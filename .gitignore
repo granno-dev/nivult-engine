@@ -1,0 +1,19 @@
+# Segreti: mai nel repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dati personali: nessun CV, nessun export, mai.
+/data/
+*.cv.json
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.DS_Store
