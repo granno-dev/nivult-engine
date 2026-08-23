@@ -66,6 +66,15 @@ migrazioni e passa le due verifiche. Sul database di sviluppo ci mette ~1,5s.
 
 Distruttivo: gira solo su database che finiscono per `_test`/`_dev`.
 
+## Ingestione
+
+```bash
+python -m nivult.ingestion.probe fantastic --query "" --country IT --limit 5
+python -m nivult.ingestion.runner --all --dry-run
+python -m nivult.ingestion.runner --all
+python -m nivult.ingestion.sweep          # scadute, in cron dopo il runner
+```
+
 ## Retention offerte
 
 ```bash

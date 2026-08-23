@@ -340,17 +340,12 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   locali, che una lista mantenuta a mano non potrà mai enumerare. Un
   `declared = false` però **non** annulla la lista: la fonte può non riconoscere
   un'agenzia che noi conosciamo, e le due evidenze si sommano.
-- **Filtri spinti nella chiamata solo su consenso unanime.** Filtrare a monte
-  costa meno crediti che scaricare e scartare, ma il corpus è **condiviso**:
-  spingere un filtro che vuole un solo iscritto lo restringerebbe per tutti.
-  `compute_pushdown` spinge solo ciò su cui **tutti** gli iscritti attivi
-  concordano, e con zero iscritti non spinge nulla.
-
-  Effetto meno ovvio, da tenere a mente: così il corpus dipende da **chi è
-  iscritto adesso**. Se domani entra qualcuno con filtri più larghi, le offerte
-  saltate ieri non tornano da sole. Per questo `clusters.pushdown_signature`
-  registra cosa è stato spinto: quando cambia, il runner avverte che quella
-  finestra ha un buco e va riscaricata.
+- **In chiamata vanno SOLO paese e famiglia.** Tutti i filtri personali restano
+  nel funnel. Un filtro spinto in chiamata restringe il corpus **condiviso**, e
+  le offerte non scaricate ieri non tornano quando domani si iscrive qualcuno
+  con preferenze più larghe. **Il risparmio di crediti non vale un archivio che
+  dipende da chi era iscritto quel giorno.** Nel funnel un filtro costa zero e
+  non lascia buchi.
 - **Un cluster si chiede per TASSONOMIA, non per titolo.** `ai_taxonomies_a` non
   è solo un campo di risposta: è un **parametro di ricerca**, e cattura la
   famiglia professionale in qualunque lingua invece di costringerci a rincorrere
@@ -460,6 +455,51 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   Il `link_kind` si ricava da `application_details`: se `via_af` è falso e c'è
   un URL, quello è l'ATS aziendale ed è `career_site`; altrimenti si ripiega
   sulla pagina di Platsbanken, che è `national_agency`.
+
+### Filtri promessi all'utente
+
+In `user_filters`, con il fill-rate misurato accanto. Promessi: modalità di
+lavoro, esperienza, tipo di contratto, lingua, sponsorship del visto, agenzie —
+tutti con campo pieno al 100% — e **dimensione azienda**.
+
+Non promessi: **titolo di studio** (48%) e **stipendio come filtro** (24%). Lo
+stipendio si **mostra quando c'è**, non ci si filtra: filtrarci nasconderebbe
+tre offerte su quattro per assenza di dato, non per scelta dell'utente.
+
+Sulla dimensione azienda, due regole:
+
+1. **Soglie numeriche, non fasce.** `min_headcount`/`max_headcount`, non
+   `organization_size`. Il formato delle fasce differisce fra filtro
+   (`"2-10"`) e campo (`"2-10 employees"`), e quell'ambiguità ci ha quasi fatto
+   concludere che il dato non fosse utilizzabile. Un intero non ha formati da
+   sbagliare.
+2. **Le offerte senza il dato NON si escludono.** `org_headcount` arriva solo
+   da Fantastic: escluderle significherebbe che chi cerca grandi aziende perde
+   tutte le offerte francesi e svedesi soltanto perché passate da un'altra fonte.
+
+### Sweep delle scadute
+
+Tre segnali, in ordine di affidabilità:
+
+| Segnale | Stato | Note |
+|---|---|---|
+| la fonte lo dichiara | `removed` | Fantastic `/expired-ats`, Arbetsförmedlingen JobStream. **Entrambi gratuiti** |
+| `date_valid_through` passata | `expired` | Certo ma raro: il campo c'è sul 15% |
+| non più vista | `expired` | Deduzione, l'unica che può sbagliare |
+
+**Il terzo vale SOLO dopo una fetch completa.** Su una fetch troncata dal tetto o
+dal limite di scorrimento della fonte, l'assenza di un'offerta non significa che
+sia sparita: significa che non siamo arrivati a leggerla. Senza questa
+condizione si ucciderebbero offerte vive, e sistematicamente quelle dei cluster
+più grandi — che sono proprio quelli che si troncano.
+
+`expiry_blind_spots_v` mostra quante offerte stanno in cluster che si troncano:
+lì le morte restano attive finché la fonte non le dichiara. È un limite noto,
+non un guasto.
+
+`/expired-ats` di Fantastic ha un **terzo vocabolario** di `time_frame`
+(`1h/1d/1m/6m`), diverso sia dalla ricerca (`1h/24h/7d/6m`) sia da `count`.
+Restituisce una lista di soli id — 3,2 milioni per il mese — a costo zero.
 
 ### Retention delle offerte
 

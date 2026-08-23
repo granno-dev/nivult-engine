@@ -501,6 +501,56 @@ def main() -> int:
         expect_value(conn, "riclassificare due volte non cambia più nulla",
             "SELECT reclassify_employers()", (), 0)
 
+        section("sweep delle scadute")
+        with conn.cursor() as cur:
+            def mkexp(sid, giorni_fa, valid=None):
+                cur.execute(
+                    "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+                    "title_normalized,organization,date_posted,raw,link_kind,"
+                    "last_seen_alive_at,date_valid_through) VALUES ('nav',%s,%s,%s,'X','x',"
+                    "'ExpCo',now(),'{}'::jsonb,'career_site',"
+                    "now() - make_interval(days => %s::int), %s) RETURNING id",
+                    (sid, f"https://exp.example/{sid}", f"https://exp.example/{sid}",
+                     giorni_fa, valid))
+                return cur.fetchone()[0]
+            j_scad  = mkexp("x1", 0, "2020-01-01")   # scadenza dichiarata, passata
+            j_viva  = mkexp("x2", 0, None)           # vista adesso
+            j_tronc = mkexp("x3", 5, None)           # vecchia, ma fetch troncata
+            j_compl = mkexp("x4", 5, None)           # vecchia, e fetch completa
+            for jid in (j_viva, j_tronc, j_compl):
+                cur.execute("INSERT INTO job_clusters (job_id,cluster_id) VALUES (%s,%s)",
+                            (jid, cl))
+            # Una fetch TRONCATA non autorizza a dedurre nulla.
+            cur.execute(
+                "INSERT INTO ingestion_runs (cluster_id,source,status,finished_at,"
+                "fetch_complete) VALUES (%s,'nav','success',now(),false)", (cl,))
+
+        expect_value(conn, "fetch troncata: nessuna deduzione",
+            "SELECT sum(righe) FROM expire_stale_jobs(1)", (), 1)
+        expect_value(conn, "scaduta per data dichiarata",
+            "SELECT status FROM jobs WHERE id = %s", (j_scad,), "expired")
+        expect_value(conn, "la vecchia NON è stata toccata: la fetch era troncata",
+            "SELECT status FROM jobs WHERE id = %s", (j_tronc,), "active")
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ingestion_runs (cluster_id,source,status,finished_at,"
+                "fetch_complete) VALUES (%s,'nav','success',now(),true)", (cl,))
+        expect_value(conn, "ora la fetch è completa: si può dedurre",
+            "SELECT sum(righe) FROM expire_stale_jobs(1)", (), 2)
+        expect_value(conn, "la vecchia è scaduta",
+            "SELECT status FROM jobs WHERE id = %s", (j_tronc,), "expired")
+        expect_value(conn, "quella vista adesso resta attiva",
+            "SELECT status FROM jobs WHERE id = %s", (j_viva,), "active")
+        expect_value(conn, "il segnale della fonte marca 'removed', non 'expired'",
+            "SELECT mark_jobs_removed('nav', ARRAY['x2'])", (), 1)
+        expect_value(conn, "e infatti lo stato è removed",
+            "SELECT status FROM jobs WHERE id = %s", (j_viva,), "removed")
+        expect_value(conn, "un id sconosciuto non marca nulla",
+            "SELECT mark_jobs_removed('nav', ARRAY['mai-vista'])", (), 0)
+        expect_value(conn, "secondo giro: niente da fare",
+            "SELECT sum(righe) FROM expire_stale_jobs(1)", (), 0)
+
         section("deduplica morbida")
         def mkdup(sid, org, title, city, kind="national_agency"):
             return ("INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"

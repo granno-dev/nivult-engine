@@ -33,6 +33,12 @@ log = logging.getLogger("nivult.ingestion.fantastic")
 BASE_URL = "https://data.fantastic.jobs/v1"
 SEARCH_PATH = "/active-ats"
 COUNT_PATH = "/active-ats-count"
+EXPIRED_PATH = "/expired-ats"
+
+# L'endpoint delle scadute ha un vocabolario di time_frame TUTTO SUO:
+# 1h/1d/1m/6m, con "1d" dove la ricerca usa "24h" e "1m" che sulla
+# ricerca non è valido. Terzo vocabolario per la stessa idea.
+EXPIRED_FRAMES = ("1h", "1d", "1m", "6m")
 
 MAX_LIMIT = 1000
 
@@ -162,6 +168,22 @@ class FantasticClient(HttpSource):
             p["date_posted_gte"] = since.astimezone(timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S")
         return p
+
+    def expired_ids(self, *, time_frame: str = "1d") -> list[str]:
+        """Id delle offerte scadute nella finestra. ZERO crediti Jobs.
+
+        Restituisce una lista di soli interi, non di record: è il segnale di
+        rimozione più economico che abbiamo su qualunque fonte. Verificato: la
+        quota Jobs non si muove.
+        """
+        if time_frame not in EXPIRED_FRAMES:
+            raise ValueError(f"time_frame per le scadute: {EXPIRED_FRAMES}, "
+                             f"ricevuto {time_frame!r}")
+        r = self.request("GET", BASE_URL + EXPIRED_PATH, headers=self._headers,
+                         params={"time_frame": time_frame})
+        if r.status_code != 200:
+            raise RuntimeError(f"scadute non recuperabili ({r.status_code}): {r.text[:200]}")
+        return [str(i) for i in r.json()]
 
     def fetch(self, *, query: str, country: str, since: datetime | None = None,
               limit: int = 100, offset: int = 0, taxonomy: str | None = None,

@@ -81,39 +81,6 @@ def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
     return clusters
 
 
-def compute_pushdown(cur, cluster_id: str) -> dict[str, object]:
-    """Filtri che si possono spingere nella chiamata.
-
-    Solo quelli su cui TUTTI gli iscritti attivi concordano: spingere un filtro
-    che vuole uno solo restringerebbe un corpus condiviso per la preferenza di
-    quell'uno. Con zero iscritti non si spinge nulla — non c'è consenso da
-    rappresentare, e il cluster è comunque destinato a diventare dormiente.
-    """
-    cur.execute(
-        "SELECT count(*), "
-        "       count(DISTINCT accepted_employer_kinds), "
-        "       (array_agg(accepted_employer_kinds))[1], "
-        "       count(DISTINCT work_arrangements), "
-        "       (array_agg(work_arrangements))[1], "
-        "       count(DISTINCT employment_types), "
-        "       (array_agg(employment_types))[1] "
-        "  FROM user_clusters WHERE cluster_id = %s AND NOT is_paused",
-        (cluster_id,))
-    n, n_ek, ek, n_wa, wa, n_et, et = cur.fetchone()
-    if not n:
-        return {}
-
-    out: dict[str, object] = {}
-    # Le agenzie si escludono in chiamata solo se NESSUNO le vuole.
-    if n_ek == 1 and ek and "staffing_agency" not in ek:
-        out["organization_agency"] = "exclude"
-    if n_wa == 1 and wa:
-        out["ai_work_arrangement"] = list(wa)
-    if n_et == 1 and et:
-        out["ai_employment_type"] = list(et)
-    return out
-
-
 def clients_for(country: str):
     return [c for c in CLIENTS if country in c.countries]
 
@@ -133,20 +100,10 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
     # Il backfill attinge a una dotazione dedicata: senza, il primo giro di ogni
     # cluster nuovo aprirebbe il breaker giornaliero e resterebbe a metà.
     # NON è un'esenzione dai soldi — provider_budget continua a valere.
-    # Filtri spinti nella chiamata: meno crediti che scaricare e scartare.
-    with conn.cursor() as cur:
-        pushdown = compute_pushdown(cur, cluster.id)
-        signature = json.dumps(pushdown, sort_keys=True)
-        cur.execute("SELECT pushdown_signature FROM clusters WHERE id = %s", (cluster.id,))
-        precedente = cur.fetchone()[0]
-    if precedente is not None and precedente != signature:
-        # Il corpus raccolto prima è più stretto di quello che serve ora: le
-        # offerte saltate allora non tornano da sole.
-        log.warning("%s: i filtri spinti in chiamata sono cambiati (%s -> %s). "
-                    "Il corpus ha un buco: va riscaricata la finestra.",
-                    cluster.label, precedente, signature)
-    if pushdown:
-        log.info("%s: filtri in chiamata -> %s", cluster.label, signature)
+    # In chiamata vanno SOLO paese e famiglia. I filtri personali restano nel
+    # funnel: là costano zero e non lasciano buchi nel corpus quando cambiano
+    # gli iscritti. Un archivio che dipende da chi era iscritto quel giorno vale
+    # meno dei crediti che farebbe risparmiare.
 
     consume_fn = ("cluster_try_consume_backfill" if cluster.in_backfill
                   else "cluster_try_consume")
@@ -215,8 +172,6 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                 page_size = min(limit, client.page_size)
                 while True:
                     kw: dict = {"taxonomy": taxonomy} if taxonomy else {}
-                    if cls.source in TAXONOMY_SOURCES and pushdown:
-                        kw["extra_filters"] = pushdown
                     result = client.fetch(query=query, country=cluster.country,
                                           since=since, limit=page_size, offset=offset,
                                           **kw)
@@ -315,8 +270,6 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     "  fetch_complete = %s, jobs_fetched = %s, jobs_new = %s, "
                     "  jobs_updated = %s WHERE id = %s",
                     (fetch_complete, fetched, new, updated, run_id))
-                cur.execute("UPDATE clusters SET pushdown_signature = %s WHERE id = %s",
-                            (signature, cluster.id))
                 cur.execute(
                     "UPDATE clusters SET last_fetched_at = now(), "
                     "  last_successful_fetch_at = now(), "

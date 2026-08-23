@@ -28,7 +28,7 @@ TABLES = [
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
     "employer_kinds", "staffing_agency_patterns",
     "provider_quotas", "provider_budget", "job_families",
-    "cluster_source_queries", "filter_values", "filter_bindings",
+    "cluster_source_queries", "filter_values", "filter_bindings", "user_filters",
 ]
 
 INDEXES = [
@@ -80,6 +80,7 @@ FUNCTIONS = [
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
     "normalize_org", "classify_employer", "jobs_set_employer_kind",
     "resolve_duplicates", "provider_try_consume", "settle_credits",
+    "expire_stale_jobs", "mark_jobs_removed",
     "assert_employer_kinds_valid", "cluster_try_consume_backfill",
     "cluster_finish_backfill",
     "reclassify_employers",
@@ -184,6 +185,7 @@ def main() -> int:
         rep.check("provider_budget_v" in views, "vista provider_budget_v")
         rep.check("cluster_backfill_v" in views, "vista cluster_backfill_v")
         rep.check("cluster_coverage_v" in views, "vista cluster_coverage_v")
+        rep.check("expiry_blind_spots_v" in views, "vista expiry_blind_spots_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)
@@ -231,6 +233,17 @@ def main() -> int:
 
         cur.execute("SELECT count(*) FROM job_families")
         rep.check(cur.fetchone()[0] == 33, "33 famiglie professionali censite")
+
+        rep.section("scadenze")
+        cur.execute("SELECT coalesce(sum(offerte_non_giudicabili),0) FROM expiry_blind_spots_v")
+        cieche = cur.fetchone()[0]
+        if cieche:
+            rep.warn(f"{cieche} offerte in cluster con fetch troncate: la scadenza "
+                     f"non si può dedurre, restano attive finché la fonte non le dichiara")
+        else:
+            rep.check(True, "nessun punto cieco sulle scadenze")
+        cur.execute("SELECT count(*) FROM jobs WHERE status='active' AND expired_at IS NOT NULL")
+        rep.check(cur.fetchone()[0] == 0, "nessuna offerta attiva con data di scadenza")
 
         rep.section("vocabolari dei filtri")
         cur.execute("SELECT parameter, count(*), "
