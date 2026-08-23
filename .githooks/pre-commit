@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# Blocca i commit che contengono segreti.
+#
+# Versionato e attivo tramite core.hooksPath, non copiato in .git/hooks: un
+# hook in .git/hooks non è versionato, quindi protegge solo la macchina dove
+# qualcuno si è ricordato di metterlo.
+#
+# Attivazione (una volta per clone):
+#     git config core.hooksPath .githooks
+#
+# Usa gitleaks se disponibile; altrimenti fa una scansione a pattern, meno
+# accurata ma meglio di niente. Il controllo che conta davvero gira comunque in
+# CI, dove gitleaks c'è sempre: un hook lo si può saltare con --no-verify, la
+# pipeline no.
+
+set -uo pipefail
+
+RED=$'\033[31m'; YEL=$'\033[33m'; OFF=$'\033[0m'
+fail() { echo "${RED}pre-commit: $*${OFF}" >&2; }
+
+if command -v gitleaks >/dev/null 2>&1; then
+  if ! gitleaks protect --staged --redact --no-banner -c .gitleaks.toml; then
+    fail "gitleaks ha trovato dei segreti nello staging. Commit annullato."
+    fail "Se è un falso positivo, aggiungi una allowlist in .gitleaks.toml."
+    exit 1
+  fi
+  exit 0
+fi
+
+echo "${YEL}pre-commit: gitleaks non installato, uso la scansione di riserva.${OFF}" >&2
+echo "${YEL}            https://github.com/gitleaks/gitleaks#installing${OFF}" >&2
+
+# Solo le righe AGGIUNTE, e solo dei file di testo.
+ADDED=$(git diff --cached -U0 --diff-filter=ACM | grep '^+' | grep -v '^+++' || true)
+[ -n "$ADDED" ] || exit 0
+
+# I segnaposto non sono segreti.
+PLACEHOLDER='CAMBIAMI|XXXXXX|EXAMPLE|example\.(test|com)|<[^>]+>|\$\{[A-Z_]+|your-storagebox|throwaway|repeat\(|placeholder'
+
+PATTERNS=(
+  'BEGIN [A-Z ]*PRIVATE KEY'
+  '(password|passwd|secret|api[_-]?key|apikey|token|client[_-]?secret)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9/+=_-]{12,}'
+  'postgres(ql)?://[^:/@[:space:]]+:[^@[:space:]]+@'
+  'AKIA[0-9A-Z]{16}'
+  'gh[pousr]_[A-Za-z0-9]{20,}'
+)
+
+HITS=0
+for p in "${PATTERNS[@]}"; do
+  MATCHES=$(echo "$ADDED" | grep -inE "$p" | grep -viE "$PLACEHOLDER" || true)
+  if [ -n "$MATCHES" ]; then
+    HITS=1
+    fail "possibile segreto (pattern: $p)"
+    echo "$MATCHES" | sed 's/^/    /' | cut -c1-120 >&2
+  fi
+done
+
+if [ "$HITS" -ne 0 ]; then
+  fail "Commit annullato. Se è un falso positivo: git commit --no-verify"
+  exit 1
+fi
+exit 0

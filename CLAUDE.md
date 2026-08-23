@@ -321,10 +321,15 @@ backup ma non può rileggerli: se viene compromessa, l'attaccante non ottiene lo
 storico. La chiave privata vive nel password manager e sul Mac, mai altrove.
 
 Conseguenza da tenere a mente: **il server non può verificare i propri backup.**
-Riesce a controllare che il file sia una struttura CMS valida e non sia
-sospettosamente piccolo, ma che il contenuto sia ripristinabile lo può dire solo
-un ripristino di prova fatto fuori, con la chiave privata. Va fatto ogni
-trimestre. Un backup mai ripristinato non è un backup verificato.
+Riesce a controllare che il file sia una struttura CMS valida, che il suo
+sha256 coincida con quello sulla Storage Box, e che non sia sospettosamente
+piccolo — ma che il contenuto sia ripristinabile lo può dire solo un ripristino
+di prova fatto fuori, con la chiave privata. Va fatto ogni trimestre.
+
+**Eseguito il 2026-08-23** su un database di prova da 115 MB e 200.000 righe:
+dump → cifratura → Storage Box → download → decifratura sul Mac → ripristino in
+un container `pgvector/pgvector:pg17`. Impronta dei dati identica all'originale,
+indici e ruoli ripristinati.
 
 Se la copia off-site non è configurata o fallisce, lo script **esce in errore**.
 Un backup che vive solo sul disco del database non è un backup, è una copia, e
@@ -336,6 +341,31 @@ Ripristino:
 openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
   -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
 ```
+
+### Ruoli Postgres
+
+- `nivult_migrator` — DDL. Lo usa **solo** il runner di migrazioni.
+- `nivult_app` — solo `SELECT/INSERT/UPDATE/DELETE`. Lo usa tutto il resto.
+  Niente `TRUNCATE`, niente `REFERENCES`, niente DDL.
+
+I ruoli nascono dalla migrazione 0010 **senza password e senza LOGIN**: in un
+file versionato non entrano segreti. Le credenziali le assegna
+`deploy/setup-roles.sh` leggendo dall'ambiente.
+
+`ALTER DEFAULT PRIVILEGES` non è un dettaglio: senza, la prima tabella creata da
+una migrazione futura sarebbe invisibile a `nivult_app`, e l'applicazione si
+romperebbe in produzione subito dopo un deploy riuscito, con un errore di
+permessi che non assomiglia alla sua causa. `check_roles.py` lo verifica
+creando una tabella dopo i GRANT e rileggendola come applicazione.
+
+### Segreti nei commit
+
+Hook `pre-commit` versionato in `.githooks/`, attivo con
+`git config core.hooksPath .githooks` (una volta per clone). Usa `gitleaks` se
+c'è, altrimenti una scansione a pattern di riserva.
+
+Il controllo che conta davvero gira in **CI**, dove `gitleaks` c'è sempre e
+guarda tutta la storia: un hook si salta con `--no-verify`, la pipeline no.
 
 ### Server
 
@@ -369,17 +399,20 @@ per i backup significa considerare compromesso tutto lo storico cifrato con essa
 
 ### Debiti aperti
 
-- ⚠ **`POSTGRES_PASSWORD` è in chiaro in `docker-compose.yml`**, contro la regola
-  "nessuna password nel codice". Va spostata in `.env` e referenziata come
-  `${POSTGRES_PASSWORD}`. Richiede di ricreare il container.
-- **Un solo ruolo Postgres, con privilegi di superutente.** Vanno separati
-  `nivult_app` (solo DML) e `nivult_migrator` (DDL, usato solo dal runner).
-  Attenzione ad `ALTER DEFAULT PRIVILEGES` per il migrator, altrimenti ogni
-  migrazione nuova rende le tabelle inaccessibili all'applicazione.
-- **Nessuna scansione dei segreti nei commit.** Hook pre-commit con `gitleaks`,
-  più lo stesso controllo in CI: l'hook protegge solo la macchina dove è
-  installato.
-- **Ripristino di prova mai eseguito.** Da fare al primo trimestre.
+- **`deploy/setup-roles.sh` non è ancora stato eseguito in produzione.** I ruoli
+  esistono senza LOGIN; l'applicazione si connette ancora come `nivult`
+  superutente. Va fatto prima del primo deploy vero.
+- **Il ripristino va fatto sulla stessa immagine.** Il database di produzione
+  nasce con `LOCALE = 'en_US.utf8'`, che su macOS non esiste: un
+  `CREATE DATABASE` da quel dump fallisce con `invalid LC_COLLATE locale name`.
+  Si ripristina dentro `pgvector/pgvector:pg17`, decifrando dove sta la chiave
+  privata e mandando il dump in chiaro via SSH nel container. Scoperto facendo
+  il ripristino, non leggendo lo script.
+- **La password del superutente `nivult` non è mai stata ruotata.** È stata
+  spostata in `.env`, ma il valore è lo stesso di sempre. Ruotarla insieme al
+  passaggio a `nivult_app`.
+- **`gitleaks` non è installato sul Mac**, quindi l'hook usa la scansione di
+  riserva. In CI gira quello vero.
 
 ## Metodo di lavoro
 

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  segreti:
+    name: Scansione segreti
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Serve la storia completa: un segreto committato e poi rimosso
+          # resta nella storia, ed è lì che va trovato.
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  schema:
+    name: Schema e suite di verifica
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: nivult
+          POSTGRES_DB: nivult_test
+          # trust: il database di CI è effimero e raggiungibile solo dal job.
+          # Così nel repo non compare nessuna credenziale, nemmeno finta.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nivult"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: reset, migrazioni da zero, 113 asserzioni
+        env:
+          NIVULT_DATABASE_URL: postgresql://nivult@127.0.0.1:5432/nivult_test
+        run: python scripts/reset_and_verify.py

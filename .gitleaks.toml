@@ -1,0 +1,23 @@
+# Configurazione gitleaks per nivult-engine.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "nivult-postgres-url"
+description = "URL Postgres con password in chiaro"
+regex = '''postgres(ql)?://[^:/@\s]+:[^@\s]+@'''
+tags = ["database", "credentials"]
+
+[allowlist]
+description = "Segnaposto e valori di prova: non sono segreti."
+paths = [
+  '''\.env\.example$''',
+  '''deploy/backup\.env\.example$''',
+]
+regexes = [
+  '''CAMBIAMI''',
+  '''uXXXXXX''',
+  '''example\.(test|com)''',
+  '''\$\{[A-Z_]+''',
+  '''throwaway''',
+]

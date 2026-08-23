@@ -7,7 +7,8 @@ Backend di Nivult. Le regole del progetto stanno in [CLAUDE.md](CLAUDE.md).
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env      # e compila NIVULT_DATABASE_URL
+cp .env.example .env             # e compila NIVULT_DATABASE_URL
+git config core.hooksPath .githooks   # hook anti-segreti, una volta per clone
 ```
 
 Postgres sulla VPS ascolta solo su `127.0.0.1`. Per lavorarci da locale serve un
@@ -40,6 +41,7 @@ python scripts/reset_and_verify.py    # azzera, riapplica tutto da zero, verific
 python scripts/verify_schema.py       # struttura. Sola lettura, sicuro in produzione.
 python scripts/check_constraints.py   # vincoli SQL. Solo su database _test/_dev.
 python scripts/check_modules.py       # strato Python. Solo su database _test/_dev.
+python scripts/check_roles.py         # privilegi del ruolo app. Solo su _test/_dev.
 ```
 
 `verify_schema.py` controlla tabelle, indici, vincoli, funzioni, trigger,

@@ -10,8 +10,8 @@ ferma alla prima che fallisce:
      database, così 0001 viene messa alla prova davvero e non trova il lavoro
      già fatto da un giro precedente;
   2. python -m nivult.migrate up  — tutte le migrazioni dalla tabella vuota;
-  3. verify_schema + check_constraints + check_modules — struttura, vincoli, e
-     lo strato Python che pilota le funzioni SQL.
+  3. verify_schema + check_constraints + check_modules + check_roles —
+     struttura, vincoli, strato Python, privilegi del ruolo applicativo.
 
 DISTRUTTIVO. Gira solo su database che finiscono per _test/_dev, a meno di
 NIVULT_ALLOW_DESTRUCTIVE=1.
@@ -105,6 +105,13 @@ def main() -> int:
 
         if check_modules.main() != 0:
             print("\nFALLITO: lo strato Python non si comporta come deve")
+            return 1
+
+        print()
+        import check_roles
+
+        if check_roles.main() != 0:
+            print("\nFALLITO: i privilegi del ruolo applicativo non sono corretti")
             return 1
 
     elapsed = time.monotonic() - started

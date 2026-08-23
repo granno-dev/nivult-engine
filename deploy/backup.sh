@@ -75,36 +75,40 @@ fi
 : "${BACKUP_REMOTE_PORT:=23}"
 : "${BACKUP_SSH_KEY:=/root/.ssh/id_ed25519_storagebox}"
 
-SSH_OPTS="-p $BACKUP_REMOTE_PORT -i $BACKUP_SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+# -n è obbligatorio: senza, ssh legge da stdin e nel ciclo di potatura più
+# sotto si mangerebbe la lista di file che gli viene passata via pipe.
+SSH_OPTS="-n -p $BACKUP_REMOTE_PORT -i $BACKUP_SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+RSYNC_SSH="ssh -p $BACKUP_REMOTE_PORT -i $BACKUP_SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+SB="$BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST"
+BASENAME=$(basename "$OUT")
 
-log "invio a $BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST:$BACKUP_REMOTE_PATH"
-rsync -a --partial \
-  -e "ssh $SSH_OPTS" \
-  "$OUT" "$BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST:$BACKUP_REMOTE_PATH/" \
+log "invio a $SB:$BACKUP_REMOTE_PATH"
+rsync -a --partial -e "$RSYNC_SSH" "$OUT" "$SB:$BACKUP_REMOTE_PATH/" \
   || die "copia off-site fallita"
 
-# Conferma che il file sia arrivato con la dimensione giusta, invece di fidarsi
-# del codice di uscita di rsync.
-REMOTE_SIZE=$(ssh $SSH_OPTS "$BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST" \
-  "ls -l $BACKUP_REMOTE_PATH/$(basename "$OUT")" 2>/dev/null | awk '{print $5}' || true)
-[ "$REMOTE_SIZE" = "$SIZE" ] \
-  || die "copia off-site incompleta: locale $SIZE, remoto ${REMOTE_SIZE:-assente}"
-log "copia off-site verificata: $REMOTE_SIZE byte"
+# Confronto degli sha256, non delle dimensioni: la Storage Box espone
+# sha256sum nella sua shell ristretta, quindi si può verificare che i byte
+# arrivati siano gli stessi partiti invece di fidarsi del codice di uscita di
+# rsync. Due file troncati alla stessa lunghezza avrebbero la stessa dimensione.
+LOCAL_HASH=$(sha256sum "$OUT" | awk '{print $1}')
+REMOTE_HASH=$(ssh $SSH_OPTS "$SB" "sha256sum $BACKUP_REMOTE_PATH/$BASENAME" 2>/dev/null | awk '{print $1}')
+[ -n "$REMOTE_HASH" ] || die "il file non risulta sulla Storage Box"
+[ "$LOCAL_HASH" = "$REMOTE_HASH" ] \
+  || die "sha256 divergente: locale $LOCAL_HASH, remoto $REMOTE_HASH"
+log "copia off-site verificata, sha256 $LOCAL_HASH"
 
 # --- potatura ---------------------------------------------------------------
 find "$LOCAL_DIR" -name 'nivult-*.sql.gz.enc' -mtime "+$LOCAL_KEEP_DAYS" -delete
 find "$LOCAL_DIR" -name '*.part' -mtime +1 -delete
 
 CUTOFF=$(date -d "-$REMOTE_KEEP_DAYS days" +%F)
-ssh $SSH_OPTS "$BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST" \
-  "ls $BACKUP_REMOTE_PATH" 2>/dev/null \
+ssh $SSH_OPTS "$SB" "ls $BACKUP_REMOTE_PATH" 2>/dev/null \
   | grep -oE 'nivult-[0-9]{4}-[0-9]{2}-[0-9]{2}\.sql\.gz\.enc' \
   | while read -r f; do
-      d=$(echo "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+      d=${f:7:10}
       if [[ "$d" < "$CUTOFF" ]]; then
         log "potatura remota: $f"
-        ssh $SSH_OPTS "$BACKUP_REMOTE_USER@$BACKUP_REMOTE_HOST" \
-          "rm $BACKUP_REMOTE_PATH/$f" || log "impossibile rimuovere $f"
+        ssh $SSH_OPTS "$SB" "rm $BACKUP_REMOTE_PATH/$f" || log "impossibile rimuovere $f"
       fi
     done || true
 
