@@ -359,6 +359,24 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
 
   I valori sono in `job_families`: 33 verificati. `ai_taxonomies_a_primary`
   esiste e restringe alla tassonomia principale, se servirà precisione.
+- **L'arricchimento è opt-in solo su alcuni canali.** Su `active-ats` (e
+  `modified-ats`) serve il flag; su **`active-jb`** — il canale board: LinkedIn,
+  Wellfound, Y Combinator — i campi azienda ci sono **sempre**, perché
+  l'organizzazione LinkedIn è letta direttamente dal board. *Verificato: una
+  chiamata a `active-jb` senza flag riporta 17 campi `org_*`.* Serve il giorno
+  in cui useremo quel canale — che oggi non usiamo, perché `link_kind` lo
+  classificherebbe `job_board`.
+- **`ats-organizations-advanced` non ci serve, e comunque non l'abbiamo.**
+  Aggiunge Crunchbase, Glassdoor e serie storiche: dati da analisi di mercato,
+  non da digest. Il Basic copre tutto ciò che usiamo. *Verificato: il nostro
+  piano risponde `403`, come per `modified-ats`.* Esiste invece
+  **`ats-organizations`**, che il piano accetta: è la strada se un giorno
+  servirà una tabella `organizations` in cache.
+- **Lo snapshot aziendale si aggiorna una volta al MESE**, il primo del mese
+  alle 02:00 UTC. *Solo documentato, non verificabile in una sessione.* Conta
+  per una eventuale cache: il ritmo di aggiornamento è mensile, non giornaliero,
+  quindi rinfrescarla ogni notte spenderebbe chiamate per rileggere gli stessi
+  dati.
 - **L'arricchimento è OPT-IN.** Senza `include_basic_organization_details=true`
   la risposta ha 49 campi, con il flag 69 — fra cui `org_linkedin_size`,
   `org_linkedin_headcount`, `org_linkedin_industry` e
