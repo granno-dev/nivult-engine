@@ -7,7 +7,7 @@ Backend di Nivult. Le regole del progetto stanno in [CLAUDE.md](CLAUDE.md).
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-cp .env.example .env             # e compila NIVULT_DATABASE_URL
+cp .env.example .env             # e compila DATABASE_URL
 git config core.hooksPath .githooks   # hook anti-segreti, una volta per clone
 ```
 

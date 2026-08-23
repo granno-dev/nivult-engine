@@ -81,6 +81,10 @@ un esito legittimo (`digests.status = 'skipped_empty'`), non un fallimento.
 - **Migrazioni versionate** per lo schema. Mai modifiche manuali al database.
 - **Tutto in UTC.** Il database è impostato su UTC; il fuso dell'utente serve
   solo a calcolare l'orario di invio.
+- **Due connessioni, due ruoli.** `DATABASE_URL` è l'applicazione
+  (`nivult_app`, solo DML); `MIGRATOR_DATABASE_URL` è il runner di migrazioni
+  (`nivult_migrator`, con DDL). In sviluppo la seconda ricade sulla prima,
+  perché c'è un ruolo solo.
 - **Niente float sui soldi.** I costi sono interi in milionesimi (`cost_micros`).
 - **Chi verifica che qualcosa sia stato scritto deve leggere da un'altra
   connessione.** Sulla stessa connessione si vede anche il non-committato: è

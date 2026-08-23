@@ -13,7 +13,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS_DIR = REPO_ROOT / "migrations"
 
-ENV_VAR = "NIVULT_DATABASE_URL"
+ENV_VAR = "DATABASE_URL"
+MIGRATOR_ENV_VAR = "MIGRATOR_DATABASE_URL"
 
 
 def load_dotenv(path: Path | None = None) -> None:
@@ -32,6 +33,7 @@ def load_dotenv(path: Path | None = None) -> None:
 
 
 def database_url() -> str:
+    """Connessione dell'applicazione: ruolo nivult_app, solo DML."""
     load_dotenv()
     url = os.environ.get(ENV_VAR)
     if not url:
@@ -41,6 +43,17 @@ def database_url() -> str:
             f"  Server : la stringa di connessione sta in /opt/nivult/.env"
         )
     return url
+
+
+def migrator_database_url() -> str:
+    """Connessione del runner di migrazioni: ruolo nivult_migrator, con DDL.
+
+    Ricade su DATABASE_URL quando non è impostata, perché in sviluppo c'è un
+    ruolo solo. In produzione le due sono distinte, ed è il punto: il ruolo che
+    l'applicazione usa tutti i giorni non può alterare lo schema.
+    """
+    load_dotenv()
+    return os.environ.get(MIGRATOR_ENV_VAR) or database_url()
 
 
 def database_name(url: str | None = None) -> str:

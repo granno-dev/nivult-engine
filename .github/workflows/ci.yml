@@ -45,5 +45,5 @@ jobs:
       - run: pip install -e .
       - name: reset, migrazioni da zero, 113 asserzioni
         env:
-          NIVULT_DATABASE_URL: postgresql://nivult@127.0.0.1:5432/nivult_test
+          DATABASE_URL: postgresql://nivult@127.0.0.1:5432/nivult_test
         run: python scripts/reset_and_verify.py

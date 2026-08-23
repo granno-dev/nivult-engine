@@ -27,7 +27,7 @@ from pathlib import Path
 
 import psycopg
 
-from nivult.config import MIGRATIONS_DIR, database_url, safe_dsn
+from nivult.config import MIGRATIONS_DIR, migrator_database_url, safe_dsn
 
 FILENAME_RE = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
 LOCK_KEY = 8_246_113_907_431_552  # arbitrario, costante: nivult migrations
@@ -114,12 +114,12 @@ def verify_checksums(migrations: list[Migration], state: dict[int, tuple[str, st
 
 def cmd_status(args: argparse.Namespace) -> int:
     migrations = discover()
-    with psycopg.connect(database_url(), autocommit=True) as conn:
+    with psycopg.connect(migrator_database_url(), autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute(BOOTSTRAP)
         state = applied_state(conn)
 
-    print(f"database: {safe_dsn(database_url())}\n")
+    print(f"database: {safe_dsn(migrator_database_url())}\n")
     pending = 0
     for m in migrations:
         if m.version in state:
@@ -140,7 +140,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_up(args: argparse.Namespace) -> int:
     migrations = discover()
-    dsn = database_url()
+    dsn = migrator_database_url()
     print(f"database: {safe_dsn(dsn)}")
 
     with psycopg.connect(dsn, autocommit=True) as conn:
