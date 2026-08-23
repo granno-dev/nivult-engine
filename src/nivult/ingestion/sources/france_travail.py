@@ -29,15 +29,52 @@ MAX_RESULTS = 3149       # tetto duro dell'API su una singola ricerca
 
 # Mappature a regole, non LLM. Dove non c'è un equivalente si lascia None:
 # meglio un campo vuoto che un valore inventato su cui poi filtriamo.
-EXPERIENCE_MAP = {
-    "1": "0-2",   # débutant accepté
-    "2": "2-5",   # expérience exigée
-    "3": "5-10",  # expérience confirmée
-}
+#
+# experienceExige vale 'D' (débutant accepté), 'S' (souhaitée), 'E' (exigée) —
+# NON '1'/'2'/'3' come avevo supposto. Ma il campo utile è un altro:
+# experienceLibelle porta gli anni veri ("2 An(s)", "7 An(s)"), che si mappano
+# sulla nostra scala molto meglio di un codice a tre valori.
 EMPLOYMENT_MAP = {
-    "CDI": "full-time", "CDD": "contract", "MIS": "contract",
-    "SAI": "contract", "LIB": "contract",
+    "CDI": "full-time",
+    "CDD": "contract",
+    "CCE": "contract",   # CDI de chantier ou d'opération
+    "MIS": "contract",   # mission d'intérim
+    "SAI": "contract",   # saisonnier
+    "LIB": "contract",   # profession libérale
 }
+WORKING_HOURS_MAP = {"Temps plein": "full-time", "Temps partiel": "part-time"}
+
+_MONTHS_PER_UNIT = {"an": 12, "ans": 12, "mois": 1}
+
+
+def experience_level(offer: dict) -> str | None:
+    """Livello di esperienza sulla nostra scala, o None.
+
+    Si legge experienceLibelle, che porta la durata reale. Solo se manca si
+    ripiega sul codice: 'D' significa débutant accepté, che è informazione
+    sufficiente per il primo scaglione. 'S' ed 'E' dicono che serve esperienza
+    ma non quanta, e da soli non bastano a scegliere uno scaglione: restano None
+    invece di essere arrotondati a caso.
+    """
+    import re
+
+    libelle = (offer.get("experienceLibelle") or "").strip().lower()
+    m = re.match(r"(\d+)\s*(an\(s\)|ans?|mois)", libelle)
+    if m:
+        months = int(m.group(1)) * _MONTHS_PER_UNIT.get(
+            m.group(2).replace("(s)", "s").rstrip("s") or "an", 12)
+        years = months / 12
+        if years < 2:
+            return "0-2"
+        if years < 5:
+            return "2-5"
+        if years < 10:
+            return "5-10"
+        return "10+"
+
+    if offer.get("experienceExige") == "D" or "débutant" in libelle:
+        return "0-2"
+    return None
 
 
 class FranceTravailClient(HttpSource):
@@ -153,12 +190,21 @@ class FranceTravailClient(HttpSource):
             countries=["FR"],
             locations=lieu or None,
             ai_job_language="fr",
-            ai_experience_level=EXPERIENCE_MAP.get(str(o.get("experienceExige", ""))),
-            ai_employment_type=EMPLOYMENT_MAP.get(o.get("typeContrat", "")),
+            ai_experience_level=experience_level(o),
+            ai_employment_type=(
+                "internship" if o.get("alternance")
+                else EMPLOYMENT_MAP.get(o.get("typeContrat", ""))),
+            ai_working_hours=WORKING_HOURS_MAP.get(
+                (o.get("dureeTravailLibelleConverti") or "").strip()),
             ai_requirements_summary=o.get("experienceLibelle"),
             ai_core_responsibilities=o.get("description"),
             ai_key_skills=[c["libelle"] for c in (o.get("competences") or [])
-                           if c.get("libelle")],
+                           if c.get("libelle")]
+                          + [q["libelle"] for q in (o.get("qualitesProfessionnelles") or [])
+                             if q.get("libelle")],
+            ai_keywords=[v for v in (o.get("romeLibelle"),
+                                     o.get("appellationlibelle"),
+                                     o.get("secteurActiviteLibelle")) if v],
             salary=o.get("salaire") or None,
             raw=o,
         )

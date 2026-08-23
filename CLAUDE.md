@@ -262,6 +262,22 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   città, perché in una deduplica morbida un falso positivo fa sparire
   un'offerta vera mentre un falso negativo lascia solo una riga in più — meglio
   precisione che copertura.
+- **France Travail non dà mai link diretti.** Misurato su 1050 offerte in 7
+  query: `origineOffre.origine` vale `1` nel 100% dei casi, cioè l'annuncio è
+  ospitato da France Travail e non esiste URL di partner. Per la Francia la
+  fonte dei `career_site` è quindi Fantastic: France Travail è un complemento
+  che allarga la copertura, non la sostituisce. Ogni offerta francese porterà
+  l'etichetta «via France Travail», e a parità di punteggio starà sotto un
+  `career_site`.
+- **`experienceLibelle` di France Travail vale più del codice.** `experienceExige`
+  ha tre valori (`D`/`S`/`E`) che non bastano a scegliere uno scaglione, ma
+  `experienceLibelle` porta gli anni reali ("2 An(s)", "7 An(s)"): da lì
+  `ai_experience_level` si mappa sul 100% del campione, senza LLM. `S` ed `E` da
+  soli restano `NULL`: dicono che serve esperienza, non quanta.
+- **`trancheEffectifEtab` è la dimensione azienda**, che avevamo dato per non
+  disponibile. C'è su France Travail. Non basta a riabilitare il filtro
+  `user_clusters.company_sizes` — servirebbe su tutte le fonti — ma va ricordato
+  quando ci torneremo.
 - **Arbetsförmedlingen dà il segnale di rimozione nativo.** Lo JobStream espone
   `removed` e `removed_date`, quindi lì la scadenza non va dedotta dall'assenza.
   Il `link_kind` si ricava da `application_details`: se `via_af` è falso e c'è
