@@ -234,6 +234,14 @@ def main() -> int:
         cur.execute("SELECT count(*) FROM job_families")
         rep.check(cur.fetchone()[0] == 33, "33 famiglie professionali censite")
 
+        cur.execute("SELECT count(*) FILTER (WHERE org_logo_permalink IS NOT NULL "
+                    "                          OR organization_logo IS NOT NULL), count(*) "
+                    "FROM jobs WHERE source = 'fantastic'")
+        con, tot = cur.fetchone()
+        if tot:
+            print(f"  info  logo disponibile su {100*con//tot}% delle offerte Fantastic "
+                  f"({con}/{tot})")
+
         rep.section("scadenze")
         cur.execute("SELECT coalesce(sum(offerte_non_giudicabili),0) FROM expiry_blind_spots_v")
         cieche = cur.fetchone()[0]

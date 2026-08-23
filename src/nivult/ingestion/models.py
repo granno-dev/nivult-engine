@@ -59,6 +59,7 @@ class RawJob:
     org_size: str | None = None
     org_headcount: int | None = None
     org_industry: str | None = None
+    org_logo_permalink: str | None = None
     employer_agency_declared: bool | None = None
 
     def __post_init__(self) -> None:

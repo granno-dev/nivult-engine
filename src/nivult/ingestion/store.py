@@ -26,7 +26,8 @@ _COLUMNS = (
     "ai_requirements_summary", "ai_core_responsibilities",
     "salary", "date_valid_through", "ai_education", "organization_logo",
     "ai_work_arrangement_office_days",
-    "org_size", "org_headcount", "org_industry", "employer_agency_declared",
+    "org_size", "org_headcount", "org_industry", "org_logo_permalink",
+    "employer_agency_declared",
     "raw",
 )
 

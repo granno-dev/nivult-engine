@@ -282,6 +282,7 @@ class FantasticClient(HttpSource):
             org_size=r.get("org_linkedin_size"),
             org_headcount=_int_or_none(r.get("org_linkedin_headcount")),
             org_industry=r.get("org_linkedin_industry"),
+            org_logo_permalink=r.get("org_logo_permalink"),
             employer_agency_declared=r.get("org_linkedin_recruitment_agency_derived"),
             raw=r,
         )

@@ -474,6 +474,32 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   un URL, quello è l'ATS aziendale ed è `career_site`; altrimenti si ripiega
   sulla pagina di Platsbanken, che è `national_agency`.
 
+### Logo dell'azienda
+
+Catena di ripiego, in ordine. Fill-rate misurato su 300 offerte reali in
+IT/DE/FR:
+
+| | Copertura | |
+|---|---|---|
+| `org_logo_permalink` | **83%** | fonte principale |
+| `organization_logo` | 49% | secondo anello (l'avevamo stimato al 40%) |
+| Logo.dev da `domain_derived` | 98% ha il dominio | terzo anello |
+| monogramma con le iniziali | sempre | ultimo, non fallisce mai |
+
+I primi due insieme coprono il 94%. Col terzo si arriva praticamente al 100%,
+e il quarto chiude il caso residuo senza mai lasciare un buco nel digest.
+
+**Il logo si scarica e si salva UNA VOLTA PER AZIENDA. Mai collegato al volo.**
+Nelle email i client bloccano le immagini remote per impostazione predefinita:
+un logo collegato a un dominio esterno resta un rettangolo vuoto per la maggior
+parte dei destinatari. Va scaricato una volta, salvato, e servito da noi —
+il che significa anche che un cambio di logo lato azienda non si propaga da
+solo, ed è accettabile.
+
+Una volta per **azienda**, non per offerta: la stessa azienda pubblica decine di
+annunci, e scaricare lo stesso file ogni volta sarebbe sprecato. La chiave
+stabile è `org_linkedin_slug` (96%), con `domain_derived` (98%) come ripiego.
+
 ### Filtri promessi all'utente
 
 In `user_filters`, con il fill-rate misurato accanto. Promessi: modalità di
