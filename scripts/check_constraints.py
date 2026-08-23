@@ -311,6 +311,48 @@ def main() -> int:
             "SELECT string_agg(kind, ',' ORDER BY rank) FROM link_kinds WHERE is_direct",
             (), "career_site")
 
+        section("datore diretto o agenzia")
+        def mkorg(sid, org):
+            return ("INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+                    "title_normalized,organization,date_posted,raw,link_kind) VALUES "
+                    f"('nav','{sid}','https://e.example/{sid}','https://e.example/{sid}',"
+                    f"'X','x','{org}',now(),'{{}}'::jsonb,'career_site') "
+                    "RETURNING employer_kind")
+
+        expect_value(conn, "ADECCO FRANCE -> agenzia", mkorg("e1", "ADECCO FRANCE"),
+                     (), "staffing_agency")
+        expect_value(conn, "Manpower Aktiebolag -> agenzia", mkorg("e2", "Manpower Aktiebolag"),
+                     (), "staffing_agency")
+        expect_value(conn, "GI GROUP SPA (pattern di due parole) -> agenzia",
+                     mkorg("e3", "GI GROUP SPA"), (), "staffing_agency")
+        expect_value(conn, "Robert-Half S.r.l. (punteggiatura) -> agenzia",
+                     mkorg("e4", "Robert-Half S.r.l."), (), "staffing_agency")
+        expect_value(conn, "Acme SpA -> datore diretto", mkorg("e5", "Acme SpA"), (), "direct")
+        # Confine di parola: senza, "randstad" matcherebbe dentro "Randstadt" e
+        # metterebbe l'etichetta sbagliata su un datore vero.
+        expect_value(conn, "Randstadt Bakery NON è Randstad",
+                     mkorg("e6", "Randstadt Bakery"), (), "direct")
+        expect_value(conn, "Manpowersystem Nordic NON è Manpower",
+                     mkorg("e7", "Manpowersystem Nordic"), (), "direct")
+
+        expect_error(conn, "23514", "pattern troppo corto rifiutato",
+            "INSERT INTO staffing_agency_patterns (pattern) VALUES ('gi')")
+        expect_error(conn, "23514", "pattern non normalizzato rifiutato",
+            "INSERT INTO staffing_agency_patterns (pattern) VALUES ('Kelly Services')")
+
+        # Il motivo per cui la lista sta in tabella: aggiungerne una deve
+        # riclassificare anche ciò che è già stato ingerito.
+        expect_value(conn, "aggiungere un pattern riclassifica le offerte esistenti",
+            "WITH ins AS (INSERT INTO staffing_agency_patterns (pattern) VALUES ('randstadt') "
+            "             RETURNING 1) "
+            "SELECT reclassify_employers() FROM ins", (), 1)
+        expect_value(conn, "dopo la riclassificazione l'etichetta è cambiata",
+            "SELECT employer_kind FROM jobs WHERE source_job_id = 'e6'", (), "staffing_agency")
+        expect_value(conn, "e non ha toccato chi non c'entra",
+            "SELECT employer_kind FROM jobs WHERE source_job_id = 'e5'", (), "direct")
+        expect_value(conn, "riclassificare due volte non cambia più nulla",
+            "SELECT reclassify_employers()", (), 0)
+
         section("match")
         expect_error(conn, "23514", "punteggio fuori scala rifiutato",
             "INSERT INTO matches (user_id,job_id,score,reason,threshold_used,model) "

@@ -262,6 +262,26 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   città, perché in una deduplica morbida un falso positivo fa sparire
   un'offerta vera mentre un falso negativo lascia solo una riga in più — meglio
   precisione che copertura.
+- **Le agenzie si etichettano, non si filtrano.** `jobs.employer_kind` vale
+  `direct` o `staffing_agency`, derivato da trigger a partire da
+  `staffing_agency_patterns`. Diventerà un filtro utente nel funnel: c'è chi le
+  agenzie le vuole e chi no, e sono due preferenze entrambe legittime.
+  **Buttare dati in ingestione è irreversibile, etichettarli no.**
+
+  La lista sta in tabella e non in codice per un motivo preciso: se fosse in
+  codice, aggiungere un'agenzia domani non riclassificherebbe le offerte già
+  ingerite. Il ciclo è `INSERT` + `SELECT reclassify_employers()`, senza
+  rilascio. `verify_schema.py` segnala se le etichette si sono disallineate
+  dalla lista.
+
+  Il confronto è a **confine di parola**, non contenimento: "Randstadt Bakery"
+  non è Randstad, e un'etichetta sbagliata su un datore vero è peggio di
+  un'etichetta mancante. Per la stessa ragione i pattern hanno un minimo di 4
+  caratteri, e parole comuni come "actual" non entrano da sole.
+
+  **La lista è incompleta per costruzione.** Misurata su 796 datori reali
+  copriva il 15,7%, salita al 25,4% dopo le aggiunte della 0015. Non arriverà
+  mai al 100%: va rivista quando i dati mostrano nomi nuovi.
 - **France Travail non dà mai link diretti.** Misurato su 1050 offerte in 7
   query: `origineOffre.origine` vale `1` nel 100% dei casi, cioè l'annuncio è
   ospitato da France Travail e non esiste URL di partner. Per la Francia la

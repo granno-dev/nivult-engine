@@ -26,6 +26,7 @@ TABLES = [
     "matches", "digests", "digest_items",
     "ingestion_runs", "api_usage", "deletion_requests", "cluster_month_stats",
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
+    "employer_kinds", "staffing_agency_patterns",
 ]
 
 INDEXES = [
@@ -36,7 +37,7 @@ INDEXES = [
     "jobs_active_posted_idx", "jobs_taxonomies_idx", "jobs_countries_idx",
     "jobs_key_skills_idx", "jobs_keywords_idx", "jobs_tsv_idx",
     "jobs_filters_idx", "jobs_last_seen_idx", "jobs_fingerprint_idx",
-    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "jobs_link_kind_idx",
+    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "jobs_link_kind_idx", "jobs_employer_kind_idx",
     "job_embeddings_hnsw_idx",
     "job_clusters_by_cluster_idx",
     "matches_user_recent_idx", "matches_passed_idx", "matches_job_idx",
@@ -72,12 +73,14 @@ FUNCTIONS = [
     "set_updated_at", "assert_valid_timezone", "cluster_try_consume",
     "assert_seniority_order", "jobs_derive_fields",
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
+    "normalize_org", "classify_employer", "jobs_set_employer_kind",
+    "reclassify_employers",
 ]
 
 TRIGGERS = [
     "users_set_updated_at", "users_valid_timezone", "clusters_set_updated_at",
     "user_clusters_seniority_order", "jobs_derive_fields_trg",
-    "jobs_duplicate_target_canonical",
+    "jobs_duplicate_target_canonical", "jobs_employer_kind_trg",
 ]
 
 
@@ -201,6 +204,18 @@ def main() -> int:
         cur.execute("SELECT count(*) FROM jobs j LEFT JOIN link_kinds k "
                     "ON k.kind = j.link_kind WHERE k.kind IS NULL")
         rep.check(cur.fetchone()[0] == 0, "ogni offerta ha un tipo di link noto")
+
+        cur.execute("SELECT count(*) FROM staffing_agency_patterns")
+        n_pat = cur.fetchone()[0]
+        rep.check(n_pat > 0, f"lista agenzie popolata ({n_pat} pattern)")
+        cur.execute("SELECT count(*) FROM jobs "
+                    "WHERE employer_kind IS DISTINCT FROM classify_employer(organization)")
+        drift = cur.fetchone()[0]
+        if drift:
+            rep.warn(f"{drift} offerte con etichetta datore disallineata dalla lista — "
+                     f"eseguire SELECT reclassify_employers()")
+        else:
+            rep.check(True, "etichette datore allineate alla lista")
 
         rep.section("autenticazione senza password")
         cur.execute(
