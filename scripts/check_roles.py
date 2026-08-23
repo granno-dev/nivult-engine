@@ -68,9 +68,9 @@ def denied(conn, label: str, sql: str) -> None:
     bad(label, "CONSENTITO: il ruolo applicativo può farlo, e non dovrebbe")
 
 
-def app_dsn() -> str:
+def dsn_as(role: str) -> str:
     d = conninfo_to_dict(database_url())
-    d["user"] = "nivult_app"
+    d["user"] = role
     d.pop("password", None)
     return make_conninfo(**d)
 
@@ -88,8 +88,9 @@ def main() -> int:
             # Solo in sviluppo: in produzione la password la assegna
             # deploy/setup-roles.sh da variabile d'ambiente.
             cur.execute("ALTER ROLE nivult_app LOGIN")
+            cur.execute("ALTER ROLE nivult_migrator LOGIN")
 
-        app = psycopg.connect(app_dsn())
+        app = psycopg.connect(dsn_as("nivult_app"))
         try:
             print("\nquello che l'applicazione deve poter fare")
             allowed(app, "SELECT su una tabella", "SELECT count(*) FROM users")
@@ -129,11 +130,34 @@ def main() -> int:
                     "INSERT INTO tabella_futura VALUES (2,'y')")
             denied(app, "ma nemmeno lì può fare DDL",
                    "ALTER TABLE tabella_futura ADD COLUMN z int")
+
+            print("\nil migrator deve poter alterare gli oggetti esistenti")
+            # È il motivo della migrazione 0011: senza il passaggio di
+            # proprietà, nivult_migrator può creare oggetti nuovi ma non
+            # toccare quelli che già ci sono, e la prima migrazione che
+            # aggiunge una colonna a una tabella esistente fallirebbe.
+            mig = psycopg.connect(dsn_as("nivult_migrator"))
+            try:
+                allowed(mig, "ALTER su una tabella preesistente",
+                        "ALTER TABLE users ADD COLUMN prova_0011 int")
+                allowed(mig, "e la può rimettere a posto",
+                        "ALTER TABLE users DROP COLUMN prova_0011")
+                allowed(mig, "CREATE TABLE", "CREATE TABLE mig_prova (id int)")
+                allowed(mig, "DROP TABLE", "DROP TABLE mig_prova")
+                with mig.cursor() as cur:
+                    cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+                    if cur.fetchone()[0]:
+                        bad("il migrator non è superutente", "è superutente")
+                    else:
+                        ok("il migrator non è superutente")
+            finally:
+                mig.close()
         finally:
             app.close()
             with admin.cursor() as cur:
                 cur.execute("DROP TABLE IF EXISTS tabella_futura")
                 cur.execute("ALTER ROLE nivult_app NOLOGIN")
+                cur.execute("ALTER ROLE nivult_migrator NOLOGIN")
     finally:
         admin.close()
 
