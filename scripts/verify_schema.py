@@ -25,6 +25,7 @@ TABLES = [
     "jobs", "job_embeddings", "job_clusters",
     "matches", "digests", "digest_items",
     "ingestion_runs", "api_usage", "deletion_requests", "cluster_month_stats",
+    "login_tokens", "sessions", "oauth_identities",
 ]
 
 INDEXES = [
@@ -44,6 +45,8 @@ INDEXES = [
     "api_usage_cluster_idx", "api_usage_user_idx", "api_usage_provider_idx",
     "api_usage_time_idx",
     "deletion_requests_open_idx", "deletion_requests_status_idx",
+    "login_tokens_user_idx", "login_tokens_expiry_idx",
+    "sessions_user_idx", "sessions_active_idx", "oauth_identities_user_idx",
 ]
 
 CONSTRAINTS = [
@@ -59,12 +62,15 @@ CONSTRAINTS = [
     "ingestion_runs_finished_ck", "ingestion_runs_failed_ck", "job_clusters_run_fk",
     "deletion_requests_completed_ck", "deletion_requests_failed_ck",
     "jobs_raw_present_ck", "jobs_purged_is_dead_ck", "cluster_month_stats_month_ck",
+    "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
+    "sessions_hash_key", "sessions_window_ck",
+    "oauth_identities_user_provider_key", "user_cvs_encryption_ck",
 ]
 
 FUNCTIONS = [
     "set_updated_at", "assert_valid_timezone", "cluster_try_consume",
     "assert_seniority_order", "jobs_derive_fields",
-    "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs",
+    "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
 ]
 
 TRIGGERS = [
@@ -185,6 +191,18 @@ def main() -> int:
         expected = len(list((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql")))
         rep.check(count == expected,
                   f"{expected} migrazioni applicate (trovate {count}, ultima {top})")
+
+        rep.section("autenticazione senza password")
+        cur.execute(
+            "SELECT table_name || '.' || column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND (column_name ILIKE '%password%' "
+            "   OR column_name ILIKE '%passwd%' OR column_name ILIKE '%pwd%')")
+        pw = [r[0] for r in cur.fetchall()]
+        rep.check(not pw, "nessuna colonna password nello schema",
+                  f"trovate: {', '.join(pw)}")
+
+        cur.execute("SELECT count(*) FROM user_cvs WHERE length(encrypted_dek) < 32")
+        rep.check(cur.fetchone()[0] == 0, "ogni CV ha una DEK avvolta")
 
         rep.section("deriva del vocabolario del fornitore")
         cur.execute(

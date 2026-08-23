@@ -276,6 +276,111 @@ ogni migrazione sarebbe comunque `op.execute()` di SQL grezzo.
 **Una migrazione già applicata non si modifica** — il runner confronta i
 checksum e si rifiuta di proseguire. Se serve un cambiamento, nuova migrazione.
 
+## Sicurezza
+
+### Autenticazione: niente password
+
+Magic-link via email, più Google e Microsoft come provider OAuth. **Non esiste
+una colonna password** in nessuna tabella, e `verify_schema.py` fallisce se
+qualcuno ne aggiunge una. Niente password significa niente reset da mettere in
+sicurezza, niente credenziali riusate da altri siti, niente hash da difendere.
+
+- `login_tokens` e `sessions` conservano **solo lo sha256** del token, mai il
+  token. Se il database trapela, quello che si trova non permette di entrare.
+  sha256 nudo è sufficiente: i token li generiamo noi con entropia alta, non
+  sono password indovinabili, quindi una KDF costosa non aggiunge nulla.
+- `oauth_identities` ha come chiave `(provider, subject)` e **non l'email**. Il
+  claim `sub` è l'unico identificativo stabile: le email cambiano e certi domini
+  le riassegnano, quindi agganciare l'account all'email significherebbe che chi
+  eredita un indirizzo eredita l'account.
+- Il token in chiaro non deve comparire nei log, mai — stessa regola del CV.
+
+### CV: cifratura lato client, a busta
+
+Object storage su **Hetzner Object Storage**, stesso data center del database,
+dati in UE. Il file viene cifrato **prima** dell'upload: Hetzner riceve byte
+opachi e non ha alcuna chiave.
+
+Schema a busta: ogni CV ha la sua DEK casuale (AES-256-GCM); la DEK viene
+avvolta con la KEK che sta in variabile d'ambiente sul server, e la DEK avvolta
+finisce in `user_cvs.encrypted_dek`. La KEK non entra mai nel database.
+
+Il motivo della busta è la rotazione: cambiare KEK vuol dire riavvolgere DEK di
+poche decine di byte, non riscaricare e ricifrare ogni CV. `kek_version` dice
+con quale generazione è avvolta ciascuna DEK, così la rotazione è incrementale
+invece che atomica — nessuna finestra in cui metà dei CV è illeggibile.
+
+### Backup
+
+`deploy/backup.sh`, in cron alle 03:00. `pg_dumpall` (include i ruoli, che non
+stanno dentro il database) → gzip → **cifratura a chiave pubblica** con
+`openssl cms` → copia su Hetzner Storage Box.
+
+**Sul server sta solo il certificato pubblico.** Quella macchina può produrre
+backup ma non può rileggerli: se viene compromessa, l'attaccante non ottiene lo
+storico. La chiave privata vive nel password manager e sul Mac, mai altrove.
+
+Conseguenza da tenere a mente: **il server non può verificare i propri backup.**
+Riesce a controllare che il file sia una struttura CMS valida e non sia
+sospettosamente piccolo, ma che il contenuto sia ripristinabile lo può dire solo
+un ripristino di prova fatto fuori, con la chiave privata. Va fatto ogni
+trimestre. Un backup mai ripristinato non è un backup verificato.
+
+Se la copia off-site non è configurata o fallisce, lo script **esce in errore**.
+Un backup che vive solo sul disco del database non è un backup, è una copia, e
+un off-site che smette in silenzio è il modo classico di scoprirlo troppo tardi.
+
+Ripristino:
+
+```bash
+openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
+  -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
+```
+
+### Server
+
+Aggiornamenti automatici **solo dal canale security** (`52nivult-security`, con
+`#clear` sulla lista ereditata: in apt.conf le liste si concatenano invece di
+sostituirsi, quindi senza `#clear` l'archivio completo resta dentro). Riavvio
+automatico alle 04:00, dopo la finestra di backup delle 03:00 — un riavvio a
+metà dump lascerebbe un backup troncato, mentre a valle non perde lavoro perché
+il runner di migrazioni e i job a lotti sono riprendibili.
+
+Postgres ascolta solo su `127.0.0.1`. Dall'esterno si passa da un tunnel SSH.
+
+### Inventario dei segreti e rotazione
+
+| Segreto | Dove vive | Come si ruota | Cosa si rompe durante |
+|---|---|---|---|
+| Chiave privata backup | password manager + Mac. **Mai sul server** | nuova coppia, cert nuovo sul server; conservare la vecchia privata finché esistono backup cifrati con essa | niente: i backup nuovi usano la nuova, i vecchi la vecchia |
+| KEK dei CV | env sul server + password manager | nuova KEK con `kek_version+1`, riavvolgere le DEK a lotti | niente, grazie a `kek_version` |
+| Password Postgres | `docker-compose.yml` ⚠ e `/opt/nivult/.env` | `ALTER ROLE ... PASSWORD`, poi aggiornare `.env` e riavviare l'applicazione | connessioni attive cadono, il runner è riprendibile |
+| Chiavi delle 6 fonti | `.env` sul server | rigenerare dal portale del fornitore, sostituire, riavviare | l'ingestione fallisce finché non è sostituita |
+| Chiave GLM | `.env` sul server | come sopra | il matching si ferma allo stadio LLM |
+| SMTP / Telegram / WhatsApp | `.env` sul server | come sopra | i digest non partono; `digests.status` va a `failed` e vengono ritentati |
+| Client secret OAuth | `.env` sul server | dal portale Google/Microsoft, con periodo di sovrapposizione | nessuno, se si sovrappongono |
+| Chiave SSH Storage Box | `/root/.ssh/id_ed25519_storagebox` | nuova chiave, installarla sulla Storage Box, rimuovere la vecchia | il backup fallisce rumorosamente |
+
+**Se una chiave trapela alle 3 di notte:** revocare prima di sostituire — una
+chiave ruotata ma non revocata resta valida. Poi sostituire in `.env`, riavviare,
+e verificare dai log che il servizio sia ripartito. Per la KEK dei CV e la chiave
+privata dei backup non c'è revoca possibile: lì l'unica risposta è ricifrare, e
+per i backup significa considerare compromesso tutto lo storico cifrato con essa.
+
+### Debiti aperti
+
+- ⚠ **`POSTGRES_PASSWORD` è in chiaro in `docker-compose.yml`**, contro la regola
+  "nessuna password nel codice". Va spostata in `.env` e referenziata come
+  `${POSTGRES_PASSWORD}`. Richiede di ricreare il container.
+- **Un solo ruolo Postgres, con privilegi di superutente.** Vanno separati
+  `nivult_app` (solo DML) e `nivult_migrator` (DDL, usato solo dal runner).
+  Attenzione ad `ALTER DEFAULT PRIVILEGES` per il migrator, altrimenti ogni
+  migrazione nuova rende le tabelle inaccessibili all'applicazione.
+- **Nessuna scansione dei segreti nei commit.** Hook pre-commit con `gitleaks`,
+  più lo stesso controllo in CI: l'hook protegge solo la macchina dove è
+  installato.
+- **Ripristino di prova mai eseguito.** Da fare al primo trimestre.
+
 ## Metodo di lavoro
 
 - **Prima di modifiche non banali, proponi il piano e aspetta conferma.**

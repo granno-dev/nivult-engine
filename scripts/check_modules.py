@@ -98,12 +98,21 @@ def seed(conn: psycopg.Connection) -> dict:
                     "'daily','Europe/Rome') RETURNING id")
         ids["user"] = cur.fetchone()[0]
 
-        cur.execute("INSERT INTO user_cvs (user_id,storage_key,embedding,embedding_model) "
-                    "VALUES (%s,'cv/mod.pdf',%s,'bge-m3')", (ids["user"], VEC))
+        cur.execute("INSERT INTO user_cvs (user_id,storage_key,embedding,embedding_model,"
+                    "encryption_algo, encrypted_dek, nonce, auth_tag, kek_version) "
+                    "VALUES (%s,'cv/mod.pdf',%s,'bge-m3','aes-256-gcm', decode(repeat('ab',32),'hex'), decode(repeat('cd',12),'hex'), decode(repeat('ef',16),'hex'), 1)", (ids["user"], VEC))
         cur.execute("INSERT INTO user_clusters (user_id,cluster_id) VALUES (%s,%s)",
                     (ids["user"], ids["cluster"]))
         cur.execute("INSERT INTO api_usage (provider,operation,user_id,cost_micros) "
                     "VALUES ('glm','score',%s,4200)", (ids["user"],))
+        cur.execute("INSERT INTO login_tokens (user_id,token_hash,expires_at,requested_ip) "
+                    "VALUES (%s, repeat('a',64), now() + interval '15 min','203.0.113.7')",
+                    (ids["user"],))
+        cur.execute("INSERT INTO sessions (user_id,token_hash,expires_at,origin,ip) "
+                    "VALUES (%s, repeat('b',64), now() + interval '30 days',"
+                    "'magic_link','203.0.113.7')", (ids["user"],))
+        cur.execute("INSERT INTO oauth_identities (provider,subject,user_id,email_at_link) "
+                    "VALUES ('google','sub-mod',%s,'mod@example.test')", (ids["user"],))
 
         def mkjob(sid, status, expired_days, posted_days):
             cur.execute(
@@ -248,8 +257,10 @@ def main() -> int:
         totals = execute_deletion(work, req, batch_size=100)
         check("cancellati i dati personali attesi",
               sorted(totals), ["api_usage:anonimizzate", "digest_items", "digests",
-                               "matches", "user_clusters", "user_cvs", "users"])
-        for table in ("user_cvs", "user_clusters", "matches", "digest_items", "digests"):
+                               "login_tokens", "matches", "oauth_identities", "sessions",
+                               "user_clusters", "user_cvs", "users"])
+        for table in ("user_cvs", "user_clusters", "matches", "digest_items", "digests",
+                      "login_tokens", "sessions", "oauth_identities"):
             check(f"COMMITTATO: {table} svuotata per l'utente",
                   seen_by_other(f"SELECT count(*) FROM {table} WHERE user_id = %s",
                                 (ids["user"],)), 0)

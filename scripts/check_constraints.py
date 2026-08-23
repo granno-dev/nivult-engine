@@ -125,8 +125,9 @@ def fixtures(conn) -> dict[str, str]:
         ids["digest_a"] = cur.fetchone()[0]
 
         cur.execute(
-            "INSERT INTO user_cvs (user_id, storage_key, embedding, embedding_model) "
-            "VALUES (%s, 'cv/b.pdf', %s, 'bge-m3')", (ids["user_b"], VEC))
+            "INSERT INTO user_cvs (user_id, storage_key, embedding, embedding_model, "
+            "encryption_algo, encrypted_dek, nonce, auth_tag, kek_version) "
+            "VALUES (%s, 'cv/b.pdf', %s, 'bge-m3', 'aes-256-gcm', decode(repeat('ab',32),'hex'), decode(repeat('cd',12),'hex'), decode(repeat('ef',16),'hex'), 1)", (ids["user_b"], VEC))
         # Consumo attribuito a user_b: dopo la cancellazione la riga deve
         # sopravvivere senza il collegamento alla persona.
         cur.execute(
@@ -292,6 +293,57 @@ def main() -> int:
             (ids["digest_a"], j1, u_a, ids["match_a"],
              ids["digest_a"], j2, u_a, ids["match_a"]))
 
+        section("autenticazione senza password")
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO login_tokens (user_id, token_hash, expires_at) "
+                        "VALUES (%s, repeat('a',64), now() + interval '15 min')", (u_a,))
+            cur.execute("INSERT INTO oauth_identities (provider, subject, user_id) "
+                        "VALUES ('google','sub-123',%s)", (u_a,))
+            cur.execute("INSERT INTO sessions (user_id, token_hash, expires_at, origin) "
+                        "VALUES (%s, repeat('b',64), now() + interval '30 days','magic_link')",
+                        (u_a,))
+
+        expect_error(conn, "23505", "token di accesso duplicato rifiutato",
+            "INSERT INTO login_tokens (user_id, token_hash, expires_at) "
+            "VALUES (%s, repeat('a',64), now() + interval '15 min')", (u_a,))
+        expect_error(conn, "23514", "token_hash che non è sha256 esadecimale rifiutato",
+            "INSERT INTO login_tokens (user_id, token_hash, expires_at) "
+            "VALUES (%s, 'non-e-un-hash', now() + interval '15 min')", (u_a,))
+        expect_error(conn, "23514", "token già scaduto alla creazione rifiutato",
+            "INSERT INTO login_tokens (user_id, token_hash, expires_at) "
+            "VALUES (%s, repeat('c',64), now() - interval '1 min')", (u_a,))
+        expect_error(conn, "23505", "stessa identità OAuth su due account rifiutata",
+            "INSERT INTO oauth_identities (provider, subject, user_id) "
+            "VALUES ('google','sub-123',%s)", (u_b,))
+        expect_error(conn, "23505", "due identità Google per lo stesso utente rifiutate",
+            "INSERT INTO oauth_identities (provider, subject, user_id) "
+            "VALUES ('google','sub-999',%s)", (u_a,))
+        expect_error(conn, "23514", "origine di sessione sconosciuta rifiutata",
+            "INSERT INTO sessions (user_id, token_hash, expires_at, origin) "
+            "VALUES (%s, repeat('d',64), now() + interval '1 day','facebook')", (u_a,))
+        expect_value(conn, "nessuna colonna password in tutto lo schema",
+            "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' "
+            "AND column_name ILIKE '%%password%%'", (), 0)
+
+        section("cifratura dei CV")
+        expect_error(conn, "23514", "DEK troppo corta rifiutata",
+            "INSERT INTO user_cvs (user_id, storage_key, encryption_algo, encrypted_dek, "
+            "nonce, auth_tag, kek_version) VALUES (%s,'cv/x.pdf','aes-256-gcm',"
+            "decode('aabb','hex'), decode(repeat('cd',12),'hex'), "
+            "decode(repeat('ef',16),'hex'), 1)", (u_a,))
+        expect_error(conn, "23514", "nonce di lunghezza sbagliata rifiutato",
+            "INSERT INTO user_cvs (user_id, storage_key, encryption_algo, encrypted_dek, "
+            "nonce, auth_tag, kek_version) VALUES (%s,'cv/y.pdf','aes-256-gcm',"
+            "decode(repeat('ab',32),'hex'), decode(repeat('cd',8),'hex'), "
+            "decode(repeat('ef',16),'hex'), 1)", (u_a,))
+        expect_error(conn, "23514", "algoritmo non previsto rifiutato",
+            "INSERT INTO user_cvs (user_id, storage_key, encryption_algo, encrypted_dek, "
+            "nonce, auth_tag, kek_version) VALUES (%s,'cv/z.pdf','rot13',"
+            "decode(repeat('ab',32),'hex'), decode(repeat('cd',12),'hex'), "
+            "decode(repeat('ef',16),'hex'), 1)", (u_a,))
+        expect_value(conn, "purge_expired_auth non tocca token ancora validi",
+            "SELECT sum(rows_affected) FROM purge_expired_auth(7)", (), 0)
+
         section("retention")
         with conn.cursor() as cur:
             # Offerte dedicate, per non interferire con le altre sezioni.
@@ -370,6 +422,11 @@ def main() -> int:
             "SELECT count(*) FROM users WHERE id = %s", (u_b,), 0)
         expect_value(conn, "dopo: nessun CV residuo",
             "SELECT count(*) FROM user_cvs WHERE user_id = %s", (u_b,), 0)
+        expect_value(conn, "dopo: nessun token, sessione o identità OAuth residua",
+            "SELECT (SELECT count(*) FROM login_tokens WHERE user_id=%s) "
+            "     + (SELECT count(*) FROM sessions WHERE user_id=%s) "
+            "     + (SELECT count(*) FROM oauth_identities WHERE user_id=%s)",
+            (u_b, u_b, u_b), 0)
         expect_value(conn, "dopo: il costo sopravvive senza collegamento alla persona",
             "SELECT count(*) FROM api_usage WHERE user_id IS NULL AND cost_micros = 1200",
             (), 1)

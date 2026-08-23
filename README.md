@@ -77,6 +77,12 @@ da un match o da un digest restano come lapide senza jsonb né embedding, per no
 perdere l'anti-ripetizione. Gli aggregati per cluster e mese vengono scritti
 prima della cancellazione.
 
+## Server e backup
+
+Configurazione versionata in `deploy/`. Il backup gira alle 03:00, cifra con
+chiave pubblica e copia su Hetzner Storage Box; la chiave privata non sta sul
+server. Vedi la sezione Sicurezza di [CLAUDE.md](CLAUDE.md).
+
 ## Cancellazione utente (GDPR)
 
 ```bash
