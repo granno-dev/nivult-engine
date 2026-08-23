@@ -257,6 +257,21 @@ def main() -> int:
             "INSERT INTO provider_budget (provider, period_month) "
             "VALUES ('arbetsformedlingen', DATE '2026-03-15')")
 
+        section("vocabolari dei filtri")
+        expect_value(conn, "il filtro dimensione ha un formato diverso dal campo",
+            "SELECT api_value || ' <- filtro | campo -> ' || response_value "
+            "FROM filter_values WHERE parameter='organization_size' AND api_value='2-10'",
+            (), "2-10 <- filtro | campo -> 2-10 employees")
+        expect_error(conn, "23514", "un valore 'verified' senza data è rifiutato",
+            "INSERT INTO filter_values (parameter,api_value,label,sort_order,evidence) "
+            "VALUES ('ai_language','Spanish','Spagnolo',9,'verified')")
+        expect_error(conn, "23514", "un livello di evidenza inventato è rifiutato",
+            "INSERT INTO filter_values (parameter,api_value,label,sort_order,evidence) "
+            "VALUES ('ai_language','Spanish','Spagnolo',9,'forse')")
+        expect_value(conn, "ogni binding punta a un vocabolario esistente",
+            "SELECT count(*) FROM filter_bindings b WHERE NOT EXISTS ("
+            "  SELECT 1 FROM filter_values v WHERE v.parameter = b.parameter)", (), 0)
+
         section("famiglia e termini di ricerca")
         expect_error(conn, "23503", "famiglia fuori vocabolario rifiutata",
             "INSERT INTO clusters (family, country) VALUES ('Rincorsa Sinonimi','FR')")

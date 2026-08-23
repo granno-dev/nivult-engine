@@ -28,7 +28,7 @@ TABLES = [
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
     "employer_kinds", "staffing_agency_patterns",
     "provider_quotas", "provider_budget", "job_families",
-    "cluster_source_queries",
+    "cluster_source_queries", "filter_values", "filter_bindings",
 ]
 
 INDEXES = [
@@ -231,6 +231,29 @@ def main() -> int:
 
         cur.execute("SELECT count(*) FROM job_families")
         rep.check(cur.fetchone()[0] == 33, "33 famiglie professionali censite")
+
+        rep.section("vocabolari dei filtri")
+        cur.execute("SELECT parameter, count(*), "
+                    "       count(*) FILTER (WHERE evidence = 'verified') "
+                    "FROM filter_values GROUP BY 1 ORDER BY 1")
+        for par, tot, ver in cur.fetchall():
+            print(f"  info  {par:<24} {ver}/{tot} valori verificati con una chiamata")
+
+        # Un valore fuori vocabolario nei filtri utente non dà errore all'API:
+        # dà zero risultati, e sembra che il mercato sia vuoto invece che la
+        # query sbagliata. Qui deve fallire, rumorosamente.
+        cur.execute("SELECT column_name, parameter FROM filter_bindings ORDER BY column_name")
+        for colonna, parametro in cur.fetchall():
+            cur.execute(
+                f"SELECT count(*), string_agg(DISTINCT v, ', ') FROM ("
+                f"  SELECT unnest({colonna}) AS v FROM user_clusters) x "
+                f"WHERE v NOT IN (SELECT api_value FROM filter_values "
+                f"                 WHERE parameter = %s)", (parametro,))
+            n, esempi = cur.fetchone()
+            rep.check(n == 0,
+                      f"user_clusters.{colonna} usa solo valori di {parametro}",
+                      f"{n} fuori vocabolario: {esempi} — l'API restituirebbe "
+                      f"zero risultati SENZA errore")
 
         rep.section("portata dei cluster")
         cur.execute("SELECT family || ' × ' || country || ' (' || n || ' offerte)' "
