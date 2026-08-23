@@ -367,6 +367,23 @@ c'è, altrimenti una scansione a pattern di riserva.
 Il controllo che conta davvero gira in **CI**, dove `gitleaks` c'è sempre e
 guarda tutta la storia: un hook si salta con `--no-verify`, la pipeline no.
 
+### Stato del deploy in produzione
+
+Al 2026-08-23:
+
+- 11 migrazioni applicate, schema verificato con `verify_schema.py` (sola
+  lettura, l'unica suite che si può puntare alla produzione — le altre tre
+  scrivono, e `reset_and_verify.py` comincia con `DROP SCHEMA public CASCADE`);
+- password del superutente `nivult` ruotata, verificata da fuori: la nuova
+  funziona, la vecchia è respinta;
+- `nivult_app` e `nivult_migrator` attivi. L'applicazione usa `DATABASE_URL`
+  (solo DML), il runner `MIGRATOR_DATABASE_URL`;
+- backup riprovato subito dopo la rotazione, non aspettando le 03:00: 20 tabelle
+  e 3 ruoli nel dump, cifratura e copia off-site verificate.
+
+Il database di produzione ascolta solo su `127.0.0.1`: per lavorarci da locale
+serve `ssh -L 15432:127.0.0.1:5432 root@<host>`.
+
 ### Server
 
 Aggiornamenti automatici **solo dal canale security** (`52nivult-security`, con
@@ -399,20 +416,19 @@ per i backup significa considerare compromesso tutto lo storico cifrato con essa
 
 ### Debiti aperti
 
-- **`deploy/setup-roles.sh` non è ancora stato eseguito in produzione.** I ruoli
-  esistono senza LOGIN; l'applicazione si connette ancora come `nivult`
-  superutente. Va fatto prima del primo deploy vero.
 - **Il ripristino va fatto sulla stessa immagine.** Il database di produzione
   nasce con `LOCALE = 'en_US.utf8'`, che su macOS non esiste: un
   `CREATE DATABASE` da quel dump fallisce con `invalid LC_COLLATE locale name`.
   Si ripristina dentro `pgvector/pgvector:pg17`, decifrando dove sta la chiave
   privata e mandando il dump in chiaro via SSH nel container. Scoperto facendo
   il ripristino, non leggendo lo script.
-- **La password del superutente `nivult` non è mai stata ruotata.** È stata
-  spostata in `.env`, ma il valore è lo stesso di sempre. Ruotarla insieme al
-  passaggio a `nivult_app`.
 - **`gitleaks` non è installato sul Mac**, quindi l'hook usa la scansione di
   riserva. In CI gira quello vero.
+- **Il workflow CI non è mai stato visto girare** da qui: `gh` non è installato.
+- **`pg_hba` del container ha `trust` per 127.0.0.1 interno.** Significa che una
+  verifica di password fatta con `docker exec ... psql -h 127.0.0.1` passa
+  sempre, qualunque password si usi, e non dimostra niente. Le credenziali si
+  verificano **da fuori**, attraverso la porta mappata sull'host.
 
 ## Metodo di lavoro
 
