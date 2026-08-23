@@ -64,12 +64,13 @@ class RawJob:
 
 @dataclass(slots=True)
 class FetchResult:
-    """Esito di una fetch, non solo i risultati.
+    """Esito di UNA PAGINA, non dell'intera ingestione.
 
-    `complete` dice se la fonte ha restituito tutto il disponibile. Serve allo
-    sweep delle scadute: se la fetch è stata troncata, il fatto che un'offerta
-    non sia comparsa non significa che sia scaduta — significa che non siamo
-    arrivati a leggerla.
+    `complete` dice se questa pagina ha esaurito i risultati disponibili. Se il
+    ciclo si ferma prima — per il tetto giornaliero o per il limite di
+    scorrimento della fonte — la fetch complessiva è troncata anche quando
+    l'ultima pagina diceva il contrario. Quella somma la fa il runner, ed è ciò
+    che finisce in `ingestion_runs.fetch_complete`.
     """
 
     jobs: list[RawJob]
@@ -81,3 +82,13 @@ class FetchResult:
     # perdita silenziosa in ingestione non si nota finché qualcuno non conta a
     # mano, e a quel punto è già andata avanti per settimane.
     skipped: int = 0
+
+    @property
+    def received(self) -> int:
+        """Record arrivati dalla fonte, normalizzabili o no.
+
+        È questo che fa avanzare l'offset, non len(jobs): contando solo quelli
+        normalizzati, ogni scarto sposterebbe la finestra e salterebbe
+        silenziosamente un'offerta buona a ogni pagina.
+        """
+        return len(self.jobs) + self.skipped

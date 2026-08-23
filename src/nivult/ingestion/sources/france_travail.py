@@ -81,6 +81,8 @@ class FranceTravailClient(HttpSource):
     source = "france_travail"
     countries = frozenset({"FR"})
     credits_per_request = 0  # gratuita: il limite è il rate, non il costo
+    page_size = PAGE_SIZE
+    max_offset = MAX_RESULTS
 
     def __init__(self, client_id: str | None = None, client_secret: str | None = None, **kw):
         super().__init__(rate_per_second=kw.pop("rate_per_second", 2.0), **kw)
@@ -117,11 +119,13 @@ class FranceTravailClient(HttpSource):
         return self._token
 
     def fetch(self, *, query: str, country: str = "FR", since: datetime | None = None,
-              limit: int = PAGE_SIZE) -> FetchResult:
+              limit: int = PAGE_SIZE, offset: int = 0) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
 
-        params: dict[str, str] = {"motsCles": query, "range": f"0-{min(limit, PAGE_SIZE) - 1}"}
+        # L'API pagina con un intervallo inclusivo, non con offset e limite.
+        end = offset + min(limit, PAGE_SIZE) - 1
+        params: dict[str, str] = {"motsCles": query, "range": f"{offset}-{end}"}
         if since:
             # L'API rifiuta minCreationDate da solo: i due estremi sono
             # dipendenti e vanno passati insieme. Scoperto al primo giro del
@@ -137,8 +141,10 @@ class FranceTravailClient(HttpSource):
         )
         # 204 = nessun risultato, 206 = risultato parziale (è la norma).
         if r.status_code == 204:
+            # 204 su una pagina successiva significa che i risultati sono
+            # finiti, non che non ce n'erano.
             return FetchResult(jobs=[], complete=True, requests_made=1, credits_used=0,
-                               total_available=0)
+                               total_available=offset)
         if r.status_code not in (200, 206):
             raise RuntimeError(f"ricerca fallita ({r.status_code}): {r.text[:300]}")
 
@@ -162,9 +168,7 @@ class FranceTravailClient(HttpSource):
         if skipped:
             log.warning("%s: %d record non normalizzabili su %d", self.source, skipped, len(offers))
 
-        # complete solo se abbiamo davvero visto tutto: serve allo sweep delle
-        # scadute, che non deve mai basarsi su una fetch troncata.
-        complete = total is not None and total <= len(offers)
+        complete = total is not None and offset + len(offers) >= total
 
         return FetchResult(jobs=jobs, complete=complete, requests_made=1,
                            credits_used=0, total_available=total,

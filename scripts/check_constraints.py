@@ -369,6 +369,48 @@ def main() -> int:
         expect_value(conn, "riclassificare due volte non cambia più nulla",
             "SELECT reclassify_employers()", (), 0)
 
+        section("deduplica morbida")
+        def mkdup(sid, org, title, city, kind="national_agency"):
+            return ("INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+                    "title_normalized,organization,date_posted,countries,cities,raw,link_kind) "
+                    f"VALUES ('nav','{sid}','https://d.example/{sid}','https://d.example/{sid}',"
+                    f"'{title}','{title.lower()}','{org}',now(),ARRAY['FR'],ARRAY['{city}'],"
+                    f"'{{}}'::jsonb,'{kind}')")
+
+        with conn.cursor() as cur:
+            for sid, org, title, city, kind in [
+                ("d1", "Acme Corp", "HR Lead", "Lyon", "national_agency"),
+                ("d2", "Acme Corp", "HR Lead", "Lyon", "career_site"),
+                ("d3", "Acme Corp", "HR Lead", "Lyon", "national_agency"),
+                ("d4", "Acme Corp", "HR Lead", "Nice", "national_agency"),
+                ("d5", "", "Ghost Role", "Lyon", "national_agency"),
+                ("d6", "", "Ghost Role", "Lyon", "national_agency"),
+            ]:
+                cur.execute(mkdup(sid, org, title, city, kind))
+
+        expect_value(conn, "risoluzione eseguita",
+            "SELECT jobs_marked > 0 FROM resolve_duplicates()", (), True)
+        expect_value(conn, "il gruppo di 3 lascia una sola canonica",
+            "SELECT count(*) FROM jobs WHERE source_job_id IN ('d1','d2','d3') "
+            "AND duplicate_of_job_id IS NULL", (), 1)
+        # Il career_site vince: è il link che vogliamo dare all'utente.
+        expect_value(conn, "vince il career_site, non chi è arrivato prima",
+            "SELECT source_job_id FROM jobs WHERE source_job_id IN ('d1','d2','d3') "
+            "AND duplicate_of_job_id IS NULL", (), "d2")
+        expect_value(conn, "città diversa non viene accorpata",
+            "SELECT duplicate_of_job_id IS NULL FROM jobs WHERE source_job_id='d4'",
+            (), True)
+        # Senza datore il fingerprint perde il suo elemento più discriminante.
+        expect_value(conn, "datore non dichiarato: NESSUNA accorpata",
+            "SELECT count(*) FROM jobs WHERE source_job_id IN ('d5','d6') "
+            "AND duplicate_of_job_id IS NOT NULL", (), 0)
+        expect_value(conn, "secondo giro: niente da fare",
+            "SELECT groups_resolved || '/' || jobs_marked FROM resolve_duplicates()",
+            (), "0/0")
+        expect_value(conn, "i duplicati puntano tutti a una riga canonica",
+            "SELECT count(*) FROM jobs d JOIN jobs o ON o.id = d.duplicate_of_job_id "
+            "WHERE o.duplicate_of_job_id IS NOT NULL", (), 0)
+
         section("match")
         expect_error(conn, "23514", "punteggio fuori scala rifiutato",
             "INSERT INTO matches (user_id,job_id,score,reason,threshold_used,model) "

@@ -30,7 +30,7 @@ STREAM_URL = "https://jobstream.api.jobtechdev.se/stream"
 AGENCY_URL = "https://arbetsformedlingen.se/platsbanken/annonser/{id}"
 
 MAX_LIMIT = 100     # tetto per pagina della JobSearch
-MAX_OFFSET = 2000   # tetto di scorrimento
+MAX_OFFSET = 2000   # tetto di scorrimento imposto dalla fonte
 
 # I timestamp arrivano senza fuso ("2026-08-10T10:55:20"). Sono ora locale
 # svedese: interpretarli come UTC li sposterebbe di una o due ore a seconda
@@ -57,16 +57,19 @@ class ArbetsformedlingenClient(HttpSource):
     source = "arbetsformedlingen"
     countries = frozenset({"SE"})
     credits_per_request = 0
+    page_size = MAX_LIMIT
+    max_offset = MAX_OFFSET
 
     def __init__(self, **kw):
         super().__init__(rate_per_second=kw.pop("rate_per_second", 3.0), **kw)
 
     def fetch(self, *, query: str, country: str = "SE", since: datetime | None = None,
-              limit: int = MAX_LIMIT) -> FetchResult:
+              limit: int = MAX_LIMIT, offset: int = 0) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
 
-        params: dict[str, object] = {"q": query, "limit": min(limit, MAX_LIMIT), "offset": 0}
+        params: dict[str, object] = {"q": query, "limit": min(limit, MAX_LIMIT),
+                                     "offset": offset}
         if since:
             params["published-after"] = since.astimezone(SE).strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -89,9 +92,10 @@ class ArbetsformedlingenClient(HttpSource):
         if skipped:
             log.warning("%s: %d record non normalizzabili su %d", self.source, skipped, len(hits))
 
-        # complete solo se abbiamo davvero visto tutto il disponibile: lo sweep
-        # delle scadute non deve mai basarsi su una fetch troncata.
-        complete = total is not None and total <= len(hits)
+        # Questa pagina esaurisce i risultati? Si conta dall'offset, non dai
+        # soli hits: a pagina 3 aver ricevuto 100 record non significa aver
+        # visto tutto.
+        complete = total is not None and offset + len(hits) >= total
 
         return FetchResult(jobs=jobs, complete=complete, requests_made=1,
                            credits_used=0, total_available=total,

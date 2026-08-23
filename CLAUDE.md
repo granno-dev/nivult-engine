@@ -255,6 +255,29 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
 - **`canonicalize` ripara gli URL senza schema** (`www.acme.se` →
   `https://www.acme.se`), ma solo se ciò che resta è un nome di dominio
   plausibile. I datori li scrivono così, e rifiutarli perdeva offerte vere.
+- **La paginazione la guida il runner, non il client.** Il tetto giornaliero sta
+  nel database e i client devono restare senza database, o il probe smette di
+  funzionare. Il runner chiede `cluster_try_consume` prima di **ogni** pagina e
+  registra ogni pagina in `api_usage`: una fonte che raddoppia le chiamate senza
+  raddoppiare i risultati va vista subito.
+- **L'offset avanza sui record RICEVUTI, non su quelli normalizzati.** Contando
+  solo i normalizzati, ogni scarto sposterebbe la finestra e salterebbe
+  un'offerta buona a ogni pagina.
+- **`fetch_complete` è vero solo se l'ultima pagina ha esaurito i risultati E il
+  ciclo non si è fermato per altro.** Ci si può fermare per tre motivi: tetto
+  giornaliero, limite di scorrimento della fonte (France Travail si ferma a
+  3149), rete di sicurezza sul numero di pagine. In tutti e tre la fetch è
+  troncata, e da una fetch troncata le scadute non si deducono.
+- **La deduplica morbida gira DOPO tutti i cluster, mai durante.** Un'offerta
+  arrivata da un cluster può essere il duplicato di una arrivata da un altro, e
+  deciderlo a metà strada sceglierebbe l'originale in base a chi è passato
+  prima. Vince il `link_kind` più basso di rank, poi chi è arrivato prima, poi
+  l'id: senza uno spareggio deterministico due esecuzioni sugli stessi dati
+  potrebbero scegliere originali diversi.
+- **Le offerte senza datore dichiarato sono escluse dalla deduplica morbida.**
+  Senza `organization` il fingerprint resta titolo + città + settimana, e due
+  aziende diverse che entrambe nascondono il nome collasserebbero in una. Il
+  caso si è presentato al primo campione reale.
 - **Lo sweep delle scadute richiede `ingestion_runs.fetch_complete`.** Se una
   fetch è stata troncata dal limite di pagina, l'assenza di un'offerta non
   significa che sia scaduta: significa che non siamo arrivati a leggerla.
