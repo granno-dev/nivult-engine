@@ -1,0 +1,9 @@
+{
+  "ruolo": "HR Business Partner",
+  "seniority": "5-10",
+  "competenze": ["talent acquisition", "employee relations", "performance management",
+                 "HRIS", "compensation & benefits", "diritto del lavoro"],
+  "lingue": ["Italian", "English"],
+  "sedi": ["Milano", "Roma", "remoto"],
+  "note": "Cerca un ruolo generalista in azienda strutturata, non in agenzia."
+}

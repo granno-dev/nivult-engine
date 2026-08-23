@@ -79,16 +79,44 @@ trasformerebbe una svista in una bugia all'utente.
 
 > Il copy del sito pubblico va allineato. Sta nell'altro repo.
 
-### 2. Matching a imbuto (per utente, per ciclo)
+### 2. Matching — valutazione diretta, non a imbuto
 
-1. Filtri deterministici sui campi strutturati
-2. Ricerca ibrida: embedding **BGE-M3** su pgvector + full-text Postgres, fusi con
-   **Reciprocal Rank Fusion**
-3. Reranker **bge-reranker-v2-m3**
-4. Le ~15 offerte finaliste vanno a un LLM (**GLM 5.2** via API) che assegna un
-   punteggio 0–100 e scrive una riga di motivazione
+**GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
+niente reranker, niente ricerca ibrida: l'imbuto è stato tolto perché il
+giudizio del modello costa poco abbastanza da poterlo dare a tutte.
 
-Passano solo le offerte **sopra soglia alta**. Meglio un digest vuoto che un digest scadente.
+Quattro cose lo rendono sostenibile (~2,50 $/mese per un Ultra su cluster
+stretti):
+
+1. **thinking OFF** — su una valutazione a rubrica il ragionamento esteso
+   moltiplica i token di uscita senza cambiare il punteggio;
+2. **riassunto e competenze**, non la descrizione integrale, che è in gran parte
+   boilerplate legale e di employer branding;
+3. **CV e rubrica in cache**, quindi in testa a ogni chiamata e identici — se
+   cambiassero fra un lotto e l'altro il risparmio sparirebbe;
+4. **due passate**: punteggio secco su tutte, motivazione solo per le prime 30.
+
+Passano solo le offerte **sopra soglia alta**. Meglio un digest vuoto che un
+digest scadente.
+
+**Due protezioni obbligatorie**, entrambe con la forma dei budget che già
+usiamo — configurazione a parte, una riga per periodo, nessun azzeramento:
+
+- **Budget di valutazione per utente**, legato al piano (`plan_quotas`,
+  `user_evaluation_budget`, `user_try_evaluate`). Il costo qui è **per utente**,
+  non per cluster: il corpus è condiviso ma il giudizio no, quindi cento utenti
+  sullo stesso cluster costano cento volte.
+- **Valvola per i cluster sovradimensionati.** Sopra
+  `clusters.prescreen_threshold` offerte al mese entra un pre-screening con
+  Mistral Small, che passa a GLM solo le migliori. È **per cluster**, non
+  globale: attivarla ovunque pagherebbe un secondo modello dove non serve, e
+  aggiungerebbe un anello che può sbagliare là dove GLM ce la fa da solo.
+  Misurato: un cluster stretto fa ~300 offerte al mese, HR Germania 2.600, e
+  HR Francia in produzione è già a 2.552.
+
+> **Da decidere:** `job_embeddings`, l'indice HNSW, `user_cvs.embedding` e
+> `jobs.tsv` non servono più a nessuno. Toglierli semplifica parecchio, ma è una
+> porta che si richiude con difficoltà. Restano finché non lo decidiamo.
 
 ### 3. Consegna
 

@@ -29,6 +29,7 @@ TABLES = [
     "employer_kinds", "staffing_agency_patterns",
     "provider_quotas", "provider_budget", "job_families",
     "cluster_source_queries", "filter_values", "filter_bindings", "user_filters",
+    "plan_quotas", "user_evaluation_budget",
 ]
 
 INDEXES = [
@@ -80,7 +81,8 @@ FUNCTIONS = [
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
     "normalize_org", "classify_employer", "jobs_set_employer_kind",
     "resolve_duplicates", "provider_try_consume", "settle_credits",
-    "expire_stale_jobs", "mark_jobs_removed",
+    "expire_stale_jobs", "mark_jobs_removed", "user_try_evaluate",
+    "cluster_needs_prescreen",
     "assert_employer_kinds_valid", "cluster_try_consume_backfill",
     "cluster_finish_backfill",
     "reclassify_employers",
@@ -186,6 +188,7 @@ def main() -> int:
         rep.check("cluster_backfill_v" in views, "vista cluster_backfill_v")
         rep.check("cluster_coverage_v" in views, "vista cluster_coverage_v")
         rep.check("expiry_blind_spots_v" in views, "vista expiry_blind_spots_v")
+        rep.check("cluster_volume_v" in views, "vista cluster_volume_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)
@@ -275,6 +278,23 @@ def main() -> int:
                       f"user_clusters.{colonna} usa solo valori di {parametro}",
                       f"{n} fuori vocabolario: {esempi} — l'API restituirebbe "
                       f"zero risultati SENZA errore")
+
+        rep.section("valutazione")
+        cur.execute("SELECT count(*) FROM plan_quotas")
+        rep.check(cur.fetchone()[0] == 3, "quota di valutazione per ogni piano")
+        cur.execute("SELECT u.plan FROM users u LEFT JOIN plan_quotas q ON q.plan = u.plan "
+                    "WHERE q.plan IS NULL GROUP BY 1")
+        senza = [r[0] for r in cur.fetchall()]
+        rep.check(not senza, "ogni piano in uso ha una quota",
+                  f"senza quota: {', '.join(senza)}")
+        cur.execute("SELECT family || ' × ' || country || ' (' || offerte_30g || '/mese)' "
+                    "FROM cluster_volume_v WHERE prescreening_attivo")
+        grossi = [r[0] for r in cur.fetchall()]
+        if grossi:
+            rep.warn("pre-screening attivo su: " + "; ".join(grossi)
+                     + " — valvola inserita, non un guasto")
+        else:
+            rep.check(True, "nessun cluster sopra la soglia di pre-screening")
 
         rep.section("portata dei cluster")
         cur.execute("SELECT family || ' × ' || country || ' (' || n || ' offerte)' "

@@ -224,6 +224,54 @@ def main() -> int:
             "  SELECT 1 FROM cluster_daily_budget WHERE cluster_id=%s "
             "  AND usage_date=current_date AND circuit_open)", (cl, cl), True)
 
+        section("budget di valutazione per utente")
+        expect_value(conn, "un utente basic ha la sua quota",
+            "SELECT monthly_evaluations FROM plan_quotas q JOIN users u ON u.plan=q.plan "
+            "WHERE u.id = %s", (u_b,), 1500)
+        expect_value(conn, "valutazione entro la quota consentita",
+            "SELECT user_try_evaluate(%s, 1000)", (u_b,), True)
+        expect_value(conn, "oltre la quota: respinta",
+            "SELECT user_try_evaluate(%s, 1000)", (u_b,), False)
+        expect_value(conn, "e il breaker dice quale piano e quanto",
+            "SELECT circuit_reason FROM user_evaluation_budget WHERE user_id = %s",
+            (u_b,), "valutazioni mensili esaurite (1000/1500, piano basic)")
+        expect_value(conn, "un utente inesistente non consuma nulla",
+            "SELECT user_try_evaluate('00000000-0000-0000-0000-000000000000', 1)",
+            (), False)
+        # Un utente cancellato o sospeso non deve poter far spendere.
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET status='paused' WHERE id=%s", (u_a,))
+        expect_value(conn, "un utente sospeso non fa valutare",
+            "SELECT user_try_evaluate(%s, 1)", (u_a,), False)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET status='active' WHERE id=%s", (u_a,))
+        expect_error(conn, "23514", "mese non normalizzato rifiutato",
+            "INSERT INTO user_evaluation_budget (user_id, period_month) "
+            "VALUES (%s, DATE '2026-03-15')", (u_a,))
+
+        section("valvola di pre-screening")
+        # Tre offerte nel cluster, così il volume è noto e il caso è
+        # autosufficiente invece di dipendere dalle fixture di altre sezioni.
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO job_clusters (job_id, cluster_id) "
+                        "SELECT id, %s FROM jobs LIMIT 3 "
+                        "ON CONFLICT DO NOTHING", (cl,))
+            cur.execute("SELECT offerte_30g FROM cluster_volume_v WHERE id = %s", (cl,))
+            volume = cur.fetchone()[0]
+        expect_value(conn, f"volume del cluster leggibile ({volume} offerte)",
+            "SELECT offerte_30g > 0 FROM cluster_volume_v WHERE id = %s", (cl,), True)
+        expect_value(conn, "soglia sopra il volume: valvola chiusa",
+            "SELECT cluster_needs_prescreen(%s)", (cl,), False)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE clusters SET prescreen_threshold = %s WHERE id = %s",
+                        (max(volume - 1, 1), cl))
+        expect_value(conn, "soglia sotto il volume: valvola aperta",
+            "SELECT cluster_needs_prescreen(%s)", (cl,), True)
+        with conn.cursor() as cur:
+            cur.execute("UPDATE clusters SET prescreen_threshold = 800 WHERE id = %s", (cl,))
+        expect_error(conn, "23514", "soglia a zero rifiutata",
+            "UPDATE clusters SET prescreen_threshold = 0 WHERE id = %s", (cl,))
+
         section("budget del fornitore")
         expect_value(conn, "fonte gratuita: tetto a 0 non blocca mai",
             "SELECT provider_try_consume('france_travail', 0, 1)::text || "
