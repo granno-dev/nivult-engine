@@ -27,7 +27,7 @@ TABLES = [
     "ingestion_runs", "api_usage", "deletion_requests", "cluster_month_stats",
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
     "employer_kinds", "staffing_agency_patterns",
-    "provider_quotas", "provider_budget",
+    "provider_quotas", "provider_budget", "job_families",
 ]
 
 INDEXES = [
@@ -226,6 +226,9 @@ def main() -> int:
                      f"eseguire SELECT reclassify_employers()")
         else:
             rep.check(True, "etichette datore allineate alla lista")
+
+        cur.execute("SELECT count(*) FROM job_families")
+        rep.check(cur.fetchone()[0] == 33, "33 famiglie professionali censite")
 
         rep.section("portata dei cluster")
         cur.execute("SELECT family || ' × ' || country || ' (' || n || ' offerte)' "

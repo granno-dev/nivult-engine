@@ -39,9 +39,10 @@ MAX_LIMIT = 1000
 # time_frame accetta scaglioni fissi, non una data. Si sceglie il più stretto
 # che copre la finestra richiesta: chiedere più indietro del necessario costa
 # crediti veri.
+# active-ats accetta solo 1h/24h/7d/6m — NON "1m", che invece active-ats-count
+# tollera. Verificato: la ricerca risponde 400 con l'elenco dei valori validi.
 TIME_FRAMES = ((timedelta(hours=1), "1h"), (timedelta(days=1), "24h"),
-               (timedelta(days=7), "7d"), (timedelta(days=31), "1m"),
-               (timedelta(days=186), "6m"))
+               (timedelta(days=7), "7d"), (timedelta(days=186), "6m"))
 
 # La fonte restituisce i paesi per NOME ("Germany"), mentre France Travail dà
 # "FR" e Arbetsförmedlingen "SE". Mescolarli in jobs.countries romperebbe ogni
@@ -114,16 +115,16 @@ class FantasticClient(HttpSource):
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}", "accept": "application/json"}
 
-    def count(self, *, query: str, country: str, since: datetime | None = None) -> int:
+    def count(self, *, query: str, country: str, since: datetime | None = None,
+              taxonomy: str | None = None) -> int:
         """Quante offerte ci sarebbero. 1 Request, ZERO crediti Jobs.
 
         Da chiamare sempre prima di scaricare: è l'unico modo di sapere quanto
         costerebbe una fetch prima di averla pagata.
         """
         r = self.request("GET", BASE_URL + COUNT_PATH, headers=self._headers,
-                         params={"title": query,
-                                 "location": COUNTRY_NAMES.get(country, country),
-                                 "time_frame": time_frame_for(since)})
+                         params=self.search_params(query=query, country=country,
+                                                   since=since, taxonomy=taxonomy))
         if r.status_code != 200:
             raise RuntimeError(f"conteggio fallito ({r.status_code}): {r.text[:300]}")
         payload = r.json()
@@ -136,17 +137,48 @@ class FantasticClient(HttpSource):
                 return int(payload[key])
         raise RuntimeError(f"forma del conteggio non riconosciuta: {str(payload)[:200]}")
 
+    def search_params(self, *, query: str, country: str, since: datetime | None,
+                      taxonomy: str | None = None) -> dict:
+        """Parametri di ricerca comuni a fetch e count.
+
+        Se `taxonomy` c'è si filtra su quella e NON sul titolo: la tassonomia
+        cattura la famiglia professionale in qualunque lingua, mentre il titolo
+        costringe a rincorrere i sinonimi. Misurato in Germania su 7 giorni:
+        title='Human Resources' dà 26 offerte, ai_taxonomies_a='Human Resources'
+        ne dà 646.
+        """
+        p: dict[str, object] = {"location": COUNTRY_NAMES.get(country, country)}
+        if taxonomy:
+            p["ai_taxonomies_a"] = taxonomy
+        else:
+            p["title"] = query
+        # time_frame è OBBLIGATORIO sulla ricerca, ma i suoi scaglioni sono
+        # grossolani: 14 giorni ricadrebbero in "6m". date_posted_gte restringe
+        # dentro lo scaglione — misurato: 6m dà 6775 offerte, 6m più la data
+        # ne dà 2003 — e i crediti si pagano su quelle restituite, quindi la
+        # data esatta è ciò che evita di pagare sei mesi per due settimane.
+        p["time_frame"] = time_frame_for(since)
+        if since:
+            p["date_posted_gte"] = since.astimezone(timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S")
+        return p
+
     def fetch(self, *, query: str, country: str, since: datetime | None = None,
-              limit: int = 100, offset: int = 0) -> FetchResult:
+              limit: int = 100, offset: int = 0, taxonomy: str | None = None,
+              with_org_details: bool = True) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
 
+        params = self.search_params(query=query, country=country, since=since,
+                                    taxonomy=taxonomy)
+        params.update({"limit": min(limit, MAX_LIMIT), "offset": offset})
+        if with_org_details:
+            # L'arricchimento è OPT-IN: senza questo flag la risposta non porta
+            # org_linkedin_size né gli altri campi di organizzazione.
+            params["include_basic_organization_details"] = "true"
+
         r = self.request("GET", BASE_URL + SEARCH_PATH, headers=self._headers,
-                         params={"title": query,
-                                 "location": COUNTRY_NAMES.get(country, country),
-                                 "time_frame": time_frame_for(since),
-                                 "limit": min(limit, MAX_LIMIT),
-                                 "offset": offset})
+                         params=params)
         if r.status_code != 200:
             raise RuntimeError(f"ricerca fallita ({r.status_code}): {r.text[:300]}")
 

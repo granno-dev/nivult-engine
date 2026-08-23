@@ -326,6 +326,29 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   pagina), si chiama, e `settle_credits` restituisce la differenza. Il verso
   conta — riservare poco e aggiustare in su lascerebbe una finestra in cui due
   worker paralleli sforano entrambi credendo di stare nel tetto.
+- **Un cluster si chiede per TASSONOMIA, non per titolo.** `ai_taxonomies_a` non
+  è solo un campo di risposta: è un **parametro di ricerca**, e cattura la
+  famiglia professionale in qualunque lingua invece di costringerci a rincorrere
+  i sinonimi. Misurato su 14 giorni:
+
+  | Paese | `title='Human Resources'` | `ai_taxonomies_a='Human Resources'` |
+  |---|---|---|
+  | DE | 43 | 1.220 |
+  | FR | 9 | 744 |
+  | IT | 8 | 131 |
+
+  I valori sono in `job_families`: 33 verificati. `ai_taxonomies_a_primary`
+  esiste e restringe alla tassonomia principale, se servirà precisione.
+- **L'arricchimento è OPT-IN.** Senza `include_basic_organization_details=true`
+  la risposta ha 49 campi, con il flag 69 — fra cui `org_linkedin_size`,
+  `org_linkedin_headcount`, `org_linkedin_industry` e
+  `org_linkedin_recruitment_agency_derived`. Non costa crediti in più.
+- **`time_frame` è obbligatorio sulla ricerca** e accetta solo `1h/24h/7d/6m`
+  (non `1m`, che invece `count` tollera). Gli scaglioni sono grossolani, quindi
+  si accompagna con `date_posted_gte`, che restringe dentro lo scaglione: `6m`
+  dà 6.775 offerte, `6m` più la data ne dà 2.003. Siccome i crediti si pagano
+  sulle offerte **restituite**, la data esatta è ciò che evita di pagare sei
+  mesi per averne due settimane.
 - **Fantastic dichiara la quota negli header**, e vanno creduti più delle nostre
   stime: `x-api-jobs-this-request` è il costo esatto della chiamata,
   `x-api-jobs-remaining` e `x-api-requests-remaining` sono il residuo reale. Il
@@ -468,12 +491,12 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
 ### Vincoli aperti sui dati del fornitore
 
 - `user_clusters.company_sizes` esiste ma **il funnel non deve applicarlo**.
-  Verificato il 2026-08-23: Fantastic **non** espone la dimensione azienda in
-  `active-ats`, nemmeno con Basic Organization Enrichment attivo — i soli campi
-  di organizzazione sono `org_linkedin_slug`, `organization_url` e
-  `organization_logo`. France Travail ha `trancheEffectifEtab`, ma un filtro
-  attivo su una fonte sola darebbe risultati che dipendono da **dove è passata
-  l'offerta**, non da cosa cerca l'utente. Resta chiuso.
+  **Non più per un limite tecnico.** Fantastic espone `org_linkedin_size` e
+  `org_linkedin_headcount` con `include_basic_organization_details=true`, ed
+  `organization_size` è anche un parametro di ricerca. Ma le fonti nazionali non
+  ce l'hanno, e un filtro attivo su una fonte sola darebbe risultati che
+  dipendono da **dove è passata l'offerta** invece che da cosa cerca l'utente.
+  Riaprirlo è ora una decisione di prodotto.
 - `experience_levels` è **confermato**: un'offerta reale di Fantastic riporta
   `5-10`. La scala ipotizzata era giusta. `scripts/verify_schema.py` segnala i valori fuori vocabolario:
   quelli non vengono considerati dai filtri di seniority.
