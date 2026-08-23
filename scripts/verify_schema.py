@@ -66,6 +66,7 @@ CONSTRAINTS = [
     "deletion_requests_completed_ck", "deletion_requests_failed_ck",
     "jobs_raw_present_ck", "jobs_purged_is_dead_ck", "cluster_month_stats_month_ck",
     "provider_budget_month_ck", "provider_budget_circuit_ck",
+    "user_clusters_employer_kinds_ck",
     "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
     "sessions_hash_key", "sessions_window_ck",
     "oauth_identities_user_provider_key", "user_cvs_encryption_ck",
@@ -78,6 +79,7 @@ FUNCTIONS = [
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
     "normalize_org", "classify_employer", "jobs_set_employer_kind",
     "resolve_duplicates", "provider_try_consume", "settle_credits",
+    "assert_employer_kinds_valid",
     "reclassify_employers",
 ]
 
@@ -85,6 +87,7 @@ TRIGGERS = [
     "users_set_updated_at", "users_valid_timezone", "clusters_set_updated_at",
     "user_clusters_seniority_order", "jobs_derive_fields_trg",
     "jobs_duplicate_target_canonical", "jobs_employer_kind_trg",
+    "user_clusters_employer_kinds_trg",
 ]
 
 
@@ -221,6 +224,18 @@ def main() -> int:
                      f"eseguire SELECT reclassify_employers()")
         else:
             rep.check(True, "etichette datore allineate alla lista")
+
+        rep.section("portata dei cluster")
+        cur.execute("SELECT family || ' × ' || country || ' (' || n || ' offerte)' "
+                    "FROM (SELECT c.family, c.country, count(*) n FROM clusters c "
+                    "  JOIN job_clusters jc ON jc.cluster_id = c.id "
+                    "  GROUP BY c.id, c.family, c.country HAVING count(*) > 2000) x")
+        larghi = [r[0] for r in cur.fetchall()]
+        if larghi:
+            rep.warn("cluster probabilmente troppo larghi: " + "; ".join(larghi)
+                     + " — un cluster è famiglia × paese, non mezzo mercato")
+        else:
+            rep.check(True, "nessun cluster sospettosamente largo")
 
         rep.section("budget dei fornitori")
         cur.execute("SELECT provider FROM provider_quotas ORDER BY provider")

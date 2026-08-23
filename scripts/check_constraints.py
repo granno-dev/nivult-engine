@@ -261,6 +261,21 @@ def main() -> int:
         expect_error(conn, "23514", "min_seniority oltre max_seniority rifiutato",
             "INSERT INTO user_clusters (user_id,cluster_id,min_seniority,max_seniority) "
             "VALUES (%s,%s,'10+','0-2')", (u_a, cl))
+        expect_value(conn, "per default l'utente accetta ogni tipo di datore",
+            "WITH x AS (INSERT INTO user_clusters (user_id, cluster_id) VALUES (%s, %s) "
+            "           RETURNING accepted_employer_kinds) "
+            "SELECT accepted_employer_kinds::text FROM x", (u_b, cl),
+            "{direct,staffing_agency,undisclosed}")
+        expect_error(conn, "23514", "tipo di datore inesistente rifiutato",
+            "UPDATE user_clusters SET accepted_employer_kinds = ARRAY['agency'] "
+            "WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "nessun tipo accettato rifiutato",
+            "UPDATE user_clusters SET accepted_employer_kinds = ARRAY[]::text[] "
+            "WHERE user_id = %s", (u_b,))
+        expect_value(conn, "escludere le agenzie è consentito",
+            "UPDATE user_clusters SET accepted_employer_kinds = ARRAY['direct'] "
+            "WHERE user_id = %s RETURNING cardinality(accepted_employer_kinds)", (u_b,), 1)
+
         expect_error(conn, "23503", "cancellare un cluster con iscritti rifiutato",
             "WITH s AS (INSERT INTO user_clusters (user_id,cluster_id) VALUES (%s,%s) "
             "RETURNING cluster_id) DELETE FROM clusters WHERE id = (SELECT cluster_id FROM s)",

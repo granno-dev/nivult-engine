@@ -11,6 +11,19 @@ digest ricorrente di offerte di lavoro selezionate da un'AI sulla base del suo C
 I cluster sono condivisi tra utenti: se dieci utenti seguono HR in Italia, le offerte
 si scaricano **una volta sola**. L'ingestione è per cluster, non per utente.
 
+> **Un cluster è sempre famiglia × paese, mai un paese intero.** Non è una
+> preferenza di stile: è il vincolo che tiene in piedi il budget. Un cluster
+> stretto produce una decina di offerte al giorno, e le 20.000 mensili di
+> Fantastic sono ~666 al giorno su tutti i cluster — margine ampio. «Tutta la
+> Germania» ne fa 3.500 al giorno da solo e brucia la quota in meno di una
+> settimana.
+>
+> Il rischio sui crediti non è mai il piano: è un cluster definito male.
+> `daily_credit_cap` è tarato su **200**, abbondante per un cluster stretto e
+> abbastanza stretto da scattare prima dei danni su uno largo. Un cluster che
+> ne chiede molti di più va guardato, non aumentato.
+> `verify_schema.py` segnala i cluster con più di 2000 offerte.
+
 Le famiglie professionali sono quelle di `ai_taxonomies_a` del fornitore.
 **Non costruiamo una tassonomia nostra.**
 
@@ -293,9 +306,11 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   pagina), si chiama, e `settle_credits` restituisce la differenza. Il verso
   conta — riservare poco e aggiustare in su lascerebbe una finestra in cui due
   worker paralleli sforano entrambi credendo di stare nel tetto.
-- **`active-ats-count` costa 1 richiesta e zero crediti Jobs.** Va chiamata
-  prima di scaricare: su un piano a consumo, sapere quanto costerebbe una fetch
-  prima di averla pagata vale più di una pagina di risultati.
+- **`count()` è OBBLIGATORIA prima di ogni scarico a pagamento.**
+  `active-ats-count` costa 1 richiesta e zero crediti Jobs: su un piano a
+  consumo, sapere quanto costerebbe una fetch prima di averla pagata vale più
+  di una pagina di risultati. Un `fetch` su Fantastic senza `count` che lo
+  precede è un errore, non una scorciatoia.
 - **Il rate limit è una risorsa scarsa quanto i crediti.** Superarlo non costa
   denaro, costa un ban: da qui `clusters.daily_request_cap` e il token bucket per
   fonte. Ogni chiamata finisce in `api_usage`, anche quelle gratuite, perché una
@@ -327,6 +342,13 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   **Tre valori, non due.** `undisclosed` quando la fonte non espone il nome del
   datore — il 5% delle offerte francesi. Due regole per il digest, da applicare
   quando ci arriveremo:
+
+  **La preferenza è dell'utente, e va esposta.** `user_clusters.accepted_employer_kinds`
+  esiste perché il motore la preveda; **l'onboarding del sito e il pannello
+  preferenze li fa l'altro repo**. Requisito di prodotto: la scelta si fa in
+  onboarding e resta modificabile dal pannello, non è una tantum. Il default
+  accetta tutti e tre i tipi — restringere è una scelta esplicita dell'utente,
+  mai un effetto collaterale.
 
   1. **Su `undisclosed` non si stampa mai un nome.** Si mostra l'etichetta
      «datore non dichiarato». Una stringa di ripiego spacciata per azienda è
