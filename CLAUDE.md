@@ -248,6 +248,13 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   parametro di query (`?jobId=`, `?gh_jid=`): una allowlist li ridurrebbe tutti
   allo stesso `canonical_url`, che essendo UNIQUE significa scartarli come
   duplicati. `check_urls.py` blocca questo caso.
+- **Gli scarti in normalizzazione si contano e si riportano.** `FetchResult.skipped`
+  arriva fino al riepilogo del runner. Una perdita silenziosa in ingestione non
+  si nota finché qualcuno non conta a mano, e a quel punto va avanti da
+  settimane. È così che sono emersi gli URL senza schema.
+- **`canonicalize` ripara gli URL senza schema** (`www.acme.se` →
+  `https://www.acme.se`), ma solo se ciò che resta è un nome di dominio
+  plausibile. I datori li scrivono così, e rifiutarli perdeva offerte vere.
 - **Lo sweep delle scadute richiede `ingestion_runs.fetch_complete`.** Se una
   fetch è stata troncata dal limite di pagina, l'assenza di un'offerta non
   significa che sia scaduta: significa che non siamo arrivati a leggerla.
@@ -278,6 +285,17 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   non è Randstad, e un'etichetta sbagliata su un datore vero è peggio di
   un'etichetta mancante. Per la stessa ragione i pattern hanno un minimo di 4
   caratteri, e parole comuni come "actual" non entrano da sole.
+
+  **Tre valori, non due.** `undisclosed` quando la fonte non espone il nome del
+  datore — il 5% delle offerte francesi. Due regole per il digest, da applicare
+  quando ci arriveremo:
+
+  1. **Su `undisclosed` non si stampa mai un nome.** Si mostra l'etichetta
+     «datore non dichiarato». Una stringa di ripiego spacciata per azienda è
+     una bugia all'utente, ed è il motivo per cui `organization` ora può essere
+     `NULL` invece di contenere un segnaposto.
+  2. **A parità di punteggio l'ordine è `direct` → `staffing_agency` →
+     `undisclosed`**, da `employer_kinds.rank`, come per `link_kinds`.
 
   **La lista è incompleta per costruzione.** Misurata su 796 datori reali
   copriva il 15,7%, salita al 25,4% dopo le aggiunte della 0015. Non arriverà

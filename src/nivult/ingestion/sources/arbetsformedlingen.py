@@ -87,14 +87,15 @@ class ArbetsformedlingenClient(HttpSource):
                 skipped += 1
                 log.debug("offerta scartata (%s): %s", hit.get("id"), exc)
         if skipped:
-            log.info("%s: %d offerte scartate su %d", self.source, skipped, len(hits))
+            log.warning("%s: %d record non normalizzabili su %d", self.source, skipped, len(hits))
 
         # complete solo se abbiamo davvero visto tutto il disponibile: lo sweep
         # delle scadute non deve mai basarsi su una fetch troncata.
         complete = total is not None and total <= len(hits)
 
         return FetchResult(jobs=jobs, complete=complete, requests_made=1,
-                           credits_used=0, total_available=total)
+                           credits_used=0, total_available=total,
+                           skipped=skipped)
 
     def fetch_removals(self, since: datetime) -> tuple[list[str], int]:
         """Id rimossi dallo stream, e quante variazioni sono state esaminate.
@@ -142,7 +143,7 @@ class ArbetsformedlingenClient(HttpSource):
             link_kind=classify_link(canonical),
             title=h["headline"],
             title_normalized=normalize_title(h["headline"]),
-            organization=employer.get("name") or "Okänd arbetsgivare",
+            organization=employer.get("name") or None,
             date_posted=_dt(h["publication_date"]),
             domain_derived=registrable_domain(canonical),
             cities=[addr["municipality"]] if addr.get("municipality") else [],

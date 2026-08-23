@@ -123,8 +123,12 @@ class FranceTravailClient(HttpSource):
 
         params: dict[str, str] = {"motsCles": query, "range": f"0-{min(limit, PAGE_SIZE) - 1}"}
         if since:
-            params["minCreationDate"] = since.astimezone(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ")
+            # L'API rifiuta minCreationDate da solo: i due estremi sono
+            # dipendenti e vanno passati insieme. Scoperto al primo giro del
+            # runner, non è scritto da nessuna parte che abbiamo letto.
+            fmt = "%Y-%m-%dT%H:%M:%SZ"
+            params["minCreationDate"] = since.astimezone(timezone.utc).strftime(fmt)
+            params["maxCreationDate"] = datetime.now(timezone.utc).strftime(fmt)
 
         r = self.request(
             "GET", f"{BASE_URL}/offres/search",
@@ -156,14 +160,15 @@ class FranceTravailClient(HttpSource):
                 skipped += 1
                 log.debug("offerta scartata (%s): %s", offer.get("id"), exc)
         if skipped:
-            log.info("%s: %d offerte scartate su %d", self.source, skipped, len(offers))
+            log.warning("%s: %d record non normalizzabili su %d", self.source, skipped, len(offers))
 
         # complete solo se abbiamo davvero visto tutto: serve allo sweep delle
         # scadute, che non deve mai basarsi su una fetch troncata.
         complete = total is not None and total <= len(offers)
 
         return FetchResult(jobs=jobs, complete=complete, requests_made=1,
-                           credits_used=0, total_available=total)
+                           credits_used=0, total_available=total,
+                           skipped=skipped)
 
     def _to_raw_job(self, o: dict) -> RawJob:
         origin = o.get("origineOffre") or {}
@@ -183,7 +188,10 @@ class FranceTravailClient(HttpSource):
             link_kind=classify_link(canonical),
             title=o["intitule"],
             title_normalized=normalize_title(o["intitule"]),
-            organization=entreprise.get("nom") or "Non comunicato",
+            # Se la fonte non lo espone resta NULL: employer_kind lo
+            # classifica come undisclosed. Un nome inventato nel database
+            # finirebbe nel digest come se fosse un'azienda vera.
+            organization=entreprise.get("nom") or None,
             date_posted=datetime.fromisoformat(o["dateCreation"]),
             domain_derived=registrable_domain(canonical),
             cities=[lieu["libelle"]] if lieu.get("libelle") else [],

@@ -67,6 +67,7 @@ CONSTRAINTS = [
     "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
     "sessions_hash_key", "sessions_window_ck",
     "oauth_identities_user_provider_key", "user_cvs_encryption_ck",
+    "employer_kinds_rank_key", "employer_kinds_rank_ck",
 ]
 
 FUNCTIONS = [

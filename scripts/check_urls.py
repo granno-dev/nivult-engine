@@ -85,8 +85,17 @@ def main() -> int:
     print("\ncanonicalizzazione — input da rifiutare")
     raises("stringa vuota", "")
     raises("solo spazi", "   ")
-    raises("schema mancante", "acme.example/jobs/1")
+    # Un URL senza schema è comunque un URL: i datori lo scrivono così, e
+    # rifiutarlo perde offerte vere (misurato su Arbetsförmedlingen).
+    eq("schema mancante riparato in https",
+       canonicalize("www.lillaservice.se"), "https://lillaservice.se/")
+    eq("schema mancante con path", canonicalize("acme.example/jobs/1"),
+       "https://acme.example/jobs/1")
+    same("con o senza schema coincidono", "acme.example/jobs/1", "https://acme.example/jobs/1")
     raises("mailto", "mailto:jobs@acme.example")
+    raises("testo che non è un dominio", "candidatura via email")
+    raises("parola singola senza punto", "intranet")
+    raises("solo un TLD", ".com")
     raises("javascript", "javascript:alert(1)")
     raises("host assente", "https:///jobs/1")
 

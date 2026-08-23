@@ -23,7 +23,7 @@ class RawJob:
     # --- sempre presenti ---
     title: str
     title_normalized: str
-    organization: str
+    organization: str | None
     date_posted: datetime
     raw: dict
 
@@ -77,3 +77,7 @@ class FetchResult:
     requests_made: int
     credits_used: int
     total_available: int | None = None
+    # Record ricevuti ma non normalizzabili. Vanno riportati, non taciuti: una
+    # perdita silenziosa in ingestione non si nota finché qualcuno non conta a
+    # mano, e a quel punto è già andata avanti per settimane.
+    skipped: int = 0

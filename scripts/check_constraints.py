@@ -335,6 +335,22 @@ def main() -> int:
         expect_value(conn, "Manpowersystem Nordic NON è Manpower",
                      mkorg("e7", "Manpowersystem Nordic"), (), "direct")
 
+        expect_value(conn, "datore assente -> undisclosed, non 'direct'",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+            "title_normalized,organization,date_posted,raw,link_kind) VALUES "
+            "('nav','e8','https://e.example/e8','https://e.example/e8','X','x',"
+            "NULL,now(),'{}'::jsonb,'career_site') RETURNING employer_kind",
+            (), "undisclosed")
+        expect_value(conn, "stringa vuota trattata come assente",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+            "title_normalized,organization,date_posted,raw,link_kind) VALUES "
+            "('nav','e9','https://e.example/e9','https://e.example/e9','X','x',"
+            "'   ',now(),'{}'::jsonb,'career_site') RETURNING employer_kind",
+            (), "undisclosed")
+        expect_value(conn, "ordine nel digest: direct < agenzia < non dichiarato",
+            "SELECT string_agg(kind, ' < ' ORDER BY rank) FROM employer_kinds", (),
+            "direct < staffing_agency < undisclosed")
+
         expect_error(conn, "23514", "pattern troppo corto rifiutato",
             "INSERT INTO staffing_agency_patterns (pattern) VALUES ('gi')")
         expect_error(conn, "23514", "pattern non normalizzato rifiutato",

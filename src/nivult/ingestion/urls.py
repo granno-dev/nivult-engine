@@ -7,6 +7,7 @@ stringa, e due che indicano offerte diverse non devono mai collidere.
 
 from __future__ import annotations
 
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 # Parametri di tracciamento da buttare.
@@ -24,6 +25,12 @@ TRACKING_PARAMS = frozenset({
 })
 
 DEFAULT_PORTS = {"http": "80", "https": "443"}
+
+# Un nome di dominio plausibile: etichette separate da punti, con un TLD
+# alfabetico di almeno due lettere. Serve a distinguere "www.acme.se/jobs" —
+# che è un URL a cui manca solo lo schema — da testo qualunque.
+HOSTLIKE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:[:/?#]|$)",
+                      re.IGNORECASE)
 
 # Domini degli enti pubblici del lavoro: ammessi, ma etichettati.
 NATIONAL_AGENCY_DOMAINS = frozenset({
@@ -49,7 +56,16 @@ def canonicalize(url: str) -> str:
     if not url or not url.strip():
         raise ValueError("URL vuoto")
 
-    parts = urlsplit(url.strip())
+    raw = url.strip()
+
+    # I datori scrivono spesso l'indirizzo senza schema ("www.acme.se"). Sono
+    # link veri: rifiutarli perde offerte reali — misurato su Arbetsförmedlingen.
+    # Si ripara solo se ciò che resta è davvero un nome di dominio, così
+    # "candidatura via email" continua a essere rifiutato.
+    if "://" not in raw and HOSTLIKE.match(raw):
+        raw = "https://" + raw
+
+    parts = urlsplit(raw)
     scheme = parts.scheme.lower()
     if scheme not in ("http", "https"):
         raise ValueError(f"schema non supportato: {scheme or '(assente)'}")
