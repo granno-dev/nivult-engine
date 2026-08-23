@@ -16,6 +16,8 @@ import logging
 import sys
 from dataclasses import asdict
 
+from nivult.config import load_dotenv
+
 SOURCES = {
     "france_travail": ("nivult.ingestion.sources.france_travail", "FranceTravailClient"),
     "arbetsformedlingen": ("nivult.ingestion.sources.arbetsformedlingen",
@@ -40,6 +42,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="stampa i RawJob grezzi, per le fixture")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
+
+    # Il probe non tocca il database, quindi nessuno avrebbe caricato .env:
+    # le credenziali delle fonti stanno lì insieme a tutto il resto.
+    load_dotenv()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(levelname)-7s %(message)s", stream=sys.stderr)
