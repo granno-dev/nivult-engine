@@ -81,6 +81,29 @@ def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
     return clusters
 
 
+def riserva(cur, *, cluster_id: str, source: str, in_backfill: bool,
+            credits: int) -> tuple[bool, str]:
+    """Riserva su entrambi i budget. Ritorna (concesso, motivo del rifiuto).
+
+    DUE budget, non uno: quello del cluster protegge dalla query impazzita,
+    quello del fornitore protegge la fattura. Vanno chiesti entrambi, e in
+    quest'ordine — se il fornitore rifiuta non ha senso aver già consumato la
+    dotazione del cluster.
+    """
+    cur.execute("SELECT provider_try_consume(%s, %s, 1)", (source, credits))
+    if not cur.fetchone()[0]:
+        return False, "quota mensile del fornitore esaurita"
+
+    fn = "cluster_try_consume_backfill" if in_backfill else "cluster_try_consume"
+    cur.execute(f"SELECT {fn}(%s, %s)", (cluster_id, credits))
+    if not cur.fetchone()[0]:
+        # Restituisce al fornitore ciò che il cluster non userà.
+        cur.execute("SELECT settle_credits(%s, NULL, %s)", (source, -credits))
+        return False, ("dotazione di backfill esaurita" if in_backfill
+                       else "tetto giornaliero del cluster raggiunto")
+    return True, ""
+
+
 def clients_for(country: str):
     return [c for c in CLIENTS if country in c.countries]
 
@@ -105,8 +128,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
     # gli iscritti. Un archivio che dipende da chi era iscritto quel giorno vale
     # meno dei crediti che farebbe risparmiare.
 
-    consume_fn = ("cluster_try_consume_backfill" if cluster.in_backfill
-                  else "cluster_try_consume")
+    # in_backfill resta valido per TUTTE le fonti del cluster: chiuderlo dopo la
+    # prima faceva rifiutare le successive, che si trovavano a chiedere una
+    # dotazione già chiusa. In produzione ha significato che France Travail e
+    # Arbetsförmedlingen non hanno ingerito nulla al primo giro.
+    in_backfill = cluster.in_backfill
+    backfill_da_chiudere: bool | None = None
     if cluster.in_backfill:
         log.info("%s: backfill, finestra di %d giorni, dotazione dedicata",
                  cluster.label, BACKFILL_WINDOW.days)
@@ -123,13 +150,14 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                         "Vedi cluster_coverage_v", cluster.label, cls.source)
             continue
 
-        # Il breaker PRIMA della chiamata: se il tetto è raggiunto non si parte.
+        # Riserva su entrambi i budget PRIMA della chiamata.
         with conn.cursor() as cur:
-            cur.execute(f"SELECT {consume_fn}(%s, %s)",
-                        (cluster.id, cls.credits_per_request))
-            allowed = cur.fetchone()[0]
+            allowed, motivo = riserva(cur, cluster_id=cluster.id, source=cls.source,
+                                      in_backfill=in_backfill,
+                                      credits=cls.credits_per_request)
+        conn.commit()
         if not allowed:
-            log.warning("%s: breaker aperto, salto %s", cluster.label, cls.source)
+            log.warning("%s: %s, salto %s", cluster.label, motivo, cls.source)
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO ingestion_runs (cluster_id, source, status, finished_at, "
@@ -200,8 +228,13 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                                     store.link_to_cluster(cur, job_id, cluster.id, run_id)
                                 except psycopg.Error as exc:
                                     totals["rifiutate_dal_db"] += 1
-                                    log.debug("scartata %s:%s — %s",
-                                              job.source, job.source_job_id, exc)
+                                    # WARNING e non DEBUG: un'offerta rifiutata dal
+                                    # database è una perdita, e una perdita di cui
+                                    # non si vede il motivo non si corregge mai.
+                                    log.warning(
+                                        "%s:%s rifiutata dal database [%s] %s",
+                                        job.source, job.source_job_id, exc.sqlstate,
+                                        str(exc).strip().splitlines()[0][:140])
                                     conn.rollback()
                                     continue
                                 new += is_new
@@ -209,6 +242,14 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                                 newest = max(newest, job.date_posted)
                             # Ogni pagina è una chiamata: va contata da sola,
                             # o il costo reale di un cluster resta invisibile.
+                            # Il costo reale può differire da quanto riservato:
+                            # su Fantastic si paga per offerta RESTITUITA, e la
+                            # differenza va restituita a entrambi i budget.
+                            delta = result.credits_used - cls.credits_per_request
+                            if delta:
+                                cur.execute(
+                                    "SELECT settle_credits(%s, %s, %s, %s)",
+                                    (cls.source, cluster.id, delta, in_backfill))
                             store.record_usage(
                                 cur, provider=cls.source, cluster_id=cluster.id,
                                 run_id=run_id, requests=result.requests_made,
@@ -239,14 +280,14 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     # fetch troncata, e le scadute non si deducono da una fetch
                     # troncata.
                     with conn.cursor() as cur:
-                        cur.execute(f"SELECT {consume_fn}(%s, %s)",
-                                    (cluster.id, cls.credits_per_request))
-                        if not cur.fetchone()[0]:
-                            stop_reason = ("dotazione di backfill esaurita"
-                                           if cluster.in_backfill
-                                           else "tetto giornaliero raggiunto")
-                            break
+                        ok, motivo = riserva(cur, cluster_id=cluster.id,
+                                             source=cls.source,
+                                             in_backfill=in_backfill,
+                                             credits=cls.credits_per_request)
                     conn.commit()
+                    if not ok:
+                        stop_reason = motivo
+                        break
         except Exception as exc:  # noqa: BLE001
             log.error("%s / %s: fetch fallita: %s", cluster.label, cls.source, exc)
             if not dry_run:
@@ -282,23 +323,20 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
         totals["nuove"] += new
         totals["aggiornate"] += updated
 
-        # Il backfill si chiude quando ha visto tutto, oppure quando la
-        # dotazione è finita: nel secondo caso il cluster parte con uno storico
-        # incompleto, e resta scritto invece di essere dimenticato.
-        if cluster.in_backfill and not dry_run:
+        # Il backfill si chiude DOPO tutte le fonti: qui si registra solo l'esito.
+        if in_backfill:
             exhausted = stop_reason == "dotazione di backfill esaurita"
-            if fetch_complete or exhausted:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT cluster_finish_backfill(%s, %s)",
-                                (cluster.id, exhausted))
-                conn.commit()
-                if exhausted:
-                    log.warning("%s: backfill chiuso con dotazione esaurita — "
-                                "storico incompleto", cluster.label)
-                else:
-                    log.info("%s: backfill completato", cluster.label)
+            if backfill_da_chiudere is None or exhausted:
+                backfill_da_chiudere = exhausted or bool(fetch_complete)
         log.info("%s / %s: %d pagine, %d nuove, %d aggiornate, completa=%s",
                  cluster.label, cls.source, pages, new, updated, fetch_complete)
+
+    if in_backfill and backfill_da_chiudere and not dry_run:
+        with conn.cursor() as cur:
+            cur.execute("SELECT cluster_finish_backfill(%s, %s)",
+                        (cluster.id, stop_reason == "dotazione di backfill esaurita"))
+        conn.commit()
+        log.info("%s: backfill chiuso", cluster.label)
 
     return totals
 
