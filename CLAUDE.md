@@ -326,6 +326,17 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   pagina), si chiama, e `settle_credits` restituisce la differenza. Il verso
   conta — riservare poco e aggiustare in su lascerebbe una finestra in cui due
   worker paralleli sforano entrambi credendo di stare nel tetto.
+- **Fantastic dichiara la quota negli header**, e vanno creduti più delle nostre
+  stime: `x-api-jobs-this-request` è il costo esatto della chiamata,
+  `x-api-jobs-remaining` e `x-api-requests-remaining` sono il residuo reale. Il
+  client usa il primo per la conciliazione — se un giorno la tariffa cambia,
+  quell'header lo dice e un conteggio di record no. `x-api-jobs-remaining`
+  sembra aggiornarsi con ritardo: va bene per un controllo di deriva
+  periodico, non per decidere una singola chiamata.
+- **Fantastic restituisce i paesi per NOME** ("Germany"), mentre France Travail
+  dà "FR" e Arbetsförmedlingen "SE". Il client converte in ISO: mescolarli in
+  `jobs.countries` romperebbe ogni filtro per paese in silenzio — la riga c'è,
+  ma nessun `WHERE` la trova.
 - **`count()` è OBBLIGATORIA prima di ogni scarico a pagamento.**
   `active-ats-count` costa 1 richiesta e zero crediti Jobs: su un piano a
   consumo, sapere quanto costerebbe una fetch prima di averla pagata vale più
@@ -456,12 +467,15 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
 
 ### Vincoli aperti sui dati del fornitore
 
-- `user_clusters.company_sizes` esiste ma **il funnel non deve applicarlo**: la
-  dimensione azienda non è fra i campi del fornitore. Servirebbe un arricchimento
-  a partire da `org_linkedin_slug`.
-- `experience_levels` contiene un vocabolario **provvisorio**, ipotizzato prima
-  di aver visto una risposta reale di Fantastic.jobs. Va confermato alla prima
-  ingestione. `scripts/verify_schema.py` segnala i valori fuori vocabolario:
+- `user_clusters.company_sizes` esiste ma **il funnel non deve applicarlo**.
+  Verificato il 2026-08-23: Fantastic **non** espone la dimensione azienda in
+  `active-ats`, nemmeno con Basic Organization Enrichment attivo — i soli campi
+  di organizzazione sono `org_linkedin_slug`, `organization_url` e
+  `organization_logo`. France Travail ha `trancheEffectifEtab`, ma un filtro
+  attivo su una fonte sola darebbe risultati che dipendono da **dove è passata
+  l'offerta**, non da cosa cerca l'utente. Resta chiuso.
+- `experience_levels` è **confermato**: un'offerta reale di Fantastic riporta
+  `5-10`. La scala ipotizzata era giusta. `scripts/verify_schema.py` segnala i valori fuori vocabolario:
   quelli non vengono considerati dai filtri di seniority.
 - Il full-text usa la configurazione `'simple'` (nessuno stemming), perché le
   offerte sono multilingua. La semantica la porta BGE-M3. La colonna

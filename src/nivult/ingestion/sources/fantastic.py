@@ -43,6 +43,9 @@ TIME_FRAMES = ((timedelta(hours=1), "1h"), (timedelta(days=1), "24h"),
                (timedelta(days=7), "7d"), (timedelta(days=31), "1m"),
                (timedelta(days=186), "6m"))
 
+# La fonte restituisce i paesi per NOME ("Germany"), mentre France Travail dà
+# "FR" e Arbetsförmedlingen "SE". Mescolarli in jobs.countries romperebbe ogni
+# filtro per paese in modo silenzioso: la riga c'è, ma nessun WHERE la trova.
 COUNTRY_NAMES = {
     "FR": "France", "DE": "Germany", "IT": "Italy", "ES": "Spain",
     "SE": "Sweden", "NO": "Norway", "FI": "Finland", "NL": "Netherlands",
@@ -51,12 +54,34 @@ COUNTRY_NAMES = {
 }
 
 
+# Il chiamante calcola `since` come now - X, e qui si ricalcola `now`: fra le
+# due letture passano microsecondi, e senza tolleranza una finestra di
+# esattamente 24 ore ricadeva nello scaglione 7d. Su una fonte che scala un
+# credito per offerta restituita, quello scarto silenzioso costa sette volte
+# tanto.
+_SLACK = timedelta(minutes=5)
+
+
+COUNTRY_CODES = {name.lower(): code for code, name in COUNTRY_NAMES.items()}
+
+
+def to_iso_country(value: str) -> str | None:
+    """"Germany" -> "DE". None se non riconosciuto: meglio un vuoto che un
+    valore che nessun filtro troverà mai."""
+    if not value:
+        return None
+    v = value.strip()
+    if len(v) == 2 and v.isalpha():
+        return v.upper()
+    return COUNTRY_CODES.get(v.lower())
+
+
 def time_frame_for(since: datetime | None) -> str:
     if since is None:
         return "7d"
     age = datetime.now(timezone.utc) - since.astimezone(timezone.utc)
     for span, label in TIME_FRAMES:
-        if age <= span:
+        if age <= span + _SLACK:
             return label
     return "6m"
 
@@ -74,10 +99,14 @@ class FantasticClient(HttpSource):
 
     def __init__(self, api_key: str | None = None, **kw):
         super().__init__(rate_per_second=kw.pop("rate_per_second", 1.0), **kw)
-        self.api_key = api_key or os.environ.get("FANTASTIC_JOBS_API_KEY", "")
+        # Quota residua dichiarata dalla fonte, per riconciliare provider_budget
+        # con la verità invece che con la nostra stima.
+        self.jobs_remaining: int | None = None
+        self.requests_remaining: int | None = None
+        self.api_key = api_key or os.environ.get("FANTASTIC_API_KEY", "")
         if not self.api_key:
             raise SystemExit(
-                "Serve FANTASTIC_JOBS_API_KEY.\n"
+                "Serve FANTASTIC_API_KEY.\n"
                 "Piano Starter-20k: 20.000 offerte e 10.000 richieste al mese."
             )
 
@@ -124,6 +153,13 @@ class FantasticClient(HttpSource):
         payload = r.json()
         records = payload if isinstance(payload, list) else payload.get("data", [])
 
+        # Il costo REALE, dichiarato dalla fonte. Meglio di contare i record:
+        # se un giorno la tariffa cambia, questo lo dice e il conteggio no.
+        billed = r.headers.get("x-api-jobs-this-request")
+        credits = int(billed) if billed and billed.isdigit() else len(records)
+        self.jobs_remaining = _int_or_none(r.headers.get("x-api-jobs-remaining"))
+        self.requests_remaining = _int_or_none(r.headers.get("x-api-requests-remaining"))
+
         jobs, skipped = [], 0
         for rec in records:
             try:
@@ -140,8 +176,7 @@ class FantasticClient(HttpSource):
 
         return FetchResult(
             jobs=jobs, complete=complete, requests_made=1,
-            # Il costo REALE: un credito per offerta tornata, non per chiamata.
-            credits_used=len(records) * self.credits_per_job,
+            credits_used=credits,
             total_available=None, skipped=skipped)
 
     def _to_raw_job(self, r: dict) -> RawJob:
@@ -151,7 +186,7 @@ class FantasticClient(HttpSource):
         canonical = canonicalize(url)
 
         posted = r["date_posted"]
-        valid = r.get("date_validthrough") or r.get("date_valid_through")
+        valid = r.get("date_valid_through")
 
         return RawJob(
             source=self.source,
@@ -166,7 +201,9 @@ class FantasticClient(HttpSource):
             domain_derived=r.get("domain_derived") or registrable_domain(canonical),
             org_linkedin_slug=r.get("org_linkedin_slug"),
             cities=[c for c in (r.get("cities_derived") or []) if c],
-            countries=[c for c in (r.get("countries_derived") or []) if c],
+            countries=[iso for iso in
+                       (to_iso_country(c) for c in (r.get("countries_derived") or []))
+                       if iso],
             locations=r.get("locations_raw") or r.get("locations") or None,
             ai_job_language=r.get("ai_job_language"),
             ai_visa_sponsorship=r.get("ai_visa_sponsorship"),
@@ -179,7 +216,7 @@ class FantasticClient(HttpSource):
             ai_taxonomies_a=list(r.get("ai_taxonomies_a") or []),
             ai_requirements_summary=r.get("ai_requirements_summary"),
             ai_core_responsibilities=r.get("ai_core_responsibilities"),
-            salary=r.get("salary_raw") or r.get("salary") or None,
+            salary=r.get("salary") or None,
             date_valid_through=(datetime.fromisoformat(str(valid).replace("Z", "+00:00"))
                                 if valid else None),
             ai_education=r.get("ai_education"),
@@ -197,3 +234,7 @@ def _first(v):
 
 def _as_str(v):
     return None if v is None else str(v)
+
+
+def _int_or_none(v):
+    return int(v) if v and str(v).isdigit() else None

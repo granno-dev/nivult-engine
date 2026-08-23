@@ -22,6 +22,7 @@ SOURCES = {
     "france_travail": ("nivult.ingestion.sources.france_travail", "FranceTravailClient"),
     "arbetsformedlingen": ("nivult.ingestion.sources.arbetsformedlingen",
                            "ArbetsformedlingenClient"),
+    "fantastic": ("nivult.ingestion.sources.fantastic", "FantasticClient"),
 }
 
 
