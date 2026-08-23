@@ -79,7 +79,8 @@ FUNCTIONS = [
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
     "normalize_org", "classify_employer", "jobs_set_employer_kind",
     "resolve_duplicates", "provider_try_consume", "settle_credits",
-    "assert_employer_kinds_valid",
+    "assert_employer_kinds_valid", "cluster_try_consume_backfill",
+    "cluster_finish_backfill",
     "reclassify_employers",
 ]
 
@@ -180,6 +181,7 @@ def main() -> int:
         views = {r[0] for r in cur.fetchall()}
         rep.check("cluster_month_stats_v" in views, "vista cluster_month_stats_v")
         rep.check("provider_budget_v" in views, "vista provider_budget_v")
+        rep.check("cluster_backfill_v" in views, "vista cluster_backfill_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)
@@ -236,6 +238,15 @@ def main() -> int:
                      + " — un cluster è famiglia × paese, non mezzo mercato")
         else:
             rep.check(True, "nessun cluster sospettosamente largo")
+
+        cur.execute("SELECT family || ' × ' || country FROM clusters "
+                    "WHERE backfill_truncated")
+        troncati = [r[0] for r in cur.fetchall()]
+        if troncati:
+            rep.warn("backfill chiuso con dotazione esaurita, storico incompleto: "
+                     + ", ".join(troncati))
+        else:
+            rep.check(True, "nessun backfill troncato")
 
         rep.section("budget dei fornitori")
         cur.execute("SELECT provider FROM provider_quotas ORDER BY provider")

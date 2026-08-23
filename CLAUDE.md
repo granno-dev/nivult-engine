@@ -294,6 +294,26 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
 - **Lo sweep delle scadute richiede `ingestion_runs.fetch_complete`.** Se una
   fetch è stata troncata dal limite di pagina, l'assenza di un'offerta non
   significa che sia scaduta: significa che non siamo arrivati a leggerla.
+- **Il backfill è di due settimane e ha una dotazione sua.** Un cluster mai
+  scaricato prende 14 giorni di storico — non un mese: **un'offerta di tre
+  settimane fa è spesso già chiusa, e un primo digest pieno di annunci morti è
+  il peggior inizio possibile.** La dotazione è separata dal tetto giornaliero
+  (`clusters.backfill_*`), altrimenti il primo giro di ogni cluster nuovo
+  aprirebbe il breaker e resterebbe a metà.
+
+  **Non è un'esenzione dai soldi:** `provider_budget` continua a valere. Il
+  backfill è esente solo dal tetto giornaliero del cluster, che serve a
+  un'altra cosa — accorgersi di una query impazzita.
+
+  Si chiude da solo quando ha visto tutto, oppure quando la dotazione finisce:
+  nel secondo caso `backfill_truncated` resta a `true` e `verify_schema.py` lo
+  segnala, perché quel cluster parte con uno storico incompleto e va saputo.
+
+  ⚠ **Su Fantastic 14 giorni costano come 30.** Gli scaglioni di `time_frame`
+  sono `1h/24h/7d/1m/6m`: non esiste "due settimane", quindi si chiede `1m` e
+  si scarta il resto — ma i crediti si pagano **per offerta restituita**, non
+  per offerta tenuta. Da decidere quando accenderemo Fantastic: o si accetta di
+  pagare il doppio del backfill, o per quella fonte si usa `7d`.
 - **Due budget, non uno.** `cluster_daily_budget` protegge dalla singola query
   impazzita; `provider_budget` protegge la fattura. Sono cose diverse: venti
   cluster ciascuno entro il proprio tetto giornaliero possono esaurire le 20.000

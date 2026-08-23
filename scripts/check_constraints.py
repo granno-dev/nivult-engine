@@ -257,6 +257,41 @@ def main() -> int:
             "INSERT INTO provider_budget (provider, period_month) "
             "VALUES ('arbetsformedlingen', DATE '2026-03-15')")
 
+        section("dotazione di backfill")
+        expect_value(conn, "un cluster nuovo è in backfill",
+            "SELECT in_corso FROM cluster_backfill_v WHERE id = %s", (cl,), True)
+        # La dotazione è separata: consumarla NON deve toccare il tetto
+        # giornaliero. Si confronta prima e dopo, perché una riga di budget
+        # giornaliero esiste già dai test sul breaker.
+        with conn.cursor() as cur:
+            cur.execute("SELECT coalesce(sum(credits_used),0) FROM cluster_daily_budget "
+                        "WHERE cluster_id = %s", (cl,))
+            prima = cur.fetchone()[0]
+        expect_value(conn, "consumo sulla dotazione di backfill",
+            "SELECT cluster_try_consume_backfill(%s, 500)", (cl,), True)
+        expect_value(conn, "il tetto giornaliero resta intatto",
+            "SELECT coalesce(sum(credits_used),0) FROM cluster_daily_budget "
+            "WHERE cluster_id = %s", (cl,), prima)
+        expect_value(conn, "e la dotazione dedicata è stata intaccata",
+            "SELECT backfill_credits_used FROM clusters WHERE id = %s", (cl,), 500)
+        expect_value(conn, "oltre la dotazione: respinto",
+            "SELECT cluster_try_consume_backfill(%s, 99999)", (cl,), False)
+        with conn.cursor() as cur:
+            cur.execute("SELECT cluster_finish_backfill(%s, false)", (cl,))
+        expect_value(conn, "a backfill chiuso la dotazione non è più utilizzabile",
+            "SELECT cluster_try_consume_backfill(%s, 1)", (cl,), False)
+        expect_value(conn, "e il cluster non risulta più in backfill",
+            "SELECT in_corso FROM cluster_backfill_v WHERE id = %s", (cl,), False)
+        with conn.cursor() as cur:
+            cur.execute("SELECT cluster_finish_backfill(%s, true)", (cl,))
+        expect_value(conn, "un backfill troncato resta segnalato",
+            "SELECT backfill_truncated FROM clusters WHERE id = %s", (cl,), True)
+        # La conciliazione deve sapere da quale borsellino restituire.
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_credits('fantastic', %s, -100, true)", (cl,))
+        expect_value(conn, "il rimborso di backfill torna nella sua dotazione",
+            "SELECT backfill_credits_used FROM clusters WHERE id = %s", (cl,), 400)
+
         section("iscrizioni")
         expect_error(conn, "23514", "min_seniority oltre max_seniority rifiutato",
             "INSERT INTO user_clusters (user_id,cluster_id,min_seniority,max_seniority) "

@@ -27,9 +27,12 @@ log = logging.getLogger("nivult.ingestion.runner")
 
 CLIENTS = (FranceTravailClient, ArbetsformedlingenClient)
 
-# Prima finestra per un cluster mai scaricato. Senza, si chiederebbe l'intero
-# storico della fonte al primo giro.
-FIRST_WINDOW = timedelta(days=7)
+# Backfill: quanto storico prende un cluster mai scaricato.
+#
+# Due settimane, non un mese: un'offerta di tre settimane fa è spesso già
+# chiusa, e un primo digest pieno di annunci morti è il peggior inizio
+# possibile. Oltre al costo, è una scelta di qualità.
+BACKFILL_WINDOW = timedelta(days=14)
 
 
 @dataclass(slots=True)
@@ -38,6 +41,7 @@ class Cluster:
     family: str
     country: str
     last_seen_posted_at: datetime | None
+    in_backfill: bool = False
 
     @property
     def label(self) -> str:
@@ -47,14 +51,16 @@ class Cluster:
 def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
     if cluster_id:
         cur.execute(
-            "SELECT id, family, country, last_seen_posted_at FROM clusters WHERE id = %s",
+            "SELECT id, family, country, last_seen_posted_at, "
+            "       backfill_completed_at IS NULL FROM clusters WHERE id = %s",
             (cluster_id,))
     else:
         # NULLS FIRST: chi non è mai stato scaricato ha la precedenza.
         cur.execute(
-            "SELECT id, family, country, last_seen_posted_at FROM clusters "
+            "SELECT id, family, country, last_seen_posted_at, "
+            "       backfill_completed_at IS NULL FROM clusters "
             "WHERE status = 'active' ORDER BY last_fetched_at NULLS FIRST")
-    return [Cluster(str(r[0]), r[1], r[2], r[3]) for r in cur.fetchall()]
+    return [Cluster(str(r[0]), r[1], r[2], r[3], r[4]) for r in cur.fetchall()]
 
 
 def clients_for(country: str):
@@ -64,18 +70,28 @@ def clients_for(country: str):
 def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                    dry_run: bool, max_pages: int) -> dict[str, int]:
     totals = {"nuove": 0, "aggiornate": 0, "non_normalizzabili": 0,
-              "rifiutate_dal_db": 0, "richieste": 0}
+              "rifiutate_dal_db": 0, "fuori_finestra": 0, "richieste": 0}
     clients = clients_for(cluster.country)
     if not clients:
         log.warning("%s: nessuna fonte copre %s", cluster.label, cluster.country)
         return totals
 
-    since = cluster.last_seen_posted_at or datetime.now(timezone.utc) - FIRST_WINDOW
+    since = (cluster.last_seen_posted_at
+             or datetime.now(timezone.utc) - BACKFILL_WINDOW)
+
+    # Il backfill attinge a una dotazione dedicata: senza, il primo giro di ogni
+    # cluster nuovo aprirebbe il breaker giornaliero e resterebbe a metà.
+    # NON è un'esenzione dai soldi — provider_budget continua a valere.
+    consume_fn = ("cluster_try_consume_backfill" if cluster.in_backfill
+                  else "cluster_try_consume")
+    if cluster.in_backfill:
+        log.info("%s: backfill, finestra di %d giorni, dotazione dedicata",
+                 cluster.label, BACKFILL_WINDOW.days)
 
     for cls in clients:
         # Il breaker PRIMA della chiamata: se il tetto è raggiunto non si parte.
         with conn.cursor() as cur:
-            cur.execute("SELECT cluster_try_consume(%s, %s)",
+            cur.execute(f"SELECT {consume_fn}(%s, %s)",
                         (cluster.id, cls.credits_per_request))
             allowed = cur.fetchone()[0]
         if not allowed:
@@ -130,6 +146,16 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     totals["non_normalizzabili"] += result.skipped
                     attempt = client.attempts[-1] if client.attempts else None
 
+                    # Le fonti con scaglioni fissi (Fantastic: 1h/24h/7d/1m/6m)
+                    # non sanno restituire esattamente 14 giorni e danno il
+                    # mese. Si scarta qui ciò che è più vecchio della finestra:
+                    # un'offerta di tre settimane fa è spesso già chiusa, e un
+                    # primo digest di annunci morti è il peggior inizio.
+                    fuori_finestra = [j for j in result.jobs if j.date_posted < since]
+                    if fuori_finestra:
+                        result.jobs = [j for j in result.jobs if j.date_posted >= since]
+                        totals["fuori_finestra"] += len(fuori_finestra)
+
                     if not dry_run:
                         with conn.cursor() as cur:
                             for job in result.jobs:
@@ -177,10 +203,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     # fetch troncata, e le scadute non si deducono da una fetch
                     # troncata.
                     with conn.cursor() as cur:
-                        cur.execute("SELECT cluster_try_consume(%s, %s)",
+                        cur.execute(f"SELECT {consume_fn}(%s, %s)",
                                     (cluster.id, cls.credits_per_request))
                         if not cur.fetchone()[0]:
-                            stop_reason = "tetto giornaliero raggiunto"
+                            stop_reason = ("dotazione di backfill esaurita"
+                                           if cluster.in_backfill
+                                           else "tetto giornaliero raggiunto")
                             break
                     conn.commit()
         except Exception as exc:  # noqa: BLE001
@@ -217,6 +245,22 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
 
         totals["nuove"] += new
         totals["aggiornate"] += updated
+
+        # Il backfill si chiude quando ha visto tutto, oppure quando la
+        # dotazione è finita: nel secondo caso il cluster parte con uno storico
+        # incompleto, e resta scritto invece di essere dimenticato.
+        if cluster.in_backfill and not dry_run:
+            exhausted = stop_reason == "dotazione di backfill esaurita"
+            if fetch_complete or exhausted:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT cluster_finish_backfill(%s, %s)",
+                                (cluster.id, exhausted))
+                conn.commit()
+                if exhausted:
+                    log.warning("%s: backfill chiuso con dotazione esaurita — "
+                                "storico incompleto", cluster.label)
+                else:
+                    log.info("%s: backfill completato", cluster.label)
         log.info("%s / %s: %d pagine, %d nuove, %d aggiornate, completa=%s",
                  cluster.label, cls.source, pages, new, updated, fetch_complete)
 
@@ -272,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"database: {safe_dsn(dsn)}")
 
     grand = {"nuove": 0, "aggiornate": 0, "non_normalizzabili": 0,
-             "rifiutate_dal_db": 0, "richieste": 0}
+             "rifiutate_dal_db": 0, "fuori_finestra": 0, "richieste": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             clusters = due_clusters(cur, args.cluster)
