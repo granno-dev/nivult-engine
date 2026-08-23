@@ -281,6 +281,21 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
 - **Lo sweep delle scadute richiede `ingestion_runs.fetch_complete`.** Se una
   fetch è stata troncata dal limite di pagina, l'assenza di un'offerta non
   significa che sia scaduta: significa che non siamo arrivati a leggerla.
+- **Due budget, non uno.** `cluster_daily_budget` protegge dalla singola query
+  impazzita; `provider_budget` protegge la fattura. Sono cose diverse: venti
+  cluster ciascuno entro il proprio tetto giornaliero possono esaurire le 20.000
+  offerte mensili di Fantastic in pochi giorni senza che nessun breaker per
+  cluster scatti. Le quote stanno in `provider_quotas`; un tetto a `0` significa
+  fonte gratuita, contabilizzata ma mai bloccante.
+- **Su Fantastic il costo non è noto prima della chiamata.** Scala **un credito
+  per offerta restituita**, non per richiesta. Il ciclo è
+  **riserva-poi-concilia**: si riserva il caso peggiore (la dimensione di
+  pagina), si chiama, e `settle_credits` restituisce la differenza. Il verso
+  conta — riservare poco e aggiustare in su lascerebbe una finestra in cui due
+  worker paralleli sforano entrambi credendo di stare nel tetto.
+- **`active-ats-count` costa 1 richiesta e zero crediti Jobs.** Va chiamata
+  prima di scaricare: su un piano a consumo, sapere quanto costerebbe una fetch
+  prima di averla pagata vale più di una pagina di risultati.
 - **Il rate limit è una risorsa scarsa quanto i crediti.** Superarlo non costa
   denaro, costa un ban: da qui `clusters.daily_request_cap` e il token bucket per
   fonte. Ogni chiamata finisce in `api_usage`, anche quelle gratuite, perché una

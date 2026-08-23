@@ -27,6 +27,7 @@ TABLES = [
     "ingestion_runs", "api_usage", "deletion_requests", "cluster_month_stats",
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
     "employer_kinds", "staffing_agency_patterns",
+    "provider_quotas", "provider_budget",
 ]
 
 INDEXES = [
@@ -64,6 +65,7 @@ CONSTRAINTS = [
     "ingestion_runs_finished_ck", "ingestion_runs_failed_ck", "job_clusters_run_fk",
     "deletion_requests_completed_ck", "deletion_requests_failed_ck",
     "jobs_raw_present_ck", "jobs_purged_is_dead_ck", "cluster_month_stats_month_ck",
+    "provider_budget_month_ck", "provider_budget_circuit_ck",
     "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
     "sessions_hash_key", "sessions_window_ck",
     "oauth_identities_user_provider_key", "user_cvs_encryption_ck",
@@ -75,6 +77,7 @@ FUNCTIONS = [
     "assert_seniority_order", "jobs_derive_fields",
     "assert_duplicate_target_is_canonical", "delete_user_batch", "purge_dead_jobs", "purge_expired_auth",
     "normalize_org", "classify_employer", "jobs_set_employer_kind",
+    "resolve_duplicates", "provider_try_consume", "settle_credits",
     "reclassify_employers",
 ]
 
@@ -173,6 +176,7 @@ def main() -> int:
         cur.execute("SELECT viewname FROM pg_views WHERE schemaname = 'public'")
         views = {r[0] for r in cur.fetchall()}
         rep.check("cluster_month_stats_v" in views, "vista cluster_month_stats_v")
+        rep.check("provider_budget_v" in views, "vista provider_budget_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)
@@ -217,6 +221,21 @@ def main() -> int:
                      f"eseguire SELECT reclassify_employers()")
         else:
             rep.check(True, "etichette datore allineate alla lista")
+
+        rep.section("budget dei fornitori")
+        cur.execute("SELECT provider FROM provider_quotas ORDER BY provider")
+        have = {r[0] for r in cur.fetchall()}
+        # Ogni fonte da cui abbiamo ingerito deve avere una quota configurata,
+        # o provider_try_consume solleva a runtime invece che qui.
+        cur.execute("SELECT DISTINCT source FROM jobs")
+        used = {r[0] for r in cur.fetchall()}
+        senza_quota = sorted(used - have)
+        rep.check(not senza_quota, "ogni fonte usata ha una quota configurata",
+                  f"mancano: {', '.join(senza_quota)}")
+        cur.execute("SELECT provider || ' ' || credits_used || '/' || monthly_credits_cap "
+                    "FROM provider_budget_v WHERE monthly_credits_cap > 0")
+        for row in cur.fetchall():
+            print(f"  info  consumo mensile: {row[0]}")
 
         rep.section("autenticazione senza password")
         cur.execute(

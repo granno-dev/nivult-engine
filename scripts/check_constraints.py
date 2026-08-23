@@ -224,6 +224,39 @@ def main() -> int:
             "  SELECT 1 FROM cluster_daily_budget WHERE cluster_id=%s "
             "  AND usage_date=current_date AND circuit_open)", (cl, cl), True)
 
+        section("budget del fornitore")
+        expect_value(conn, "fonte gratuita: tetto a 0 non blocca mai",
+            "SELECT provider_try_consume('france_travail', 0, 1)::text || "
+            "       provider_try_consume('france_travail', 0, 1)::text", (), "truetrue")
+        expect_value(conn, "fonte a pagamento: consumo entro la quota",
+            "SELECT provider_try_consume('fantastic', 100, 1)", (), True)
+        # Ogni chiamata in un'istruzione a sé: dentro una sola istruzione la
+        # sottoquery vedrebbe l'istantanea PRECEDENTE alla chiamata di funzione,
+        # e leggerebbe il valore vecchio.
+        expect_value(conn, "oltre la quota mensile: respinto",
+            "SELECT provider_try_consume('fantastic', 999999, 1)", (), False)
+        expect_value(conn, "e il breaker si apre con il motivo giusto",
+            "SELECT circuit_reason FROM provider_budget WHERE provider = 'fantastic'",
+            (), "crediti mensili esauriti (100/20000)")
+        expect_error(conn, "P0001", "fornitore senza quota configurata rifiutato",
+            "SELECT provider_try_consume('sconosciuto', 1, 1)")
+
+        # Riserva il caso peggiore, poi restituisci la differenza.
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_credits('fantastic', NULL, -40)")
+        expect_value(conn, "conciliazione: il rimborso riduce il consumato",
+            "SELECT credits_used FROM provider_budget WHERE provider='fantastic'", (), 60)
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_credits('fantastic', NULL, -99999)")
+        expect_value(conn, "il rimborso non scende sotto zero",
+            "SELECT credits_used FROM provider_budget WHERE provider='fantastic'", (), 0)
+        expect_error(conn, "22007", "data non valida rifiutata",
+            "INSERT INTO provider_budget (provider, period_month) "
+            "VALUES ('fantastic', 'non-una-data')")
+        expect_error(conn, "23514", "period_month non primo del mese rifiutato",
+            "INSERT INTO provider_budget (provider, period_month) "
+            "VALUES ('arbetsformedlingen', DATE '2026-03-15')")
+
         section("iscrizioni")
         expect_error(conn, "23514", "min_seniority oltre max_seniority rifiutato",
             "INSERT INTO user_clusters (user_id,cluster_id,min_seniority,max_seniority) "
