@@ -118,12 +118,12 @@ def seed(conn: psycopg.Connection) -> dict:
             cur.execute(
                 "INSERT INTO jobs (source,source_job_id,url,canonical_url,domain_derived,"
                 "title,title_normalized,organization,date_posted,countries,ai_key_skills,"
-                "status,expired_at,raw) VALUES ('fantastic',%s,%s,%s,'acme.example',"
+                "status,expired_at,raw,link_kind) VALUES ('fantastic',%s,%s,%s,'acme.example',"
                 "%s,'hr manager','Acme SpA', now() - make_interval(days => %s::int),"
                 "ARRAY['IT'],ARRAY['recruiting'],%s,"
                 "CASE WHEN %s::int IS NULL THEN NULL "
                 "     ELSE now() - make_interval(days => %s::int) END,"
-                "jsonb_build_object('descr', repeat('x', 2000))) RETURNING id",
+                "jsonb_build_object('descr', repeat('x', 2000)), 'career_site') RETURNING id",
                 (sid, f"https://acme.example/careers/{sid}",
                  f"https://acme.example/careers/{sid}", f"HR Manager {sid}",
                  posted_days, status, expired_days, expired_days))

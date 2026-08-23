@@ -20,4 +20,7 @@ regexes = [
   '''example\.(test|com)''',
   '''\$\{[A-Z_]+''',
   '''throwaway''',
+  '''os\.environ''',
+  '''getenv''',
+  '''process\.env''',
 ]

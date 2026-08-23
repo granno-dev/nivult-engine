@@ -108,6 +108,13 @@ def main() -> int:
             return 1
 
         print()
+        import check_urls
+
+        if check_urls.main() != 0:
+            print("\nFALLITO: la canonicalizzazione degli URL non è corretta")
+            return 1
+
+        print()
         import check_roles
 
         if check_roles.main() != 0:

@@ -36,7 +36,9 @@ ADDED=$(git diff --cached -U0 --diff-filter=ACM | grep '^+' | grep -v '^+++' || 
 [ -n "$ADDED" ] || exit 0
 
 # I segnaposto non sono segreti.
-PLACEHOLDER='CAMBIAMI|XXXXXX|EXAMPLE|example\.(test|com)|<[^>]+>|\$\{[A-Z_]+|your-storagebox|throwaway|repeat\(|placeholder'
+# Leggere un segreto da variabile d'ambiente non e' un segreto: e' il pattern
+# che vogliamo incoraggiare, e segnalarlo insegnerebbe a usare --no-verify.
+PLACEHOLDER='CAMBIAMI|XXXXXX|EXAMPLE|example\.(test|com)|<[^>]+>|\$\{[A-Z_]+|your-storagebox|throwaway|repeat\(|placeholder|os\.environ|getenv|environ\[|process\.env|secrets\.'
 
 PATTERNS=(
   'BEGIN [A-Z ]*PRIVATE KEY'

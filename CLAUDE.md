@@ -25,8 +25,29 @@ Fonti:
 - **API pubbliche nazionali gratuite** — France Travail, Bundesagentur,
   Arbetsförmedlingen, NAV, Työmarkkinatori.
 
-**Regola dura:** solo offerte da career site aziendali. Il link deve portare al sito
-dell'azienda, mai a un intermediario/aggregatore. Se non è verificabile, l'offerta si scarta.
+**Regola sui link.** La regola nasce contro gli **aggregatori commerciali** che
+rivendono traffico, non contro gli enti pubblici del lavoro. Quindi ogni offerta
+porta un `link_kind`:
+
+| `link_kind` | Ammesso | Nel digest |
+|---|---|---|
+| `career_site` | sì | «candidatura diretta» |
+| `national_agency` | sì | «via France Travail», «via Bundesagentur», … |
+| `job_board` | per ora no | — |
+
+Due vincoli sul funnel, che lo schema supporta ma che vanno applicati a valle:
+
+1. **A parità di punteggio, `career_site` viene prima.** L'ordine sta in
+   `link_kinds.rank`, non in codice: è una politica di prodotto e cambiarla non
+   deve richiedere un rilascio.
+2. **Il digest deve mostrare l'etichetta.** La trasparenza è ciò che permette di
+   ammettere le agenzie senza tradire la promessa. `link_kinds.is_direct` dice
+   quale delle due formule usare.
+
+`jobs.link_kind` è `NOT NULL` **senza default**: un default silenzioso
+trasformerebbe una svista in una bugia all'utente.
+
+> Il copy del sito pubblico va allineato. Sta nell'altro repo.
 
 ### 2. Matching a imbuto (per utente, per ciclo)
 
@@ -191,6 +212,32 @@ che sembra protettivo e non protegge è peggio di nessun vincolo.
 pesante e potabile) più `user_job_seen (user_id, job_id, first_evaluated_at)`
 non partizionata, che tiene l'anti-ripetizione. Stesso numero di righe ma molto
 più stretta, quindi si può conservare per sempre mentre il testo si pota.
+
+### Ingestione
+
+- **L'appartenenza al cluster viene dalla query che ha trovato l'offerta**, non
+  da un campo dell'offerta. Le fonti nazionali non hanno `ai_taxonomies_a` — usano
+  ROME e la classificazione della Bundesagentur — e non costruiamo una mappatura:
+  interroghiamo la fonte coi termini del cluster e ciò che torna appartiene a
+  quel cluster. È già il verso in cui lavora il worker cluster-first.
+- **I campi AI mancanti si riempiono a regole, mai con un LLM.** France Travail dà
+  `experienceExige` e `typeContrat`, e da lì si derivano `ai_experience_level` e
+  `ai_employment_type`. Dove non c'è equivalente si lascia `NULL`: meglio un campo
+  vuoto che un valore inventato su cui poi si filtra.
+- **Quando arriveremo al funnel, un filtro su campo `NULL` dev'essere una
+  decisione esplicita**, non un effetto collaterale.
+- **La canonicalizzazione degli URL usa una denylist di parametri**, non una
+  allowlist. Moltissimi career site identificano l'offerta proprio con un
+  parametro di query (`?jobId=`, `?gh_jid=`): una allowlist li ridurrebbe tutti
+  allo stesso `canonical_url`, che essendo UNIQUE significa scartarli come
+  duplicati. `check_urls.py` blocca questo caso.
+- **Lo sweep delle scadute richiede `ingestion_runs.fetch_complete`.** Se una
+  fetch è stata troncata dal limite di pagina, l'assenza di un'offerta non
+  significa che sia scaduta: significa che non siamo arrivati a leggerla.
+- **Il rate limit è una risorsa scarsa quanto i crediti.** Superarlo non costa
+  denaro, costa un ban: da qui `clusters.daily_request_cap` e il token bucket per
+  fonte. Ogni chiamata finisce in `api_usage`, anche quelle gratuite, perché una
+  fonte che degrada va vista prima che diventi un problema.
 
 ### Retention delle offerte
 

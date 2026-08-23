@@ -100,10 +100,10 @@ def fixtures(conn) -> dict[str, str]:
             cur.execute(
                 "INSERT INTO jobs (source, source_job_id, url, canonical_url, "
                 "domain_derived, title, title_normalized, organization, date_posted, "
-                "countries, ai_key_skills, ai_requirements_summary, raw) VALUES "
+                "countries, ai_key_skills, ai_requirements_summary, raw, link_kind) VALUES "
                 "('fantastic', %s, %s, %s, 'acme.example', 'HR Manager', 'hr manager', "
                 "'Acme', now(), ARRAY['IT'], ARRAY['recruiting','payroll'], "
-                "'Cinque anni di esperienza', '{}'::jsonb) RETURNING id",
+                "'Cinque anni di esperienza', '{}'::jsonb, 'career_site') RETURNING id",
                 (sid, url, url))
             ids[key] = cur.fetchone()[0]
 
@@ -214,6 +214,11 @@ def main() -> int:
             "SELECT cluster_try_consume(%s, 40)", (cl,), True)
         expect_value(conn, "consumo oltre il tetto rifiutato",
             "SELECT cluster_try_consume(%s, 5000)", (cl,), False)
+        expect_value(conn, "tetto RICHIESTE indipendente dai crediti",
+            "WITH c AS (INSERT INTO clusters (family,country,daily_credit_cap,daily_request_cap) "
+            "  VALUES ('Gratis','FR',1000000,2) RETURNING id) "
+            "SELECT cluster_try_consume(id,0)::text || cluster_try_consume(id,0)::text "
+            "    || cluster_try_consume(id,0)::text FROM c", (), "truetruefalse")
         expect_value(conn, "breaker aperto dopo lo sforamento",
             "SELECT cluster_try_consume(%s, 5000) IS FALSE AND EXISTS ("
             "  SELECT 1 FROM cluster_daily_budget WHERE cluster_id=%s "
@@ -231,14 +236,14 @@ def main() -> int:
         section("offerte")
         expect_error(conn, "23505", "canonical_url duplicato rifiutato",
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"
-            "organization,date_posted,raw) VALUES ('nav','n-1',"
+            "organization,date_posted,raw,link_kind) VALUES ('nav','n-1',"
             "'https://acme.example/careers/1','https://acme.example/careers/1',"
-            "'Altro','altro','Acme',now(),'{}'::jsonb)")
+            "'Altro','altro','Acme',now(),'{}'::jsonb,'national_agency')")
         expect_error(conn, "23505", "(source, source_job_id) duplicato rifiutato",
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"
-            "organization,date_posted,raw) VALUES ('fantastic','f-1',"
+            "organization,date_posted,raw,link_kind) VALUES ('fantastic','f-1',"
             "'https://acme.example/careers/9','https://acme.example/careers/9',"
-            "'Altro','altro','Acme',now(),'{}'::jsonb)")
+            "'Altro','altro','Acme',now(),'{}'::jsonb,'career_site')")
         expect_error(conn, "23514", "status active con expired_at rifiutato",
             "UPDATE jobs SET expired_at = now() WHERE id = %s", (j1,))
         expect_error(conn, "23514", "offerta duplicato di se stessa rifiutata",
@@ -246,9 +251,10 @@ def main() -> int:
         expect_error(conn, "23514", "catena di duplicati rifiutata",
             "WITH a AS (UPDATE jobs SET duplicate_of_job_id = %s WHERE id = %s RETURNING id) "
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"
-            "organization,date_posted,raw,duplicate_of_job_id) "
+            "organization,date_posted,raw,link_kind,duplicate_of_job_id) "
             "SELECT 'nav','n-2','https://acme.example/careers/3',"
-            "'https://acme.example/careers/3','Terzo','terzo','Acme',now(),'{}'::jsonb, id "
+            "'https://acme.example/careers/3','Terzo','terzo','Acme',now(),"
+            "'{}'::jsonb,'national_agency', id "
             "FROM a", (j1, j2))
         expect_value(conn, "trigger: tsv popolato e pesato",
             "SELECT tsv @@ to_tsquery('simple','manager') AND "
@@ -258,6 +264,23 @@ def main() -> int:
         expect_value(conn, "stesso annuncio da fonti diverse -> stesso fingerprint",
             "SELECT (SELECT fingerprint FROM jobs WHERE id=%s) = "
             "       (SELECT fingerprint FROM jobs WHERE id=%s)", (j1, j2), True)
+
+        expect_error(conn, "23503", "tipo di link sconosciuto rifiutato",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"
+            "organization,date_posted,raw,link_kind) VALUES ('nav','n-7',"
+            "'https://acme.example/careers/7','https://acme.example/careers/7',"
+            "'X','x','Acme',now(),'{}'::jsonb,'passaparola')")
+        expect_error(conn, "23502", "offerta senza tipo di link rifiutata",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"
+            "organization,date_posted,raw) VALUES ('nav','n-8',"
+            "'https://acme.example/careers/8','https://acme.example/careers/8',"
+            "'X','x','Acme',now(),'{}'::jsonb)")
+        expect_value(conn, "career_site precede national_agency nell'ordinamento",
+            "SELECT (SELECT rank FROM link_kinds WHERE kind='career_site') < "
+            "       (SELECT rank FROM link_kinds WHERE kind='national_agency')", (), True)
+        expect_value(conn, "solo career_site è candidatura diretta",
+            "SELECT string_agg(kind, ',' ORDER BY rank) FROM link_kinds WHERE is_direct",
+            (), "career_site")
 
         section("match")
         expect_error(conn, "23514", "punteggio fuori scala rifiutato",
@@ -351,12 +374,12 @@ def main() -> int:
                 cur.execute(
                     "INSERT INTO jobs (source,source_job_id,url,canonical_url,domain_derived,"
                     "title,title_normalized,organization,date_posted,countries,ai_key_skills,"
-                    "salary,status,expired_at,raw) VALUES ('nav',%s,%s,%s,'ret.example',"
+                    "salary,status,expired_at,raw,link_kind) VALUES ('nav',%s,%s,%s,'ret.example',"
                     "'Retention','retention','RetCo', now() - make_interval(days => %s::int),"
                     "ARRAY['IT'],ARRAY['sql'],%s::jsonb,%s,"
                     "CASE WHEN %s::int IS NULL THEN NULL "
                     "ELSE now() - make_interval(days => %s::int) END,"
-                    "'{\"big\": \"payload\"}'::jsonb) RETURNING id",
+                    "'{\"big\": \"payload\"}'::jsonb,'national_agency') RETURNING id",
                     (sid, f"https://ret.example/{sid}", f"https://ret.example/{sid}",
                      posted_days, '{"min": 1}' if salary else None, status,
                      expired_days, expired_days))

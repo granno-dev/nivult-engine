@@ -47,3 +47,42 @@ Ripristino di prova, trimestrale, su una macchina con la chiave privata:
 openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
   -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
 ```
+
+## Credenziali France Travail
+
+API pubblica ufficiale, gratuita. Registrazione:
+
+1. Account su **https://francetravail.io** (sezione *Se connecter* → *Créer un compte*).
+2. *Mon espace* → **Créer une application**. Servono nome, descrizione dell'uso
+   e URL di callback (per `client_credentials` non viene usato: va bene
+   `https://nivult.com`).
+3. Nella scheda dell'applicazione, **souscrire** all'API
+   **« Offres d'emploi v2 »**. La sottoscrizione può richiedere una validazione.
+4. A sottoscrizione attiva, nella scheda dell'applicazione compaiono
+   **Identifiant client** (comincia per `PAR_`) e **Clé secrète**.
+
+Poi in `/opt/nivult/.env`:
+
+```
+FRANCE_TRAVAIL_CLIENT_ID=PAR_...
+FRANCE_TRAVAIL_CLIENT_SECRET=...
+```
+
+Dettagli tecnici usati dal client:
+
+| | |
+|---|---|
+| Token endpoint | `https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire` |
+| Grant | `client_credentials` |
+| Scope | `api_offresdemploiv2 o2dsoffre` |
+| Base API | `https://api.francetravail.io/partenaire/offresdemploi/v2` |
+| Ricerca | `GET /offres/search` — risponde **206** con `Content-Range`, non 200 |
+| Limiti | 150 risultati per pagina, 3149 per ricerca |
+
+Verifica appena arrivano le credenziali:
+
+```bash
+python -m nivult.ingestion.probe france_travail --query "ressources humaines" --limit 5
+```
+
+Sola lettura, non tocca il database.

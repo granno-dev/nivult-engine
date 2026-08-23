@@ -25,7 +25,7 @@ TABLES = [
     "jobs", "job_embeddings", "job_clusters",
     "matches", "digests", "digest_items",
     "ingestion_runs", "api_usage", "deletion_requests", "cluster_month_stats",
-    "login_tokens", "sessions", "oauth_identities",
+    "login_tokens", "sessions", "oauth_identities", "link_kinds",
 ]
 
 INDEXES = [
@@ -36,7 +36,8 @@ INDEXES = [
     "jobs_active_posted_idx", "jobs_taxonomies_idx", "jobs_countries_idx",
     "jobs_key_skills_idx", "jobs_keywords_idx", "jobs_tsv_idx",
     "jobs_filters_idx", "jobs_last_seen_idx", "jobs_fingerprint_idx",
-    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "job_embeddings_hnsw_idx",
+    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "jobs_link_kind_idx",
+    "job_embeddings_hnsw_idx",
     "job_clusters_by_cluster_idx",
     "matches_user_recent_idx", "matches_passed_idx", "matches_job_idx",
     "digests_user_recent_idx", "digests_pending_idx",
@@ -191,6 +192,15 @@ def main() -> int:
         expected = len(list((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql")))
         rep.check(count == expected,
                   f"{expected} migrazioni applicate (trovate {count}, ultima {top})")
+
+        rep.section("politica sui link")
+        cur.execute("SELECT kind || '=' || rank FROM link_kinds ORDER BY rank")
+        kinds = [r[0] for r in cur.fetchall()]
+        rep.check(kinds == ["career_site=1", "national_agency=2", "job_board=3"],
+                  "ordine di preferenza dei tipi di link", f"trovato: {kinds}")
+        cur.execute("SELECT count(*) FROM jobs j LEFT JOIN link_kinds k "
+                    "ON k.kind = j.link_kind WHERE k.kind IS NULL")
+        rep.check(cur.fetchone()[0] == 0, "ogni offerta ha un tipo di link noto")
 
         rep.section("autenticazione senza password")
         cur.execute(
