@@ -96,10 +96,10 @@ def main() -> int:
             allowed(app, "SELECT su una tabella", "SELECT count(*) FROM users")
             allowed(app, "INSERT",
                     "INSERT INTO clusters (family,country,daily_credit_cap) "
-                    "VALUES ('Priv','IT',10)")
+                    "VALUES ('Legal','IT',10)")
             allowed(app, "UPDATE", "UPDATE clusters SET daily_credit_cap = 11 "
-                                   "WHERE family = 'Priv'")
-            allowed(app, "DELETE", "DELETE FROM clusters WHERE family = 'Priv'")
+                                   "WHERE family = 'Legal'")
+            allowed(app, "DELETE", "DELETE FROM clusters WHERE family = 'Legal'")
             allowed(app, "chiamare una funzione del motore",
                     "SELECT 1 FROM pg_proc WHERE proname = 'cluster_try_consume'")
 

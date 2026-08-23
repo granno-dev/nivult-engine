@@ -25,7 +25,9 @@ _COLUMNS = (
     "ai_key_skills", "ai_keywords", "ai_taxonomies_a",
     "ai_requirements_summary", "ai_core_responsibilities",
     "salary", "date_valid_through", "ai_education", "organization_logo",
-    "ai_work_arrangement_office_days", "raw",
+    "ai_work_arrangement_office_days",
+    "org_size", "org_headcount", "org_industry", "employer_agency_declared",
+    "raw",
 )
 
 # Ciò che si aggiorna quando un'offerta già nota ricompare. Fuori restano

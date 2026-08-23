@@ -11,9 +11,10 @@ si paga una volta per cluster. Vedi CLAUDE.md.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -21,11 +22,16 @@ import psycopg
 from nivult.config import load_dotenv, migrator_database_url, safe_dsn
 from nivult.ingestion import store
 from nivult.ingestion.sources.arbetsformedlingen import ArbetsformedlingenClient
+from nivult.ingestion.sources.fantastic import FantasticClient
 from nivult.ingestion.sources.france_travail import FranceTravailClient
 
 log = logging.getLogger("nivult.ingestion.runner")
 
-CLIENTS = (FranceTravailClient, ArbetsformedlingenClient)
+CLIENTS = (FantasticClient, FranceTravailClient, ArbetsformedlingenClient)
+
+# Fonti che sanno filtrare per tassonomia: non serve un termine di ricerca,
+# si chiede direttamente la famiglia professionale.
+TAXONOMY_SOURCES = frozenset({'fantastic'})
 
 # Backfill: quanto storico prende un cluster mai scaricato.
 #
@@ -42,6 +48,8 @@ class Cluster:
     country: str
     last_seen_posted_at: datetime | None
     in_backfill: bool = False
+    # Termine di ricerca per fonte, per le fonti senza tassonomia.
+    queries: dict[str, str] = field(default_factory=dict)
 
     @property
     def label(self) -> str:
@@ -60,7 +68,50 @@ def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
             "SELECT id, family, country, last_seen_posted_at, "
             "       backfill_completed_at IS NULL FROM clusters "
             "WHERE status = 'active' ORDER BY last_fetched_at NULLS FIRST")
-    return [Cluster(str(r[0]), r[1], r[2], r[3], r[4]) for r in cur.fetchall()]
+    clusters = [Cluster(str(r[0]), r[1], r[2], r[3], r[4]) for r in cur.fetchall()]
+    if clusters:
+        cur.execute(
+            "SELECT cluster_id, source, query FROM cluster_source_queries "
+            "WHERE cluster_id = ANY(%s)", ([c.id for c in clusters],))
+        per_id: dict[str, dict[str, str]] = {}
+        for cid, src, q in cur.fetchall():
+            per_id.setdefault(str(cid), {})[src] = q
+        for c in clusters:
+            c.queries = per_id.get(c.id, {})
+    return clusters
+
+
+def compute_pushdown(cur, cluster_id: str) -> dict[str, object]:
+    """Filtri che si possono spingere nella chiamata.
+
+    Solo quelli su cui TUTTI gli iscritti attivi concordano: spingere un filtro
+    che vuole uno solo restringerebbe un corpus condiviso per la preferenza di
+    quell'uno. Con zero iscritti non si spinge nulla — non c'è consenso da
+    rappresentare, e il cluster è comunque destinato a diventare dormiente.
+    """
+    cur.execute(
+        "SELECT count(*), "
+        "       count(DISTINCT accepted_employer_kinds), "
+        "       (array_agg(accepted_employer_kinds))[1], "
+        "       count(DISTINCT work_arrangements), "
+        "       (array_agg(work_arrangements))[1], "
+        "       count(DISTINCT employment_types), "
+        "       (array_agg(employment_types))[1] "
+        "  FROM user_clusters WHERE cluster_id = %s AND NOT is_paused",
+        (cluster_id,))
+    n, n_ek, ek, n_wa, wa, n_et, et = cur.fetchone()
+    if not n:
+        return {}
+
+    out: dict[str, object] = {}
+    # Le agenzie si escludono in chiamata solo se NESSUNO le vuole.
+    if n_ek == 1 and ek and "staffing_agency" not in ek:
+        out["organization_agency"] = "exclude"
+    if n_wa == 1 and wa:
+        out["ai_work_arrangement"] = list(wa)
+    if n_et == 1 and et:
+        out["ai_employment_type"] = list(et)
+    return out
 
 
 def clients_for(country: str):
@@ -82,6 +133,21 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
     # Il backfill attinge a una dotazione dedicata: senza, il primo giro di ogni
     # cluster nuovo aprirebbe il breaker giornaliero e resterebbe a metà.
     # NON è un'esenzione dai soldi — provider_budget continua a valere.
+    # Filtri spinti nella chiamata: meno crediti che scaricare e scartare.
+    with conn.cursor() as cur:
+        pushdown = compute_pushdown(cur, cluster.id)
+        signature = json.dumps(pushdown, sort_keys=True)
+        cur.execute("SELECT pushdown_signature FROM clusters WHERE id = %s", (cluster.id,))
+        precedente = cur.fetchone()[0]
+    if precedente is not None and precedente != signature:
+        # Il corpus raccolto prima è più stretto di quello che serve ora: le
+        # offerte saltate allora non tornano da sole.
+        log.warning("%s: i filtri spinti in chiamata sono cambiati (%s -> %s). "
+                    "Il corpus ha un buco: va riscaricata la finestra.",
+                    cluster.label, precedente, signature)
+    if pushdown:
+        log.info("%s: filtri in chiamata -> %s", cluster.label, signature)
+
     consume_fn = ("cluster_try_consume_backfill" if cluster.in_backfill
                   else "cluster_try_consume")
     if cluster.in_backfill:
@@ -89,6 +155,17 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                  cluster.label, BACKFILL_WINDOW.days)
 
     for cls in clients:
+        # Cosa si chiede a questa fonte: la tassonomia se la sa usare, altrimenti
+        # il termine di ricerca specifico. Senza termine la fonte non può fare
+        # nulla di sensato, e saltarla in silenzio è il modo di ritrovarsi un
+        # cluster mezzo vuoto senza capire perché.
+        taxonomy = cluster.family if cls.source in TAXONOMY_SOURCES else None
+        query = cluster.queries.get(cls.source, "")
+        if not taxonomy and not query:
+            log.warning("%s: nessun termine di ricerca per %s — fonte saltata. "
+                        "Vedi cluster_coverage_v", cluster.label, cls.source)
+            continue
+
         # Il breaker PRIMA della chiamata: se il tetto è raggiunto non si parte.
         with conn.cursor() as cur:
             cur.execute(f"SELECT {consume_fn}(%s, %s)",
@@ -137,8 +214,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
             with cls() as client:
                 page_size = min(limit, client.page_size)
                 while True:
-                    result = client.fetch(query=cluster.family, country=cluster.country,
-                                          since=since, limit=page_size, offset=offset)
+                    kw: dict = {"taxonomy": taxonomy} if taxonomy else {}
+                    if cls.source in TAXONOMY_SOURCES and pushdown:
+                        kw["extra_filters"] = pushdown
+                    result = client.fetch(query=query, country=cluster.country,
+                                          since=since, limit=page_size, offset=offset,
+                                          **kw)
                     last_page = result
                     pages += 1
                     fetched += result.received
@@ -234,6 +315,8 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     "  fetch_complete = %s, jobs_fetched = %s, jobs_new = %s, "
                     "  jobs_updated = %s WHERE id = %s",
                     (fetch_complete, fetched, new, updated, run_id))
+                cur.execute("UPDATE clusters SET pushdown_signature = %s WHERE id = %s",
+                            (signature, cluster.id))
                 cur.execute(
                     "UPDATE clusters SET last_fetched_at = now(), "
                     "  last_successful_fetch_at = now(), "

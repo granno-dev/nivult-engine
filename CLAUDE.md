@@ -326,6 +326,31 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   pagina), si chiama, e `settle_credits` restituisce la differenza. Il verso
   conta — riservare poco e aggiustare in su lascerebbe una finestra in cui due
   worker paralleli sforano entrambi credendo di stare nel tetto.
+- **Il cluster è una famiglia, le fonti lo interrogano ciascuna a modo suo.**
+  `clusters.family` è un valore di `job_families` (la tassonomia del fornitore),
+  con FK: **non è un termine di ricerca**. I termini per le fonti che la
+  tassonomia non ce l'hanno stanno in `cluster_source_queries`, uno per fonte.
+  Fantastic non ne ha bisogno: chiede `ai_taxonomies_a` e basta.
+  `cluster_coverage_v` mostra i cluster che una fonte salterebbe in silenzio
+  per mancanza di termine, e `verify_schema.py` lo segnala.
+- **L'agenzia dichiarata dalla fonte vince sulla nostra lista.**
+  `org_linkedin_recruitment_agency_derived` ha copertura **100%** e su un giro
+  reale ha riconosciuto **95 agenzie che i nostri pattern avrebbero mancato** —
+  «Newslot Recrutement», «Atomic HR», «GE IROISE»: piccole società di selezione
+  locali, che una lista mantenuta a mano non potrà mai enumerare. Un
+  `declared = false` però **non** annulla la lista: la fonte può non riconoscere
+  un'agenzia che noi conosciamo, e le due evidenze si sommano.
+- **Filtri spinti nella chiamata solo su consenso unanime.** Filtrare a monte
+  costa meno crediti che scaricare e scartare, ma il corpus è **condiviso**:
+  spingere un filtro che vuole un solo iscritto lo restringerebbe per tutti.
+  `compute_pushdown` spinge solo ciò su cui **tutti** gli iscritti attivi
+  concordano, e con zero iscritti non spinge nulla.
+
+  Effetto meno ovvio, da tenere a mente: così il corpus dipende da **chi è
+  iscritto adesso**. Se domani entra qualcuno con filtri più larghi, le offerte
+  saltate ieri non tornano da sole. Per questo `clusters.pushdown_signature`
+  registra cosa è stato spinto: quando cambia, il runner avverte che quella
+  finestra ha un buco e va riscaricata.
 - **Un cluster si chiede per TASSONOMIA, non per titolo.** `ai_taxonomies_a` non
   è solo un campo di risposta: è un **parametro di ricerca**, e cattura la
   famiglia professionale in qualunque lingua invece di costringerci a rincorrere
@@ -491,7 +516,9 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
 ### Vincoli aperti sui dati del fornitore
 
 - `user_clusters.company_sizes` esiste ma **il funnel non deve applicarlo**.
-  **Non più per un limite tecnico.** Fantastic espone `org_linkedin_size` e
+  **Non più per un limite tecnico, e il fill-rate regge**: `org_linkedin_size`
+  è presente sul **97,5%** di un campione di 200 offerte in 4 paesi, e su un
+  giro reale sul 96% delle offerte Fantastic. Fantastic espone `org_linkedin_size` e
   `org_linkedin_headcount` con `include_basic_organization_details=true`, ed
   `organization_size` è anche un parametro di ricerca. Ma le fonti nazionali non
   ce l'hanno, e un filtro attivo su una fonte sola darebbe risultati che

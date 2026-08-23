@@ -55,6 +55,12 @@ class RawJob:
     organization_logo: str | None = None
     ai_work_arrangement_office_days: int | None = None
 
+    # Arricchimento organizzazione: presente solo sulle fonti che lo espongono.
+    org_size: str | None = None
+    org_headcount: int | None = None
+    org_industry: str | None = None
+    employer_agency_declared: bool | None = None
+
     def __post_init__(self) -> None:
         if not self.canonical_url:
             raise ValueError(f"canonical_url mancante per {self.source}:{self.source_job_id}")

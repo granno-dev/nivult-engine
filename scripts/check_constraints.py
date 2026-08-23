@@ -199,12 +199,12 @@ def main() -> int:
 
         section("clusters e budget")
         expect_error(conn, "23514", "country minuscolo rifiutato",
-            "INSERT INTO clusters (family,country,daily_credit_cap) VALUES ('X','it',10)")
+            "INSERT INTO clusters (family,country,daily_credit_cap) VALUES ('Legal','it',10)")
         expect_error(conn, "23505", "cluster (famiglia,paese) duplicato rifiutato",
             "INSERT INTO clusters (family,country,daily_credit_cap) "
             "VALUES ('Human Resources','IT',50)")
         expect_error(conn, "23514", "tetto crediti a zero rifiutato",
-            "INSERT INTO clusters (family,country,daily_credit_cap) VALUES ('Y','FR',0)")
+            "INSERT INTO clusters (family,country,daily_credit_cap) VALUES ('Sales','FR',0)")
         expect_error(conn, "23514", "circuit_open senza opened_at rifiutato",
             "INSERT INTO cluster_daily_budget (cluster_id,usage_date,circuit_open) "
             "VALUES (%s, current_date, true)", (cl,))
@@ -216,7 +216,7 @@ def main() -> int:
             "SELECT cluster_try_consume(%s, 5000)", (cl,), False)
         expect_value(conn, "tetto RICHIESTE indipendente dai crediti",
             "WITH c AS (INSERT INTO clusters (family,country,daily_credit_cap,daily_request_cap) "
-            "  VALUES ('Gratis','FR',1000000,2) RETURNING id) "
+            "  VALUES ('Marketing','FR',1000000,2) RETURNING id) "
             "SELECT cluster_try_consume(id,0)::text || cluster_try_consume(id,0)::text "
             "    || cluster_try_consume(id,0)::text FROM c", (), "truetruefalse")
         expect_value(conn, "breaker aperto dopo lo sforamento",
@@ -256,6 +256,40 @@ def main() -> int:
         expect_error(conn, "23514", "period_month non primo del mese rifiutato",
             "INSERT INTO provider_budget (provider, period_month) "
             "VALUES ('arbetsformedlingen', DATE '2026-03-15')")
+
+        section("famiglia e termini di ricerca")
+        expect_error(conn, "23503", "famiglia fuori vocabolario rifiutata",
+            "INSERT INTO clusters (family, country) VALUES ('Rincorsa Sinonimi','FR')")
+        expect_value(conn, "una famiglia di job_families è accettata",
+            "INSERT INTO clusters (family, country) VALUES ('Software','FR') "
+            "RETURNING family", (), "Software")
+        expect_error(conn, "23514", "termine di ricerca vuoto rifiutato",
+            "INSERT INTO cluster_source_queries (cluster_id, source, query) "
+            "VALUES (%s, 'france_travail', '   ')", (cl,))
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO cluster_source_queries (cluster_id,source,query) "
+                        "VALUES (%s,'france_travail','ressources humaines')", (cl,))
+        expect_value(conn, "un termine per fonte, registrato",
+            "SELECT count(*) FROM cluster_source_queries WHERE cluster_id=%s", (cl,), 1)
+        expect_error(conn, "23505", "due termini per la stessa fonte rifiutati",
+            "INSERT INTO cluster_source_queries (cluster_id, source, query) "
+            "VALUES (%s, 'france_travail', 'altro')", (cl,))
+
+        section("etichetta datore dichiarata dalla fonte")
+        expect_value(conn, "la fonte dichiara agenzia -> vince sulla lista",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+            "title_normalized,organization,date_posted,raw,link_kind,"
+            "employer_agency_declared) VALUES ('fantastic','ea1',"
+            "'https://f.example/1','https://f.example/1','X','x','Sconosciuta Srl',"
+            "now(),'{}'::jsonb,'career_site',true) RETURNING employer_kind",
+            (), "staffing_agency")
+        expect_value(conn, "dichiarato false NON annulla la nostra lista",
+            "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
+            "title_normalized,organization,date_posted,raw,link_kind,"
+            "employer_agency_declared) VALUES ('fantastic','ea2',"
+            "'https://f.example/2','https://f.example/2','X','x','ADECCO ITALIA',"
+            "now(),'{}'::jsonb,'career_site',false) RETURNING employer_kind",
+            (), "staffing_agency")
 
         section("dotazione di backfill")
         expect_value(conn, "un cluster nuovo è in backfill",

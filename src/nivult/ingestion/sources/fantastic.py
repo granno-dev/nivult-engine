@@ -165,13 +165,16 @@ class FantasticClient(HttpSource):
 
     def fetch(self, *, query: str, country: str, since: datetime | None = None,
               limit: int = 100, offset: int = 0, taxonomy: str | None = None,
-              with_org_details: bool = True) -> FetchResult:
+              with_org_details: bool = True,
+              extra_filters: dict | None = None) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
 
         params = self.search_params(query=query, country=country, since=since,
                                     taxonomy=taxonomy)
         params.update({"limit": min(limit, MAX_LIMIT), "offset": offset})
+        if extra_filters:
+            params.update(extra_filters)
         if with_org_details:
             # L'arricchimento è OPT-IN: senza questo flag la risposta non porta
             # org_linkedin_size né gli altri campi di organizzazione.
@@ -217,8 +220,9 @@ class FantasticClient(HttpSource):
             raise ValueError("url assente")
         canonical = canonicalize(url)
 
-        posted = r["date_posted"]
-        valid = r.get("date_valid_through")
+        posted = _dt(r["date_posted"])
+        if posted is None:
+            raise ValueError("date_posted assente")
 
         return RawJob(
             source=self.source,
@@ -229,7 +233,7 @@ class FantasticClient(HttpSource):
             title=r["title"],
             title_normalized=normalize_title(r["title"]),
             organization=r.get("organization") or None,
-            date_posted=datetime.fromisoformat(str(posted).replace("Z", "+00:00")),
+            date_posted=posted,
             domain_derived=r.get("domain_derived") or registrable_domain(canonical),
             org_linkedin_slug=r.get("org_linkedin_slug"),
             cities=[c for c in (r.get("cities_derived") or []) if c],
@@ -249,11 +253,14 @@ class FantasticClient(HttpSource):
             ai_requirements_summary=r.get("ai_requirements_summary"),
             ai_core_responsibilities=r.get("ai_core_responsibilities"),
             salary=r.get("salary") or None,
-            date_valid_through=(datetime.fromisoformat(str(valid).replace("Z", "+00:00"))
-                                if valid else None),
+            date_valid_through=_dt(r.get("date_valid_through")),
             ai_education=r.get("ai_education"),
             organization_logo=r.get("organization_logo"),
             ai_work_arrangement_office_days=r.get("ai_work_arrangement_office_days"),
+            org_size=r.get("org_linkedin_size"),
+            org_headcount=_int_or_none(r.get("org_linkedin_headcount")),
+            org_industry=r.get("org_linkedin_industry"),
+            employer_agency_declared=r.get("org_linkedin_recruitment_agency_derived"),
             raw=r,
         )
 
@@ -266,6 +273,21 @@ def _first(v):
 
 def _as_str(v):
     return None if v is None else str(v)
+
+
+def _dt(value) -> datetime | None:
+    """Timestamp della fonte, sempre con fuso.
+
+    date_posted arriva senza marcatore ("2026-08-23T00:03:58"), quindi
+    fromisoformat produce un datetime naive: confrontarlo con una finestra
+    consapevole del fuso solleva, e scritto in una colonna timestamptz verrebbe
+    interpretato secondo il fuso della sessione. Si assume UTC, che è ciò che
+    la fonte usa negli altri campi datati.
+    """
+    if not value:
+        return None
+    d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 def _int_or_none(v):

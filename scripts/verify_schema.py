@@ -28,6 +28,7 @@ TABLES = [
     "login_tokens", "sessions", "oauth_identities", "link_kinds",
     "employer_kinds", "staffing_agency_patterns",
     "provider_quotas", "provider_budget", "job_families",
+    "cluster_source_queries",
 ]
 
 INDEXES = [
@@ -38,7 +39,7 @@ INDEXES = [
     "jobs_active_posted_idx", "jobs_taxonomies_idx", "jobs_countries_idx",
     "jobs_key_skills_idx", "jobs_keywords_idx", "jobs_tsv_idx",
     "jobs_filters_idx", "jobs_last_seen_idx", "jobs_fingerprint_idx",
-    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "jobs_link_kind_idx", "jobs_employer_kind_idx",
+    "jobs_duplicate_of_idx", "jobs_purgeable_idx", "jobs_link_kind_idx", "jobs_employer_kind_idx", "jobs_org_size_idx",
     "job_embeddings_hnsw_idx",
     "job_clusters_by_cluster_idx",
     "matches_user_recent_idx", "matches_passed_idx", "matches_job_idx",
@@ -55,7 +56,7 @@ INDEXES = [
 CONSTRAINTS = [
     "users_channel_address_ck", "users_schedule_ck", "users_deleted_ck",
     "user_cvs_embedding_ck",
-    "clusters_family_country_key", "cluster_daily_budget_circuit_ck",
+    "clusters_family_country_key", "clusters_family_fk", "cluster_daily_budget_circuit_ck",
     "jobs_source_id_key", "jobs_canonical_url_key", "jobs_expiry_ck",
     "jobs_not_self_dup_ck",
     "matches_user_job_key", "matches_id_user_key",
@@ -182,6 +183,7 @@ def main() -> int:
         rep.check("cluster_month_stats_v" in views, "vista cluster_month_stats_v")
         rep.check("provider_budget_v" in views, "vista provider_budget_v")
         rep.check("cluster_backfill_v" in views, "vista cluster_backfill_v")
+        rep.check("cluster_coverage_v" in views, "vista cluster_coverage_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)
@@ -250,6 +252,15 @@ def main() -> int:
                      + ", ".join(troncati))
         else:
             rep.check(True, "nessun backfill troncato")
+
+        cur.execute("SELECT family || ' × ' || country || ' / ' || source "
+                    "FROM cluster_coverage_v WHERE NOT interrogabile")
+        scoperti = [r[0] for r in cur.fetchall()]
+        if scoperti:
+            rep.warn("cluster senza termine di ricerca, la fonte li salterà: "
+                     + "; ".join(scoperti))
+        else:
+            rep.check(True, "ogni cluster è interrogabile da tutte le sue fonti")
 
         rep.section("budget dei fornitori")
         cur.execute("SELECT provider FROM provider_quotas ORDER BY provider")
