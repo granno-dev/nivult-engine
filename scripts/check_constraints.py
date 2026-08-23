@@ -264,6 +264,35 @@ def main() -> int:
         expect_value(conn, "stesso annuncio da fonti diverse -> stesso fingerprint",
             "SELECT (SELECT fingerprint FROM jobs WHERE id=%s) = "
             "       (SELECT fingerprint FROM jobs WHERE id=%s)", (j1, j2), True)
+        # Il caso che ha motivato la 0013: due aziende diverse sullo stesso ATS
+        # condiviso. Col fingerprint per dominio collidevano, e una sarebbe
+        # sparita come duplicato.
+        expect_value(conn, "ATS condiviso: aziende diverse NON collidono",
+            "WITH a AS (INSERT INTO jobs (source,source_job_id,url,canonical_url,"
+            "  domain_derived,title,title_normalized,organization,date_posted,countries,"
+            "  cities,raw,link_kind) VALUES ('arbetsformedlingen','af-1',"
+            "  'https://aplitrak.com/?adid=1','https://aplitrak.com/?adid=1','aplitrak.com',"
+            "  'Rekryterare','rekryterare','Manpower',now(),ARRAY['SE'],ARRAY['Goteborg'],"
+            "  '{}'::jsonb,'career_site') RETURNING fingerprint), "
+            "b AS (INSERT INTO jobs (source,source_job_id,url,canonical_url,"
+            "  domain_derived,title,title_normalized,organization,date_posted,countries,"
+            "  cities,raw,link_kind) VALUES ('arbetsformedlingen','af-2',"
+            "  'https://aplitrak.com/?adid=2','https://aplitrak.com/?adid=2','aplitrak.com',"
+            "  'Rekryterare','rekryterare','Randstad',now(),ARRAY['SE'],ARRAY['Goteborg'],"
+            "  '{}'::jsonb,'career_site') RETURNING fingerprint) "
+            "SELECT (SELECT fingerprint FROM a) <> (SELECT fingerprint FROM b)", (), True)
+        expect_value(conn, "stessa azienda e titolo, città diverse: NON collidono",
+            "WITH a AS (INSERT INTO jobs (source,source_job_id,url,canonical_url,"
+            "  title,title_normalized,organization,date_posted,countries,cities,raw,link_kind)"
+            "  VALUES ('nav','c-1','https://x.example/1','https://x.example/1',"
+            "  'HR Manager','hr manager','Acme',now(),ARRAY['IT'],ARRAY['Milano'],"
+            "  '{}'::jsonb,'career_site') RETURNING fingerprint), "
+            "b AS (INSERT INTO jobs (source,source_job_id,url,canonical_url,"
+            "  title,title_normalized,organization,date_posted,countries,cities,raw,link_kind)"
+            "  VALUES ('nav','c-2','https://x.example/2','https://x.example/2',"
+            "  'HR Manager','hr manager','Acme',now(),ARRAY['IT'],ARRAY['Roma'],"
+            "  '{}'::jsonb,'career_site') RETURNING fingerprint) "
+            "SELECT (SELECT fingerprint FROM a) <> (SELECT fingerprint FROM b)", (), True)
 
         expect_error(conn, "23503", "tipo di link sconosciuto rifiutato",
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,title_normalized,"

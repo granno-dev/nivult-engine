@@ -16,7 +16,11 @@ import logging
 import sys
 from dataclasses import asdict
 
-SOURCES = {"france_travail": ("nivult.ingestion.sources.france_travail", "FranceTravailClient")}
+SOURCES = {
+    "france_travail": ("nivult.ingestion.sources.france_travail", "FranceTravailClient"),
+    "arbetsformedlingen": ("nivult.ingestion.sources.arbetsformedlingen",
+                           "ArbetsformedlingenClient"),
+}
 
 
 def load(name: str):
@@ -31,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source", choices=sorted(SOURCES))
     ap.add_argument("--query", required=True)
-    ap.add_argument("--country", default="FR")
+    ap.add_argument("--country", default=None)
     ap.add_argument("--limit", type=int, default=5)
     ap.add_argument("--json", action="store_true", help="stampa i RawJob grezzi, per le fixture")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -41,7 +45,8 @@ def main(argv: list[str] | None = None) -> int:
                         format="%(levelname)-7s %(message)s", stream=sys.stderr)
 
     with load(args.source)() as client:
-        result = client.fetch(query=args.query, country=args.country, limit=args.limit)
+        country = args.country or sorted(client.countries)[0]
+        result = client.fetch(query=args.query, country=country, limit=args.limit)
 
     if args.json:
         print(json.dumps([asdict(j) for j in result.jobs], default=str, ensure_ascii=False, indent=2))

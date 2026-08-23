@@ -22,8 +22,25 @@ Fonti:
 
 - **Fantastic.jobs** — API a pagamento. `GET https://data.fantastic.jobs/v1/active-ats`,
   auth `Bearer`, parametri `title`, `location`, `time_frame`, `limit`.
-- **API pubbliche nazionali gratuite** — France Travail, Bundesagentur,
-  Arbetsförmedlingen, NAV, Työmarkkinatori.
+- **API pubbliche nazionali gratuite** — France Travail, Arbetsförmedlingen,
+  NAV, Työmarkkinatori.
+
+> **La Bundesagentur für Arbeit è fuori, deliberatamente.** Non offre una API
+> pubblica: la vecchia chiave nota risponde `403`, e quello che circola come
+> "API della Bundesagentur" sono credenziali OAuth2 estratte per reverse
+> engineering dalla loro app mobile. Usare credenziali di qualcun altro per far
+> funzionare un servizio in abbonamento è sbagliato su due piani — contrattuale,
+> perché non è un accesso autorizzato; e operativo, perché possono essere
+> ruotate da un giorno all'altro lasciandoci senza una fonte in produzione e
+> senza nessuno a cui rivolgerci.
+>
+> **La Germania si copre con Fantastic.jobs** (~107.000 offerte ATS al mese su
+> quel mercato). È stata inoltrata una richiesta di accesso partner autorizzato
+> alla BA: se arriva, si valuta; se non arriva, non cambia niente.
+>
+> *Se qualcuno in futuro propone di rimettere dentro la Bundesagentur: la
+> ragione dell'esclusione non è tecnica, e non è cambiata solo perché il codice
+> funzionerebbe.*
 
 **Regola sui link.** La regola nasce contro gli **aggregatori commerciali** che
 rivendono traffico, non contro gli enti pubblici del lavoro. Quindi ogni offerta
@@ -238,6 +255,18 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   denaro, costa un ban: da qui `clusters.daily_request_cap` e il token bucket per
   fonte. Ogni chiamata finisce in `api_usage`, anche quelle gratuite, perché una
   fonte che degrada va vista prima che diventi un problema.
+- **Il fingerprint della deduplica morbida usa l'azienda, non il dominio.** Su un
+  ATS condiviso (`aplitrak.com`, `varbi.com`, `greenhouse.io`, `lever.co`) il
+  dominio identifica il fornitore del software, non chi assume: due aziende
+  diverse collidevano e una veniva scartata come duplicato. Include anche la
+  città, perché in una deduplica morbida un falso positivo fa sparire
+  un'offerta vera mentre un falso negativo lascia solo una riga in più — meglio
+  precisione che copertura.
+- **Arbetsförmedlingen dà il segnale di rimozione nativo.** Lo JobStream espone
+  `removed` e `removed_date`, quindi lì la scadenza non va dedotta dall'assenza.
+  Il `link_kind` si ricava da `application_details`: se `via_af` è falso e c'è
+  un URL, quello è l'ATS aziendale ed è `career_site`; altrimenti si ripiega
+  sulla pagina di Platsbanken, che è `national_agency`.
 
 ### Retention delle offerte
 
