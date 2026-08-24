@@ -82,6 +82,19 @@ class FiltriCluster(BaseModel):
     wants: str | None = Field(default=None, max_length=1000)
 
 
+class RichiestaCopertura(BaseModel):
+    """Cosa un utente ci chiede e non copriamo ancora.
+
+    Non diventa un filtro: selezionare una lingua o un paese che non abbiamo
+    darebbe un digest vuoto, letto come "non c'e' lavoro per me" invece che
+    come "quel mercato non lo leggiamo". Diventa domanda misurata.
+    """
+    kind: str = Field(pattern="^(cluster|language)$")
+    family: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, pattern="^[A-Za-z]{2}$")
+    language: str | None = Field(default=None, max_length=60)
+
+
 class PreferenzeUtente(BaseModel):
     """Le preferenze di consegna. I filtri di matching stanno per cluster."""
     timezone: str | None = None
@@ -309,6 +322,26 @@ def create_app() -> FastAPI:
                              "ammessi": ["<= max_headcount"]})
         if problemi:
             raise HTTPException(422, detail=problemi)
+
+    @app.post("/me/copertura", status_code=202)
+    def chiedi_copertura(corpo: RichiestaCopertura,
+                         uid: str = Depends(utente), conn=Depends(connessione)):
+        """Registra una richiesta di copertura. Sempre 202: non c'e' niente
+        da restituire e non c'e' niente che l'utente debba aspettare."""
+        if corpo.kind == "cluster" and not (corpo.family and corpo.country):
+            raise HTTPException(422, "una richiesta di ricerca vuole mestiere e paese")
+        if corpo.kind == "language" and not corpo.language:
+            raise HTTPException(422, "una richiesta di lingua vuole la lingua")
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO coverage_requests (user_id, kind, family, country, language) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (uid, corpo.kind,
+                 (corpo.family or "").strip() or None,
+                 (corpo.country or "").upper() or None,
+                 (corpo.language or "").strip() or None))
+        conn.commit()
+        return {"esito": "richiesta registrata"}
 
     @app.get("/me/cluster")
     def miei_cluster(uid: str = Depends(utente), conn=Depends(connessione)):
