@@ -169,9 +169,17 @@ def main() -> int:
             # una posizione: e' la stessa ricerca.
             r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
                             json={"family": "Human Resources", "country": "it",
-                                  "filtri": {"languages": ["Italian"]}})
+                                  "filtri": {"languages": ["Italian"],
+                                             "target_role": "HR Business Partner"}})
             check("ma si possono ancora cambiare i filtri di una che si ha",
                   r.status_code, 201)
+            # Il ruolo e' la risposta alla domanda "a cosa ambisce questa
+            # persona": deve sopravvivere al giro e tornare al pannello.
+            check("il ruolo a cui punta viene salvato",
+                  seen_by_other("SELECT target_role FROM user_clusters uc "
+                                "JOIN clusters c ON c.id = uc.cluster_id "
+                                "WHERE c.country = 'IT' LIMIT 1"),
+                  "HR Business Partner")
 
             with psycopg.connect(database_url(), autocommit=True) as cc:
                 cc.execute("DELETE FROM user_clusters uc USING clusters c "

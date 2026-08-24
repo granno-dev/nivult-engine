@@ -76,6 +76,11 @@ class FiltriCluster(BaseModel):
     needs_visa_sponsorship: bool = False
     min_headcount: int | None = None
     max_headcount: int | None = None
+    # Il ruolo a cui punta ("HR Business Partner"). La famiglia decide dove
+    # si legge; questo dice cosa si cerca, e va al modello come segnale di
+    # punteggio — mai come chiave di ingestione (misurato: per titolo si
+    # perde il 96% delle offerte) ne' come filtro secco.
+    target_role: str | None = Field(default=None, max_length=120)
     # Cosa cerca, con parole sue. Il tetto e' quello del vincolo in tabella:
     # questo testo entra nel prompt di OGNI offerta del cluster, quindi la
     # sua lunghezza si paga moltiplicata per il numero di offerte.
@@ -357,7 +362,7 @@ def create_app() -> FastAPI:
             "INSERT INTO user_clusters (user_id, cluster_id, languages, "
             "  min_seniority, max_seniority, work_arrangements, employment_types, "
             "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
-            "  max_headcount, wants) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "  max_headcount, wants, target_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
             "  languages = EXCLUDED.languages, "
             "  min_seniority = EXCLUDED.min_seniority, "
@@ -369,12 +374,14 @@ def create_app() -> FastAPI:
             "  min_headcount = EXCLUDED.min_headcount, "
             "  max_headcount = EXCLUDED.max_headcount, "
             "  wants = EXCLUDED.wants, "
+            "  target_role = EXCLUDED.target_role, "
             "  is_paused = false",
             (uid, cluster_id, filtri.languages, filtri.min_seniority,
              filtri.max_seniority, filtri.work_arrangements,
              filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
              filtri.min_headcount, filtri.max_headcount,
-             (filtri.wants or "").strip() or None))
+             (filtri.wants or "").strip() or None,
+             (filtri.target_role or "").strip() or None))
 
     @app.post("/me/ricerca", status_code=201)
     def apri_ricerca(corpo: NuovaRicerca, uid: str = Depends(utente),
@@ -449,7 +456,7 @@ def create_app() -> FastAPI:
                 "       uc.min_seniority, uc.max_seniority, uc.work_arrangements, "
                 "       uc.employment_types, uc.accepted_employer_kinds, "
                 "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount, "
-                "       uc.wants "
+                "       uc.wants, uc.target_role "
                 "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
                 "WHERE uc.user_id = %s AND c.status = 'active' "
                 "ORDER BY c.family, c.country", (uid,))
@@ -461,7 +468,7 @@ def create_app() -> FastAPI:
                          "accepted_employer_kinds": r[8],
                          "needs_visa_sponsorship": r[9],
                          "min_headcount": r[10], "max_headcount": r[11],
-                         "wants": r[12]}}
+                         "wants": r[12], "target_role": r[13]}}
                     for r in cur.fetchall()]
 
     @app.put("/me/cluster/{cluster_id}", status_code=204)
