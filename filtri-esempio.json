@@ -1,0 +1,11 @@
+{
+  "countries": ["IT"],
+  "languages": ["Italian", "English"],
+  "min_seniority": "2-5",
+  "max_seniority": "10+",
+  "work_arrangements": ["On-site", "Hybrid", "Remote OK", "Remote Solely"],
+  "employment_types": ["FULL_TIME"],
+  "accepted_employer_kinds": ["direct", "undisclosed"],
+  "min_headcount": 50,
+  "max_headcount": null
+}
