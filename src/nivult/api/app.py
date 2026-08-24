@@ -15,6 +15,7 @@ parte, per costruzione dello schema.
 from __future__ import annotations
 
 import hashlib
+import logging
 import ipaddress
 import os
 import secrets
@@ -33,6 +34,7 @@ from nivult.config import database_url, load_dotenv
 from nivult.matching.llm import GLM
 
 load_dotenv()
+log = logging.getLogger("nivult.api")
 
 
 def _ip(request: Request) -> str | None:
@@ -433,7 +435,18 @@ def create_app() -> FastAPI:
         try:
             profilo = _analizza_cv(conn, testo)
         except RuntimeError as exc:
-            raise HTTPException(502, f"estrazione del profilo fallita: {exc}")
+            # Il dettaglio del fornitore resta nei log, dove serve a noi. A chi
+            # sta caricando il CV non dice nulla di azionabile, e "credito
+            # esaurito" e' un fatto nostro che non va scaricato su di lui.
+            # Conta invece dirgli che il suo file non e' il problema e che
+            # nulla e' stato salvato a meta'.
+            log.error("estrazione del profilo fallita: %s", exc)
+            raise HTTPException(
+                502,
+                "The engine could not read your CV right now — nothing to do "
+                "with your file, and nothing was saved. Try again in a few "
+                "minutes.",
+            )
 
         esito = crypto.cifra(dati)
         chiave = f"cv/{uid}/{secrets.token_hex(8)}"

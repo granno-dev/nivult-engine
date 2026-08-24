@@ -56,6 +56,24 @@ class SourceClient(Protocol):
     def fetch(self, *, query: str, country: str, since, limit: int) -> FetchResult: ...
 
 
+class CreditoEsaurito(RuntimeError):
+    """Il fornitore risponde 429 ma il problema è il credito, non il ritmo."""
+
+
+_SEGNALI_SALDO = (
+    "insufficient balance",
+    "no resource package",
+    "please recharge",
+    "quota exceeded",
+    "billing",
+)
+
+
+def _saldo_esaurito(corpo: str) -> bool:
+    c = (corpo or "").lower()
+    return any(seg in c for seg in _SEGNALI_SALDO)
+
+
 class HttpSource:
     """Base per i client HTTP: timeout, retry con backoff, rispetto di 429."""
 
@@ -99,6 +117,14 @@ class HttpSource:
                 continue
 
             self.attempts.append(Attempt(r.status_code, int((time.monotonic() - started) * 1000)))
+
+            if r.status_code == 429 and _saldo_esaurito(r.text):
+                # Non tutti i 429 vogliono dire "rallenta". Z.ai usa lo stesso
+                # codice per "credito finito" (1113), e quello aspettando non
+                # diventa vero: quattro tentativi con backoff sono venti
+                # secondi buttati che finiscono in un timeout, nascondendo la
+                # causa vera dietro un errore che non le somiglia.
+                raise CreditoEsaurito(f"{self.source}: {r.text[:200]}")
 
             if r.status_code == 429:
                 # Retry-After è il numero che la fonte ci sta dando: ignorarlo
