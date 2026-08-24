@@ -75,11 +75,10 @@ def create_app() -> FastAPI:
             raise HTTPException(401, "sessione non valida")
         return uid
 
-    class RichiestaLink(BaseModel):
-        email: EmailStr
-
-    class ConsumoLink(BaseModel):
-        token: str
+    @app.get("/")
+    def radice():
+        # Il controllo che un umano può fare col browser: l'API è viva?
+        return {"servizio": "nivult-api", "stato": "ok"}
 
     @app.post("/auth/magic-link", status_code=202)
     def magic_link(corpo: RichiestaLink, request: Request,
