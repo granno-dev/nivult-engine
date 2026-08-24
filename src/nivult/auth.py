@@ -85,7 +85,7 @@ def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=Non
             (uid, _sha256(token), LINK_VALIDITA.seconds // 60, ip, ua))
     conn.commit()
 
-    link = f"{_base_url()}/accesso?token={token}"
+    link = f"{_base_url()}/verify?token={token}"
     if invia is None:
         from nivult.delivery.email import invia_generica
         invia = lambda a, oggetto, testo, html: invia_generica(a, oggetto, testo, html)  # noqa: E731
