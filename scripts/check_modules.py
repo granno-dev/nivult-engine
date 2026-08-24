@@ -31,12 +31,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import psycopg  # noqa: E402
 
+from nivult import auth  # noqa: E402
 from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
 from nivult.gdpr import execute_deletion, request_deletion  # noqa: E402
 from nivult.matching import worker  # noqa: E402
 from nivult.retention import purge  # noqa: E402
 
 from datetime import datetime, timezone  # noqa: E402
+import hashlib  # noqa: E402
 
 VEC = "[" + ",".join(["0.01"] * 1024) + "]"
 PASSED: list[str] = []
@@ -518,6 +520,53 @@ def main() -> int:
                                 "WHERE u.email = 'digest-c@example.test'"), 3)
         finally:
             worker.email_mod.invia = invia_originale
+
+        section("autenticazione senza password")
+        wipe(work)
+        email_inviati: list[tuple] = []
+
+        def cattura(destinatario, oggetto, testo, html):
+            email_inviati.append((destinatario, oggetto, testo))
+
+        token = auth.richiedi_magic_link(work, "Nuovo@Esempio.test", invia=cattura)
+        check("richiesta link su email nuova = registrazione: l'utente esiste",
+              seen_by_other("SELECT count(*) FROM users WHERE email = 'nuovo@esempio.test'"), 1)
+        check("l'email porta il link con il token",
+              bool(token) and token in email_inviati[0][2], True)
+        check("del token si conserva solo lo sha256, mai il chiaro",
+              seen_by_other("SELECT token_hash FROM login_tokens lt JOIN users u "
+                            "ON u.id = lt.user_id WHERE u.email = 'nuovo@esempio.test'"),
+              hashlib.sha256(token.encode()).hexdigest())
+
+        r = auth.consuma(work, token)
+        check("il link si scambia con una sessione", bool(r), True)
+        sessione, uid = r
+        check("il consumo prova l'email: verified valorizzato",
+              seen_by_other("SELECT email_verified_at IS NOT NULL FROM users "
+                            "WHERE email = 'nuovo@esempio.test'"), True)
+        check("il link è monouso", auth.consuma(work, token), None)
+        check("la sessione identifica l'utente",
+              auth.verifica_sessione(work, sessione), uid)
+        check("un token di sessione fasullo non entra",
+              auth.verifica_sessione(work, "token-fasullo"), None)
+        check("la sessione si revoca", auth.revoca_sessione(work, sessione), True)
+        check("dopo la revoca non vale più",
+              auth.verifica_sessione(work, sessione), None)
+
+        # Rate limit: tre link nella finestra, il quarto si trova il muro.
+        auth.richiedi_magic_link(work, "nuovo@esempio.test", invia=cattura)
+        t3 = auth.richiedi_magic_link(work, "nuovo@esempio.test", invia=cattura)
+        t4 = auth.richiedi_magic_link(work, "nuovo@esempio.test", invia=cattura)
+        check("il terzo link nella finestra è ancora concesso", t3 is not None, True)
+        check("il quarto link nella finestra è rifiutato", t4, None)
+
+        # Scadenza: il link morto non entra, anche se mai consumato.
+        with work.cursor() as cur:
+            cur.execute("UPDATE login_tokens SET created_at = now() - interval '30 minutes', "
+                        "  expires_at = now() - interval '1 minute' WHERE token_hash = %s",
+                        (hashlib.sha256(t3.encode()).hexdigest(),))
+        work.commit()
+        check("il link scaduto è rifiutato", auth.consuma(work, t3), None)
 
         section("pulizia")
         wipe(work)

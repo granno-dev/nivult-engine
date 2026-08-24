@@ -108,6 +108,13 @@ def main() -> int:
             return 1
 
         print()
+        import check_api
+
+        if check_api.main() != 0:
+            print("\nFALLITO: l'API non si comporta come deve")
+            return 1
+
+        print()
         import check_urls
 
         if check_urls.main() != 0:

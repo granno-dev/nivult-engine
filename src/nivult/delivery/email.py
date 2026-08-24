@@ -144,10 +144,15 @@ def configurato() -> bool:
 
 
 def invia(destinatario: str, items: list[dict]) -> str:
-    """Spedisce davvero. Ritorna il Message-ID per digests.provider_message_id."""
+    """Spedisce un digest. Ritorna il Message-ID per digests.provider_message_id."""
+    oggetto, testo, html = compila(items)
+    return invia_generica(destinatario, oggetto, testo, html)
+
+
+def invia_generica(destinatario: str, oggetto: str, testo: str, html: str) -> str:
+    """Spedisce una qualsiasi email transazionale: digest, magic link, allarmi."""
     if not configurato():
         raise RuntimeError("SMTP non configurato: servono SMTP_HOST e SMTP_FROM")
-    oggetto, testo, html = compila(items)
     msg = EmailMessage()
     msg["Subject"] = oggetto
     msg["From"] = os.environ["SMTP_FROM"]
