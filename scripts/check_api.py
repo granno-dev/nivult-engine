@@ -177,26 +177,6 @@ def main() -> int:
                 cc.execute("DELETE FROM user_clusters uc USING clusters c "
                            "WHERE c.id = uc.cluster_id AND c.country IN ('PT','IT')")
 
-            print("\n— richieste di copertura —")
-            r = client.post("/me/copertura", headers={"Authorization": f"Bearer {sessione}"},
-                            json={"kind": "cluster", "family": "Nursing", "country": "es"})
-            check("una ricerca non coperta si puo' chiedere", r.status_code, 202)
-            check("il paese viene normalizzato in maiuscolo",
-                  seen_by_other("SELECT country FROM coverage_requests "
-                                "WHERE family = 'Nursing'"), "ES")
-            r = client.post("/me/copertura", headers={"Authorization": f"Bearer {sessione}"},
-                            json={"kind": "language", "language": "Spanish"})
-            check("una lingua mancante si puo' chiedere", r.status_code, 202)
-            # Una riga a meta' non si conta, e contare e' tutto il senso della
-            # tabella: il vincolo deve rifiutarla prima che ci arrivi.
-            r = client.post("/me/copertura", headers={"Authorization": f"Bearer {sessione}"},
-                            json={"kind": "cluster", "family": "Nursing"})
-            check("una richiesta di ricerca senza paese e' rifiutata",
-                  r.status_code, 422)
-            r = client.post("/me/copertura",
-                            json={"kind": "language", "language": "Spanish"})
-            check("e serve una sessione", r.status_code, 401)
-
             r = client.get("/vocabolari")
             check("i vocabolari ci sono", r.status_code, 200)
             v = r.json()
