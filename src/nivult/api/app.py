@@ -280,26 +280,18 @@ def create_app() -> FastAPI:
             cur.execute("SELECT family FROM job_families ORDER BY sort_order")
             famiglie = [f for (f,) in cur.fetchall()]
 
-            # Le lingue si scoprono anche dal corpus, non solo dal vocabolario
-            # scritto a mano. Adesso che un utente puo' aprire un mercato
-            # nuovo, le offerte in una lingua nuova arrivano prima che qualcuno
-            # pensi a censirla, e il filtro resterebbe cieco proprio su cio'
-            # che ha appena cominciato ad arrivare.
-            #
-            # La soglia e la forma del nome tengono fuori la deriva nota
-            # (France Travail scrive `fr` invece di `French`): un valore corto
-            # e minuscolo e' un codice, non una lingua, e va normalizzato in
-            # ingestione — non accettato qui come se fosse un'altra lingua.
+            # Quali lingue stanno DAVVERO arrivando. Non serve a limitare la
+            # scelta — il vocabolario le ammette tutte — ma a dirlo: scegliere
+            # una lingua che nessun mercato aperto pubblica darebbe un digest
+            # vuoto, e un digest vuoto si legge come "non c'e' lavoro per me".
+            # Meglio saperlo prima che dopo.
             cur.execute(
-                "SELECT ai_job_language, count(*) FROM jobs "
-                "WHERE ai_job_language IS NOT NULL AND status = 'active' "
-                "GROUP BY 1 HAVING count(*) >= 10")
-            noti = {v["codice"] for v in per_parametro.get("ai_language", [])}
-            for lingua, _n in cur.fetchall():
-                if (lingua not in noti and len(lingua) > 3
-                        and lingua[:1].isupper() and " and " not in lingua):
-                    per_parametro.setdefault("ai_language", []).append(
-                        {"codice": lingua, "etichetta": lingua})
+                "SELECT DISTINCT ai_job_language FROM jobs "
+                "WHERE ai_job_language IS NOT NULL AND status = 'active'")
+            presenti = {l for (l,) in cur.fetchall()}
+            for v in per_parametro.get("ai_language", []):
+                v["presente"] = v["codice"] in presenti
+
         return {
             "livelli_esperienza": livelli,
             "lingue": per_parametro.get("ai_language", []),
