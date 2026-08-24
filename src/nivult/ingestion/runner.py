@@ -46,9 +46,10 @@ class Cluster:
     id: str
     family: str
     country: str
-    last_seen_posted_at: datetime | None
     in_backfill: bool = False
-    # Termine di ricerca per fonte, per le fonti senza tassonomia.
+    # Cursore e termine di ricerca per fonte: le fonti di un cluster procedono
+    # ognuna per conto suo, e non devono nulla l'una all'altra.
+    cursors: dict[str, datetime] = field(default_factory=dict)
     queries: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -59,16 +60,16 @@ class Cluster:
 def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
     if cluster_id:
         cur.execute(
-            "SELECT id, family, country, last_seen_posted_at, "
+            "SELECT id, family, country, "
             "       backfill_completed_at IS NULL FROM clusters WHERE id = %s",
             (cluster_id,))
     else:
         # NULLS FIRST: chi non è mai stato scaricato ha la precedenza.
         cur.execute(
-            "SELECT id, family, country, last_seen_posted_at, "
+            "SELECT id, family, country, "
             "       backfill_completed_at IS NULL FROM clusters "
             "WHERE status = 'active' ORDER BY last_fetched_at NULLS FIRST")
-    clusters = [Cluster(str(r[0]), r[1], r[2], r[3], r[4]) for r in cur.fetchall()]
+    clusters = [Cluster(str(r[0]), r[1], r[2], r[3]) for r in cur.fetchall()]
     if clusters:
         cur.execute(
             "SELECT cluster_id, source, query FROM cluster_source_queries "
@@ -78,6 +79,19 @@ def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
             per_id.setdefault(str(cid), {})[src] = q
         for c in clusters:
             c.queries = per_id.get(c.id, {})
+        # Un cursore per coppia cluster-fonte, non per cluster: quando era uno
+        # solo, la fonte che vedeva le offerte più recenti trascinava avanti
+        # anche le altre, che da lì in poi chiedevano a una data mai raggiunta
+        # — offerte perse in silenzio, con il run che risultava success.
+        cur.execute(
+            "SELECT cluster_id, source, last_seen_posted_at "
+            "FROM cluster_source_cursors WHERE cluster_id = ANY(%s)",
+            ([c.id for c in clusters],))
+        cursors: dict[str, dict[str, datetime]] = {}
+        for cid, src, ts in cur.fetchall():
+            cursors.setdefault(str(cid), {})[src] = ts
+        for c in clusters:
+            c.cursors = cursors.get(c.id, {})
     return clusters
 
 
@@ -117,9 +131,6 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
         log.warning("%s: nessuna fonte copre %s", cluster.label, cluster.country)
         return totals
 
-    since = (cluster.last_seen_posted_at
-             or datetime.now(timezone.utc) - BACKFILL_WINDOW)
-
     # Il backfill attinge a una dotazione dedicata: senza, il primo giro di ogni
     # cluster nuovo aprirebbe il breaker giornaliero e resterebbe a metà.
     # NON è un'esenzione dai soldi — provider_budget continua a valere.
@@ -149,6 +160,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
             log.warning("%s: nessun termine di ricerca per %s — fonte saltata. "
                         "Vedi cluster_coverage_v", cluster.label, cls.source)
             continue
+
+        # Il cursore è di QUESTA coppia cluster-fonte. La finestra di backfill
+        # resta il ripiego per una coppia che cursore non ha ancora: una fonte
+        # che non ha mai consegnato nulla riparte da due settimane di storico.
+        since = (cluster.cursors.get(cls.source)
+                 or datetime.now(timezone.utc) - BACKFILL_WINDOW)
 
         # Riserva su entrambi i budget PRIMA della chiamata.
         with conn.cursor() as cur:
@@ -313,9 +330,19 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                     (fetch_complete, fetched, new, updated, run_id))
                 cur.execute(
                     "UPDATE clusters SET last_fetched_at = now(), "
-                    "  last_successful_fetch_at = now(), "
-                    "  last_seen_posted_at = GREATEST(COALESCE(last_seen_posted_at, %s), %s) "
-                    "WHERE id = %s", (newest, newest, cluster.id))
+                    "  last_successful_fetch_at = now() WHERE id = %s",
+                    (cluster.id,))
+                # Il cursore avanza solo fino alla più recente offerta VISTA da
+                # questa fonte, mai oltre: GREATEST lo protegge da un regresso
+                # se una fetch torna meno di quanto era arrivata prima.
+                cur.execute(
+                    "INSERT INTO cluster_source_cursors (cluster_id, source, "
+                    "  last_seen_posted_at) VALUES (%s, %s, %s) "
+                    "ON CONFLICT (cluster_id, source) DO UPDATE SET "
+                    "  last_seen_posted_at = GREATEST("
+                    "    cluster_source_cursors.last_seen_posted_at, "
+                    "    EXCLUDED.last_seen_posted_at)",
+                    (cluster.id, cls.source, newest))
             conn.commit()
         else:
             conn.rollback()

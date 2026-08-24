@@ -30,6 +30,8 @@ TABLES = [
     "provider_quotas", "provider_budget", "job_families",
     "cluster_source_queries", "filter_values", "filter_bindings", "user_filters",
     "plan_quotas", "user_evaluation_budget",
+    "cluster_source_cursors",
+    "model_pricing", "benchmark_runs", "benchmark_models", "benchmark_scores",
 ]
 
 INDEXES = [
@@ -69,10 +71,12 @@ CONSTRAINTS = [
     "jobs_raw_present_ck", "jobs_purged_is_dead_ck", "cluster_month_stats_month_ck",
     "provider_budget_month_ck", "provider_budget_circuit_ck",
     "user_clusters_employer_kinds_ck",
+    "cluster_source_cursors_source_check",
     "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
     "sessions_hash_key", "sessions_window_ck",
     "oauth_identities_user_provider_key", "user_cvs_encryption_ck",
     "employer_kinds_rank_key", "employer_kinds_rank_ck",
+    "benchmark_models_run_model_key", "benchmark_scores_esito_ck",
 ]
 
 FUNCTIONS = [
@@ -86,6 +90,7 @@ FUNCTIONS = [
     "assert_employer_kinds_valid", "cluster_try_consume_backfill",
     "cluster_finish_backfill",
     "reclassify_employers",
+    "benchmark_recall",
 ]
 
 TRIGGERS = [
@@ -189,6 +194,7 @@ def main() -> int:
         rep.check("cluster_coverage_v" in views, "vista cluster_coverage_v")
         rep.check("expiry_blind_spots_v" in views, "vista expiry_blind_spots_v")
         rep.check("cluster_volume_v" in views, "vista cluster_volume_v")
+        rep.check("benchmark_models_v" in views, "vista benchmark_models_v")
 
         rep.section("vincoli")
         absent = missing(cur, "SELECT conname FROM pg_constraint", CONSTRAINTS)

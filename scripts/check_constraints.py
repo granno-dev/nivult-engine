@@ -338,6 +338,37 @@ def main() -> int:
             "INSERT INTO cluster_source_queries (cluster_id, source, query) "
             "VALUES (%s, 'france_travail', 'altro')", (cl,))
 
+        section("cursore per coppia cluster-fonte")
+        expect_error(conn, "23514", "fonte fuori vocabolario rifiutata",
+            "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
+            "VALUES (%s, 'linkedin', now())", (cl,))
+        expect_error(conn, "23505", "un solo cursore per coppia cluster-fonte",
+            "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
+            "VALUES (%s, 'fantastic', now()), (%s, 'fantastic', now())", (cl, cl))
+        # L'upsert del runner: GREATEST deve impedire che una fetch povera faccia
+        # REGREDIRE il cursore di una fonte — tornare indietro significherebbe
+        # ri-scaricare (e su Fantastic ri-pagare) finestre già viste.
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO cluster_source_cursors (cluster_id, source, "
+                        "last_seen_posted_at) VALUES (%s, 'fantastic', "
+                        "now() - interval '3 days')", (cl,))
+        expect_value(conn, "un cursore registrato per la coppia",
+            "SELECT count(*) FROM cluster_source_cursors WHERE cluster_id = %s", (cl,), 1)
+        expect_value(conn, "l'upsert con una data PIÙ VECCHIA non fa regredire il cursore",
+            "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
+            "VALUES (%s, 'fantastic', now() - interval '10 days') "
+            "ON CONFLICT (cluster_id, source) DO UPDATE SET last_seen_posted_at = "
+            "GREATEST(cluster_source_cursors.last_seen_posted_at, "
+            "         EXCLUDED.last_seen_posted_at) "
+            "RETURNING last_seen_posted_at < now() - interval '4 days'", (cl,), False)
+        expect_value(conn, "l'upsert con una data PIÙ RECENTE lo avanza",
+            "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
+            "VALUES (%s, 'fantastic', now()) "
+            "ON CONFLICT (cluster_id, source) DO UPDATE SET last_seen_posted_at = "
+            "GREATEST(cluster_source_cursors.last_seen_posted_at, "
+            "         EXCLUDED.last_seen_posted_at) "
+            "RETURNING last_seen_posted_at > now() - interval '1 minute'", (cl,), True)
+
         section("etichetta datore dichiarata dalla fonte")
         expect_value(conn, "la fonte dichiara agenzia -> vince sulla lista",
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
