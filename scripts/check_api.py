@@ -139,8 +139,22 @@ def main() -> int:
             r = client.get("/vocabolari")
             check("i vocabolari ci sono", r.status_code, 200)
             v = r.json()
+            lingue = {l["codice"] for l in v["lingue"]}
             check("le lingue vengono dal vocabolario in tabella",
-                  "Italian" in v["lingue"] and "French" in v["lingue"], True)
+                  {"Italian", "French"} <= lingue, True)
+            # Ogni voce porta la sua etichetta leggibile: senza, all'utente
+            # arriverebbero le parole del database — `FULL_TIME` e
+            # `staffing_agency` erano esattamente questo.
+            check("ogni vocabolario porta l'etichetta, non solo il codice",
+                  all(isinstance(x, dict) and x.get("etichetta")
+                      for chiave in ("lingue", "tipi_contratto", "tipi_datore",
+                                     "modalita_lavoro", "livelli_esperienza")
+                      for x in v[chiave]), True)
+            check("nessuna etichetta e' rimasta uguale al codice grezzo",
+                  [x["codice"] for x in v["tipi_contratto"]
+                   if x["etichetta"] == x["codice"]], [])
+            check("la sponsorship del visto arriva al sito",
+                  len(v["sponsorship_visto"]) >= 2, True)
             check("i livelli di esperienza sono ordinati",
                   [l["codice"] for l in v["livelli_esperienza"]],
                   ["0-2", "2-5", "5-10", "10+"])

@@ -84,8 +84,10 @@ class ValutatoreGLM:
         self.model.close()
 
     def valuta(self, profilo_testo: str, offerta: dict):
+        # noqa: il desiderio sta dentro l'offerta, messo lì dal funnel.
         """-> (punteggio, micro-motivazione, uso token della chiamata)."""
-        score, reason, uso = valuta_offerta(self.model, profilo_testo, offerta)
+        score, reason, uso = valuta_offerta(self.model, profilo_testo, offerta,
+                                            offerta.get("_wants"))
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
@@ -93,7 +95,8 @@ class ValutatoreGLM:
 
     def motiva(self, profilo_testo: str, offerta: dict):
         """-> (motivazione, uso token della chiamata)."""
-        reason, uso = motiva_offerta(self.model, profilo_testo, offerta)
+        reason, uso = motiva_offerta(self.model, profilo_testo, offerta,
+                                     offerta.get("_wants"))
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1

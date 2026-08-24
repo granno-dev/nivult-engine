@@ -184,8 +184,29 @@ def _testa(profilo_testo: str, rubrica: str) -> list[dict]:
             {"role": "system", "content": "PROFILO DEL CANDIDATO\n" + profilo_testo}]
 
 
-def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
-                   ) -> tuple[int, str, dict]:
+def _coda_offerta(offerta: dict, desiderio: str | None) -> str:
+    """Il messaggio dell'offerta, con in fondo le parole dell'utente.
+
+    Il desiderio va QUI e non nel prefisso, ed e' una scelta di costo prima
+    che di prompt: il prefisso (CV + rubrica) e' identico a ogni chiamata ed
+    e' quello che la cache paga. Cambiarlo per cluster manderebbe la cache a
+    vuoto ogni volta che il worker passa da una ricerca all'altra.
+
+    Sta dopo l'offerta anche per una ragione di lettura: il modello prima
+    guarda cosa c'e', poi cosa ne pensa chi cerca.
+    """
+    testo = "OFFERTA\n" + offerta_come_testo(offerta)
+    if desiderio:
+        testo += ("\n\nCOSA CERCA QUESTA PERSONA, CON PAROLE SUE\n"
+                  + desiderio.strip()[:1000]
+                  + "\n\nPesalo come una preferenza forte, non come un "
+                    "requisito: un'offerta ottima che non la nomina resta "
+                    "ottima.")
+    return testo
+
+
+def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
+                   desiderio: str | None = None) -> tuple[int, str, dict]:
     """UNA offerta per chiamata: punteggio e micro-motivazione.
 
     Nel lotto il modello confronta le offerte fra loro invece di misurarle
@@ -195,7 +216,7 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
     solo ciò che passa.
     """
     corpo = _testa(profilo_testo, RUBRICA) + [{
-        "role": "user", "content": "OFFERTA\n" + offerta_come_testo(offerta)}]
+        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
     p = _estrai_json(risposta)
     score = max(0, min(100, int(p.get("score", 0))))
@@ -203,11 +224,11 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
     return score, reason, dict(modello.last_usage)
 
 
-def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
-                   ) -> tuple[str, dict]:
+def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
+                   desiderio: str | None = None) -> tuple[str, dict]:
     """Seconda passata: la motivazione che il destinatario del digest legge."""
     corpo = _testa(profilo_testo, RUBRICA_MOTIVAZIONE) + [{
-        "role": "user", "content": "OFFERTA\n" + offerta_come_testo(offerta)}]
+        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"

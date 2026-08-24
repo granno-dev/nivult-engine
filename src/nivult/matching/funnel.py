@@ -68,7 +68,7 @@ def _filtri(cur, user_id: str) -> list[dict]:
         "SELECT uc.cluster_id::text, uc.min_seniority, uc.max_seniority, "
         "       uc.work_arrangements, uc.languages, uc.employment_types, "
         "       uc.needs_visa_sponsorship, uc.accepted_employer_kinds, "
-        "       uc.min_headcount, uc.max_headcount "
+        "       uc.min_headcount, uc.max_headcount, uc.wants "
         "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
         "WHERE uc.user_id = %s AND NOT uc.is_paused AND c.status = 'active'",
         (user_id,))
@@ -107,5 +107,10 @@ def candidati(conn: psycopg.Connection, user_id: str) -> list[dict]:
                 "max_headcount": f["max_headcount"],
             })
             for j in cur.fetchall():
+                # Il desiderio viaggia con l'offerta perché è del CLUSTER, e
+                # il worker qui sotto non sa più da quale ricerca venga.
+                # Un'offerta presente in due cluster tiene quello del primo
+                # che l'ha trovata: è già la regola con cui `visti` dedupla.
+                j["_wants"] = f.get("wants")
                 visti.setdefault(j["id"], j)
     return sorted(visti.values(), key=lambda j: j["date_posted"], reverse=True)

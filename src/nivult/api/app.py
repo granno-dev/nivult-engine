@@ -26,7 +26,7 @@ from psycopg.types.json import Json
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
 from nivult import crypto, cv, storage
@@ -76,6 +76,10 @@ class FiltriCluster(BaseModel):
     needs_visa_sponsorship: bool = False
     min_headcount: int | None = None
     max_headcount: int | None = None
+    # Cosa cerca, con parole sue. Il tetto e' quello del vincolo in tabella:
+    # questo testo entra nel prompt di OGNI offerta del cluster, quindi la
+    # sua lunghezza si paga moltiplicata per il numero di offerte.
+    wants: str | None = Field(default=None, max_length=1000)
 
 
 class PreferenzeUtente(BaseModel):
@@ -223,23 +227,36 @@ def create_app() -> FastAPI:
     def vocabolari(conn=Depends(connessione)):
         """I valori che il sito può offrire nei selettori, dai vocabolari
         in tabella: il sito non li hardcoda, così un valore nuovo o corretto
-        arriva senza rilascio del sito."""
+        arriva senza rilascio del sito.
+
+        Ogni voce è una coppia {codice, etichetta}. Il codice è la chiave su
+        cui si filtra e non cambia mai; l'etichetta è quello che l'utente
+        legge. Prima uscivano solo i codici, e chi si iscriveva sceglieva fra
+        `FULL_TIME` e `staffing_agency` — parole del database, non sue.
+        """
+        def coppie(righe):
+            return [{"codice": c, "etichetta": e or c} for c, e in righe]
+
         with conn.cursor() as cur:
             cur.execute("SELECT code, label FROM experience_levels ORDER BY rank")
-            livelli = [{"codice": c, "etichetta": l} for c, l in cur.fetchall()]
-            cur.execute("SELECT parameter, api_value FROM filter_values "
-                        "ORDER BY parameter, api_value")
-            per_parametro: dict[str, list[str]] = {}
-            for parametro, valore in cur.fetchall():
-                per_parametro.setdefault(parametro, []).append(valore)
-            cur.execute("SELECT kind FROM employer_kinds ORDER BY rank")
-            tipi = [k for (k,) in cur.fetchall()]
+            livelli = coppie(cur.fetchall())
+            cur.execute("SELECT parameter, api_value, label FROM filter_values "
+                        "ORDER BY parameter, sort_order, api_value")
+            per_parametro: dict[str, list[dict]] = {}
+            for parametro, valore, etichetta in cur.fetchall():
+                per_parametro.setdefault(parametro, []).append(
+                    {"codice": valore, "etichetta": etichetta or valore})
+            cur.execute("SELECT kind, label FROM employer_kinds ORDER BY rank")
+            tipi = coppie(cur.fetchall())
         return {
             "livelli_esperienza": livelli,
             "lingue": per_parametro.get("ai_language", []),
             "modalita_lavoro": per_parametro.get("ai_work_arrangement", []),
             "tipi_contratto": per_parametro.get("ai_employment_type", []),
             "tipi_datore": tipi,
+            # Promesso in CLAUDE.md fra i filtri con campo pieno al 100%, e
+            # non era mai arrivato al sito.
+            "sponsorship_visto": per_parametro.get("ai_visa_sponsorship", []),
         }
 
     @app.get("/cluster")
@@ -300,7 +317,8 @@ def create_app() -> FastAPI:
                 "SELECT c.id::text, c.family, c.country, uc.languages, "
                 "       uc.min_seniority, uc.max_seniority, uc.work_arrangements, "
                 "       uc.employment_types, uc.accepted_employer_kinds, "
-                "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount "
+                "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount, "
+                "       uc.wants "
                 "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
                 "WHERE uc.user_id = %s AND c.status = 'active' "
                 "ORDER BY c.family, c.country", (uid,))
@@ -311,7 +329,8 @@ def create_app() -> FastAPI:
                          "employment_types": r[7] or [],
                          "accepted_employer_kinds": r[8],
                          "needs_visa_sponsorship": r[9],
-                         "min_headcount": r[10], "max_headcount": r[11]}}
+                         "min_headcount": r[10], "max_headcount": r[11],
+                         "wants": r[12]}}
                     for r in cur.fetchall()]
 
     @app.put("/me/cluster/{cluster_id}", status_code=204)
@@ -334,7 +353,7 @@ def create_app() -> FastAPI:
                 "INSERT INTO user_clusters (user_id, cluster_id, languages, "
                 "  min_seniority, max_seniority, work_arrangements, employment_types, "
                 "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
-                "  max_headcount) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                "  max_headcount, wants) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
                 "  languages = EXCLUDED.languages, "
                 "  min_seniority = EXCLUDED.min_seniority, "
@@ -345,11 +364,13 @@ def create_app() -> FastAPI:
                 "  accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
                 "  min_headcount = EXCLUDED.min_headcount, "
                 "  max_headcount = EXCLUDED.max_headcount, "
+                "  wants = EXCLUDED.wants, "
                 "  is_paused = false",
                 (uid, cluster_id, filtri.languages, filtri.min_seniority,
                  filtri.max_seniority, filtri.work_arrangements,
                  filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
-                 filtri.min_headcount, filtri.max_headcount))
+                 filtri.min_headcount, filtri.max_headcount,
+                 (filtri.wants or "").strip() or None))
         conn.commit()
 
     @app.delete("/me/cluster/{cluster_id}", status_code=204)
