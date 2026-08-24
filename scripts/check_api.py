@@ -170,16 +170,53 @@ def main() -> int:
             r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
                             json={"family": "Human Resources", "country": "it",
                                   "filtri": {"languages": ["Italian"],
-                                             "target_role": "HR Business Partner"}})
+                                             "target_role": "HR Business Partner",
+                                             "industries": ["Software Development"]}})
             check("ma si possono ancora cambiare i filtri di una che si ha",
                   r.status_code, 201)
             # Il ruolo e' la risposta alla domanda "a cosa ambisce questa
             # persona": deve sopravvivere al giro e tornare al pannello.
+            check("il settore scelto viene salvato",
+                  seen_by_other("SELECT industries FROM user_clusters uc "
+                                "JOIN clusters c ON c.id = uc.cluster_id "
+                                "WHERE c.country = 'IT' LIMIT 1"),
+                  ["Software Development"])
             check("il ruolo a cui punta viene salvato",
                   seen_by_other("SELECT target_role FROM user_clusters uc "
                                 "JOIN clusters c ON c.id = uc.cluster_id "
                                 "WHERE c.country = 'IT' LIMIT 1"),
                   "HR Business Partner")
+
+            print("\n— la famiglia si ricava dal ruolo —")
+            # Il classificatore vero parla con GLM: nei test si sostituisce,
+            # come _analizza_cv. Cio' che si prova e' il giro nostro — cache,
+            # validazione, risposta — non il modello.
+            app_module._classifica_ruolo = lambda fam, ruolo: "Human Resources"
+            r = client.get("/ricerca/famiglia", params={"ruolo": "People Partner"},
+                           headers={"Authorization": f"Bearer {sessione}"})
+            check("il ruolo si classifica", r.json().get("famiglia"), "Human Resources")
+            check("e la classificazione finisce in cache",
+                  seen_by_other("SELECT family FROM role_family_cache "
+                                "WHERE role_norm = 'people partner'"),
+                  "Human Resources")
+            app_module._classifica_ruolo = lambda fam, ruolo: (_ for _ in ()).throw(
+                AssertionError("la cache doveva rispondere lei"))
+            r = client.get("/ricerca/famiglia", params={"ruolo": "  People   PARTNER "},
+                           headers={"Authorization": f"Bearer {sessione}"})
+            check("la seconda volta risponde la cache, normalizzando",
+                  r.json().get("famiglia"), "Human Resources")
+
+            # Apertura senza famiglia: la ricava dal ruolo.
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"country": "it",
+                                  "filtri": {"target_role": "People Partner"}})
+            check("si apre una ricerca dando solo ruolo e paese", r.status_code, 201)
+            check("e la risposta dice su quale scaffale e' caduta",
+                  r.json().get("famiglia"), "Human Resources")
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"country": "it", "filtri": {}})
+            check("senza ruolo ne' famiglia si viene fermati", r.status_code, 422)
+
 
             with psycopg.connect(database_url(), autocommit=True) as cc:
                 cc.execute("DELETE FROM user_clusters uc USING clusters c "

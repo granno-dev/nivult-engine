@@ -50,6 +50,8 @@ WHERE jc.cluster_id = %(cluster_id)s
        OR j.ai_experience_level = ANY(%(livelli)s::text[]))
   AND (%(needs_visa)s = false OR j.ai_visa_sponsorship IS NULL
        OR j.ai_visa_sponsorship)
+  AND (cardinality(%(industries)s::text[]) = 0 OR j.org_industry IS NULL
+       OR j.org_industry = ANY(%(industries)s::text[]))
   AND (%(min_headcount)s::int IS NULL OR j.org_headcount IS NULL
        OR j.org_headcount >= %(min_headcount)s::int)
   AND (%(max_headcount)s::int IS NULL OR j.org_headcount IS NULL
@@ -68,7 +70,8 @@ def _filtri(cur, user_id: str) -> list[dict]:
         "SELECT uc.cluster_id::text, uc.min_seniority, uc.max_seniority, "
         "       uc.work_arrangements, uc.languages, uc.employment_types, "
         "       uc.needs_visa_sponsorship, uc.accepted_employer_kinds, "
-        "       uc.min_headcount, uc.max_headcount, uc.wants, uc.target_role "
+        "       uc.min_headcount, uc.max_headcount, uc.wants, uc.target_role, "
+        "       uc.industries "
         "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
         "WHERE uc.user_id = %s AND NOT uc.is_paused AND c.status = 'active'",
         (user_id,))
@@ -103,6 +106,7 @@ def candidati(conn: psycopg.Connection, user_id: str) -> list[dict]:
                 "employer_kinds": f["accepted_employer_kinds"],
                 "livelli": livelli,
                 "needs_visa": f["needs_visa_sponsorship"],
+                "industries": f["industries"] or [],
                 "min_headcount": f["min_headcount"],
                 "max_headcount": f["max_headcount"],
             })

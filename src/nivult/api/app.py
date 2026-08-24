@@ -81,6 +81,9 @@ class FiltriCluster(BaseModel):
     # punteggio — mai come chiave di ingestione (misurato: per titolo si
     # perde il 96% delle offerte) ne' come filtro secco.
     target_role: str | None = Field(default=None, max_length=120)
+    # Settori accettati (vocabolario LinkedIn, dal corpus). Vuoto = tutti;
+    # un'offerta senza il dato passa comunque, come per ogni filtro.
+    industries: list[str] = []
     # Cosa cerca, con parole sue. Il tetto e' quello del vincolo in tabella:
     # questo testo entra nel prompt di OGNI offerta del cluster, quindi la
     # sua lunghezza si paga moltiplicata per il numero di offerte.
@@ -94,7 +97,9 @@ class NuovaRicerca(BaseModel):
     utenti sullo stesso mercato lo scaricano una volta — non un catalogo di
     cio' che l'utente puo' chiedere. Se non esiste, si apre.
     """
-    family: str = Field(max_length=120)
+    # Facoltativa: se manca si ricava dal ruolo. L'utente pensa per titoli;
+    # lo scaffale da leggere e' un fatto nostro.
+    family: str | None = Field(default=None, max_length=120)
     country: str = Field(pattern="^[A-Za-z]{2}$")
     filtri: FiltriCluster = Field(default_factory=FiltriCluster)
 
@@ -128,6 +133,32 @@ def _analizza_cv(conn, testo: str) -> dict:
     with GLM() as modello:
         return cv.estrai_profilo(modello, testo, famiglie=famiglie,
                                   seniority=seniority, lingue=lingue)
+
+
+def _classifica_ruolo(famiglie: list[str], ruolo: str) -> str | None:
+    """Da "HR Business Partner" alla famiglia della tassonomia, con GLM.
+
+    A livello di modulo per la stessa ragione di _analizza_cv: i test lo
+    sostituiscono e non parlano col modello. Ritorna None se la risposta non
+    e' una famiglia vera: meglio chiedere di riprovare che archiviare una
+    classificazione inventata.
+    """
+    from nivult.matching.llm import GLM, _estrai_json
+    elenco = "\n".join(f"- {f}" for f in famiglie)
+    with GLM() as m:
+        risposta = m.chat([
+            {"role": "system", "content":
+                "Classifichi titoli di lavoro nella famiglia professionale "
+                "giusta. Rispondi SOLO con JSON: {\"family\": \"...\"}, "
+                "scegliendo ESATTAMENTE una voce dall'elenco."},
+            {"role": "user", "content":
+                f"FAMIGLIE:\n{elenco}\n\nTITOLO: {ruolo}"},
+        ], max_tokens=60)
+    try:
+        family = str(_estrai_json(risposta).get("family", "")).strip()
+    except Exception:
+        return None
+    return family if family in famiglie else None
 
 
 def create_app() -> FastAPI:
@@ -284,6 +315,12 @@ def create_app() -> FastAPI:
             for v in per_parametro.get("ai_language", []):
                 v["presente"] = v["codice"] in presenti
 
+            cur.execute(
+                "SELECT org_industry, count(*) FROM jobs "
+                "WHERE org_industry IS NOT NULL AND status = 'active' "
+                "GROUP BY 1 HAVING count(*) >= 5 ORDER BY count(*) DESC LIMIT 40")
+            settori = [{"codice": i, "etichetta": i} for i, _ in cur.fetchall()]
+
         return {
             "livelli_esperienza": livelli,
             "lingue": per_parametro.get("ai_language", []),
@@ -294,6 +331,9 @@ def create_app() -> FastAPI:
             # non era mai arrivato al sito.
             "sponsorship_visto": per_parametro.get("ai_visa_sponsorship", []),
             "famiglie": famiglie,
+            # Dal corpus, non da una lista scritta: i settori che il filtro
+            # puo' davvero incontrare. La soglia tiene fuori il rumore.
+            "settori": settori,
         }
 
     @app.get("/cluster")
@@ -327,6 +367,15 @@ def create_app() -> FastAPI:
                                  "ammessi": sorted(ammessi)})
 
         dentro("languages", filtri.languages, vocabolario("ai_language"))
+        if filtri.industries:
+            cur.execute("SELECT DISTINCT org_industry FROM jobs "
+                        "WHERE org_industry IS NOT NULL")
+            noti = {r[0] for r in cur.fetchall()}
+            # Con il corpus vuoto non c'e' nulla da confrontare: il vocabolario
+            # non ha offerto niente, e rifiutare qui bloccherebbe i database
+            # appena nati per un filtro che comunque non escluderebbe nulla.
+            if noti:
+                dentro("industries", filtri.industries, noti)
         dentro("work_arrangements", filtri.work_arrangements,
                vocabolario("ai_work_arrangement"))
         dentro("employment_types", filtri.employment_types,
@@ -347,6 +396,36 @@ def create_app() -> FastAPI:
         if problemi:
             raise HTTPException(422, detail=problemi)
 
+    def _famiglia_dal_ruolo(cur, ruolo: str) -> str:
+        """La famiglia per un titolo digitato, dalla cache o da GLM.
+
+        La cache e' mondiale, non per utente: "hr business partner" si
+        classifica una volta sola. Il fallimento del modello e' un 502 che
+        invita a riprovare, mai una famiglia inventata messa a catalogo.
+        """
+        norm = " ".join(ruolo.lower().split())
+        cur.execute("SELECT family FROM role_family_cache WHERE role_norm = %s",
+                    (norm,))
+        r = cur.fetchone()
+        if r:
+            return r[0]
+        cur.execute("SELECT family FROM job_families ORDER BY sort_order")
+        famiglie = [f for (f,) in cur.fetchall()]
+        try:
+            family = _classifica_ruolo(famiglie, ruolo)
+        except RuntimeError as exc:
+            log.error("classificazione ruolo fallita: %s", exc)
+            family = None
+        if not family:
+            raise HTTPException(
+                502,
+                "We could not work out the field for that role just now. "
+                "Try again in a moment.")
+        cur.execute(
+            "INSERT INTO role_family_cache (role_norm, family) VALUES (%s, %s) "
+            "ON CONFLICT (role_norm) DO NOTHING", (norm, family))
+        return family
+
     def _scrivi_iscrizione(cur, uid: str, cluster_id: str,
                            filtri: FiltriCluster) -> None:
         """L'iscrizione a un cluster con i suoi filtri, in un posto solo.
@@ -362,7 +441,8 @@ def create_app() -> FastAPI:
             "INSERT INTO user_clusters (user_id, cluster_id, languages, "
             "  min_seniority, max_seniority, work_arrangements, employment_types, "
             "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
-            "  max_headcount, wants, target_role) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "  max_headcount, wants, target_role, industries) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
             "  languages = EXCLUDED.languages, "
             "  min_seniority = EXCLUDED.min_seniority, "
@@ -375,13 +455,15 @@ def create_app() -> FastAPI:
             "  max_headcount = EXCLUDED.max_headcount, "
             "  wants = EXCLUDED.wants, "
             "  target_role = EXCLUDED.target_role, "
+            "  industries = EXCLUDED.industries, "
             "  is_paused = false",
             (uid, cluster_id, filtri.languages, filtri.min_seniority,
              filtri.max_seniority, filtri.work_arrangements,
              filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
              filtri.min_headcount, filtri.max_headcount,
              (filtri.wants or "").strip() or None,
-             (filtri.target_role or "").strip() or None))
+             (filtri.target_role or "").strip() or None,
+             filtri.industries))
 
     @app.post("/me/ricerca", status_code=201)
     def apri_ricerca(corpo: NuovaRicerca, uid: str = Depends(utente),
@@ -397,11 +479,17 @@ def create_app() -> FastAPI:
         """
         paese = corpo.country.upper()
         with conn.cursor() as cur:
+            famiglia = corpo.family
+            if not famiglia:
+                ruolo = (corpo.filtri.target_role or "").strip()
+                if not ruolo:
+                    raise HTTPException(422, "serve la famiglia oppure il ruolo")
+                famiglia = _famiglia_dal_ruolo(cur, ruolo)
             # Prima l'input, poi la quota. Al contrario, chiedere una famiglia
             # che non esiste da un piano pieno risponderebbe "compra un piano
             # piu' grande" a un refuso.
             cur.execute("SELECT 1 FROM job_families WHERE family = %s",
-                        (corpo.family,))
+                        (famiglia,))
             if not cur.fetchone():
                 raise HTTPException(422, "famiglia professionale sconosciuta")
 
@@ -420,7 +508,7 @@ def create_app() -> FastAPI:
             cur.execute("SELECT c.id::text FROM user_clusters uc "
                         "JOIN clusters c ON c.id = uc.cluster_id "
                         "WHERE uc.user_id = %s AND c.family = %s AND c.country = %s",
-                        (uid, corpo.family, paese))
+                        (uid, famiglia, paese))
             gia = cur.fetchone()
             # Cambiare i filtri di una ricerca che si ha gia' non consuma una
             # posizione: e' la stessa ricerca.
@@ -431,7 +519,7 @@ def create_app() -> FastAPI:
                     f"Stop one from your panel, or move up a plan.")
 
             try:
-                cur.execute("SELECT apri_cluster(%s, %s)::text", (corpo.family, paese))
+                cur.execute("SELECT apri_cluster(%s, %s)::text", (famiglia, paese))
             except psycopg.errors.CheckViolation:
                 conn.rollback()
                 raise HTTPException(422, "famiglia professionale sconosciuta")
@@ -446,7 +534,20 @@ def create_app() -> FastAPI:
         # `nuovo` dice al sito se il primo digest deve aspettare la prima
         # ingestione notturna: un mercato appena aperto non ha ancora offerte,
         # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.
-        return {"id": cluster_id, "nuovo": not gia_letto}
+        return {"id": cluster_id, "nuovo": not gia_letto, "famiglia": famiglia}
+
+    @app.get("/ricerca/famiglia")
+    def famiglia_per_ruolo(ruolo: str, uid: str = Depends(utente),
+                           conn=Depends(connessione)):
+        """Solo la classificazione, senza aprire niente: l'onboarding la usa
+        per mostrare subito su quale scaffale cadra' la ricerca."""
+        ruolo = ruolo.strip()
+        if not ruolo or len(ruolo) > 120:
+            raise HTTPException(422, "ruolo mancante o troppo lungo")
+        with conn.cursor() as cur:
+            famiglia = _famiglia_dal_ruolo(cur, ruolo)
+        conn.commit()
+        return {"famiglia": famiglia}
 
     @app.get("/me/cluster")
     def miei_cluster(uid: str = Depends(utente), conn=Depends(connessione)):
@@ -456,7 +557,7 @@ def create_app() -> FastAPI:
                 "       uc.min_seniority, uc.max_seniority, uc.work_arrangements, "
                 "       uc.employment_types, uc.accepted_employer_kinds, "
                 "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount, "
-                "       uc.wants, uc.target_role "
+                "       uc.wants, uc.target_role, uc.industries "
                 "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
                 "WHERE uc.user_id = %s AND c.status = 'active' "
                 "ORDER BY c.family, c.country", (uid,))
@@ -468,7 +569,8 @@ def create_app() -> FastAPI:
                          "accepted_employer_kinds": r[8],
                          "needs_visa_sponsorship": r[9],
                          "min_headcount": r[10], "max_headcount": r[11],
-                         "wants": r[12], "target_role": r[13]}}
+                         "wants": r[12], "target_role": r[13],
+                         "industries": r[14] or []}}
                     for r in cur.fetchall()]
 
     @app.put("/me/cluster/{cluster_id}", status_code=204)
