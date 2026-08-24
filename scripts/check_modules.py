@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import psycopg  # noqa: E402
 
 from nivult import auth  # noqa: E402
+from nivult import crypto  # noqa: E402
 from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
 from nivult.gdpr import execute_deletion, request_deletion  # noqa: E402
 from nivult.matching import worker  # noqa: E402
@@ -39,6 +40,8 @@ from nivult.retention import purge  # noqa: E402
 
 from datetime import datetime, timezone  # noqa: E402
 import hashlib  # noqa: E402
+import os as _os  # noqa: E402
+import secrets as _secrets  # noqa: E402
 
 VEC = "[" + ",".join(["0.01"] * 1024) + "]"
 PASSED: list[str] = []
@@ -567,6 +570,38 @@ def main() -> int:
                         (hashlib.sha256(t3.encode()).hexdigest(),))
         work.commit()
         check("il link scaduto è rifiutato", auth.consuma(work, t3), None)
+
+        section("cifratura a busta dei CV")
+        _os.environ["CV_KEK"] = _secrets.token_hex(32)
+        segreto = "Curriculum di Giuseppe, HR Business Partner, 8 anni".encode()
+        esito = crypto.cifra(segreto)
+        check("il roundtrip cifra→decifra restituisce il file originale",
+              crypto.decifra(esito.dati, esito.encrypted_dek), segreto)
+        check("ciò che va in storage non contiene il testo in chiaro",
+              segreto in esito.dati, False)
+        check("le forme rispettano lo schema della 0009",
+              (len(esito.nonce), len(esito.auth_tag), len(esito.encrypted_dek)),
+              (12, 16, 60))
+        check("due cifrature dello stesso file non si assomigliano",
+              crypto.cifra(segreto).dati != esito.dati, True)
+        try:
+            crypto.decifra(esito.dati[:-1] + bytes([esito.dati[-1] ^ 1]),
+                           esito.encrypted_dek)
+            bad("un file manomesso viene rifiutato", "nessuna eccezione")
+        except Exception:  # noqa: BLE001
+            ok("un file manomesso viene rifiutato (GCM)", "InvalidTag")
+        _os.environ["CV_KEK"] = _secrets.token_hex(32)   # KEK diversa
+        try:
+            crypto.decifra(esito.dati, esito.encrypted_dek)
+            bad("una DEK avvolta con un'altra KEK non si apre", "nessuna eccezione")
+        except Exception:  # noqa: BLE001
+            ok("una DEK avvolta con un'altra KEK non si apre", "InvalidTag")
+        del _os.environ["CV_KEK"]
+        try:
+            crypto.cifra(b"x")
+            bad("senza KEK si rifiuta, non cifra con niente", "nessuna eccezione")
+        except RuntimeError:
+            ok("senza KEK si rifiuta, non cifra con niente", "RuntimeError")
 
         section("pulizia")
         wipe(work)

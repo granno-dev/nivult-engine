@@ -126,6 +126,14 @@ dall'utente (giornaliera / settimanale / mensile).
 Se nessuna offerta supera la soglia, **non si manda nulla**. Un digest vuoto è
 un esito legittimo (`digests.status = 'skipped_empty'`), non un fallimento.
 
+Il worker (`nivult.matching.worker`, orario via `deploy/digests.sh`) itera sugli
+**utenti dovuti**, non sui cluster: il corpus è condiviso, il giudizio no. È
+tutto riprendibile — un'offerta già valutata non si ripaga, un match passato e
+mai spedito viene recuperato dal digest successivo — e il consumo del budget di
+valutazione è per offerta, non anticipato: un errore a metà digest non butta via
+la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
+digest (quelle del run più le recuperate), non solo quelle appena pagate.
+
 ## Dati del fornitore (Fantastic.jobs)
 
 **Sempre presenti (100%)** — si può fare affidamento su questi campi:
@@ -651,10 +659,14 @@ python -m nivult.migrate status          # cosa è applicato e cosa manca
 python -m nivult.migrate up --dry-run    # elenca senza applicare
 python -m nivult.migrate up              # applica
 
+python -m nivult.matching.worker         # digest: valuta e consegna chi è dovuto
+python -m nivult.matching.worker --user <uuid> --dry-run   # prova senza inviare
+
 python scripts/reset_and_verify.py       # azzera, riapplica tutto, verifica. Da rilanciare a ogni modifica.
 python scripts/verify_schema.py          # struttura, sola lettura, sicuro in produzione
 python scripts/check_constraints.py      # i vincoli rifiutano davvero? (solo db _test/_dev)
 python scripts/check_modules.py          # lo strato Python committa davvero? (solo db _test/_dev)
+python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
 python scripts/delete_user.py --user-id <uuid>
 python scripts/purge_jobs.py --dry-run    # retention offerte morte
 python scripts/purge_jobs.py --stats      # aggregati per cluster e mese

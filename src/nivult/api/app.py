@@ -14,16 +14,22 @@ parte, per costruzione dello schema.
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import os
+import secrets
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from psycopg import Binary
+from psycopg.types.json import Json
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
 from nivult import auth
+from nivult import crypto, cv, storage
 from nivult.config import database_url, load_dotenv
+from nivult.matching.llm import GLM
 
 load_dotenv()
 
@@ -80,6 +86,24 @@ class PreferenzeUtente(BaseModel):
     delivery_email: EmailStr | None = None
     telegram_chat_id: str | None = None
     whatsapp_e164: str | None = None
+
+
+def _analizza_cv(conn, testo: str) -> dict:
+    """Il profilo dal CV, con GLM, sui vocabolari veri del database.
+
+    Sta a livello di modulo per poter essere sostituito nei test: l'API non
+    chiama GLM direttamente.
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT family FROM job_families ORDER BY sort_order")
+        famiglie = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT code FROM experience_levels ORDER BY rank")
+        seniority = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT api_value FROM filter_values WHERE parameter = 'ai_language'")
+        lingue = [r[0] for r in cur.fetchall()]
+    with GLM() as modello:
+        return cv.estrai_profilo(modello, testo, famiglie=famiglie,
+                                  seniority=seniority, lingue=lingue)
 
 
 def create_app() -> FastAPI:
@@ -352,6 +376,84 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, f"valore malformato: {exc}")
         conn.commit()
         return me(uid=uid, conn=conn)
+
+    # --- CV ----------------------------------------------------------------
+
+    @app.post("/me/cv")
+    async def carica_cv(file: UploadFile = File(...),
+                        uid: str = Depends(utente),
+                        conn=Depends(connessione)):
+        """Carica il CV: cifrato a busta prima di toccare lo storage, con il
+        profilo proposto da GLM nella risposta perché l'utente lo confermi.
+
+        Il testo del CV non si logga MAI: è un dato personale come tutto il
+        resto del file.
+        """
+        dati = await file.read()
+        try:
+            testo = cv.estrai_testo(file.filename or "", file.content_type or "", dati)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        try:
+            profilo = _analizza_cv(conn, testo)
+        except RuntimeError as exc:
+            raise HTTPException(502, f"estrazione del profilo fallita: {exc}")
+
+        esito = crypto.cifra(dati)
+        chiave = f"cv/{uid}/{secrets.token_hex(8)}"
+        storage.salva(chiave, esito.dati)
+        try:
+            with conn.cursor() as cur:
+                # Il CV attivo diventa storico: resta ricostruibile quale
+                # versione ha prodotto un dato match.
+                # Il CV attivo diventa storico: la riga resta (dice quale
+                # versione ha prodotto un dato match, e ne conserva il
+                # profilo), il file cifrato no — un blob personale che non
+                # serve più a nulla non deve accumularsi nel bucket.
+                cur.execute("UPDATE user_cvs SET status = 'superseded' "
+                            "WHERE user_id = %s AND status = 'active' "
+                            "RETURNING storage_key", (uid,))
+                for (vecchia,) in cur.fetchall():
+                    storage.elimina(vecchia)
+                cur.execute(
+                    "INSERT INTO user_cvs (user_id, storage_key, original_filename, "
+                    "  mime_type, sha256, families, seniority, skills, languages, "
+                    "  years_experience, raw_extraction, encryption_algo, "
+                    "  encrypted_dek, nonce, auth_tag, kek_version) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'aes-256-gcm',"
+                    "  %s,%s,%s,1) RETURNING id::text",
+                    (uid, chiave, file.filename, file.content_type,
+                     hashlib.sha256(dati).hexdigest(), profilo["families"],
+                     profilo["seniority"], profilo["skills"],
+                     Json(profilo["languages"]),
+                     profilo["years_experience"],
+                     Json(profilo["raw_extraction"]),
+                     Binary(esito.encrypted_dek),
+                     Binary(esito.nonce),
+                     Binary(esito.auth_tag)))
+                cv_id = cur.fetchone()[0]
+            conn.commit()
+        except Exception:
+            # La riga non c'è, il file cifrato non deve restare orfano.
+            storage.elimina(chiave)
+            raise
+        return {"id": cv_id, "profilo": profilo}
+
+    @app.get("/me/cv")
+    def leggi_cv(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Il profilo del CV attivo: ciò che l'onboarding precompila e il
+        pannello mostra. Il file non si scarica da qui."""
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT families, seniority, skills, languages, years_experience, "
+                "       uploaded_at FROM user_cvs "
+                "WHERE user_id = %s AND status = 'active'", (uid,))
+            r = cur.fetchone()
+        if not r:
+            raise HTTPException(404, "nessun CV caricato")
+        return {"families": r[0], "seniority": r[1], "skills": r[2],
+                "languages": r[3], "years_experience": r[4],
+                "caricato_il": r[5]}
 
     return app
 

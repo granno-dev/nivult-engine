@@ -13,7 +13,9 @@ DISTRUTTIVO: scrive utenti e poi ripulisce. Solo su database _test/_dev.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -25,11 +27,20 @@ import psycopg  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from nivult import auth  # noqa: E402
+from nivult.api import app as app_module  # noqa: E402
 from nivult.api.app import create_app  # noqa: E402
 from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
 
 PASSED: list[str] = []
 FAILED: list[str] = []
+
+
+def seen_by_other(sql: str, params=()):
+    """Legge da una connessione in autocommit: passa solo ciò che è committato."""
+    with psycopg.connect(database_url(), autocommit=True) as c:
+        with c.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()[0]
 
 
 def check(label: str, got, expected) -> None:
@@ -195,6 +206,79 @@ def main() -> int:
             r = client.get("/me", headers=auth_header)
             check("le preferenze salvate si vedono da /me",
                   (r.json()["frequenza"], r.json()["fuso"]), ("weekly", "Europe/Rome"))
+
+            # --- CV: cifratura, storage, profilo ---------------------------------
+            os.environ["CV_KEK"] = secrets.token_hex(32)
+            salvati: dict[str, bytes] = {}
+            salva_originale = app_module.storage.salva
+            elimina_originale = app_module.storage.elimina
+            analizza_originale = app_module._analizza_cv
+            app_module.storage.salva = lambda chiave, dati: salvati.__setitem__(chiave, dati)
+            app_module.storage.elimina = lambda chiave: salvati.pop(chiave, None)
+            app_module._analizza_cv = lambda conn, testo: {
+                "families": ["Human Resources"], "seniority": "5-10",
+                "skills": ["recruiting", "employee relations"],
+                "languages": ["Italian", "English"], "years_experience": 8,
+                "raw_extraction": {"note": "finto"},
+            }
+
+            try:
+                contenuto = b"Curriculum di prova: HR Business Partner con 8 anni."
+                r = client.post("/me/cv", files={"file": ("cv.txt", contenuto, "text/plain")},
+                                headers=auth_header)
+                check("upload del CV: 200 col profilo proposto", r.status_code, 200)
+                profilo = r.json().get("profilo", {})
+                check("il profilo arriva per la precompilazione",
+                      (profilo.get("families"), profilo.get("seniority")),
+                      (["Human Resources"], "5-10"))
+                check("GET /me/cv rilegge il profilo del CV attivo",
+                      client.get("/me/cv", headers=auth_header).json().get("skills"),
+                      ["recruiting", "employee relations"])
+                check("nello storage è finito ESATTAMENTE un oggetto",
+                      len(salvati), 1)
+                chiave_salvata, byte_salvati = next(iter(salvati.items()))
+                check("lo storage non ha ricevuto il testo in chiaro",
+                      contenuto in byte_salvati, False)
+                check("la chiave dell'oggetto è sotto cv/<utente>/",
+                      chiave_salvata.startswith("cv/"), True)
+                check("lo schema della 0009 è rispettato nella riga",
+                      seen_by_other(
+                          "SELECT length(encrypted_dek) || '/' || length(nonce) || "
+                          "  '/' || length(auth_tag) FROM user_cvs WHERE user_id = ("
+                          "  SELECT id FROM users WHERE email = 'pref@test.dev') "
+                          "  AND status = 'active'"),
+                      "60/12/16")
+                check("lo sha256 del file originale è registrato",
+                      seen_by_other(
+                          "SELECT sha256 FROM user_cvs WHERE user_id = ("
+                          "  SELECT id FROM users WHERE email = 'pref@test.dev') "
+                          "  AND status = 'active'"),
+                      hashlib.sha256(contenuto).hexdigest())
+                check("i valori fuori vocabolario di GLM non passano: languages salvate",
+                      seen_by_other("SELECT languages::text FROM user_cvs WHERE user_id = ("
+                                    "  SELECT id FROM users WHERE email = 'pref@test.dev') "
+                                    "  AND status = 'active'"),
+                      '["Italian", "English"]')
+
+                secondo = b"Secondo curriculum, aggiornato: Chief People Officer."
+                r = client.post("/me/cv", files={"file": ("cv2.txt", secondo, "text/plain")},
+                                headers=auth_header)
+                check("il secondo upload va a buon fine", r.status_code, 200)
+                check("il primo CV è degradato a superseded: uno attivo solo",
+                      seen_by_other("SELECT count(*) FROM user_cvs WHERE user_id = ("
+                                    "  SELECT id FROM users WHERE email = 'pref@test.dev') "
+                                    "  AND status = 'active'"), 1)
+                check("il vecchio file cifrato è stato eliminato dal bucket",
+                      len(salvati), 1)
+
+                r = client.post("/me/cv", files={"file": ("cv.txt", b" corto ", "text/plain")},
+                                headers=auth_header)
+                check("un file senza testo sufficiente è rifiutato", r.status_code, 422)
+            finally:
+                app_module.storage.salva = salva_originale
+                app_module.storage.elimina = elimina_originale
+                app_module._analizza_cv = analizza_originale
+                del os.environ["CV_KEK"]
 
             # CORS: solo gli origine dichiarati parlano con l'API.
             pre = client.options(
