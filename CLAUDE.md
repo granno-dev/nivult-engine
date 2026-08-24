@@ -747,6 +747,21 @@ saltarla. Se servirà, JWKS si innesta in `_verifica_claim` senza toccare altro.
 senza cambiarlo su Google e Azure rompe il login con un errore che non somiglia
 alla sua causa.
 
+**Privacy e termini vanno messi in ENTRAMBE le console, non solo in Google.**
+Su Google stanno in *Google Auth Platform → Branding*; su Azure in
+*App registrations → Branding & properties*. Dimenticare Azure non dà errore:
+la schermata di consenso Microsoft mostra i segnaposto grezzi del suo modello
+(`<appTerms>`, `<appPrivacy>`) e la frase «l'autore non ha fornito collegamenti
+per la verifica delle condizioni» — che è esattamente ciò che non vuoi far
+leggere a qualcuno mentre gli chiedi di fidarsi.
+
+Il **publisher domain** di Azure si verifica servendo
+`https://nivult.com/.well-known/microsoft-identity-association.json` con
+dentro l'application id. Sta in `public/` nel repo del sito: è l'unica
+directory che l'export statico copia alla lettera, e il punto iniziale di
+`.well-known` sopravvive all'export — cosa da sapere prima che qualcuno lo
+sposti «per ordine».
+
 ### CV: cifratura lato client, a busta
 
 Object storage su **Hetzner Object Storage**, stesso data center del database,
