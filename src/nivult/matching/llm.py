@@ -27,8 +27,8 @@ class Punteggio:
     reason: str | None = None
 
 
-def _estrai_json(testo: str) -> list[dict]:
-    """I modelli avvolgono il JSON in prosa o in un blocco markdown.
+def _estrai_json(testo: str) -> dict:
+    """Il modello a volte avvolge il JSON in prosa o in un blocco markdown.
 
     Meglio recuperarlo che far fallire una chiamata già pagata.
     """
@@ -38,11 +38,13 @@ def _estrai_json(testo: str) -> list[dict]:
     try:
         d = json.loads(testo)
     except json.JSONDecodeError:
-        m = re.search(r"\[.*\]", testo, re.S)
+        m = re.search(r"\{.*\}", testo, re.S)
         if not m:
             raise ValueError(f"nessun JSON nella risposta: {testo[:180]}")
         d = json.loads(m.group(0))
-    return d if isinstance(d, list) else d.get("results", [])
+    if not isinstance(d, dict):
+        raise ValueError(f"atteso un oggetto JSON, ricevuto: {str(d)[:120]}")
+    return d
 
 
 class ChatModel(HttpSource):
@@ -210,3 +212,16 @@ def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
     return reason, dict(modello.last_usage)
+
+
+def valuta(modello: ChatModel, profilo: dict, jobs: list[dict], *,
+           con_motivazione: bool = False) -> list[Punteggio]:
+    """Comodità per gli esperimenti: la serie di valutazioni a offerta singola."""
+    testo = profilo_come_testo(profilo)
+    out: list[Punteggio] = []
+    for j in jobs:
+        score, reason, _ = valuta_offerta(modello, testo, j)
+        if con_motivazione:
+            reason, _ = motiva_offerta(modello, testo, j)
+        out.append(Punteggio(str(j["id"]), score, reason))
+    return out

@@ -442,6 +442,28 @@ def main() -> int:
                             "  AND status = 'failed'", (dg["b"],)),
               "budget di valutazione esaurito (5000/5000, piano pro)")
 
+        # Regressione: un match rimasto indietro (worker morto prima della
+        # consegna) va recuperato dal digest successivo SENZA rivalutarlo.
+        with work.cursor() as cur:
+            cur.execute(
+                "INSERT INTO matches (user_id, job_id, score, reason, threshold_used, model) "
+                "SELECT %s, id, 88, 'rimasta indietro', 80, 'test' "
+                "FROM jobs WHERE source_job_id = 'francese'", (dg["a"],))
+            cur.execute("UPDATE users SET next_digest_at = now() - interval '20 min' "
+                        "WHERE id = %s", (dg["a"],))
+        work.commit()
+        with work.cursor(row_factory=dict_row) as cur:
+            u3 = next(u for u in worker.utenti_dovuti(cur, datetime.now(timezone.utc))
+                      if u.email == "digest-a@example.test")
+        e3 = worker.digest_utente(work, u3, dry_run=True, evaluatore=finto)
+        check("il match rimasto indietro viene consegnato", e3["stato"], "sent")
+        check("senza rivalutarlo: zero chiamate nuove",
+              (e3["valutate"], e3["inviate"]), (0, 1))
+        check("il conteggio del digest conta le valutazioni che lo alimentano",
+              seen_by_other("SELECT jobs_evaluated_count || '/' || jobs_sent_count "
+                            "FROM digests WHERE user_id = %s AND status = 'sent' "
+                            "  AND jobs_sent_count = 1", (dg["a"],)), "1/1")
+
         section("pulizia")
         wipe(work)
         check("database lasciato pulito",

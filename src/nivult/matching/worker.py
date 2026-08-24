@@ -259,7 +259,7 @@ def _items_del_digest(conn, user_id: str) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "SELECT m.id::text AS match_id, m.score, m.reason, "
-            "       j.id::text AS job_id, j.source_job_id, j.title, "
+            "       j.id::text AS id, j.source_job_id, j.title, "
             "       j.organization, j.cities, "
             "       j.url, j.source, j.link_kind, j.employer_kind, j.salary, "
             "       j.date_posted "
@@ -290,44 +290,44 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
         return esito
 
     candidati = funnel.candidati(conn, u.id)
-    if not candidati:
-        _chiudi(conn, digest_id, status="skipped_empty", valutate=0, inviate=0)
-        _rischedula(conn, u, started)
-        esito["stato"] = "skipped_empty"
-        return esito
+    budget_finito = False
+    if candidati:
+        # Il budget del piano: si valuta ciò che resta, preferendo le più
+        # recenti. La lettura serve a dimensionare e ad avvisare; il CONSUMO
+        # vero è per offerta, atomico: un errore a metà digest non butta via
+        # la dotazione di valutazioni non ancora fatte.
+        with conn.cursor() as cur:
+            cur.execute("SELECT q.monthly_evaluations, "
+                        "COALESCE(b.evaluations_used, 0) "
+                        "FROM plan_quotas q "
+                        "LEFT JOIN user_evaluation_budget b ON b.user_id = %s "
+                        "  AND b.period_month = date_trunc('month', current_date)::date "
+                        "WHERE q.plan = %s", (u.id, u.plan))
+            cap, usate = cur.fetchone()
+        rimaste = cap - usate
+        if rimaste <= 0:
+            budget_finito = True
+            log.warning("%s: budget di valutazione esaurito (%s/%s) — non valuto, "
+                        "ma consegno ciò che resta da spedire", u.email, usate, cap)
+            candidati = []
+        elif len(candidati) > rimaste:
+            log.warning("%s: %d candidati ma %d valutazioni rimaste — taglio le più vecchie",
+                        u.email, len(candidati), rimaste)
+            candidati = candidati[:rimaste]
 
-    # Il budget del piano: si valuta ciò che resta, preferendo le più recenti.
-    with conn.cursor() as cur:
-        cur.execute("SELECT q.monthly_evaluations, "
-                    "COALESCE(b.evaluations_used, 0) "
-                    "FROM plan_quotas q "
-                    "LEFT JOIN user_evaluation_budget b "
-                    "  ON b.user_id = %s AND b.period_month = date_trunc('month', current_date)::date "
-                    "WHERE q.plan = %s", (u.id, u.plan))
-        cap, usate = cur.fetchone()
-    rimaste = cap - usate
-    if rimaste <= 0:
-        _chiudi(conn, digest_id, status="failed", valutate=0, inviate=0,
-                error=f"budget di valutazione esaurito ({usate}/{cap}, piano {u.plan})")
-        _rischedula(conn, u, started)
-        esito["stato"] = "failed_budget"
-        return esito
-    if len(candidati) > rimaste:
-        log.warning("%s: %d candidati ma %d valutazioni rimaste — taglio le più vecchie",
-                    u.email, len(candidati), rimaste)
-        candidati = candidati[:rimaste]
-
-    with conn.cursor() as cur:
-        cur.execute("SELECT user_try_evaluate(%s, %s)", (u.id, len(candidati)))
-        if not cur.fetchone()[0]:
-            raise RuntimeError(f"user_try_evaluate ha rifiutato {u.email}")
-    conn.commit()
-
-    if evaluatore is None:
-        evaluatore = ValutatoreGLM()
     try:
         # Prima passata: punteggio (e micro-motivazione) su tutte.
+        if candidati and evaluatore is None:
+            evaluatore = ValutatoreGLM()
+        valutate_adesso: set[str] = set()
         for i, offerta in enumerate(candidati):
+            with conn.cursor() as cur:
+                cur.execute("SELECT user_try_evaluate(%s, 1)", (u.id,))
+                if not cur.fetchone()[0]:
+                    log.warning("%s: budget finito a metà digest — fermo le valutazioni",
+                                u.email)
+                    break
+            conn.commit()
             score, reason, uso = evaluatore.valuta(profilo_testo, offerta)
             with conn.cursor() as cur:
                 cur.execute(
@@ -337,13 +337,30 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                     (u.id, offerta["id"], u.cv_id, score, reason, threshold,
                      MODELLO, uso.get("input"), uso.get("output")))
             esito["valutate"] += 1
+            valutate_adesso.add(offerta["id"])
             if i % 50 == 49:
                 conn.commit()
         conn.commit()
 
         items = _items_del_digest(conn, u.id)
 
+        if not items:
+            # Niente da spedire. Se per di più il budget è a zero, il digest
+            # fallisce col motivo esplicito: è l'esito che merita un allarme.
+            if budget_finito and not esito["valutate"]:
+                _chiudi(conn, digest_id, status="failed", valutate=0, inviate=0,
+                        error=f"budget di valutazione esaurito ({usate}/{cap}, piano {u.plan})")
+                esito["stato"] = "failed_budget"
+            else:
+                _chiudi(conn, digest_id, status="skipped_empty",
+                        valutate=esito["valutate"], inviate=0)
+                esito["stato"] = "skipped_empty"
+            _rischedula(conn, u, started)
+            return esito
+
         # Seconda passata: la motivazione vera solo per ciò che viene inviato.
+        if evaluatore is None:
+            evaluatore = ValutatoreGLM()
         for item in items:
             item["reason"], _ = evaluatore.motiva(profilo_testo, item)
             with conn.cursor() as cur:
@@ -357,16 +374,9 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                     "INSERT INTO digest_items (digest_id, job_id, user_id, match_id, "
                     "  rank, score_snapshot, reason_snapshot) VALUES (%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (digest_id, job_id) DO NOTHING",
-                    (digest_id, item["job_id"], u.id, item["match_id"], pos,
+                    (digest_id, item["id"], u.id, item["match_id"], pos,
                      item["score"], item["reason"]))
         conn.commit()
-
-        if not items:
-            _chiudi(conn, digest_id, status="skipped_empty",
-                    valutate=esito["valutate"], inviate=0)
-            _rischedula(conn, u, started)
-            esito["stato"] = "skipped_empty"
-            return esito
 
         if u.delivery_channel != "email":
             _chiudi(conn, digest_id, status="failed", valutate=esito["valutate"],
@@ -382,7 +392,13 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             log.info("%s: DRY RUN, email compilata in %s", u.email, percorsoHtml)
         else:
             message_id = email_mod.invia(destinatario, items)
-        _chiudi(conn, digest_id, status="sent", valutate=esito["valutate"],
+        # jobs_evaluated_count: le valutazioni che ALIMENTANO questo digest —
+        # quelle pagate in questo run più le recuperate da un tentativo
+        # precedente. È ciò che soddisfa il vincolo sent <= evaluated: un
+        # digest può consegnare offerte valutate prima di lui.
+        alimentano = esito["valutate"] + sum(
+            1 for it in items if it["id"] not in valutate_adesso)
+        _chiudi(conn, digest_id, status="sent", valutate=alimentano,
                 inviate=len(items), message_id=message_id)
         _rischedula(conn, u, started)
         esito["stato"] = "sent"
