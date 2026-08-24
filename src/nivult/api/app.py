@@ -24,9 +24,10 @@ from psycopg import Binary
 from psycopg.types.json import Json
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 
-from nivult import auth
+from nivult import auth, oauth
 from nivult import crypto, cv, storage
 from nivult.config import database_url, load_dotenv
 from nivult.matching.llm import GLM
@@ -164,6 +165,41 @@ def create_app() -> FastAPI:
         header = request.headers.get("Authorization", "")
         auth.revoca_sessione(conn, header[7:].strip())
         return {"esito": "sessione revocata"}
+
+    # ── Accesso con Google e Microsoft ──────────────────────────────────────
+    #
+    # Sono navigazioni di primo livello del browser, non chiamate XHR: qui il
+    # CORS non c'entra nulla, e la risposta è sempre un 302.
+    #
+    # Il giro termina su /verify del sito con un gettone monouso, la stessa
+    # pagina in cui atterra il magic link. Così il token di sessione non entra
+    # mai in una URL, e il sito non guadagna una rotta.
+
+    def _al_sito(percorso: str) -> RedirectResponse:
+        return RedirectResponse(f"{oauth.site_url()}{percorso}", status_code=302)
+
+    @app.get("/auth/oauth/{provider}/start")
+    def oauth_start(provider: str, conn=Depends(connessione)):
+        # Rotta non autenticata che scrive una riga: le righe sono minuscole,
+        # vivono dieci minuti, e ogni passaggio pota le scadute. Se un giorno
+        # servisse un freno, va messo qui.
+        try:
+            return RedirectResponse(oauth.inizia(conn, provider), status_code=302)
+        except oauth.OAuthError as e:
+            return _al_sito(f"/login?errore={e.codice}")
+
+    @app.get("/auth/oauth/{provider}/callback")
+    def oauth_callback(provider: str, code: str = "", state: str = "",
+                       error: str = "", conn=Depends(connessione)):
+        if error:
+            # L'utente ha annullato sulla schermata del provider: non è un
+            # guasto, si torna al login senza drammi.
+            return _al_sito("/login?errore=accesso_annullato")
+        try:
+            gettone = oauth.concludi(conn, provider, code, state)
+        except oauth.OAuthError as e:
+            return _al_sito(f"/login?errore={e.codice}")
+        return _al_sito(f"/verify?token={gettone}")
 
     @app.get("/me")
     def me(uid: str = Depends(utente), conn=Depends(connessione)):

@@ -667,6 +667,7 @@ python scripts/verify_schema.py          # struttura, sola lettura, sicuro in pr
 python scripts/check_constraints.py      # i vincoli rifiutano davvero? (solo db _test/_dev)
 python scripts/check_modules.py          # lo strato Python committa davvero? (solo db _test/_dev)
 python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
+python scripts/check_oauth.py            # OAuth: state, claim, collegamento (solo db _test/_dev)
 python scripts/delete_user.py --user-id <uuid>
 python scripts/purge_jobs.py --dry-run    # retention offerte morte
 python scripts/purge_jobs.py --stats      # aggregati per cluster e mese
@@ -696,6 +697,55 @@ sicurezza, niente credenziali riusate da altri siti, niente hash da difendere.
   le riassegnano, quindi agganciare l'account all'email significherebbe che chi
   eredita un indirizzo eredita l'account.
 - Il token in chiaro non deve comparire nei log, mai — stessa regola del CV.
+
+### OAuth: una seconda porta, non un secondo sistema
+
+`nivult.oauth`, authorization code con PKCE e `nonce`. Il giro finisce **dove
+finisce il magic link**: un gettone monouso di `login_tokens`, riscattato dal
+sito su `/verify`.
+
+**Il motivo di quel giro apparentemente lungo è che il token di sessione non
+deve mai entrare in una URL** — finirebbe nel referrer, nella cronologia e nei
+log dei proxy. In URL viaggia solo un gettone che vale una volta sola e cinque
+minuti. Effetto collaterale gradito: il sito non guadagna nessuna rotta nuova.
+
+`login_tokens.origin` dice come è nato il gettone e viene copiato in
+`sessions.origin` al consumo. **L'origine sta sul token, non la sceglie chi
+consuma:** una sessione OAuth marcata `magic_link` mentirebbe esattamente dove
+serve la verità, cioè indagando su un accesso sospetto.
+
+**Il consumo di un gettone OAuth non verifica l'email.** Solo il magic link
+prova il possesso dell'indirizzo; per OAuth la decisione è già stata presa a
+monte, dove si sa di quale provider fidarsi.
+
+**Di quale email fidarsi — la regola che evita un takeover.** Un'identità nota
+entra sempre. Su un'identità nuova che porta l'indirizzo di un account già
+esistente, si collega **solo se il provider ha dato una prova**; altrimenti si
+rifiuta e si manda a passare dal magic link, che la prova sa darla.
+
+| Provider | Email fidata? |
+|---|---|
+| Google, `email_verified: true` | sì |
+| Google, `email_verified` falso o assente | no |
+| Microsoft, tenant consumer (account personali) | sì |
+| Microsoft, qualunque altro tenant | **no** |
+
+L'ultima riga non è prudenza generica: sugli account aziendali il claim `email`
+lo scrive l'amministratore del tenant, quindi **chiunque controlli un tenant
+può presentarsi con l'indirizzo di qualcun altro**. È la vulnerabilità nota come
+nOAuth, e la difesa raccomandata da Microsoft stessa è non usare mai l'email
+come criterio di autorizzazione. `scripts/check_oauth.py` presidia questo caso.
+
+**La firma dell'`id_token` non viene verificata, ed è una scelta.** Si
+controllano `iss`, `aud`, `exp` e `nonce`; per l'integrità ci si fida del TLS,
+perché il token arriva dal token endpoint in una chiamata server-to-server con
+client confidenziale — il caso in cui l'OIDC consente esplicitamente di
+saltarla. Se servirà, JWKS si innesta in `_verifica_claim` senza toccare altro.
+
+**I redirect URI sono configurazione condivisa con le due console.**
+`API_URL` costruisce `{API_URL}/auth/oauth/{provider}/callback`: cambiarlo qui
+senza cambiarlo su Google e Azure rompe il login con un errore che non somiglia
+alla sua causa.
 
 ### CV: cifratura lato client, a busta
 

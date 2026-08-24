@@ -115,20 +115,26 @@ def consuma(conn: psycopg.Connection, token: str, *, ip=None, ua=None
         cur.execute(
             "UPDATE login_tokens SET consumed_at = now() "
             "WHERE token_hash = %s AND consumed_at IS NULL AND expires_at > now() "
-            "RETURNING user_id::text", (_sha256(token),))
+            "RETURNING user_id::text, origin", (_sha256(token),))
         r = cur.fetchone()
         if not r:
             conn.rollback()
             return None
-        uid = r[0]
+        uid, origine = r
         sessione = secrets.token_urlsafe(32)
+        # L'origine viaggia col token, non la sceglie chi consuma: un ritorno
+        # OAuth passa di qui, e una sessione marcata 'magic_link' mentirebbe
+        # proprio dove serve la verità, cioè indagando su un accesso sospetto.
         cur.execute(
             "INSERT INTO sessions (user_id, token_hash, expires_at, origin, ip, user_agent) "
-            "VALUES (%s, %s, now() + make_interval(days => %s), 'magic_link', %s, %s)",
-            (uid, _sha256(sessione), SESSIONE_VALIDITA.days, ip, ua))
-        # Il link consumato prova il possesso dell'indirizzo.
-        cur.execute("UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) "
-                    "WHERE id = %s", (uid,))
+            "VALUES (%s, %s, now() + make_interval(days => %s), %s, %s, %s)",
+            (uid, _sha256(sessione), SESSIONE_VALIDITA.days, origine, ip, ua))
+        # Il link consumato prova il possesso dell'indirizzo — ma solo il link.
+        # Un gettone nato da OAuth non prova niente sull'email: là la decisione
+        # è già stata presa da nivult.oauth, che sa di quale provider fidarsi.
+        if origine == "magic_link":
+            cur.execute("UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) "
+                        "WHERE id = %s", (uid,))
     conn.commit()
     return sessione, uid
 
