@@ -104,6 +104,98 @@ def main() -> int:
                   client.get("/me", headers={"Authorization": f"Bearer {sessione}"})
                   .status_code, 401)
 
+            # --- vocabolari, cluster, preferenze --------------------------------
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("TRUNCATE users CASCADE")
+                    cur.execute("SELECT count(*) FROM job_families")
+                    if cur.fetchone()[0] == 0:
+                        cur.execute("INSERT INTO job_families (family, sort_order) "
+                                    "VALUES ('Human Resources', 1)")
+                    cur.execute("INSERT INTO clusters (family, country) "
+                                "VALUES ('Human Resources','IT') "
+                                "ON CONFLICT (family, country) DO NOTHING")
+                    cur.execute("SELECT id::text FROM clusters "
+                                "WHERE family = 'Human Resources' AND country = 'IT'")
+                    cluster_id = cur.fetchone()[0]
+                setup.commit()
+
+            client.post("/auth/magic-link", json={"email": "pref@test.dev"})
+            r = client.post("/auth/consuma", json={"token": tokens[-1]})
+            sessione = r.json()["sessione"]
+            auth_header = {"Authorization": f"Bearer {sessione}"}
+
+            r = client.get("/vocabolari")
+            check("i vocabolari ci sono", r.status_code, 200)
+            v = r.json()
+            check("le lingue vengono dal vocabolario in tabella",
+                  "Italian" in v["lingue"] and "French" in v["lingue"], True)
+            check("i livelli di esperienza sono ordinati",
+                  [l["codice"] for l in v["livelli_esperienza"]],
+                  ["0-2", "2-5", "5-10", "10+"])
+
+            r = client.get("/cluster")
+            check("l'elenco dei cluster comprende HR × IT",
+                  any(c["famiglia"] == "Human Resources" and c["paese"] == "IT"
+                      for c in r.json()), True)
+
+            filtri = {"languages": ["Italian", "English"], "min_seniority": "2-5",
+                      "max_seniority": "10+", "employment_types": ["FULL_TIME"],
+                      "min_headcount": 50}
+            r = client.put(f"/me/cluster/{cluster_id}", json=filtri,
+                           headers=auth_header)
+            check("iscrizione al cluster con filtri: 204", r.status_code, 204)
+            r = client.get("/me/cluster", headers=auth_header)
+            check("l'iscrizione si rilegge con i filtri giusti",
+                  (len(r.json()), r.json()[0]["filtri"]["languages"],
+                   r.json()[0]["filtri"]["min_headcount"]),
+                  (1, ["Italian", "English"], 50))
+            check("i tipi datore accettati tornano al default tutti e tre",
+                  r.json()[0]["filtri"]["accepted_employer_kinds"],
+                  ["direct", "staffing_agency", "undisclosed"])
+
+            bad = dict(filtri, languages=["Italianooo"])
+            r = client.put(f"/me/cluster/{cluster_id}", json=bad, headers=auth_header)
+            check("una lingua fuori vocabolario è rifiutata con 422",
+                  r.status_code, 422)
+            check("il 422 dice quali valori sono ammessi",
+                  "Italian" in str(r.json()), True)
+            bad = dict(filtri, min_seniority="senior")
+            check("una seniority fuori vocabolario è rifiutata",
+                  client.put(f"/me/cluster/{cluster_id}", json=bad,
+                             headers=auth_header).status_code, 422)
+            check("un cluster inesistente è un 404",
+                  client.put("/me/cluster/00000000-0000-0000-0000-000000000000",
+                             json=filtri, headers=auth_header).status_code, 404)
+
+            check("disiscrizione: 204",
+                  client.delete(f"/me/cluster/{cluster_id}",
+                                headers=auth_header).status_code, 204)
+            check("dopo la disiscrizione non ci sono cluster",
+                  client.get("/me/cluster", headers=auth_header).json(), [])
+
+            check("passare a daily azzera il weekday con un null esplicito",
+                  client.put("/me", json={"frequency": "daily", "send_weekday": None},
+                             headers=auth_header).status_code, 200)
+            check("weekly senza giorno è rifiutato",
+                  client.put("/me", json={"frequency": "weekly"},
+                             headers=auth_header).status_code, 422)
+            check("weekly col giorno passa",
+                  client.put("/me", json={"frequency": "weekly", "send_weekday": 1},
+                             headers=auth_header).status_code, 200)
+            check("daily col giorno è rifiutato",
+                  client.put("/me", json={"frequency": "daily", "send_weekday": 1},
+                             headers=auth_header).status_code, 422)
+            check("un fuso orario inesistente è rifiutato",
+                  client.put("/me", json={"timezone": "Fuso/Fasullo"},
+                             headers=auth_header).status_code, 422)
+            check("il fuso valido passa e si rilegge",
+                  client.put("/me", json={"timezone": "Europe/Rome"},
+                             headers=auth_header).status_code, 200)
+            r = client.get("/me", headers=auth_header)
+            check("le preferenze salvate si vedono da /me",
+                  (r.json()["frequenza"], r.json()["fuso"]), ("weekly", "Europe/Rome"))
+
             # CORS: solo gli origine dichiarati parlano con l'API.
             pre = client.options(
                 "/auth/magic-link", headers={

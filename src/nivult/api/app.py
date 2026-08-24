@@ -50,6 +50,38 @@ class ConsumoLink(BaseModel):
     token: str
 
 
+class FiltriCluster(BaseModel):
+    """I filtri deterministici del funnel, per coppia utente-cluster.
+
+    Le liste vuote significano 'nessun vincolo': restringere è una scelta
+    esplicita dell'utente, mai un effetto collaterale. I valori sono validati
+    contro i vocabolari in tabella — un refuso filtrerebbe via tutto in
+    silenzio, e sembrerebbe che per quell'utente il mercato sia vuoto.
+    """
+    languages: list[str] = []
+    min_seniority: str | None = None
+    max_seniority: str | None = None
+    work_arrangements: list[str] = []
+    employment_types: list[str] = []
+    accepted_employer_kinds: list[str] = []
+    needs_visa_sponsorship: bool = False
+    min_headcount: int | None = None
+    max_headcount: int | None = None
+
+
+class PreferenzeUtente(BaseModel):
+    """Le preferenze di consegna. I filtri di matching stanno per cluster."""
+    timezone: str | None = None
+    frequency: str | None = None
+    send_hour_local: int | None = None
+    send_weekday: int | None = None
+    send_monthday: int | None = None
+    delivery_channel: str | None = None
+    delivery_email: EmailStr | None = None
+    telegram_chat_id: str | None = None
+    whatsapp_e164: str | None = None
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Nivult", version="0.1.0", docs_url=None, redoc_url=None)
     # Il sito sta su un altro origine per costruzione (Pages statico): senza
@@ -122,6 +154,204 @@ def create_app() -> FastAPI:
         return {"id": uid, "email": r[0], "piano": r[1], "abbonamento": r[2],
                 "canale": r[3], "frequenza": r[4], "fuso": r[5],
                 "email_verificata": r[6], "stato": r[7]}
+
+    # --- vocabolari e cluster ----------------------------------------------
+
+    @app.get("/vocabolari")
+    def vocabolari(conn=Depends(connessione)):
+        """I valori che il sito può offrire nei selettori, dai vocabolari
+        in tabella: il sito non li hardcoda, così un valore nuovo o corretto
+        arriva senza rilascio del sito."""
+        with conn.cursor() as cur:
+            cur.execute("SELECT code, label FROM experience_levels ORDER BY rank")
+            livelli = [{"codice": c, "etichetta": l} for c, l in cur.fetchall()]
+            cur.execute("SELECT parameter, api_value FROM filter_values "
+                        "ORDER BY parameter, api_value")
+            per_parametro: dict[str, list[str]] = {}
+            for parametro, valore in cur.fetchall():
+                per_parametro.setdefault(parametro, []).append(valore)
+            cur.execute("SELECT kind FROM employer_kinds ORDER BY rank")
+            tipi = [k for (k,) in cur.fetchall()]
+        return {
+            "livelli_esperienza": livelli,
+            "lingue": per_parametro.get("ai_language", []),
+            "modalita_lavoro": per_parametro.get("ai_work_arrangement", []),
+            "tipi_contratto": per_parametro.get("ai_employment_type", []),
+            "tipi_datore": tipi,
+        }
+
+    @app.get("/cluster")
+    def cluster(conn=Depends(connessione)):
+        """I cluster su cui ci si può iscrivere: famiglia × paese, mai un
+        paese intero. Il volume serve al picker: un cluster morto è una
+        promessa che il digest non può mantenere."""
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.id::text, c.family, c.country, "
+                "       COALESCE(v.offerte_30g, 0) FROM clusters c "
+                "LEFT JOIN cluster_volume_v v ON v.id = c.id "
+                "WHERE c.status = 'active' ORDER BY c.family, c.country")
+            return [{"id": r[0], "famiglia": r[1], "paese": r[2],
+                     "offerte_30g": r[3]} for r in cur.fetchall()]
+
+    def _valida_filtri(cur, filtri: FiltriCluster) -> None:
+        """I valori devono esistere nei vocabolari: un refuso filtrerebbe
+        via tutto in silenzio, e il mercato sembrerebbe vuoto."""
+        def vocabolario(parametro: str) -> set[str]:
+            cur.execute("SELECT api_value FROM filter_values WHERE parameter = %s",
+                        (parametro,))
+            return {r[0] for r in cur.fetchall()}
+
+        problemi: list[dict] = []
+
+        def dentro(nome: str, valori: list[str], ammessi: set[str]):
+            sconosciuti = [v for v in valori if v not in ammessi]
+            if sconosciuti:
+                problemi.append({"campo": nome, "valori": sconosciuti,
+                                 "ammessi": sorted(ammessi)})
+
+        dentro("languages", filtri.languages, vocabolario("ai_language"))
+        dentro("work_arrangements", filtri.work_arrangements,
+               vocabolario("ai_work_arrangement"))
+        dentro("employment_types", filtri.employment_types,
+               vocabolario("ai_employment_type"))
+        if filtri.accepted_employer_kinds:
+            cur.execute("SELECT kind FROM employer_kinds")
+            dentro("accepted_employer_kinds", filtri.accepted_employer_kinds,
+                   {r[0] for r in cur.fetchall()})
+        cur.execute("SELECT code FROM experience_levels")
+        livelli = {r[0] for r in cur.fetchall()}
+        dentro("min_seniority", [f for f in (filtri.min_seniority,) if f], livelli)
+        dentro("max_seniority", [f for f in (filtri.max_seniority,) if f], livelli)
+        if (filtri.min_headcount is not None and filtri.max_headcount is not None
+                and filtri.min_headcount > filtri.max_headcount):
+            problemi.append({"campo": "min_headcount",
+                             "valori": [filtri.min_headcount],
+                             "ammessi": ["<= max_headcount"]})
+        if problemi:
+            raise HTTPException(422, detail=problemi)
+
+    @app.get("/me/cluster")
+    def miei_cluster(uid: str = Depends(utente), conn=Depends(connessione)):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.id::text, c.family, c.country, uc.languages, "
+                "       uc.min_seniority, uc.max_seniority, uc.work_arrangements, "
+                "       uc.employment_types, uc.accepted_employer_kinds, "
+                "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount "
+                "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
+                "WHERE uc.user_id = %s AND c.status = 'active' "
+                "ORDER BY c.family, c.country", (uid,))
+            return [{"id": r[0], "famiglia": r[1], "paese": r[2],
+                     "filtri": {
+                         "languages": r[3] or [], "min_seniority": r[4],
+                         "max_seniority": r[5], "work_arrangements": r[6] or [],
+                         "employment_types": r[7] or [],
+                         "accepted_employer_kinds": r[8],
+                         "needs_visa_sponsorship": r[9],
+                         "min_headcount": r[10], "max_headcount": r[11]}}
+                    for r in cur.fetchall()]
+
+    @app.put("/me/cluster/{cluster_id}", status_code=204)
+    def iscrivi_cluster(cluster_id: str, filtri: FiltriCluster,
+                        uid: str = Depends(utente), conn=Depends(connessione)):
+        """Iscriviti al cluster con questi filtri, o aggiorna i filtri se già
+        iscritto. Sostituzione integrale: ciò che non c'è nel corpo torna al
+        default. Il pannello preferenze legge e riscrive tutto il blocco."""
+        with conn.cursor() as cur:
+            cur.execute("SELECT status FROM clusters WHERE id = %s", (cluster_id,))
+            r = cur.fetchone()
+            if not r or r[0] != "active":
+                raise HTTPException(404, "cluster inesistente o non attivo")
+            _valida_filtri(cur, filtri)
+            # La lista vuota dei tipi datore accettati non è esprimibile in
+            # tabella (CHECK cardinality > 0): il default li accetta tutti.
+            tipi = filtri.accepted_employer_kinds or \
+                ["direct", "staffing_agency", "undisclosed"]
+            cur.execute(
+                "INSERT INTO user_clusters (user_id, cluster_id, languages, "
+                "  min_seniority, max_seniority, work_arrangements, employment_types, "
+                "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
+                "  max_headcount) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
+                "  languages = EXCLUDED.languages, "
+                "  min_seniority = EXCLUDED.min_seniority, "
+                "  max_seniority = EXCLUDED.max_seniority, "
+                "  work_arrangements = EXCLUDED.work_arrangements, "
+                "  employment_types = EXCLUDED.employment_types, "
+                "  needs_visa_sponsorship = EXCLUDED.needs_visa_sponsorship, "
+                "  accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
+                "  min_headcount = EXCLUDED.min_headcount, "
+                "  max_headcount = EXCLUDED.max_headcount, "
+                "  is_paused = false",
+                (uid, cluster_id, filtri.languages, filtri.min_seniority,
+                 filtri.max_seniority, filtri.work_arrangements,
+                 filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
+                 filtri.min_headcount, filtri.max_headcount))
+        conn.commit()
+
+    @app.delete("/me/cluster/{cluster_id}", status_code=204)
+    def disiscrivi_cluster(cluster_id: str, uid: str = Depends(utente),
+                           conn=Depends(connessione)):
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_clusters WHERE user_id = %s "
+                        "AND cluster_id = %s", (uid, cluster_id))
+        conn.commit()
+
+    @app.put("/me")
+    def aggiorna_me(pref: PreferenzeUtente, uid: str = Depends(utente),
+                    conn=Depends(connessione)):
+        """Aggiorna le preferenze di consegna. I campi a null azzerano (serve
+        per togliere il weekday quando si passa a daily); i campi assenti non
+        si toccano. La coerenza fra frequenza e giorno si controlla qui per
+        dare un 422 parlante — poi la ribadisce il vincolo sul database."""
+        campi = pref.model_dump(exclude_unset=True)
+        if "frequency" in campi:
+            f = campi["frequency"]
+            if f not in ("daily", "weekly", "monthly"):
+                raise HTTPException(422, "frequency: daily, weekly o monthly")
+            # Se la frequenza cambia, i campi giorno arrivano nello stesso
+            # corpo o restano quelli che ci sono già: li si legge entrambi.
+            with conn.cursor() as cur:
+                cur.execute("SELECT send_weekday, send_monthday FROM users "
+                            "WHERE id = %s", (uid,))
+                vecchio_w, vecchio_m = cur.fetchone()
+            w = campi.get("send_weekday", vecchio_w)
+            m = campi.get("send_monthday", vecchio_m)
+            if f == "daily" and (w is not None or m is not None):
+                raise HTTPException(422, "daily non ammette send_weekday né send_monthday")
+            if f == "weekly" and m is not None:
+                raise HTTPException(422, "weekly non ammette send_monthday")
+            if f == "weekly" and w is None:
+                raise HTTPException(422, "weekly richiede send_weekday (1=lunedì … 7=domenica)")
+            if f == "monthly" and w is not None:
+                raise HTTPException(422, "monthly non ammette send_weekday")
+            if f == "monthly" and m is None:
+                raise HTTPException(422, "monthly richiede send_monthday (1–28)")
+        if "delivery_channel" in campi:
+            c = campi["delivery_channel"]
+            if c not in ("email", "telegram", "whatsapp"):
+                raise HTTPException(422, "delivery_channel: email, telegram o whatsapp")
+            if c == "telegram" and not campi.get("telegram_chat_id"):
+                raise HTTPException(422, "telegram richiede telegram_chat_id")
+            if c == "whatsapp" and not campi.get("whatsapp_e164"):
+                raise HTTPException(422, "whatsapp richiede whatsapp_e164")
+        if not campi:
+            raise HTTPException(422, "nessun campo riconosciuto")
+        if "delivery_email" in campi:
+            campi["delivery_email"] = str(campi["delivery_email"])
+
+        assegnazioni = ", ".join(f"{c} = %s" for c in campi)
+        with conn.cursor() as cur:
+            try:
+                cur.execute(f"UPDATE users SET {assegnazioni} WHERE id = %s",
+                            (*campi.values(), uid))
+            except psycopg.errors.CheckViolation as exc:
+                raise HTTPException(422, f"valore rifiutato dal vincolo: {exc.diag.message_detail or exc}")
+            except psycopg.errors.InvalidTextRepresentation as exc:
+                raise HTTPException(422, f"valore malformato: {exc}")
+        conn.commit()
+        return me(uid=uid, conn=conn)
 
     return app
 
