@@ -368,16 +368,6 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                             (item["reason"], item["match_id"]))
             conn.commit()
 
-        with conn.cursor() as cur:
-            for pos, item in enumerate(items, start=1):
-                cur.execute(
-                    "INSERT INTO digest_items (digest_id, job_id, user_id, match_id, "
-                    "  rank, score_snapshot, reason_snapshot) VALUES (%s,%s,%s,%s,%s,%s,%s) "
-                    "ON CONFLICT (digest_id, job_id) DO NOTHING",
-                    (digest_id, item["id"], u.id, item["match_id"], pos,
-                     item["score"], item["reason"]))
-        conn.commit()
-
         if u.delivery_channel != "email":
             _chiudi(conn, digest_id, status="failed", valutate=esito["valutate"],
                     inviate=0, error=f"canale {u.delivery_channel} non ancora supportato")
@@ -392,6 +382,23 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             log.info("%s: DRY RUN, email compilata in %s", u.email, percorsoHtml)
         else:
             message_id = email_mod.invia(destinatario, items)
+
+        # Le voci del digest si registrano DOPO l'invio riuscito: scriverle
+        # prima renderebbe un invio fallito indistinguibile da uno avvenuto,
+        # e l'anti-join del retry scarterebbe offerte mai consegnate. Il
+        # costo di quest'ordine è il caso limite invio-riuscito-crash-prima-
+        # del-registro: al retry l'email parte due volte. Meglio un doppione
+        # raro che un digest perso.
+        with conn.cursor() as cur:
+            for pos, item in enumerate(items, start=1):
+                cur.execute(
+                    "INSERT INTO digest_items (digest_id, job_id, user_id, match_id, "
+                    "  rank, score_snapshot, reason_snapshot) VALUES (%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (digest_id, job_id) DO NOTHING",
+                    (digest_id, item["id"], u.id, item["match_id"], pos,
+                     item["score"], item["reason"]))
+        conn.commit()
+
         # jobs_evaluated_count: le valutazioni che ALIMENTANO questo digest —
         # quelle pagate in questo run più le recuperate da un tentativo
         # precedente. È ciò che soddisfa il vincolo sent <= evaluated: un

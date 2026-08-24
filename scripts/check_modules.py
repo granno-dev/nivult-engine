@@ -464,6 +464,61 @@ def main() -> int:
                             "FROM digests WHERE user_id = %s AND status = 'sent' "
                             "  AND jobs_sent_count = 1", (dg["a"],)), "1/1")
 
+        # Regressione: un invio fallito non deve lasciare il digest "mezzo
+        # registrato". Se le voci di digest_items venissero scritte prima
+        # dell'invio, il retry le considererebbe già consegnate e quelle
+        # offerte non partirebbero mai più.
+        with work.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+                "  frequency, timezone, next_digest_at) VALUES "
+                "('digest-c@example.test','pro','active','email','daily','Europe/Rome', "
+                " now() - interval '15 min') RETURNING id")
+            uc_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO user_clusters (user_id, cluster_id, languages, "
+                        "  min_seniority, max_seniority, employment_types) VALUES "
+                        "(%s,%s, ARRAY['Italian'], '2-5', '10+', ARRAY['FULL_TIME'])",
+                        (uc_id, dg["cluster"]))
+        work.commit()
+
+        invia_originale = worker.email_mod.invia
+
+        def invia_che_falla(*a, **kw):
+            raise RuntimeError("SMTP finto: connessione rifiutata")
+
+        worker.email_mod.invia = invia_che_falla
+        try:
+            with work.cursor(row_factory=dict_row) as cur:
+                uc = next(u for u in worker.utenti_dovuti(cur, datetime.now(timezone.utc))
+                          if u.email == "digest-c@example.test")
+            try:
+                worker.digest_utente(work, uc, dry_run=False, evaluatore=finto)
+                bad("l'invio fallito deve sollevare", "non ha sollevato")
+            except RuntimeError:
+                ok("l'invio fallito solleva", "RuntimeError")
+            check("nessuna voce di digest registrata dopo il fallimento",
+                  seen_by_other("SELECT count(*) FROM digest_items di "
+                                "JOIN users u ON u.id = di.user_id "
+                                "WHERE u.email = 'digest-c@example.test'"), 0)
+            check("il digest resta da riprendere, non risulta consegnato",
+                  seen_by_other("SELECT d.status FROM digests d "
+                                "JOIN users u ON u.id = d.user_id "
+                                "WHERE u.email = 'digest-c@example.test'"), "pending")
+
+            worker.email_mod.invia = lambda *a, **kw: "<msgid@test>"
+            with work.cursor(row_factory=dict_row) as cur:
+                uc2 = next(u for u in worker.utenti_dovuti(cur, datetime.now(timezone.utc))
+                           if u.email == "digest-c@example.test")
+            e4 = worker.digest_utente(work, uc2, dry_run=False, evaluatore=finto)
+            check("al retry il digest parte senza rivalutare",
+                  (e4["stato"], e4["valutate"]), ("sent", 0))
+            check("le offerte sono nel digest del retry",
+                  seen_by_other("SELECT count(*) FROM digest_items di "
+                                "JOIN users u ON u.id = di.user_id "
+                                "WHERE u.email = 'digest-c@example.test'"), 3)
+        finally:
+            worker.email_mod.invia = invia_originale
+
         section("pulizia")
         wipe(work)
         check("database lasciato pulito",
