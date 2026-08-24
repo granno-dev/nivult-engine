@@ -82,6 +82,18 @@ class FiltriCluster(BaseModel):
     wants: str | None = Field(default=None, max_length=1000)
 
 
+class NuovaRicerca(BaseModel):
+    """Apri una ricerca: una famiglia professionale in un paese.
+
+    Il cluster e' un meccanismo di CONDIVISIONE dell'ingestione — dieci
+    utenti sullo stesso mercato lo scaricano una volta — non un catalogo di
+    cio' che l'utente puo' chiedere. Se non esiste, si apre.
+    """
+    family: str = Field(max_length=120)
+    country: str = Field(pattern="^[A-Za-z]{2}$")
+    filtri: FiltriCluster = Field(default_factory=FiltriCluster)
+
+
 class RichiestaCopertura(BaseModel):
     """Cosa un utente ci chiede e non copriamo ancora.
 
@@ -261,6 +273,33 @@ def create_app() -> FastAPI:
                     {"codice": valore, "etichetta": etichetta or valore})
             cur.execute("SELECT kind, label FROM employer_kinds ORDER BY rank")
             tipi = coppie(cur.fetchall())
+            # Le famiglie professionali sono il catalogo di cio' che si puo'
+            # CERCARE, non di cio' che stiamo gia' scaricando. Tenerle qui
+                        # dentro voleva dire mostrare all'utente i tre cluster
+            # attivi al posto del prodotto.
+            cur.execute("SELECT family FROM job_families ORDER BY sort_order")
+            famiglie = [f for (f,) in cur.fetchall()]
+
+            # Le lingue si scoprono anche dal corpus, non solo dal vocabolario
+            # scritto a mano. Adesso che un utente puo' aprire un mercato
+            # nuovo, le offerte in una lingua nuova arrivano prima che qualcuno
+            # pensi a censirla, e il filtro resterebbe cieco proprio su cio'
+            # che ha appena cominciato ad arrivare.
+            #
+            # La soglia e la forma del nome tengono fuori la deriva nota
+            # (France Travail scrive `fr` invece di `French`): un valore corto
+            # e minuscolo e' un codice, non una lingua, e va normalizzato in
+            # ingestione — non accettato qui come se fosse un'altra lingua.
+            cur.execute(
+                "SELECT ai_job_language, count(*) FROM jobs "
+                "WHERE ai_job_language IS NOT NULL AND status = 'active' "
+                "GROUP BY 1 HAVING count(*) >= 10")
+            noti = {v["codice"] for v in per_parametro.get("ai_language", [])}
+            for lingua, _n in cur.fetchall():
+                if (lingua not in noti and len(lingua) > 3
+                        and lingua[:1].isupper() and " and " not in lingua):
+                    per_parametro.setdefault("ai_language", []).append(
+                        {"codice": lingua, "etichetta": lingua})
         return {
             "livelli_esperienza": livelli,
             "lingue": per_parametro.get("ai_language", []),
@@ -270,6 +309,7 @@ def create_app() -> FastAPI:
             # Promesso in CLAUDE.md fra i filtri con campo pieno al 100%, e
             # non era mai arrivato al sito.
             "sponsorship_visto": per_parametro.get("ai_visa_sponsorship", []),
+            "famiglie": famiglie,
         }
 
     @app.get("/cluster")
@@ -322,6 +362,105 @@ def create_app() -> FastAPI:
                              "ammessi": ["<= max_headcount"]})
         if problemi:
             raise HTTPException(422, detail=problemi)
+
+    def _scrivi_iscrizione(cur, uid: str, cluster_id: str,
+                           filtri: FiltriCluster) -> None:
+        """L'iscrizione a un cluster con i suoi filtri, in un posto solo.
+
+        La usano sia la PUT su una ricerca esistente sia l'apertura di una
+        nuova: due copie di questa INSERT vorrebbero dire che un campo nuovo
+        arriva in un percorso e non nell'altro, e il filtro mancante non si
+        vedrebbe — semplicemente non filtrerebbe.
+        """
+        tipi = filtri.accepted_employer_kinds or \
+            ["direct", "staffing_agency", "undisclosed"]
+        cur.execute(
+            "INSERT INTO user_clusters (user_id, cluster_id, languages, "
+            "  min_seniority, max_seniority, work_arrangements, employment_types, "
+            "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
+            "  max_headcount, wants) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
+            "  languages = EXCLUDED.languages, "
+            "  min_seniority = EXCLUDED.min_seniority, "
+            "  max_seniority = EXCLUDED.max_seniority, "
+            "  work_arrangements = EXCLUDED.work_arrangements, "
+            "  employment_types = EXCLUDED.employment_types, "
+            "  needs_visa_sponsorship = EXCLUDED.needs_visa_sponsorship, "
+            "  accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
+            "  min_headcount = EXCLUDED.min_headcount, "
+            "  max_headcount = EXCLUDED.max_headcount, "
+            "  wants = EXCLUDED.wants, "
+            "  is_paused = false",
+            (uid, cluster_id, filtri.languages, filtri.min_seniority,
+             filtri.max_seniority, filtri.work_arrangements,
+             filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
+             filtri.min_headcount, filtri.max_headcount,
+             (filtri.wants or "").strip() or None))
+
+    @app.post("/me/ricerca", status_code=201)
+    def apri_ricerca(corpo: NuovaRicerca, uid: str = Depends(utente),
+                     conn=Depends(connessione)):
+        """Apre una ricerca e ci iscrive l'utente, creando il cluster se non
+        c'e' ancora.
+
+        Il tetto del piano si verifica QUI e non solo nel sito: e' anche il
+        freno sui crediti. Ogni ricerca e' un cluster che entra
+        nell'ingestione notturna e consuma il tetto mensile della fonte
+        finche' resta attiva, quindi il numero non e' una regola commerciale
+        soltanto.
+        """
+        paese = corpo.country.upper()
+        with conn.cursor() as cur:
+            # Prima l'input, poi la quota. Al contrario, chiedere una famiglia
+            # che non esiste da un piano pieno risponderebbe "compra un piano
+            # piu' grande" a un refuso.
+            cur.execute("SELECT 1 FROM job_families WHERE family = %s",
+                        (corpo.family,))
+            if not cur.fetchone():
+                raise HTTPException(422, "famiglia professionale sconosciuta")
+
+            cur.execute(
+                "SELECT q.max_searches, "
+                "  (SELECT count(*) FROM user_clusters uc JOIN clusters c "
+                "     ON c.id = uc.cluster_id "
+                "   WHERE uc.user_id = %s AND c.status = 'active') "
+                "FROM users u JOIN plan_quotas q ON q.plan = u.plan "
+                "WHERE u.id = %s", (uid, uid))
+            r = cur.fetchone()
+            if not r:
+                raise HTTPException(422, "piano sconosciuto")
+            tetto, attuali = r
+
+            cur.execute("SELECT c.id::text FROM user_clusters uc "
+                        "JOIN clusters c ON c.id = uc.cluster_id "
+                        "WHERE uc.user_id = %s AND c.family = %s AND c.country = %s",
+                        (uid, corpo.family, paese))
+            gia = cur.fetchone()
+            # Cambiare i filtri di una ricerca che si ha gia' non consuma una
+            # posizione: e' la stessa ricerca.
+            if not gia and attuali >= tetto:
+                raise HTTPException(
+                    409,
+                    f"Your plan covers {tetto} searches, and you have {attuali}. "
+                    f"Stop one from your panel, or move up a plan.")
+
+            try:
+                cur.execute("SELECT apri_cluster(%s, %s)::text", (corpo.family, paese))
+            except psycopg.errors.CheckViolation:
+                conn.rollback()
+                raise HTTPException(422, "famiglia professionale sconosciuta")
+            cluster_id = cur.fetchone()[0]
+
+            _valida_filtri(cur, corpo.filtri)
+            _scrivi_iscrizione(cur, uid, cluster_id, corpo.filtri)
+            cur.execute("SELECT status, last_successful_fetch_at IS NOT NULL "
+                        "FROM clusters WHERE id = %s", (cluster_id,))
+            _, gia_letto = cur.fetchone()
+        conn.commit()
+        # `nuovo` dice al sito se il primo digest deve aspettare la prima
+        # ingestione notturna: un mercato appena aperto non ha ancora offerte,
+        # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.
+        return {"id": cluster_id, "nuovo": not gia_letto}
 
     @app.post("/me/copertura", status_code=202)
     def chiedi_copertura(corpo: RichiestaCopertura,
@@ -380,30 +519,7 @@ def create_app() -> FastAPI:
             _valida_filtri(cur, filtri)
             # La lista vuota dei tipi datore accettati non è esprimibile in
             # tabella (CHECK cardinality > 0): il default li accetta tutti.
-            tipi = filtri.accepted_employer_kinds or \
-                ["direct", "staffing_agency", "undisclosed"]
-            cur.execute(
-                "INSERT INTO user_clusters (user_id, cluster_id, languages, "
-                "  min_seniority, max_seniority, work_arrangements, employment_types, "
-                "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
-                "  max_headcount, wants) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-                "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
-                "  languages = EXCLUDED.languages, "
-                "  min_seniority = EXCLUDED.min_seniority, "
-                "  max_seniority = EXCLUDED.max_seniority, "
-                "  work_arrangements = EXCLUDED.work_arrangements, "
-                "  employment_types = EXCLUDED.employment_types, "
-                "  needs_visa_sponsorship = EXCLUDED.needs_visa_sponsorship, "
-                "  accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
-                "  min_headcount = EXCLUDED.min_headcount, "
-                "  max_headcount = EXCLUDED.max_headcount, "
-                "  wants = EXCLUDED.wants, "
-                "  is_paused = false",
-                (uid, cluster_id, filtri.languages, filtri.min_seniority,
-                 filtri.max_seniority, filtri.work_arrangements,
-                 filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
-                 filtri.min_headcount, filtri.max_headcount,
-                 (filtri.wants or "").strip() or None))
+            _scrivi_iscrizione(cur, uid, cluster_id, filtri)
         conn.commit()
 
     @app.delete("/me/cluster/{cluster_id}", status_code=204)

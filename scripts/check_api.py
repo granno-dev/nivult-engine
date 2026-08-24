@@ -136,6 +136,47 @@ def main() -> int:
             sessione = r.json()["sessione"]
             auth_header = {"Authorization": f"Bearer {sessione}"}
 
+            print("\n— aprire una ricerca —")
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"family": "Non Esiste", "country": "it"})
+            check("una famiglia fuori tassonomia e' rifiutata", r.status_code, 422)
+
+            with psycopg.connect(database_url(), autocommit=True) as cc:
+                cc.execute("UPDATE clusters SET last_successful_fetch_at = now() "
+                           "WHERE family='Human Resources' AND country='IT'")
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"family": "Human Resources", "country": "it"})
+            check("una ricerca su un cluster esistente si apre", r.status_code, 201)
+            check("un mercato gia' letto non risulta nuovo", r.json()["nuovo"], False)
+
+            # Il caso che conta: una famiglia x paese che NON esiste ancora.
+            # Il cluster va creato, o l'utente vede solo il nostro stato interno.
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"family": "Human Resources", "country": "pt"})
+            check("un mercato mai aperto viene creato", r.status_code, 201)
+            check("e il sito sa che deve aspettare la prima ingestione",
+                  r.json()["nuovo"], True)
+            check("il cluster esiste davvero",
+                  seen_by_other("SELECT count(*) FROM clusters "
+                                "WHERE family='Human Resources' AND country='PT'"), 1)
+
+            # Il tetto del piano e' anche il freno sui crediti: ogni ricerca
+            # e' un cluster che consuma la quota della fonte finche' vive.
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"family": "Human Resources", "country": "de"})
+            check("oltre il tetto del piano si viene fermati", r.status_code, 409)
+            # Ma cambiare i filtri di una ricerca che si ha gia' non consuma
+            # una posizione: e' la stessa ricerca.
+            r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
+                            json={"family": "Human Resources", "country": "it",
+                                  "filtri": {"languages": ["Italian"]}})
+            check("ma si possono ancora cambiare i filtri di una che si ha",
+                  r.status_code, 201)
+
+            with psycopg.connect(database_url(), autocommit=True) as cc:
+                cc.execute("DELETE FROM user_clusters uc USING clusters c "
+                           "WHERE c.id = uc.cluster_id AND c.country IN ('PT','IT')")
+
             print("\n— richieste di copertura —")
             r = client.post("/me/copertura", headers={"Authorization": f"Bearer {sessione}"},
                             json={"kind": "cluster", "family": "Nursing", "country": "es"})
