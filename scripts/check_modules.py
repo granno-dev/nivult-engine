@@ -33,7 +33,10 @@ import psycopg  # noqa: E402
 
 from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
 from nivult.gdpr import execute_deletion, request_deletion  # noqa: E402
+from nivult.matching import worker  # noqa: E402
 from nivult.retention import purge  # noqa: E402
+
+from datetime import datetime, timezone  # noqa: E402
 
 VEC = "[" + ",".join(["0.01"] * 1024) + "]"
 PASSED: list[str] = []
@@ -153,6 +156,91 @@ def seed(conn: psycopg.Connection) -> dict:
                     (ids["digest"], ids["job_sent"], ids["user"], ids["match"]))
     conn.commit()
     return ids
+
+
+def seed_digest(conn: psycopg.Connection) -> dict[str, str]:
+    """Due utenti dovuti, un cluster, e offerte che coprono ogni ramo del funnel."""
+    ids: dict[str, str] = {}
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO clusters (family, country) "
+                    "VALUES ('Human Resources','IT') RETURNING id")
+        ids["cluster"] = cur.fetchone()[0]
+
+        def utente(email, next_min_ago=60):
+            cur.execute(
+                "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+                "  frequency, timezone, next_digest_at) VALUES "
+                "(%s,'pro','active','email','daily','Europe/Rome', now() - make_interval(mins => %s::int)) "
+                "RETURNING id", (email, next_min_ago))
+            uid = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO user_cvs (user_id, storage_key, families, seniority, skills, "
+                "  languages, years_experience, encryption_algo, encrypted_dek, nonce, "
+                "  auth_tag, kek_version) VALUES "
+                "(%s,'cv/digest.pdf', ARRAY['Human Resources'],'5-10', ARRAY['recruiting'], "
+                "'[\"Italian\"]'::jsonb, 8, 'aes-256-gcm', decode(repeat('ab',32),'hex'), "
+                "decode(repeat('cd',12),'hex'), decode(repeat('ef',16),'hex'), 1) RETURNING id",
+                (uid,))
+            ids["cv_" + email] = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO user_clusters (user_id, cluster_id, languages, min_seniority, "
+                "  max_seniority, employment_types) VALUES "
+                "(%s,%s, ARRAY['Italian'], '2-5', '10+', ARRAY['FULL_TIME'])",
+                (uid, ids["cluster"]))
+            return uid
+
+        ids["a"] = utente("digest-a@example.test")
+        ids["b"] = utente("digest-b@example.test", next_min_ago=30)
+
+        def offerta(sid, *, lingua="Italian", esp="5-10", tipo="FULL_TIME",
+                    link="career_site", giorni=1):
+            cur.execute(
+                "INSERT INTO jobs (source, source_job_id, url, canonical_url, "
+                "  domain_derived, title, title_normalized, organization, date_posted, "
+                "  countries, ai_job_language, ai_experience_level, ai_employment_type, "
+                "  ai_key_skills, raw, link_kind, org_headcount) VALUES "
+                "('fantastic', %s, %s, %s, 'acme.example', %s, %s, 'Acme SpA', "
+                "  now() - make_interval(days => %s::int), ARRAY['IT'], %s, %s, %s, "
+                "  ARRAY['recruiting'], '{}'::jsonb, %s, 500) RETURNING id",
+                (sid, f"https://acme.example/{sid}", f"https://acme.example/{sid}",
+                 f"Offerta {sid}", f"offerta {sid}", giorni, lingua, esp, tipo, link))
+            jid = cur.fetchone()[0]
+            cur.execute("INSERT INTO job_clusters (job_id, cluster_id) VALUES (%s,%s)",
+                        (jid, ids["cluster"]))
+
+        offerta("ok1")                                   # sopra soglia, diretta
+        offerta("ok2", link="national_agency")           # 85, agenzia pubblica
+        offerta("bassa")                                 # sotto soglia
+        offerta("nulli", lingua=None, esp=None, tipo=None)  # tutti NULL: passa
+        offerta("francese", lingua="French")             # filtrata dalla lingua
+        offerta("junior", esp="0-2")                     # filtrata dalla seniority
+
+        # B ha il budget del mese già consumato: il breaker deve dire di no.
+        cur.execute(
+            "INSERT INTO user_evaluation_budget (user_id, period_month, evaluations_used) "
+            "VALUES (%s, date_trunc('month', current_date)::date, 5000)", (ids["b"],))
+    conn.commit()
+    return ids
+
+
+class ValutatoreFinto:
+    """Il contratto del valutatore, con punteggi decisi a tavolino."""
+
+    def __init__(self, punteggi: dict[str, int]):
+        self.punteggi = punteggi
+        self.totale = {"input": 0, "cached": 0, "output": 0, "chiamate": 0}
+
+    def valuta(self, profilo_testo, offerta):
+        sid = offerta["source_job_id"]
+        self.totale["chiamate"] += 1
+        self.totale["input"] += 100
+        self.totale["output"] += 10
+        return self.punteggi.get(sid, 10), f"motivo breve {sid}", {"input": 100, "output": 10}
+
+    def motiva(self, profilo_testo, offerta):
+        sid = offerta["source_job_id"]
+        self.totale["chiamate"] += 1
+        return f"motivazione piena {sid}", {"input": 80, "output": 20}
 
 
 def main() -> int:
@@ -278,6 +366,81 @@ def main() -> int:
         # Riprendibile: rilanciarla su un utente già svuotato non deve esplodere.
         again = execute_deletion(work, req, batch_size=100)
         check("execute_deletion è riprendibile senza errori", again, {"users": 0})
+
+        section("digest end-to-end (valutatore finto)")
+        wipe(work)
+        dg = seed_digest(work)
+        finto = ValutatoreFinto({"ok1": 90, "ok2": 85, "nulli": 85, "bassa": 40})
+        adesso = datetime.now(timezone.utc)
+
+        from psycopg.rows import dict_row
+        with work.cursor(row_factory=dict_row) as cur:
+            dovuti = worker.utenti_dovuti(cur, adesso)
+        per_email = {u.email: u for u in dovuti}
+        check("due utenti dovuti trovati", sorted(per_email), [
+            "digest-a@example.test", "digest-b@example.test"])
+
+        e = worker.digest_utente(work, per_email["digest-a@example.test"],
+                                 dry_run=True, evaluatore=finto)
+        check("digest A inviato (dry run)", e["stato"], "sent")
+        check("digest A: 4 valutate, 3 inviate", (e["valutate"], e["inviate"]), (4, 3))
+        check("COMMITTATO: digest sent visibile da fuori",
+              seen_by_other("SELECT status FROM digests WHERE user_id = %s", (dg["a"],)), "sent")
+        check("COMMITTATO: 4 match scritti, scarti compresi",
+              seen_by_other("SELECT count(*) FROM matches WHERE user_id = %s", (dg["a"],)), 4)
+        check("l'offerta sotto soglia è registrata come non passata",
+              seen_by_other("SELECT count(*) FROM matches WHERE user_id = %s AND NOT passed",
+                            (dg["a"],)), 1)
+        check("i filtri deterministici hanno escluso 2 offerte SENZA valutarle",
+              seen_by_other("SELECT count(*) FROM matches m JOIN jobs j ON j.id = m.job_id "
+                            "WHERE m.user_id = %s AND j.source_job_id IN ('francese','junior')",
+                            (dg["a"],)), 0)
+        check("ordine per punteggio e poi trasparenza del link",
+              seen_by_other("SELECT string_agg(j.source_job_id || ':' || di.rank, ',' "
+                            "  ORDER BY di.rank) FROM digest_items di "
+                            "  JOIN jobs j ON j.id = di.job_id WHERE di.user_id = %s",
+                            (dg["a"],)), "ok1:1,nulli:2,ok2:3")
+        check("il digest mostra la motivazione piena, non quella breve",
+              seen_by_other("SELECT reason_snapshot FROM digest_items di "
+                            "  JOIN jobs j ON j.id = di.job_id "
+                            " WHERE di.user_id = %s AND di.rank = 1", (dg["a"],)),
+              "motivazione piena ok1")
+        check("il costo è quello calcolato: 4 valutazioni + 3 motivazioni",
+              finto.totale["chiamate"], 4 + 3)
+        check("rischedulato all'orario locale dell'utente (8 Roma = 6 UTC)",
+              seen_by_other("SELECT (next_digest_at AT TIME ZONE 'UTC')::time = '06:00' "
+                            " AND next_digest_at > now() FROM users WHERE id = %s",
+                            (dg["a"],)), True)
+
+        # Idempotenza dello slot: rilanciare sullo stesso slot non fa nulla.
+        di_nuovo = worker.digest_utente(work, per_email["digest-a@example.test"],
+                                        dry_run=True, evaluatore=finto)
+        check("lo slot già consegnato non si ripete", di_nuovo["stato"], "già consegnato")
+
+        # Slot successivo: niente offerte nuove -> skipped_empty, non un fallimento.
+        with work.cursor() as cur:
+            cur.execute("UPDATE users SET next_digest_at = now() - interval '30 min' "
+                        "WHERE id = %s", (dg["a"],))
+        work.commit()
+        with work.cursor(row_factory=dict_row) as cur:
+            u2 = next(u for u in worker.utenti_dovuti(cur, datetime.now(timezone.utc))
+                      if u.email == "digest-a@example.test")
+        e2 = worker.digest_utente(work, u2, dry_run=True, evaluatore=finto)
+        check("senza offerte nuove il digest è skipped_empty", e2["stato"], "skipped_empty")
+        check("l'anti-ripetizione non ha rivalutato nulla",
+              seen_by_other("SELECT count(*) FROM matches WHERE user_id = %s", (dg["a"],)), 4)
+        check("un digest vuoto è un esito legittimo, distinto dal fallimento",
+              seen_by_other("SELECT count(*) FROM digests WHERE user_id = %s "
+                            "  AND status = 'skipped_empty'", (dg["a"],)), 1)
+
+        # Budget esaurito: il breaker per utente, non un costo fuori controllo.
+        eb = worker.digest_utente(work, per_email["digest-b@example.test"],
+                                  dry_run=True, evaluatore=finto)
+        check("budget esaurito: digest fallito con motivo esplicito", eb["stato"], "failed_budget")
+        check("il messaggio dice piano e consumato",
+              seen_by_other("SELECT error_message FROM digests WHERE user_id = %s "
+                            "  AND status = 'failed'", (dg["b"],)),
+              "budget di valutazione esaurito (5000/5000, piano pro)")
 
         section("pulizia")
         wipe(work)

@@ -60,6 +60,9 @@ class ChatModel(HttpSource):
             raise SystemExit(f"Serve {self.env_key}.")
         self.input_tokens = 0
         self.output_tokens = 0
+        # Uso dell'ULTIMA chiamata: chi valuta un'offerta alla volta lo registra
+        # su ogni riga di matches, non in aggregato.
+        self.last_usage: dict = {}
 
     def chat(self, messages: list[dict], *, temperature: float = 0.0,
              max_tokens: int = 4000, extra: dict | None = None) -> str:
@@ -77,6 +80,10 @@ class ChatModel(HttpSource):
         uso = d.get("usage") or {}
         self.input_tokens += uso.get("prompt_tokens", 0)
         self.output_tokens += uso.get("completion_tokens", 0)
+        self.last_usage = {
+            "input": uso.get("prompt_tokens", 0),
+            "cached": (uso.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
+            "output": uso.get("completion_tokens", 0)}
         return d["choices"][0]["message"]["content"]
 
 
@@ -101,26 +108,37 @@ class MistralSmall(ChatModel):
     env_key = "MISTRAL_API_KEY"
 
 
-RUBRICA = """Sei un selezionatore. Valuta quanto ogni offerta è adatta al profilo.
+RUBRICA = """Sei un selezionatore esperto. Valuta quanto UNA offerta di lavoro è
+adatta al profilo del candidato che ti viene dato.
 
-Punteggio 0-100:
+Punteggio da 0 a 100:
   90-100  corrispondenza forte: ruolo, livello e competenze coincidono
   70-89   buona: il ruolo è giusto, qualche competenza manca
-  50-69   plausibile: settore o livello divergono
+  50-69   plausibile: settore o livello divergono, ma il passaggio è credibile
   20-49   debole: solo affinità generiche
    0-19   non pertinente
 
 Considera ruolo, seniority, competenze richieste, lingua e sede.
-NON premiare un'offerta perché è prestigiosa o ben scritta: conta solo
-l'aderenza al profilo.
+NON premiare un'offerta perché prestigiosa o ben scritta: conta solo l'aderenza
+al profilo. NON premiare la genericità: un'offerta vaga che potrebbe adattarsi a
+chiunque non è una buona corrispondenza.
 
-Rispondi SOLO con un array JSON, un oggetto per offerta:
-[{"id": "<id>", "score": <0-100>}]
-Nessun testo prima o dopo."""
+Rispondi SOLO con questo JSON, niente altro:
+{"score": <0-100>, "reason": "<una frase in italiano, massimo 10 parole>"}
 
-RUBRICA_MOTIVAZIONI = RUBRICA.replace(
-    '[{"id": "<id>", "score": <0-100>}]',
-    '[{"id": "<id>", "score": <0-100>, "reason": "<una frase, max 25 parole>"}]')
+"""
+
+# Seconda passata: la motivazione che il destinatario del digest legge. Corre
+# solo sulle offerte che entrano nel digest (le prime 30), non su tutte: è il
+# risparmio progettato nelle decisioni di architettura.
+RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase
+italiana di massimo 25 parole perché questa offerta è adatta al profilo del
+candidato. Sii concreto: ruolo, competenze, livello. Niente genericità.
+
+Rispondi SOLO con questo JSON, niente altro:
+{"reason": "<la frase>"}
+
+"""
 
 
 def profilo_come_testo(profilo: dict) -> str:
@@ -156,27 +174,39 @@ def offerta_come_testo(job: dict) -> str:
     return " | ".join(pezzi)
 
 
-def valuta(modello: ChatModel, profilo: dict, jobs: list[dict], *,
-           con_motivazione: bool = False, batch: int = 25) -> list[Punteggio]:
-    rubrica = RUBRICA_MOTIVAZIONI if con_motivazione else RUBRICA
-    # Il profilo va in testa e identico a ogni chiamata: è la parte che i
-    # fornitori mettono in cache, e cambiarla fra un batch e l'altro
-    # annullerebbe il risparmio.
-    testa = [{"role": "system", "content": rubrica},
-             {"role": "system", "content": "PROFILO\n" + profilo_come_testo(profilo)}]
+def _testa(profilo_testo: str, rubrica: str) -> list[dict]:
+    # Il profilo va in testa e identico a ogni chiamata: è la parte che il
+    # fornitore mette in cache, e cambiarla fra un'offerta e l'altra
+    # annullerebbe il risparmio (misurato: prefissi in cache al 90%).
+    return [{"role": "system", "content": rubrica},
+            {"role": "system", "content": "PROFILO DEL CANDIDATO\n" + profilo_testo}]
 
-    out: list[Punteggio] = []
-    for i in range(0, len(jobs), batch):
-        fetta = jobs[i:i + batch]
-        corpo = "\n".join(offerta_come_testo(j) for j in fetta)
-        risposta = modello.chat(
-            testa + [{"role": "user", "content": f"OFFERTE\n{corpo}"}],
-            max_tokens=200 * len(fetta) if con_motivazione else 40 * len(fetta))
-        noti = {str(j["id"]) for j in fetta}
-        for r in _estrai_json(risposta):
-            jid = str(r.get("id", ""))
-            if jid not in noti:
-                continue
-            out.append(Punteggio(jid, max(0, min(100, int(r.get("score", 0)))),
-                                 r.get("reason")))
-    return out
+
+def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
+                   ) -> tuple[int, str, dict]:
+    """UNA offerta per chiamata: punteggio e micro-motivazione.
+
+    Nel lotto il modello confronta le offerte fra loro invece di misurarle
+    contro il CV, e distribuisce i voti sulla scala del lotto: è misurato, ed
+    è il motivo di questa firma. La micro-motivazione c'è perché
+    matches.reason è NOT NULL: lo scarto dev'essere spiegato anche lui, non
+    solo ciò che passa.
+    """
+    corpo = _testa(profilo_testo, RUBRICA) + [{
+        "role": "user", "content": "OFFERTA\n" + offerta_come_testo(offerta)}]
+    risposta = modello.chat(corpo, max_tokens=120)
+    p = _estrai_json(risposta)
+    score = max(0, min(100, int(p.get("score", 0))))
+    reason = str(p.get("reason") or "")[:400].strip() or "—"
+    return score, reason, dict(modello.last_usage)
+
+
+def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict
+                   ) -> tuple[str, dict]:
+    """Seconda passata: la motivazione che il destinatario del digest legge."""
+    corpo = _testa(profilo_testo, RUBRICA_MOTIVAZIONE) + [{
+        "role": "user", "content": "OFFERTA\n" + offerta_come_testo(offerta)}]
+    risposta = modello.chat(corpo, max_tokens=120)
+    p = _estrai_json(risposta)
+    reason = str(p.get("reason") or "")[:400].strip() or "—"
+    return reason, dict(modello.last_usage)
