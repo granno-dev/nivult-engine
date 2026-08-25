@@ -134,6 +134,26 @@ valutazione è per offerta, non anticipato: un errore a metà digest non butta v
 la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
 digest (quelle del run più le recuperate), non solo quelle appena pagate.
 
+**La lingua del digest si GENERA, non si traduce.** Il sito parla inglese e
+italiano (`nivult.com` e `nivult.com/it`), ma qui manca il pezzo: non esiste
+una colonna lingua sull'utente — `user_cvs.languages` sono le lingue che il
+*candidato parla*, estratte dal CV, un'altra cosa. Serve `users.locale`, e va
+letta in due posti: il modello dell'email e **il prompt di GLM**.
+
+Chiedere a GLM di scrivere la motivazione direttamente nella lingua dell'utente
+costa **zero** — è una riga di istruzione, non una seconda chiamata, e non tocca
+il prefisso in cache. Tradurla a valle costerebbe una chiamata per riga e
+suonerebbe tradotta: quella riga *è* il prodotto.
+
+**Gli annunci restano nella loro lingua.** Titolo, azienda e città arrivano
+dall'offerta e non si toccano: ci si candida nella lingua in cui l'annuncio è
+scritto, e tradurre il titolo renderebbe l'offerta irrintracciabile sul sito
+dell'azienda.
+
+Finché `users.locale` non c'è, **scegliere italiano sul sito e ricevere la mail
+in inglese è peggio che non tradurre affatto**: è il debito che blocca la spinta
+su `/it`.
+
 ## Dati del fornitore (Fantastic.jobs)
 
 **Sempre presenti (100%)** — si può fare affidamento su questi campi:
