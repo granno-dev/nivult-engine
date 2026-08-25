@@ -168,6 +168,24 @@ def main() -> int:
             check("il nome si puo' scrivere", r.json().get("nome"), "Giuseppe Ranno")
 
 
+            print("\n— le offerte del pannello —")
+            r = client.get("/me/offerte",
+                           headers={"Authorization": f"Bearer {sessione}"})
+            check("le offerte si leggono", r.status_code, 200)
+            check("senza match l'elenco e' vuoto, non un errore",
+                  r.json()["offerte"], [])
+            check("e senza sessione non si leggono",
+                  client.get("/me/offerte").status_code, 401)
+
+            # Il logo: rotta pubblica di proposito, perche' deve funzionare
+            # anche dentro un'email, dove non c'e' nessuna sessione.
+            r = client.get("/logo/azienda-che-non-esiste")
+            check("un logo introvabile e' 404, non un errore del server",
+                  r.status_code, 404)
+            check("e il fallimento resta scritto, o si riproverebbe sempre",
+                  seen_by_other("SELECT count(*) FROM company_logos "
+                                "WHERE chiave = 'azienda-che-non-esiste'"), 1)
+
             print("\n— aprire una ricerca —")
             r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
                             json={"family": "Non Esiste", "country": "it"})

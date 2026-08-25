@@ -21,6 +21,7 @@ import os
 import secrets
 from datetime import datetime, timezone
 
+import httpx
 import psycopg
 from psycopg import Binary
 from psycopg.types.json import Json
@@ -138,6 +139,26 @@ def _analizza_cv(conn, testo: str) -> dict:
     with GLM() as modello:
         return cv.estrai_profilo(modello, testo, famiglie=famiglie,
                                   seniority=seniority, lingue=lingue)
+
+
+def _tipo_immagine(dati: bytes) -> str | None:
+    """Il MIME dai primi byte. None se non e' un'immagine che sappiamo servire.
+
+    Serve anche da validazione: stiamo per conservare e ripubblicare un file
+    scaricato da terzi, e l'unica prova che sia un'immagine sono i suoi byte.
+    """
+    if dati[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if dati[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if dati[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if dati[:4] == b"RIFF" and dati[8:12] == b"WEBP":
+        return "image/webp"
+    testa = dati[:200].lstrip()
+    if testa[:5] == b"<?xml" or testa[:4] == b"<svg":
+        return "image/svg+xml"
+    return None
 
 
 def _classifica_ruolo(famiglie: list[str], ruolo: str) -> str | None:
@@ -549,6 +570,118 @@ def create_app() -> FastAPI:
         # ingestione notturna: un mercato appena aperto non ha ancora offerte,
         # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.
         return {"id": cluster_id, "nuovo": not gia_letto, "famiglia": famiglia}
+
+    @app.get("/me/offerte")
+    def mie_offerte(uid: str = Depends(utente), conn=Depends(connessione),
+                    limite: int = 40):
+        """Le offerte che hanno superato la soglia per questo utente.
+
+        Solo quelle passate: le scartate sono rumore, e mostrarle
+        contraddirebbe la promessa — leggiamo tutto perche' te ne arrivi
+        poco. Il conteggio del letto resta pero' nell'intestazione, perche'
+        e' il lavoro fatto.
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT m.score, m.reason, m.evaluated_at, "
+                "       j.title, j.organization, j.url, j.link_kind, "
+                "       j.employer_kind, j.cities, j.salary, "
+                "       COALESCE(j.org_linkedin_slug, j.domain_derived), "
+                "       j.purged_at IS NOT NULL "
+                "FROM matches m JOIN jobs j ON j.id = m.job_id "
+                "WHERE m.user_id = %s AND m.passed "
+                "ORDER BY m.evaluated_at DESC, m.score DESC LIMIT %s",
+                (uid, min(limite, 100)))
+            righe = cur.fetchall()
+            cur.execute("SELECT count(*) FROM matches WHERE user_id = %s", (uid,))
+            lette = cur.fetchone()[0]
+        return {
+            "valutate": lette,
+            "offerte": [{
+                "punteggio": r[0], "motivo": r[1],
+                "quando": r[2].isoformat() if r[2] else None,
+                "titolo": r[3], "azienda": r[4], "url": r[5],
+                # Serve al sito per l'etichetta di trasparenza: "candidatura
+                # diretta" oppure "via <agenzia nazionale>".
+                "link_kind": r[6], "tipo_datore": r[7],
+                "citta": (r[8] or [None])[0], "stipendio": r[9],
+                "logo": f"/logo/{r[10]}" if r[10] else None,
+                "archiviata": r[11],
+            } for r in righe],
+        }
+
+    @app.get("/logo/{chiave}")
+    def logo(chiave: str, conn=Depends(connessione)):
+        """Il logo di un'azienda, dal nostro archivio.
+
+        Scaricato al primo bisogno e conservato: mai collegato al volo. Nelle
+        email un'immagine remota resta un rettangolo vuoto perche' i client la
+        bloccano, e sul sito collegare il CDN di LinkedIn direbbe a LinkedIn
+        ogni volta che qualcuno apre il proprio pannello.
+
+        Rotta pubblica: sono loghi aziendali, dati pubblici, e legarla alla
+        sessione impedirebbe di usarli nelle email — che e' meta' del motivo
+        per cui esiste.
+        """
+        chiave = chiave.strip().lower()[:200]
+        if not chiave:
+            raise HTTPException(404, "logo assente")
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT mime, bytes FROM company_logos WHERE chiave = %s",
+                        (chiave,))
+            r = cur.fetchone()
+
+            if r is None:
+                # Primo bisogno: si cerca una fonte fra le offerte di questa
+                # azienda e si prova a scaricarla, una volta sola.
+                # Ordinato per la catena di CLAUDE.md, non a caso: la stessa
+                # azienda ha decine di offerte e solo alcune portano il
+                # permalink (83% contro 49%). Con un LIMIT 1 non ordinato si
+                # pesca una riga senza logo e si ripiega inutilmente.
+                cur.execute(
+                    "SELECT COALESCE(org_logo_permalink, organization_logo), "
+                    "       domain_derived FROM jobs "
+                    "WHERE COALESCE(org_linkedin_slug, domain_derived) = %s "
+                    "ORDER BY (org_logo_permalink IS NOT NULL) DESC, "
+                    "         (organization_logo IS NOT NULL) DESC "
+                    "LIMIT 1", (chiave,))
+                fonte = cur.fetchone()
+                url, dominio = (fonte or (None, None))
+                # Terzo anello della catena in CLAUDE.md: Logo.dev dal dominio.
+                if not url and dominio:
+                    url = f"https://img.logo.dev/{dominio}?size=128&format=png"
+                mime = dati = None
+                if url:
+                    try:
+                        with httpx.Client(timeout=8, follow_redirects=True) as c:
+                            risp = c.get(url)
+                        if risp.status_code == 200 and len(risp.content) <= 512_000:
+                            # Il tipo si riconosce dai BYTE, non dall'header:
+                            # l'S3 che ospita questi loghi li serve tutti come
+                            # `binary/octet-stream`, e fidarsi dell'header
+                            # scartava immagini perfettamente valide.
+                            mime = _tipo_immagine(risp.content)
+                            if mime:
+                                dati = risp.content
+                    except httpx.HTTPError:
+                        pass
+                # La riga si scrive anche quando il download fallisce: senza,
+                # ogni visita riproverebbe lo stesso scarico che non riesce.
+                cur.execute(
+                    "INSERT INTO company_logos (chiave, mime, bytes, origine) "
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT (chiave) DO NOTHING",
+                    (chiave, mime, Binary(dati) if dati else None, url))
+                conn.commit()
+                r = (mime, dati)
+
+        mime, dati = r
+        if not dati:
+            # L'ultimo anello e' il monogramma, e lo disegna il sito: qui
+            # basta dire che non c'e' nulla da mostrare.
+            raise HTTPException(404, "logo assente")
+        return Response(content=bytes(dati), media_type=mime or "image/png",
+                        headers={"Cache-Control": "public, max-age=604800, immutable"})
 
     @app.get("/ricerca/famiglia")
     def famiglia_per_ruolo(ruolo: str, uid: str = Depends(utente),
