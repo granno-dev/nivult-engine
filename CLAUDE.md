@@ -454,6 +454,22 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   dà "FR" e Arbetsförmedlingen "SE". Il client converte in ISO: mescolarli in
   `jobs.countries` romperebbe ogni filtro per paese in silenzio — la riga c'è,
   ma nessun `WHERE` la trova.
+- **La fetch a pagamento non si chiama senza un sì esplicito, ogni volta.**
+  I crediti sono una quota mensile condivisa con l'ingestione vera, che è il
+  prodotto: spenderli per lavori di contorno la erode in silenzio, e chi paga
+  non se ne accorge finché non mancano dove servono. Il permesso **non si
+  deduce** dal fatto che una funzione è stata approvata — è l'errore fatto il
+  2026-08-25, 400 crediti per costruire la striscia dei loghi del sito senza
+  chiedere prima.
+
+  `active-ats-count` e `/expired-ats` costano **zero crediti Jobs**: quelli
+  restano liberi, e bastano a verificare quasi tutto. È `active-ats` che scala
+  un credito per offerta restituita. Se serve un dato che costa, si dice prima
+  quanto costa e si aspetta la risposta.
+
+  *Nota per il sito: il filtro `organization` è a corrispondenza ESATTA sulla
+  stringa dell'ATS — `Bosch` dà 0, `Bosch Group` dà 554. Una lista di aziende
+  scritta a mano è muta senza darne segno.*
 - **`count()` è OBBLIGATORIA prima di ogni scarico a pagamento.**
   `active-ats-count` costa 1 richiesta e zero crediti Jobs: su un piano a
   consumo, sapere quanto costerebbe una fetch prima di averla pagata vale più
