@@ -136,6 +136,38 @@ def main() -> int:
             sessione = r.json()["sessione"]
             auth_header = {"Authorization": f"Bearer {sessione}"}
 
+            print("\n— il primo next_digest_at —")
+            # Il difetto che rendeva ogni iscritto inerte: lo slot lo scriveva
+            # solo il worker DOPO un invio, quindi restava NULL e la query
+            # degli utenti dovuti (next_digest_at IS NOT NULL) non lo vedeva
+            # mai. Chi si iscriveva non riceveva un digest per sempre.
+            check("appena iscritto non c'e' nessuno slot",
+                  seen_by_other("SELECT next_digest_at FROM users "
+                                "WHERE email = 'pref@test.dev'"), None)
+            r = client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
+                           json={"frequency": "daily", "send_hour_local": 7,
+                                 "send_weekday": None, "send_monthday": None})
+            check("salvare l'orario lo calcola", r.status_code, 200)
+            check("e adesso l'utente e' dovuto",
+                  seen_by_other("SELECT next_digest_at IS NOT NULL FROM users "
+                                "WHERE email = 'pref@test.dev'"), True)
+            check("l'API lo restituisce al pannello",
+                  bool(r.json().get("prossimo_digest")), True)
+            # Spostare l'ora deve spostare lo slot, o sarebbe lo stesso bug
+            # al contrario: orario nuovo, consegna al vecchio.
+            primo = seen_by_other("SELECT next_digest_at FROM users "
+                                  "WHERE email = 'pref@test.dev'")
+            client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
+                       json={"send_hour_local": 19})
+            check("e cambiarla lo ricalcola",
+                  seen_by_other("SELECT next_digest_at FROM users "
+                                "WHERE email = 'pref@test.dev'") != primo, True)
+
+            r = client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
+                           json={"display_name": "Giuseppe Ranno"})
+            check("il nome si puo' scrivere", r.json().get("nome"), "Giuseppe Ranno")
+
+
             print("\n— aprire una ricerca —")
             r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
                             json={"family": "Non Esiste", "country": "it"})

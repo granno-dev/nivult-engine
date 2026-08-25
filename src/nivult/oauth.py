@@ -220,8 +220,22 @@ def inizia(conn: psycopg.Connection, provider: str) -> str:
     return f"{cfg['autorizzazione']}?{urlencode(parametri)}"
 
 
+def _forse_nome(cur, uid: str, nome: str | None) -> None:
+    """Il nome dal provider, solo se non ne abbiamo gia' uno.
+
+    COALESCE e non sovrascrittura: se l'utente si e' scritto il nome come
+    vuole lui, il ritorno da Google non deve rimetterci quello anagrafico
+    ogni volta che entra.
+    """
+    if not nome:
+        return
+    cur.execute("UPDATE users SET display_name = COALESCE(display_name, %s) "
+                "WHERE id = %s", (nome.strip()[:120], uid))
+
+
 def _collega_o_crea(cur, provider: str, subject: str,
-                    email: str | None, email_fidata: bool) -> str:
+                    email: str | None, email_fidata: bool,
+                    nome: str | None = None) -> str:
     """L'identità del provider -> user_id, secondo la politica decisa.
 
     1. identità già nota            -> quell'utente
@@ -235,6 +249,7 @@ def _collega_o_crea(cur, provider: str, subject: str,
         (provider, subject))
     r = cur.fetchone()
     if r:
+        _forse_nome(cur, r[0], nome)
         return r[0]
 
     if not email:
@@ -258,6 +273,7 @@ def _collega_o_crea(cur, provider: str, subject: str,
         uid = esistente[0]
         cur.execute("UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) "
                     "WHERE id = %s", (uid,))
+        _forse_nome(cur, uid, nome)
     else:
         # L'account nasce con l'email NON verificata, e la si promuove solo se
         # il provider ha dato una prova che ci convince. Un account creato da
@@ -276,6 +292,7 @@ def _collega_o_crea(cur, provider: str, subject: str,
         "INSERT INTO oauth_identities (provider, subject, user_id, email_at_link, "
         "  last_login_at) VALUES (%s, %s, %s, %s, now())",
         (provider, subject, uid, email))
+    _forse_nome(cur, uid, nome)
     return uid
 
 
@@ -345,10 +362,16 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
         raise OAuthError("sub_assente", "Risposta del provider incompleta.")
 
     email, email_fidata = _email_attendibile(provider, claim)
+    # `name` c'e' su entrambi i provider dentro lo scope `profile`, gia'
+    # approvato. Il fallback compone dai due pezzi quando manca l'intero.
+    nome = (claim.get("name")
+            or " ".join(x for x in (claim.get("given_name"),
+                                    claim.get("family_name")) if x)
+            or None)
 
     gettone = secrets.token_urlsafe(32)
     with conn.cursor() as cur:
-        uid = _collega_o_crea(cur, provider, subject, email, email_fidata)
+        uid = _collega_o_crea(cur, provider, subject, email, email_fidata, nome)
         cur.execute(
             "INSERT INTO login_tokens (user_id, token_hash, expires_at, origin) "
             "VALUES (%s, %s, now() + make_interval(mins => %s), %s)",

@@ -19,6 +19,7 @@ import logging
 import ipaddress
 import os
 import secrets
+from datetime import datetime, timezone
 
 import psycopg
 from psycopg import Binary
@@ -32,6 +33,7 @@ from nivult import auth, oauth
 from nivult import crypto, cv, storage
 from nivult.config import database_url, load_dotenv
 from nivult.matching.llm import GLM
+from nivult.matching.worker import calcola_slot
 
 load_dotenv()
 log = logging.getLogger("nivult.api")
@@ -106,6 +108,9 @@ class NuovaRicerca(BaseModel):
 
 class PreferenzeUtente(BaseModel):
     """Le preferenze di consegna. I filtri di matching stanno per cluster."""
+    # Modificabile: OAuth lo propone, ma il nome con cui uno vuole essere
+    # chiamato e' suo, non del provider.
+    display_name: str | None = Field(default=None, max_length=120)
     timezone: str | None = None
     frequency: str | None = None
     send_hour_local: int | None = None
@@ -260,14 +265,23 @@ def create_app() -> FastAPI:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT email::text, plan, subscription_status, delivery_channel, "
-                "frequency, timezone, email_verified_at IS NOT NULL, status "
+                "frequency, timezone, email_verified_at IS NOT NULL, status, "
+                "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
+                "send_monthday, delivery_email::text, display_name "
                 "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "utente inesistente")
         return {"id": uid, "email": r[0], "piano": r[1], "abbonamento": r[2],
                 "canale": r[3], "frequenza": r[4], "fuso": r[5],
-                "email_verificata": r[6], "stato": r[7]}
+                "email_verificata": r[6], "stato": r[7],
+                # La data vera, non la frequenza ripetuta: e' l'unica cosa
+                # che dice se il prodotto sta per fare qualcosa.
+                "prossimo_digest": r[8].isoformat() if r[8] else None,
+                "ultimo_digest": r[9].isoformat() if r[9] else None,
+                "ora_invio": r[10], "giorno_settimana": r[11],
+                "giorno_mese": r[12], "email_consegna": r[13],
+                "nome": r[14]}
 
     # --- vocabolari e cluster ----------------------------------------------
 
@@ -650,6 +664,29 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, f"valore rifiutato dal vincolo: {exc.diag.message_detail or exc}")
             except psycopg.errors.InvalidTextRepresentation as exc:
                 raise HTTPException(422, f"valore malformato: {exc}")
+
+            # Il primo next_digest_at nasce QUI. Finora lo scriveva solo il
+            # worker, dopo un invio: chi si iscriveva restava con NULL, e
+            # `next_digest_at IS NOT NULL` nella query degli utenti dovuti lo
+            # rendeva non-dovuto per sempre. Ogni iscritto era inerte, e il
+            # pannello lo nascondeva stampando la frequenza al posto della
+            # data. Si ricalcola a ogni cambio d'orario, non solo la prima
+            # volta: spostare l'ora e restare sul vecchio slot sarebbe lo
+            # stesso bug al contrario.
+            if {"frequency", "send_hour_local", "send_weekday",
+                    "send_monthday", "timezone"} & set(campi):
+                cur.execute(
+                    "SELECT frequency, send_hour_local, send_weekday, "
+                    "       send_monthday, timezone FROM users WHERE id = %s",
+                    (uid,))
+                f, ora, wd, md, tz = cur.fetchone()
+                try:
+                    slot = calcola_slot(f, ora, wd, md, tz,
+                                        datetime.now(timezone.utc))
+                except Exception as exc:
+                    raise HTTPException(422, f"orario non calcolabile: {exc}")
+                cur.execute("UPDATE users SET next_digest_at = %s WHERE id = %s",
+                            (slot, uid))
         conn.commit()
         return me(uid=uid, conn=conn)
 

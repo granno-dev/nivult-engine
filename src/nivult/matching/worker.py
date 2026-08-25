@@ -158,35 +158,49 @@ def _orario(giorno: date, ora: int, tz: ZoneInfo) -> datetime:
     return datetime.combine(giorno, time(ora), tzinfo=tz)
 
 
-def prossimo_slot(u: Utente, adesso: datetime) -> datetime:
-    """Il prossimo orario di invio, nel fuso dell'utente.
+def calcola_slot(frequency: str, send_hour_local: int, send_weekday: int | None,
+                 send_monthday: int | None, tz_nome: str,
+                 adesso: datetime) -> datetime:
+    """Il prossimo orario di invio, dai soli campi dell'orario.
 
-    Sempre strettamente futuro: se il worker è stato fermo qualche giorno lo
+    Firma sui campi e non sull'Utente perche' serve anche all'API: quando
+    qualcuno cambia la frequenza dal pannello, il primo slot va ricalcolato
+    li'. Finche' questa funzione stava solo nel worker, next_digest_at lo
+    scriveva solo il worker — DOPO un invio — e chi si iscriveva restava con
+    NULL, cioe' mai dovuto, cioe' senza digest per sempre.
+
+    Sempre strettamente futuro: se il worker e' stato fermo qualche giorno lo
     slot arretrato non si recupera mandando digest a raffica — le offerte
-    intanto sono lì, e la prossima consegna le porta tutte.
+    intanto sono li', e la prossima consegna le porta tutte.
     """
-    tz = ZoneInfo(u.timezone)
+    tz = ZoneInfo(tz_nome)
     oggi = adesso.astimezone(tz).date()
-    if u.frequency == "daily":
-        cand = _orario(oggi, u.send_hour_local, tz)
+    if frequency == "daily":
+        cand = _orario(oggi, send_hour_local, tz)
         while cand <= adesso:
-            cand = _orario(cand.date() + timedelta(days=1), u.send_hour_local, tz)
+            cand = _orario(cand.date() + timedelta(days=1), send_hour_local, tz)
         return cand.astimezone(timezone.utc)
-    if u.frequency == "weekly":
+    if frequency == "weekly":
         # send_weekday è ISODOW: 1 lunedì … 7 domenica.
-        avanti = (u.send_weekday - oggi.isoweekday()) % 7
-        cand = _orario(oggi + timedelta(days=avanti), u.send_hour_local, tz)
+        avanti = ((send_weekday or 1) - oggi.isoweekday()) % 7
+        cand = _orario(oggi + timedelta(days=avanti), send_hour_local, tz)
         if cand <= adesso:
-            cand = _orario(cand.date() + timedelta(days=7), u.send_hour_local, tz)
+            cand = _orario(cand.date() + timedelta(days=7), send_hour_local, tz)
         return cand.astimezone(timezone.utc)
     # monthly: send_monthday è 1–28, quindi ogni mese lo contiene.
-    cand = _orario(oggi.replace(day=u.send_monthday), u.send_hour_local, tz)
+    giorno = send_monthday or 1
+    cand = _orario(oggi.replace(day=giorno), send_hour_local, tz)
     while cand <= adesso:
         mese = cand.month + 1
         anno = cand.year + (1 if mese > 12 else 0)
-        cand = _orario(date(anno, mese % 12 or 12, u.send_monthday),
-                       u.send_hour_local, tz)
+        cand = _orario(date(anno, mese % 12 or 12, giorno), send_hour_local, tz)
     return cand.astimezone(timezone.utc)
+
+
+def prossimo_slot(u: Utente, adesso: datetime) -> datetime:
+    """Come sopra, per l'utente che il worker ha in mano."""
+    return calcola_slot(u.frequency, u.send_hour_local, u.send_weekday,
+                        u.send_monthday, u.timezone, adesso)
 
 
 def _costo_micros(cur, modello: str, totale: dict) -> int | None:
