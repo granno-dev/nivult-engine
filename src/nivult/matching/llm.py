@@ -110,20 +110,29 @@ class MistralSmall(ChatModel):
     env_key = "MISTRAL_API_KEY"
 
 
-RUBRICA = """Sei un selezionatore esperto. Valuta quanto UNA offerta di lavoro è
-adatta al profilo del candidato che ti viene dato.
+RUBRICA = """Sei un selezionatore esperto. Valuta se QUESTA offerta merita il
+tempo di QUESTO candidato: potrebbe farla, e sarebbe un passo sensato per lui?
 
 Punteggio da 0 a 100:
-  90-100  corrispondenza forte: ruolo, livello e competenze coincidono
-  70-89   buona: il ruolo è giusto, qualche competenza manca
-  50-69   plausibile: settore o livello divergono, ma il passaggio è credibile
-  20-49   debole: solo affinità generiche
+  90-100  ruolo e livello centrati: e' esattamente il tipo di posizione che cerca
+  70-89   buona: il ruolo e' giusto, con qualche scarto di livello o di ambito
+  50-69   plausibile: settore o livello divergono, ma il passaggio e' credibile
+  20-49   debole: solo affinita' generiche
    0-19   non pertinente
 
-Considera ruolo, seniority, competenze richieste, lingua e sede.
-NON premiare un'offerta perché prestigiosa o ben scritta: conta solo l'aderenza
-al profilo. NON premiare la genericità: un'offerta vaga che potrebbe adattarsi a
-chiunque non è una buona corrispondenza.
+REGOLA FONDAMENTALE — cio' che l'annuncio NON dice non conta contro di esso.
+Gli annunci sono scritti in modi diversissimi: uno elenca dieci strumenti, un
+altro dice solo "HR Business Partner, Milano". Il secondo non e' una
+corrispondenza peggiore, e' solo scritto piu' corto. Non abbassare mai il
+punteggio perche' mancano le competenze specialistiche del candidato: se il
+ruolo e il livello sono giusti, quelle competenze sono un VANTAGGIO che il
+candidato porta, non un requisito che l'annuncio ha mancato.
+
+Abbassa il punteggio solo per cio' che l'annuncio DICE e che diverge: un
+mestiere diverso, un livello lontano, una sede o una lingua incompatibili.
+
+Non premiare un'offerta perche' prestigiosa o ben scritta: conta solo
+l'aderenza al profilo.
 
 Rispondi SOLO con questo JSON, niente altro:
 {"score": <0-100>, "reason": "<una frase in italiano, massimo 10 parole>"}
