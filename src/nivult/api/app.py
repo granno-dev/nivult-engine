@@ -15,6 +15,7 @@ parte, per costruzione dello schema.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import ipaddress
 import os
@@ -615,6 +616,47 @@ def create_app() -> FastAPI:
                 "archiviata": r[11],
             } for r in righe],
         }
+
+    @app.get("/vetrina")
+    def vetrina(conn=Depends(connessione)):
+        """Un assaggio VERO del corpus, per il riquadro della home.
+
+        Rotta pubblica e senza punteggi, deliberatamente: il punteggio è
+        contro un CV e il visitatore non ne ha uno — un numero qui sarebbe
+        una recita. La prova che il motore lavora sono le offerte stesse:
+        aziende vere, loghi veri, datate a ieri. Casuali a ogni richiesta,
+        così due aperture non mostrano mai la stessa vetrina.
+
+        Niente URL delle offerte: questo è un assaggio, non una bacheca
+        gratuita. Il prodotto è il digest.
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT title, organization, (cities)[1], (countries)[1], "
+                "       date_posted, COALESCE(org_linkedin_slug, domain_derived) "
+                "FROM jobs "
+                "WHERE status = 'active' AND duplicate_of_job_id IS NULL "
+                "  AND organization IS NOT NULL "
+                "  AND date_posted > now() - interval '7 days' "
+                "ORDER BY random() LIMIT 14")
+            righe = cur.fetchall()
+            cur.execute(
+                "SELECT count(*), count(DISTINCT organization) FROM jobs "
+                "WHERE status = 'active' AND duplicate_of_job_id IS NULL")
+            offerte, datori = cur.fetchone()
+        return Response(
+            content=json.dumps({
+                "conteggi": {"offerte": offerte, "datori": datori},
+                "offerte": [{
+                    "titolo": r[0], "azienda": r[1], "citta": r[2],
+                    "paese": r[3],
+                    "quando": r[4].isoformat() if r[4] else None,
+                    "logo": f"/logo/{r[5]}" if r[5] else None,
+                } for r in righe],
+            }),
+            media_type="application/json",
+            # Casuale per richiesta: una cache a monte la congelerebbe.
+            headers={"Cache-Control": "no-store"})
 
     @app.get("/logo/{chiave}")
     def logo(chiave: str, conn=Depends(connessione)):
