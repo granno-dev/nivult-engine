@@ -56,6 +56,9 @@ def _ip(request: Request) -> str | None:
 
 class RichiestaLink(BaseModel):
     email: EmailStr
+    # La lingua della pagina da cui l'utente sta chiedendo il link: decide la
+    # lingua dell'EMAIL, e alla prima richiesta diventa la lingua dell'account.
+    locale: str | None = Field(default=None, pattern="^[a-z]{2}$")
 
 
 class ConsumoLink(BaseModel):
@@ -121,6 +124,8 @@ class PreferenzeUtente(BaseModel):
     delivery_email: EmailStr | None = None
     telegram_chat_id: str | None = None
     whatsapp_e164: str | None = None
+    # La lingua in cui l'utente legge: email, magic link, motivazioni GLM.
+    locale: str | None = Field(default=None, pattern="^[a-z]{2}$")
 
 
 def _analizza_cv(conn, testo: str) -> dict:
@@ -225,7 +230,8 @@ def create_app() -> FastAPI:
         auth.richiedi_magic_link(
             conn, str(corpo.email),
             ip=_ip(request),
-            ua=request.headers.get("User-Agent"))
+            ua=request.headers.get("User-Agent"),
+            locale=corpo.locale)
         return {"esito": "se l'indirizzo è valido, ricevi un link"}
 
     @app.post("/auth/consuma")
@@ -288,7 +294,7 @@ def create_app() -> FastAPI:
                 "SELECT email::text, plan, subscription_status, delivery_channel, "
                 "frequency, timezone, email_verified_at IS NOT NULL, status, "
                 "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
-                "send_monthday, delivery_email::text, display_name "
+                "send_monthday, delivery_email::text, display_name, locale "
                 "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
         if not r:
@@ -302,7 +308,7 @@ def create_app() -> FastAPI:
                 "ultimo_digest": r[9].isoformat() if r[9] else None,
                 "ora_invio": r[10], "giorno_settimana": r[11],
                 "giorno_mese": r[12], "email_consegna": r[13],
-                "nome": r[14]}
+                "nome": r[14], "locale": r[15]}
 
     # --- vocabolari e cluster ----------------------------------------------
 
@@ -628,7 +634,13 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "logo assente")
 
         with conn.cursor() as cur:
-            cur.execute("SELECT mime, bytes FROM company_logos WHERE chiave = %s",
+            # Un fallimento non è per sempre: la riga con bytes NULL evita di
+            # riprovare a ogni visita, ma dopo una settimana si riprova — un
+            # timeout momentaneo non deve cancellare il logo di un'azienda
+            # per l'eternità.
+            cur.execute("SELECT mime, bytes FROM company_logos "
+                        "WHERE chiave = %s AND (bytes IS NOT NULL "
+                        "   OR fetched_at > now() - interval '7 days')",
                         (chiave,))
             r = cur.fetchone()
 
@@ -670,7 +682,9 @@ def create_app() -> FastAPI:
                 # ogni visita riproverebbe lo stesso scarico che non riesce.
                 cur.execute(
                     "INSERT INTO company_logos (chiave, mime, bytes, origine) "
-                    "VALUES (%s, %s, %s, %s) ON CONFLICT (chiave) DO NOTHING",
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT (chiave) DO UPDATE "
+                    "SET mime = EXCLUDED.mime, bytes = EXCLUDED.bytes, "
+                    "    origine = EXCLUDED.origine, fetched_at = now()",
                     (chiave, mime, Binary(dati) if dati else None, url))
                 conn.commit()
                 r = (mime, dati)
@@ -680,8 +694,15 @@ def create_app() -> FastAPI:
             # L'ultimo anello e' il monogramma, e lo disegna il sito: qui
             # basta dire che non c'e' nulla da mostrare.
             raise HTTPException(404, "logo assente")
+        intestazioni = {"Cache-Control": "public, max-age=604800, immutable",
+                        "X-Content-Type-Options": "nosniff"}
+        if mime == "image/svg+xml":
+            # Un SVG può contenere script, e questo arriva da terzi: dentro un
+            # <img> non eseguirebbe comunque, ma aperto direttamente sì. La
+            # sandbox lo neutralizza senza rompere l'uso da immagine.
+            intestazioni["Content-Security-Policy"] = "sandbox"
         return Response(content=bytes(dati), media_type=mime or "image/png",
-                        headers={"Cache-Control": "public, max-age=604800, immutable"})
+                        headers=intestazioni)
 
     @app.get("/ricerca/famiglia")
     def famiglia_per_ruolo(ruolo: str, uid: str = Depends(utente),
@@ -859,19 +880,21 @@ def create_app() -> FastAPI:
         esito = crypto.cifra(dati)
         chiave = f"cv/{uid}/{secrets.token_hex(8)}"
         storage.salva(chiave, esito.dati)
+        da_eliminare: list[str] = []
         try:
             with conn.cursor() as cur:
-                # Il CV attivo diventa storico: resta ricostruibile quale
-                # versione ha prodotto un dato match.
                 # Il CV attivo diventa storico: la riga resta (dice quale
                 # versione ha prodotto un dato match, e ne conserva il
                 # profilo), il file cifrato no — un blob personale che non
                 # serve più a nulla non deve accumularsi nel bucket.
+                #
+                # Le chiavi si RACCOLGONO qui ma si eliminano DOPO il commit:
+                # eliminandole subito, un INSERT fallito più sotto avrebbe
+                # rimesso 'active' il CV vecchio... senza più il suo file.
                 cur.execute("UPDATE user_cvs SET status = 'superseded' "
                             "WHERE user_id = %s AND status = 'active' "
                             "RETURNING storage_key", (uid,))
-                for (vecchia,) in cur.fetchall():
-                    storage.elimina(vecchia)
+                da_eliminare = [r[0] for r in cur.fetchall()]
                 cur.execute(
                     "INSERT INTO user_cvs (user_id, storage_key, original_filename, "
                     "  mime_type, sha256, families, seniority, skills, languages, "
@@ -889,12 +912,29 @@ def create_app() -> FastAPI:
                      Binary(esito.nonce),
                      Binary(esito.auth_tag)))
                 cv_id = cur.fetchone()[0]
+                # Un CV nuovo è un giudizio nuovo: i match mai consegnati si
+                # riaprono, così vengono rivalutati contro il profilo vero.
+                # Quelli già entrati in un digest restano — sono il registro
+                # di ciò che l'utente ha ricevuto, e l'anti-ripetizione su
+                # quelli è una promessa, non un ostacolo.
+                cur.execute(
+                    "DELETE FROM matches m WHERE m.user_id = %s "
+                    "AND NOT EXISTS (SELECT 1 FROM digest_items di "
+                    "                WHERE di.match_id = m.id)", (uid,))
+                riaperti = cur.rowcount
             conn.commit()
         except Exception:
             # La riga non c'è, il file cifrato non deve restare orfano.
             storage.elimina(chiave)
             raise
-        return {"id": cv_id, "profilo": profilo}
+        for vecchia in da_eliminare:
+            try:
+                storage.elimina(vecchia)
+            except Exception as exc:  # noqa: BLE001
+                # Il blob orfano è un residuo, non un guasto: si logga e si va.
+                log.warning("blob del CV precedente non rimosso (%s): %s",
+                            vecchia, exc)
+        return {"id": cv_id, "profilo": profilo, "match_riaperti": riaperti}
 
     @app.get("/me/cv")
     def leggi_cv(uid: str = Depends(utente), conn=Depends(connessione)):

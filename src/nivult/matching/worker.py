@@ -37,6 +37,7 @@ from psycopg.rows import dict_row
 from nivult.config import database_url, load_dotenv, safe_dsn
 from nivult.delivery import email as email_mod
 from nivult.matching import funnel
+from nivult.delivery.testi import LINGUA_PER_GLM
 from nivult.matching.llm import (GLM, motiva_offerta, profilo_come_testo,
                                  valuta_offerta)
 
@@ -67,6 +68,7 @@ class Utente:
     next_digest_at: datetime
     last_digest_at: datetime | None
     cv_id: str | None
+    locale: str = "en"
     profilo: dict = field(default_factory=dict)
 
 
@@ -83,20 +85,20 @@ class ValutatoreGLM:
     def __exit__(self, *exc):
         self.model.close()
 
-    def valuta(self, profilo_testo: str, offerta: dict):
+    def valuta(self, profilo_testo: str, offerta: dict, lingua: str = "English"):
         # noqa: il desiderio sta dentro l'offerta, messo lì dal funnel.
         """-> (punteggio, micro-motivazione, uso token della chiamata)."""
         score, reason, uso = valuta_offerta(self.model, profilo_testo, offerta,
-                                            offerta.get("_wants"))
+                                            offerta.get("_wants"), lingua)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
         return score, reason, uso
 
-    def motiva(self, profilo_testo: str, offerta: dict):
+    def motiva(self, profilo_testo: str, offerta: dict, lingua: str = "English"):
         """-> (motivazione, uso token della chiamata)."""
         reason, uso = motiva_offerta(self.model, profilo_testo, offerta,
-                                     offerta.get("_wants"))
+                                     offerta.get("_wants"), lingua)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
@@ -129,7 +131,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         "SELECT u.id::text, u.email::text, u.plan, u.delivery_channel, "
         "       u.delivery_email::text, u.telegram_chat_id, u.whatsapp_e164, "
         "       u.frequency, u.send_hour_local, u.send_weekday, u.send_monthday, "
-        "       u.timezone, u.next_digest_at, u.last_digest_at, "
+        "       u.timezone, u.next_digest_at, u.last_digest_at, u.locale, "
         "       cv.id::text AS cv_id, cv.families, cv.seniority, cv.skills, "
         "       cv.languages, cv.years_experience, e.label AS seniority_label "
         "FROM users u "
@@ -151,7 +153,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         send_weekday=r["send_weekday"], send_monthday=r["send_monthday"],
         timezone=r["timezone"], next_digest_at=r["next_digest_at"],
         last_digest_at=r["last_digest_at"], cv_id=r["cv_id"],
-        profilo=_profilo(r)) for r in cur.fetchall()]
+        locale=r["locale"], profilo=_profilo(r)) for r in cur.fetchall()]
 
 
 def _orario(giorno: date, ora: int, tz: ZoneInfo) -> datetime:
@@ -306,6 +308,18 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
         esito["stato"] = "già consegnato"
         return esito
 
+    # Senza CV non c'è profilo, e GLM giudicherebbe contro «Ruolo cercato: —»
+    # spendendo budget per punteggi privi di senso. Non è un errore
+    # dell'utente ma uno stato incompleto: il digest lo dice e si riprova al
+    # prossimo slot, quando magari il CV ci sarà.
+    if not u.cv_id:
+        _chiudi(conn, digest_id, status="failed", valutate=0, inviate=0,
+                error="nessun CV attivo: profilo non valutabile")
+        _rischedula(conn, u, started)
+        esito["stato"] = "failed_senza_cv"
+        return esito
+
+    lingua_glm = LINGUA_PER_GLM.get(u.locale, "English")
     candidati = funnel.candidati(conn, u.id)
     budget_finito = False
     if candidati:
@@ -345,7 +359,8 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                                 u.email)
                     break
             conn.commit()
-            score, reason, uso = evaluatore.valuta(profilo_testo, offerta)
+            score, reason, uso = evaluatore.valuta(profilo_testo, offerta,
+                                                   lingua_glm)
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO matches (user_id, job_id, cv_id, score, reason, "
@@ -379,7 +394,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
         if evaluatore is None:
             evaluatore = ValutatoreGLM()
         for item in items:
-            item["reason"], _ = evaluatore.motiva(profilo_testo, item)
+            item["reason"], _ = evaluatore.motiva(profilo_testo, item, lingua_glm)
             with conn.cursor() as cur:
                 cur.execute("UPDATE matches SET reason = %s WHERE id = %s",
                             (item["reason"], item["match_id"]))
@@ -394,11 +409,11 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
 
         destinatario = u.delivery_email or u.email
         if dry_run:
-            percorsoHtml = email_mod.anteprima(destinatario, items)
+            percorsoHtml = email_mod.anteprima(destinatario, items, u.locale)
             message_id = None
             log.info("%s: DRY RUN, email compilata in %s", u.email, percorsoHtml)
         else:
-            message_id = email_mod.invia(destinatario, items)
+            message_id = email_mod.invia(destinatario, items, u.locale)
 
         # Le voci del digest si registrano DOPO l'invio riuscito: scriverle
         # prima renderebbe un invio fallito indistinguibile da uno avvenuto,

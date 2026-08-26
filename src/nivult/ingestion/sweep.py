@@ -21,7 +21,7 @@ import sys
 
 import psycopg
 
-from nivult.config import load_dotenv, migrator_database_url, safe_dsn
+from nivult.config import database_url, load_dotenv, safe_dsn
 
 log = logging.getLogger("nivult.ingestion.sweep")
 
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
-    dsn = migrator_database_url()
+    dsn = database_url()
     print(f"database: {safe_dsn(dsn)}")
 
     with psycopg.connect(dsn) as conn:

@@ -41,7 +41,7 @@ def _sha256(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _utente_o_nuovo(cur, email: str) -> str:
+def _utente_o_nuovo(cur, email: str, locale: str | None = None) -> str:
     """L'utente con quell'email, creato al volo se non esiste.
 
     Chiedere un link su un indirizzo nuovo È la registrazione: senza password
@@ -52,16 +52,20 @@ def _utente_o_nuovo(cur, email: str) -> str:
     r = cur.fetchone()
     if r:
         return r[0]
+    # La lingua della pagina da cui e' arrivata la richiesta e' il miglior
+    # segnale che abbiamo alla nascita dell'account. Solo alla nascita: un
+    # utente esistente ha gia' la sua, e una visita non e' una scelta.
     cur.execute(
         "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
-        "  frequency, send_weekday, timezone) VALUES "
-        "(%s, 'basic', 'trialing', 'email', 'weekly', 1, 'UTC') RETURNING id::text",
-        (email,))
+        "  frequency, send_weekday, timezone, locale) VALUES "
+        "(%s, 'basic', 'trialing', 'email', 'weekly', 1, 'UTC', %s) "
+        "RETURNING id::text",
+        (email, locale or "en"))
     return cur.fetchone()[0]
 
 
 def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=None,
-                        invia=None) -> str | None:
+                        invia=None, locale: str | None = None) -> str | None:
     """Genera un magic link per l'indirizzo e lo affida all'email.
 
     Ritorna il token in chiaro (al chiamante, che lo mette nell'email e lo
@@ -77,7 +81,7 @@ def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=Non
                     (email, FINESTRA_RATE.seconds // 60))
         if cur.fetchone()[0] >= MAX_LINK_NELLA_FINESTRA:
             return None
-        uid = _utente_o_nuovo(cur, email)
+        uid = _utente_o_nuovo(cur, email, locale)
         token = secrets.token_urlsafe(32)
         cur.execute(
             "INSERT INTO login_tokens (user_id, token_hash, expires_at, requested_ip, "
@@ -85,20 +89,29 @@ def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=Non
             (uid, _sha256(token), LINK_VALIDITA.seconds // 60, ip, ua))
     conn.commit()
 
+    # La lingua dell'email: quella della pagina da cui l'utente sta
+    # chiedendo il link — sta leggendo in quella — con la lingua salvata
+    # sull'account come ripiego per i client che non la mandano.
+    if not locale:
+        with conn.cursor() as cur:
+            cur.execute("SELECT locale FROM users WHERE email = %s", (email,))
+            r = cur.fetchone()
+        locale = (r and r[0]) or "en"
+
+    from nivult.delivery.testi import t
+    x = t(locale)
     link = f"{_base_url()}/verify?token={token}"
     if invia is None:
         from nivult.delivery.email import invia_generica
         invia = lambda a, oggetto, testo, html: invia_generica(a, oggetto, testo, html)  # noqa: E731
-    invia(email, "Il tuo accesso a Nivult",
-          f"Entra in Nivult con questo link (vale 15 minuti):\n\n{link}\n\n"
-          f"Se non l'hai chiesto tu, ignora questa email.\n",
+    invia(email, x["ml_oggetto"],
+          f"{x['ml_corpo']}\n\n{link}\n\n{x['ml_ignora']}\n",
           f'<div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;'
           f'padding:32px 24px;color:#111;"><p style="margin:0 0 4px 0;font-size:13px;'
           f'letter-spacing:0.12em;color:#888;">N I V U L T</p>'
           f'<p style="margin:24px 0;font-size:17px;line-height:1.5;">'
-          f'<a href="{link}" style="color:#0a5a3c;">Entra in Nivult</a></p>'
-          f'<p style="margin:0;font-size:13px;color:#888;">Il link vale 15 minuti. '
-          f'Se non l\'hai chiesto tu, ignora questa email.</p></div>')
+          f'<a href="{link}" style="color:#0a5a3c;">{x["ml_entra"]}</a></p>'
+          f'<p style="margin:0;font-size:13px;color:#888;">{x["ml_ignora"]}</p></div>')
     return token
 
 

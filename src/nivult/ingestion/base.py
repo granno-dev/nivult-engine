@@ -129,7 +129,13 @@ class HttpSource:
             if r.status_code == 429:
                 # Retry-After è il numero che la fonte ci sta dando: ignorarlo
                 # e riprovare col nostro backoff è il modo di farsi bandire.
-                wait = float(r.headers.get("Retry-After", self._backoff(attempt)))
+                # Lo standard ammette anche una DATA HTTP al posto dei secondi:
+                # float() su quella crashava l'intera fetch per un header
+                # scritto nell'altro formato lecito.
+                try:
+                    wait = float(r.headers.get("Retry-After", ""))
+                except ValueError:
+                    wait = self._backoff(attempt)
                 log.warning("%s: 429, attendo %.1fs come richiesto", self.source, wait)
                 time.sleep(min(wait, 120))
                 continue

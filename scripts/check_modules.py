@@ -235,14 +235,14 @@ class ValutatoreFinto:
         self.punteggi = punteggi
         self.totale = {"input": 0, "cached": 0, "output": 0, "chiamate": 0}
 
-    def valuta(self, profilo_testo, offerta):
+    def valuta(self, profilo_testo, offerta, lingua="English"):
         sid = offerta["source_job_id"]
         self.totale["chiamate"] += 1
         self.totale["input"] += 100
         self.totale["output"] += 10
         return self.punteggi.get(sid, 10), f"motivo breve {sid}", {"input": 100, "output": 10}
 
-    def motiva(self, profilo_testo, offerta):
+    def motiva(self, profilo_testo, offerta, lingua="English"):
         sid = offerta["source_job_id"]
         self.totale["chiamate"] += 1
         return f"motivazione piena {sid}", {"input": 80, "output": 20}
@@ -480,6 +480,16 @@ def main() -> int:
                 "('digest-c@example.test','pro','active','email','daily','Europe/Rome', "
                 " now() - interval '15 min') RETURNING id")
             uc_id = cur.fetchone()[0]
+            # Il CV serve: senza, il worker ora chiude il digest come
+            # failed_senza_cv PRIMA di arrivare all'invio — che e' giusto in
+            # produzione, ma questo test vuole proprio arrivare all'invio.
+            cur.execute(
+                "INSERT INTO user_cvs (user_id, storage_key, families, seniority, "
+                "  skills, encryption_algo, encrypted_dek, nonce, auth_tag, kek_version) "
+                "VALUES (%s, 'cv/digest-c.pdf', ARRAY['Human Resources'], '2-5', "
+                "  ARRAY['payroll'], 'aes-256-gcm', decode(repeat('ab',32),'hex'), "
+                "  decode(repeat('cd',12),'hex'), decode(repeat('ef',16),'hex'), 1)",
+                (uc_id,))
             cur.execute("INSERT INTO user_clusters (user_id, cluster_id, languages, "
                         "  min_seniority, max_seniority, employment_types) VALUES "
                         "(%s,%s, ARRAY['Italian'], '2-5', '10+', ARRAY['FULL_TIME'])",

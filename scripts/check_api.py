@@ -72,7 +72,10 @@ def main() -> int:
 
     with psycopg.connect(database_url()) as pulizia:
         with pulizia.cursor() as cur:
-            cur.execute("TRUNCATE users CASCADE")
+            # clusters non dipende da users: il CASCADE non lo tocca, e il
+            # cluster di prova sopravviveva facendo crashare la prima
+            # INSERT di qualunque suite girasse dopo questa.
+            cur.execute("TRUNCATE users, clusters CASCADE")
         pulizia.commit()
 
     try:
@@ -118,7 +121,7 @@ def main() -> int:
             # --- vocabolari, cluster, preferenze --------------------------------
             with psycopg.connect(database_url()) as setup:
                 with setup.cursor() as cur:
-                    cur.execute("TRUNCATE users CASCADE")
+                    cur.execute("TRUNCATE users, clusters CASCADE")
                     cur.execute("SELECT count(*) FROM job_families")
                     if cur.fetchone()[0] == 0:
                         cur.execute("INSERT INTO job_families (family, sort_order) "
@@ -448,7 +451,10 @@ def main() -> int:
 
     with psycopg.connect(database_url()) as pulizia:
         with pulizia.cursor() as cur:
-            cur.execute("TRUNCATE users CASCADE")
+            # clusters non dipende da users: il CASCADE non lo tocca, e il
+            # cluster di prova sopravviveva facendo crashare la prima
+            # INSERT di qualunque suite girasse dopo questa.
+            cur.execute("TRUNCATE users, clusters CASCADE")
         pulizia.commit()
 
     print(f"\n{len(PASSED)} superati, {len(FAILED)} falliti")

@@ -18,8 +18,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 import psycopg
+from psycopg.types.json import Json as PsycopgJson
 
-from nivult.config import load_dotenv, migrator_database_url, safe_dsn
+from nivult.config import database_url, load_dotenv, safe_dsn
 from nivult.ingestion import store
 from nivult.ingestion.sources.arbetsformedlingen import ArbetsformedlingenClient
 from nivult.ingestion.sources.fantastic import FantasticClient
@@ -144,7 +145,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
     # dotazione già chiusa. In produzione ha significato che France Travail e
     # Arbetsförmedlingen non hanno ingerito nulla al primo giro.
     in_backfill = cluster.in_backfill
-    backfill_da_chiudere: bool | None = None
+    # L'esito per fonte, raccolto qui: la chiusura del backfill deve guardare
+    # TUTTE le fonti. Prima decideva sull'ultima variabile rimasta in scope
+    # dal ciclo — una fonte troncata dopo una completa chiudeva il backfill
+    # come riuscito, e il cluster partiva con uno storico bucato senza
+    # nemmeno il flag che lo dice.
+    esiti_fonte: list[tuple[bool, bool]] = []  # (fetch_complete, esaurita)
     if cluster.in_backfill:
         log.info("%s: backfill, finestra di %d giorni, dotazione dedicata",
                  cluster.label, BACKFILL_WINDOW.days)
@@ -185,11 +191,15 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
             continue
 
         with conn.cursor() as cur:
+            # Json vero e parametri VERI: registrava la famiglia anche per le
+            # fonti che cercano per termine, e un apice nel valore avrebbe
+            # prodotto jsonb malformato.
             cur.execute(
                 "INSERT INTO ingestion_runs (cluster_id, source, request_params) "
-                "VALUES (%s, %s, %s::jsonb) RETURNING id",
+                "VALUES (%s, %s, %s) RETURNING id",
                 (cluster.id, cls.source,
-                 f'{{"query": "{cluster.family}", "limit": {limit}, "since": "{since.isoformat()}"}}'))
+                 PsycopgJson({"query": taxonomy or query, "taxonomy": bool(taxonomy),
+                              "limit": limit, "since": since.isoformat()})))
             run_id = str(cur.fetchone()[0])
         conn.commit()
 
@@ -237,6 +247,24 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
                         result.jobs = [j for j in result.jobs if j.date_posted >= since]
                         totals["fuori_finestra"] += len(fuori_finestra)
 
+                    if dry_run:
+                        # La chiamata c'è stata e i crediti sono veri: la
+                        # conciliazione e la riga di api_usage si scrivono
+                        # anche qui, o i contatori mentono proprio nel giro
+                        # che serve a controllare i costi.
+                        with conn.cursor() as cur:
+                            delta = result.credits_used - cls.credits_per_request
+                            if delta:
+                                cur.execute(
+                                    "SELECT settle_credits(%s, %s, %s, %s)",
+                                    (cls.source, cluster.id, delta, in_backfill))
+                            store.record_usage(
+                                cur, provider=cls.source, cluster_id=cluster.id,
+                                run_id=run_id, requests=result.requests_made,
+                                credits=result.credits_used,
+                                http_status=attempt.status if attempt else None,
+                                latency_ms=attempt.latency_ms if attempt else None)
+                        conn.commit()
                     if not dry_run:
                         with conn.cursor() as cur:
                             for job in result.jobs:
@@ -352,18 +380,22 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
 
         # Il backfill si chiude DOPO tutte le fonti: qui si registra solo l'esito.
         if in_backfill:
-            exhausted = stop_reason == "dotazione di backfill esaurita"
-            if backfill_da_chiudere is None or exhausted:
-                backfill_da_chiudere = exhausted or bool(fetch_complete)
+            esiti_fonte.append(
+                (bool(fetch_complete),
+                 stop_reason == "dotazione di backfill esaurita"))
         log.info("%s / %s: %d pagine, %d nuove, %d aggiornate, completa=%s",
                  cluster.label, cls.source, pages, new, updated, fetch_complete)
 
-    if in_backfill and backfill_da_chiudere and not dry_run:
-        with conn.cursor() as cur:
-            cur.execute("SELECT cluster_finish_backfill(%s, %s)",
-                        (cluster.id, stop_reason == "dotazione di backfill esaurita"))
-        conn.commit()
-        log.info("%s: backfill chiuso", cluster.label)
+    if in_backfill and esiti_fonte and not dry_run:
+        complete_tutte = all(c for c, _ in esiti_fonte)
+        esaurita_una = any(e for _, e in esiti_fonte)
+        if complete_tutte or esaurita_una:
+            with conn.cursor() as cur:
+                cur.execute("SELECT cluster_finish_backfill(%s, %s)",
+                            (cluster.id, not complete_tutte))
+            conn.commit()
+            log.info("%s: backfill chiuso%s", cluster.label,
+                     "" if complete_tutte else " (troncato)")
 
     return totals
 
@@ -411,9 +443,11 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
 
-    # Il runner scrive offerte: gli basta DML, non DDL. Ma in produzione
-    # DATABASE_URL è nivult_app, che è esattamente il ruolo giusto qui.
-    dsn = migrator_database_url()
+    # Il runner scrive offerte: gli basta DML, e nivult_app ha EXECUTE su
+    # tutte le funzioni che usa (0010). Girava col ruolo migrator — con il
+    # DDL in mano — contraddicendo la regola dei due ruoli che sta scritta
+    # due righe sopra la sua stessa vecchia riga.
+    dsn = database_url()
     print(f"database: {safe_dsn(dsn)}")
 
     grand = {"nuove": 0, "aggiornate": 0, "non_normalizzabili": 0,

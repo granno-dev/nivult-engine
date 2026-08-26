@@ -27,29 +27,29 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 
 from nivult.config import load_dotenv
+from nivult.delivery.testi import mesi, t
 
 FONTI = {"france_travail": "France Travail",
          "arbetsformedlingen": "Arbetsförmedlingen",
          "bundesagentur": "Bundesagentur"}
 
-MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
-        "agosto", "settembre", "ottobre", "novembre", "dicembre"]
 
-_UNITA = {"MONTH": "/mese", "YEAR": "/anno", "HOUR": "/ora", "DAY": "/giorno",
-          "WEEK": "/settimana"}
-
-
-def _data(d: datetime) -> str:
+def _data(d: datetime, locale: str) -> str:
     d = d.astimezone(timezone.utc)
-    return f"{d.day} {MESI[d.month - 1]}"
+    # Il tedesco scrive il giorno come ordinale: «26. August», col punto.
+    punto = "." if locale == "de" else ""
+    return f"{d.day}{punto} {mesi(locale)[d.month - 1]}"
 
 
-def stipendio(salary: dict | None) -> str:
+def stipendio(salary: dict | None, locale: str = "en") -> str:
     """Dal MonetaryAmount di schema.org alla riga da mostrare, o vuoto."""
     if not salary:
         return ""
     v = salary.get("value") or {}
     lo, hi = v.get("minValue"), v.get("maxValue")
+    _UNITA = {"MONTH": t(locale)["unita_mese"], "YEAR": t(locale)["unita_anno"],
+              "HOUR": t(locale)["unita_ora"], "DAY": t(locale)["unita_giorno"],
+              "WEEK": t(locale)["unita_settimana"]}
     unita = _UNITA.get(v.get("unitText"), "")
     valuta = salary.get("currency") or ""
     if lo is not None and hi is not None and lo != hi:
@@ -61,63 +61,74 @@ def stipendio(salary: dict | None) -> str:
     return ""
 
 
-def etichetta_link(item: dict) -> str:
+def etichetta_link(item: dict, locale: str = "en") -> str:
     if item["link_kind"] == "career_site":
-        return "Candidatura diretta"
+        return t(locale)["candidatura_diretta"]
     if item["link_kind"] == "national_agency":
-        return f"Via {FONTI.get(item['source'], item['source'])}"
-    return "Apri l'offerta"
+        return t(locale)["via"].format(fonte=FONTI.get(item["source"], item["source"]))
+    return t(locale)["apri"]
 
 
-def _datore(item: dict) -> str:
+def _datore(item: dict, locale: str = "en") -> str:
     # Su «undisclosed» non si stampa un nome di ripiego: sarebbe una bugia.
     if item.get("organization"):
         return item["organization"]
-    return "Datore non dichiarato"
+    return t(locale)["datore_non_dichiarato"]
 
 
-def compila(items: list[dict]) -> tuple[str, str, str]:
-    """-> (oggetto, testo, html). Il template è volutamente sobrio."""
+def compila(items: list[dict], locale: str = "en") -> tuple[str, str, str]:
+    """-> (oggetto, testo, html), nella lingua dell'utente.
+
+    Il template viene da `testi.py`; le motivazioni dentro gli item arrivano
+    già nella lingua giusta, generate così da GLM — qui non si traduce nulla.
+    """
     n = len(items)
-    oggi = _data(datetime.now(timezone.utc))
-    oggetto = f"Nivult — {n} offert{'a' if n == 1 else 'e'} per te ({oggi})"
+    x = t(locale)
+    oggi = _data(datetime.now(timezone.utc), locale)
+    chiave_plurale = "oggetto_molte"
+    if n == 1:
+        chiave_plurale = "oggetto_uno"
+    elif locale == "pl" and n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        # Il polacco ha TRE plurali: 1 oferta, 2-4 oferty, 5+ ofert — e la
+        # regola si ripete per decina (22 oferty, ma 12 ofert).
+        chiave_plurale = "oggetto_poche"
+    oggetto = x[chiave_plurale].format(n=n, data=oggi)
 
     righe_testo: list[str] = []
     parti_html: list[str] = []
     for pos, it in enumerate(items, start=1):
         meta = [m for m in [
             ", ".join(it.get("cities") or []) or None,
-            stipendio(it.get("salary")) or None,
-            f"pubblicata il {_data(it['date_posted'])}",
-            ("agenzia di selezione" if it.get("employer_kind") == "staffing_agency"
+            stipendio(it.get("salary"), locale) or None,
+            x["pubblicata"].format(data=_data(it["date_posted"], locale)),
+            (x["agenzia"] if it.get("employer_kind") == "staffing_agency"
              else None),
         ] if m]
         righe_testo.append(
-            f"{pos}. {it['title']} — {_datore(it)}\n"
+            f"{pos}. {it['title']} — {_datore(it, locale)}\n"
             f"   {', '.join(meta)}\n"
-            f"   Aderenza {it['score']}/100. {it['reason']}\n"
-            f"   {etichetta_link(it)}: {it['url']}\n")
+            f"   {x['aderenza']} {it['score']}/100. {it['reason']}\n"
+            f"   {etichetta_link(it, locale)}: {it['url']}\n")
         parti_html.append(
             f'<div style="margin:0 0 28px 0;padding:0 0 28px 0;'
             f'border-bottom:1px solid #e5e5e5;">'
             f'<p style="margin:0;font-size:19px;line-height:1.3;">'
-            f'<a href="{it["url"]}" style="color:#111;text-decoration:none;">'
+            f'<a href="{_esc(it["url"])}" style="color:#111;text-decoration:none;">'
             f'{_esc(it["title"])}</a></p>'
             f'<p style="margin:4px 0 0 0;color:#555;font-size:15px;">'
-            f'{_esc(_datore(it))}</p>'
+            f'{_esc(_datore(it, locale))}</p>'
             f'<p style="margin:6px 0 0 0;color:#888;font-size:13px;">'
             f'{_esc(", ".join(meta))}</p>'
             f'<p style="margin:10px 0 0 0;font-size:15px;line-height:1.45;">'
             f'<strong style="color:#111;">{it["score"]}/100</strong> — '
             f'{_esc(it["reason"])}</p>'
             f'<p style="margin:10px 0 0 0;font-size:14px;">'
-            f'<a href="{it["url"]}" style="color:#0a5a3c;">'
-            f'{_esc(etichetta_link(it))} →</a></p></div>')
+            f'<a href="{_esc(it["url"])}" style="color:#0a5a3c;">'
+            f'{_esc(etichetta_link(it, locale))} →</a></p></div>')
 
-    testo = (f"Nivult — digest del {oggi}\n\n"
+    testo = (f"Nivult — {x['digest_del'].format(data=oggi)}\n\n"
              + "\n".join(righe_testo)
-             + "\nRicevi questo digest perché sei iscritto a Nivult.\n"
-               "Le preferenze si gestiscono su nivult.com\n")
+             + "\n" + x["piede_testo"] + "\n")
 
     html = (
         '<div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;'
@@ -125,12 +136,10 @@ def compila(items: list[dict]) -> tuple[str, str, str]:
         '<p style="margin:0 0 4px 0;font-size:13px;letter-spacing:0.12em;'
         'color:#888;">N I V U L T</p>'
         f'<p style="margin:0 0 28px 0;font-size:15px;color:#555;">'
-        f'Digest del {oggi}</p>'
+        f'{_esc(x["digest_del"].format(data=oggi))}</p>'
         + "".join(parti_html)
-        + '<p style="margin:28px 0 0 0;font-size:12px;color:#999;">'
-          'Ricevi questo digest perché sei iscritto a <a href="https://nivult.com"'
-          ' style="color:#999;">Nivult</a>. Le preferenze si gestiscono su nivult.com.'
-          '</p></div>')
+        + f'<p style="margin:28px 0 0 0;font-size:12px;color:#999;">'
+          f'{_esc(x["piede"])}</p></div>')
     return oggetto, testo, html
 
 
@@ -143,9 +152,9 @@ def configurato() -> bool:
     return bool(os.environ.get("SMTP_HOST") and os.environ.get("SMTP_FROM"))
 
 
-def invia(destinatario: str, items: list[dict]) -> str:
+def invia(destinatario: str, items: list[dict], locale: str = "en") -> str:
     """Spedisce un digest. Ritorna il Message-ID per digests.provider_message_id."""
-    oggetto, testo, html = compila(items)
+    oggetto, testo, html = compila(items, locale)
     return invia_generica(destinatario, oggetto, testo, html)
 
 
@@ -158,6 +167,10 @@ def invia_generica(destinatario: str, oggetto: str, testo: str, html: str) -> st
     msg["From"] = os.environ["SMTP_FROM"]
     msg["To"] = destinatario
     msg["Message-ID"] = make_msgid(domain="nivult.com")
+    # Gmail e Yahoo lo chiedono ai sender ricorrenti, e senza si finisce in
+    # spam proprio col prodotto principale. Il mailto basta al requisito
+    # finché non esiste una rotta di disiscrizione a un clic.
+    msg["List-Unsubscribe"] = "<mailto:hello@nivult.com?subject=unsubscribe>"
     msg.set_content(testo)
     msg.add_alternative(html, subtype="html")
 
@@ -181,9 +194,9 @@ def invia_generica(destinatario: str, oggetto: str, testo: str, html: str) -> st
     return msg["Message-ID"]
 
 
-def anteprima(destinatario: str, items: list[dict]) -> str:
+def anteprima(destinatario: str, items: list[dict], locale: str = "en") -> str:
     """Compila l'email su file, senza inviare: per il dry-run e i test."""
-    oggetto, testo, html = compila(items)
+    oggetto, testo, html = compila(items, locale)
     base = os.path.join(tempfile.gettempdir(), f"nivult-digest-{int(datetime.now().timestamp())}")
     with open(base + ".html", "w", encoding="utf-8") as f:
         f.write(html)

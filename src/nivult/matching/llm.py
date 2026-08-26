@@ -91,9 +91,15 @@ class ChatModel(HttpSource):
 
 class GLM(ChatModel):
     source = "glm"
-    base_url = os.environ.get("GLM_BASE_URL", "https://api.z.ai/api/paas/v4")
     model = "glm-5.2"
     env_key = "GLM_API_KEY"
+
+    # Proprietà e non attributo di classe: l'attributo veniva valutato
+    # ALL'IMPORT, prima che load_dotenv() leggesse il .env, e un override di
+    # GLM_BASE_URL lì dentro era ignorato in silenzio.
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("GLM_BASE_URL", "https://api.z.ai/api/paas/v4")
 
     def chat(self, messages, **kw):
         # Thinking OFF: su una valutazione a rubrica il ragionamento esteso
@@ -105,9 +111,12 @@ class GLM(ChatModel):
 
 class MistralSmall(ChatModel):
     source = "mistral"
-    base_url = os.environ.get("MISTRAL_BASE_URL", "https://api.mistral.ai/v1")
     model = "mistral-small-latest"
     env_key = "MISTRAL_API_KEY"
+
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("MISTRAL_BASE_URL", "https://api.mistral.ai/v1")
 
 
 RUBRICA = """Sei un selezionatore esperto. Valuta se QUESTA offerta merita il
@@ -135,19 +144,24 @@ Non premiare un'offerta perche' prestigiosa o ben scritta: conta solo
 l'aderenza al profilo.
 
 Rispondi SOLO con questo JSON, niente altro:
-{"score": <0-100>, "reason": "<una frase in italiano, massimo 10 parole>"}
+{{"score": <0-100>, "reason": "<one sentence in {lingua}, max 10 words>"}}
 
 """
 
 # Seconda passata: la motivazione che il destinatario del digest legge. Corre
 # solo sulle offerte che entrano nel digest (le prime 30), non su tutte: è il
 # risparmio progettato nelle decisioni di architettura.
-RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase
-italiana di massimo 25 parole perché questa offerta è adatta al profilo del
-candidato. Sii concreto: ruolo, competenze, livello. Niente genericità.
+# La lingua è un parametro, non una costante: quella frase E' il prodotto, e
+# arriva a utenti in nove lingue. Si genera direttamente nella loro — costa
+# un'istruzione, non una seconda chiamata — perché tradotta a valle suonerebbe
+# tradotta. Prima diceva "in italiano" per tutti, tedeschi compresi.
+RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase di
+massimo 25 parole, scritta in {lingua}, perché questa offerta è adatta al
+profilo del candidato. Sii concreto: ruolo, competenze, livello. Niente
+genericità.
 
 Rispondi SOLO con questo JSON, niente altro:
-{"reason": "<la frase>"}
+{{"reason": "<la frase>"}}
 
 """
 
@@ -215,7 +229,8 @@ def _coda_offerta(offerta: dict, desiderio: str | None) -> str:
 
 
 def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
-                   desiderio: str | None = None) -> tuple[int, str, dict]:
+                   desiderio: str | None = None,
+                   lingua: str = "English") -> tuple[int, str, dict]:
     """UNA offerta per chiamata: punteggio e micro-motivazione.
 
     Nel lotto il modello confronta le offerte fra loro invece di misurarle
@@ -224,7 +239,7 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
     matches.reason è NOT NULL: lo scarto dev'essere spiegato anche lui, non
     solo ciò che passa.
     """
-    corpo = _testa(profilo_testo, RUBRICA) + [{
+    corpo = _testa(profilo_testo, RUBRICA.format(lingua=lingua)) + [{
         "role": "user", "content": _coda_offerta(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
     p = _estrai_json(risposta)
@@ -234,9 +249,10 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
 
 
 def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
-                   desiderio: str | None = None) -> tuple[str, dict]:
+                   desiderio: str | None = None,
+                   lingua: str = "English") -> tuple[str, dict]:
     """Seconda passata: la motivazione che il destinatario del digest legge."""
-    corpo = _testa(profilo_testo, RUBRICA_MOTIVAZIONE) + [{
+    corpo = _testa(profilo_testo, RUBRICA_MOTIVAZIONE.format(lingua=lingua)) + [{
         "role": "user", "content": _coda_offerta(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
     p = _estrai_json(risposta)
