@@ -931,7 +931,19 @@ per i backup significa considerare compromesso tutto lo storico cifrato con essa
   il ripristino, non leggendo lo script.
 - **`gitleaks` non è installato sul Mac**, quindi l'hook usa la scansione di
   riserva. In CI gira quello vero.
-- **Il workflow CI non è mai stato visto girare** da qui: `gh` non è installato.
+- **La CI non era mai stata verde**, e nessuno lo sapeva: `gh` non è
+  installato, quindi il risultato non si guardava da qui. Il job dello schema
+  falliva da sempre su `ModuleNotFoundError: cryptography` — `cryptography` e
+  `boto3` erano usati da `crypto.py` e `storage.py` ma non dichiarati in
+  `pyproject.toml`, e in locale erano nel venv a mano. Dichiarati il
+  2026-08-26.
+
+  **La lezione vale oltre il caso:** una suite verde sul Mac non dice che le
+  dipendenze siano dichiarate, perché lì l'ambiente le ha per altre vie. Chi
+  le verifica è solo un `pip install -e .` in un venv vuoto — che è appunto
+  ciò che fa la CI, e per questo va guardata. I log dei run richiedono
+  autenticazione; l'elenco con l'esito no:
+  `curl -s "https://api.github.com/repos/granno-dev/nivult-engine/actions/runs?per_page=10"`.
 - **`pg_hba` del container ha `trust` per 127.0.0.1 interno.** Significa che una
   verifica di password fatta con `docker exec ... psql -h 127.0.0.1` passa
   sempre, qualunque password si usi, e non dimostra niente. Le credenziali si

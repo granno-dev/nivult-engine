@@ -10,6 +10,13 @@ dependencies = [
   "uvicorn[standard]>=0.32",
   "python-multipart>=0.0.18",
   "email-validator>=2.2",
+  # Non sono opzionali e non sono "roba di deploy": crypto.py e storage.py
+  # stanno nel percorso di import di check_modules e dell'API. Mancavano qui
+  # perché sul Mac e sul server erano finiti nel venv a mano, e con .env
+  # accanto nessuno se ne accorgeva. In CI, dove si parte da niente, l'import
+  # falliva — ed è il motivo per cui quella pipeline non è MAI stata verde.
+  "cryptography>=43",   # busta AES-256-GCM dei CV
+  "boto3>=1.35",        # Hetzner Object Storage, S3-compatibile
 ]
 
 [project.optional-dependencies]
