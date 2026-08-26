@@ -134,25 +134,29 @@ valutazione è per offerta, non anticipato: un errore a metà digest non butta v
 la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
 digest (quelle del run più le recuperate), non solo quelle appena pagate.
 
-**La lingua del digest si GENERA, non si traduce.** Il sito parla inglese e
-italiano (`nivult.com` e `nivult.com/it`), ma qui manca il pezzo: non esiste
-una colonna lingua sull'utente — `user_cvs.languages` sono le lingue che il
-*candidato parla*, estratte dal CV, un'altra cosa. Serve `users.locale`, e va
-letta in due posti: il modello dell'email e **il prompt di GLM**.
+**La lingua del digest si GENERA, non si traduce** — e da agosto 2026 è
+implementato. `users.locale` (migrazione 0046, default `en`, CHECK sulle nove
+lingue del sito) viene letta in tre posti: il template dell'email
+(`delivery/testi.py`, nove lingue scritte a mano, chiavi verificate allineate),
+il magic link, e **il prompt di GLM**, dove la motivazione nasce direttamente
+nella lingua del lettore. Il parametro sta nel prefisso e non rompe la cache:
+il prefisso è comunque per utente, e la lingua pure.
 
-Chiedere a GLM di scrivere la motivazione direttamente nella lingua dell'utente
-costa **zero** — è una riga di istruzione, non una seconda chiamata, e non tocca
-il prefisso in cache. Tradurla a valle costerebbe una chiamata per riga e
-suonerebbe tradotta: quella riga *è* il prodotto.
+La lingua arriva dal sito: alla nascita dell'account (la pagina da cui è
+stato chiesto il link), dall'onboarding col resto delle preferenze, e dal
+selettore quando c'è una sessione. `user_cvs.languages` è un'altra cosa —
+sono le lingue che il *candidato parla*, estratte dal CV.
+
+Due dettagli che non sono dettagli: il tedesco vuole la data ordinale
+(«26. August») e il polacco ha tre plurali (1 oferta, 3 oferty, 5 ofert, 22
+oferty) — il template li sa. **Un template che li sbaglia dice al lettore
+che il prodotto è tradotto a macchina, che è esattamente ciò che la
+generazione diretta vuole evitare.**
 
 **Gli annunci restano nella loro lingua.** Titolo, azienda e città arrivano
 dall'offerta e non si toccano: ci si candida nella lingua in cui l'annuncio è
 scritto, e tradurre il titolo renderebbe l'offerta irrintracciabile sul sito
 dell'azienda.
-
-Finché `users.locale` non c'è, **scegliere italiano sul sito e ricevere la mail
-in inglese è peggio che non tradurre affatto**: è il debito che blocca la spinta
-su `/it`.
 
 ## Dati del fornitore (Fantastic.jobs)
 
