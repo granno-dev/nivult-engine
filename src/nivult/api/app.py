@@ -630,12 +630,12 @@ def create_app() -> FastAPI:
         Niente URL delle offerte: questo è un assaggio, non una bacheca
         gratuita. Il prodotto è il digest.
 
-        E niente CONTEGGI. C'erano — offerte attive e datori distinti, contati
-        adesso — e facevano una bella prova di ampiezza, ma erano anche la
-        dimensione esatta del nostro indice servita a chiunque interroghi la
-        rotta, concorrenti compresi. Una rotta pubblica è pubblica per tutti:
-        nasconderli solo nel sito avrebbe lasciato il dato qui, a portata di
-        curl.
+        E niente CONTEGGI né DATE. I conteggi erano la dimensione esatta del
+        nostro indice; le date ne dicono la freschezza. Entrambi servivano a
+        chiunque interroghi la rotta, concorrenti compresi — e una rotta
+        pubblica è pubblica per tutti: toglierli solo dal sito avrebbe
+        lasciato il dato qui, a portata di curl. Il filtro sui sette giorni
+        resta, ma vive nella query e non esce.
         """
         with conn.cursor() as cur:
             # Solo offerte il cui logo ESISTE davvero: o la fonte porta
@@ -645,7 +645,7 @@ def create_app() -> FastAPI:
             # escludono anche i fallimenti noti (bytes NULL in cache).
             cur.execute(
                 "SELECT j.title, j.organization, (j.cities)[1], (j.countries)[1], "
-                "       j.date_posted, COALESCE(j.org_linkedin_slug, j.domain_derived) "
+                "       COALESCE(j.org_linkedin_slug, j.domain_derived) "
                 "FROM jobs j "
                 "LEFT JOIN company_logos cl "
                 "  ON cl.chiave = COALESCE(j.org_linkedin_slug, j.domain_derived) "
@@ -662,8 +662,7 @@ def create_app() -> FastAPI:
                 "offerte": [{
                     "titolo": r[0], "azienda": r[1], "citta": r[2],
                     "paese": r[3],
-                    "quando": r[4].isoformat() if r[4] else None,
-                    "logo": f"/logo/{r[5]}" if r[5] else None,
+                    "logo": f"/logo/{r[4]}" if r[4] else None,
                 } for r in righe],
             }),
             media_type="application/json",
