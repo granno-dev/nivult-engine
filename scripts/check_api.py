@@ -234,6 +234,108 @@ def main() -> int:
                 setup.commit()
 
 
+            print("\n— collegamento Telegram —")
+            # Il bot non puo' scrivere per primo: tutto il giro esiste per
+            # ottenere un chat_id, e il webhook e' l'unico punto in cui
+            # arriva. Qui si prova soprattutto che quella rotta pubblica non
+            # si lasci comandare da chiunque.
+            os.environ["TELEGRAM_BOT_TOKEN"] = "000:prova"
+            os.environ["TELEGRAM_BOT_USERNAME"] = "NivultBot"
+            os.environ["TELEGRAM_WEBHOOK_SECRET"] = "segreto-di-prova"
+            inviati: list[tuple] = []
+            tg_mod = app_module.telegram_mod
+            vero_invia_testo = tg_mod.invia_testo
+            tg_mod.invia_testo = lambda chat, testo: inviati.append((chat, testo)) or "1"
+
+            r = client.post("/me/telegram/collega", headers=auth_header)
+            check("apre un collegamento: 200", r.status_code, 200)
+            link = r.json().get("link", "")
+            check("il link punta al bot", link.startswith("https://t.me/NivultBot?start="), True)
+            gettone = link.rsplit("=", 1)[-1]
+            check("il gettone NON e' in chiaro nel database",
+                  seen_by_other("SELECT count(*) FROM telegram_link_tokens "
+                                "WHERE token_hash = %s", (gettone,)), 0)
+            check("in tabella c'e' il suo sha256",
+                  seen_by_other("SELECT count(*) FROM telegram_link_tokens "
+                                "WHERE token_hash = %s",
+                                (hashlib.sha256(gettone.encode()).hexdigest(),)), 1)
+            check("prima di START non e' collegato",
+                  client.get("/me/telegram/stato", headers=auth_header).json()["collegato"],
+                  False)
+
+            # IL PUNTO: senza il segreto quella rotta collegherebbe la chat di
+            # chiunque all'account di chiunque.
+            corpo = {"message": {"chat": {"id": 555001}, "text": f"/start {gettone}"}}
+            check("webhook SENZA header segreto: rifiutato",
+                  client.post("/telegram/webhook", json=corpo).status_code, 403)
+            check("webhook con segreto SBAGLIATO: rifiutato",
+                  client.post("/telegram/webhook", json=corpo,
+                              headers={"X-Telegram-Bot-Api-Secret-Token": "quasi"}
+                              ).status_code, 403)
+            check("e la chat non e' stata collegata lo stesso",
+                  seen_by_other("SELECT telegram_chat_id IS NULL FROM users "
+                                "WHERE email = 'pref@test.dev'"), True)
+
+            buono = {"X-Telegram-Bot-Api-Secret-Token": "segreto-di-prova"}
+            check("webhook col segreto giusto: 200",
+                  client.post("/telegram/webhook", json=corpo, headers=buono).status_code, 200)
+            check("adesso la chat e' collegata",
+                  seen_by_other("SELECT telegram_chat_id FROM users "
+                                "WHERE email = 'pref@test.dev'"), "555001")
+            check("e il bot ha salutato", len(inviati), 1)
+            check("lo stato lo dice alla pagina",
+                  client.get("/me/telegram/stato", headers=auth_header).json()["collegato"],
+                  True)
+
+            # Monouso, come il magic link: chi rigioca lo stesso START non
+            # ricollega niente.
+            inviati.clear()
+            client.post("/telegram/webhook",
+                        json={"message": {"chat": {"id": 555999},
+                                          "text": f"/start {gettone}"}}, headers=buono)
+            check("gettone gia' usato: la chat NON cambia",
+                  seen_by_other("SELECT telegram_chat_id FROM users "
+                                "WHERE email = 'pref@test.dev'"), "555001")
+
+            # Una chat appartiene a un utente solo, o il secondo riceverebbe i
+            # digest del primo senza che nessuno se ne accorga.
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("INSERT INTO users (email, plan, frequency, "
+                                "  delivery_channel, subscription_status) "
+                                "VALUES ('tg2@test.dev','basic','daily','email',"
+                                "        'trialing') RETURNING id")
+                    altro = cur.fetchone()[0]
+                    cur.execute(
+                        "INSERT INTO telegram_link_tokens (user_id, token_hash, expires_at) "
+                        "VALUES (%s, %s, now() + interval '10 minutes')",
+                        (altro, hashlib.sha256(b"secondo").hexdigest()))
+                setup.commit()
+            inviati.clear()
+            client.post("/telegram/webhook",
+                        json={"message": {"chat": {"id": 555001},
+                                          "text": "/start secondo"}}, headers=buono)
+            check("una chat gia' presa non si ruba",
+                  seen_by_other("SELECT telegram_chat_id IS NULL FROM users "
+                                "WHERE email = 'tg2@test.dev'"), True)
+            check("e all'utente viene spiegato perche'", len(inviati), 1)
+
+            # Scollegando, il canale non puo' restare 'telegram': sarebbe un
+            # utente che non riceve piu' niente senza saperlo.
+            client.put("/me", headers=auth_header, json={"delivery_channel": "telegram",
+                                                         "telegram_chat_id": "555001"})
+            check("scollega: 204",
+                  client.delete("/me/telegram", headers=auth_header).status_code, 204)
+            check("e il canale torna a email",
+                  seen_by_other("SELECT delivery_channel FROM users "
+                                "WHERE email = 'pref@test.dev'"), "email")
+
+            tg_mod.invia_testo = vero_invia_testo
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("DELETE FROM users WHERE email = 'tg2@test.dev'")
+                setup.commit()
+
             print("\n— le offerte del pannello —")
             r = client.get("/me/offerte",
                            headers={"Authorization": f"Bearer {sessione}"})

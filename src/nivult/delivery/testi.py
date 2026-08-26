@@ -49,6 +49,8 @@ LINGUA_PER_GLM = {
 
 TESTI: dict[str, dict[str, str]] = {
     "en": {
+        "canale_ripiego_oggetto": 'Your digest is coming by email again',
+        "canale_ripiego_testo": 'We could not deliver to Telegram ({motivo}), so your digest is going back to email. You can reconnect Telegram any time from your panel on nivult.com.',
         "oggetto_uno": "Nivult — 1 job for you ({data})",
         "oggetto_molte": "Nivult — {n} jobs for you ({data})",
         "digest_del": "Digest of {data}",
@@ -72,6 +74,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/day", "unita_settimana": "/week",
     },
     "it": {
+        "canale_ripiego_oggetto": 'Il tuo digest torna via email',
+        "canale_ripiego_testo": 'Non siamo riusciti a consegnare su Telegram ({motivo}), quindi il digest torna via email. Puoi ricollegare Telegram quando vuoi dal pannello su nivult.com.',
         "oggetto_uno": "Nivult — 1 offerta per te ({data})",
         "oggetto_molte": "Nivult — {n} offerte per te ({data})",
         "digest_del": "Digest del {data}",
@@ -95,6 +99,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/giorno", "unita_settimana": "/settimana",
     },
     "fr": {
+        "canale_ripiego_oggetto": 'Votre digest revient par e-mail',
+        "canale_ripiego_testo": 'La livraison sur Telegram a échoué ({motivo}), votre digest repasse donc par e-mail. Vous pouvez reconnecter Telegram à tout moment depuis votre espace sur nivult.com.',
         "oggetto_uno": "Nivult — 1 offre pour vous ({data})",
         "oggetto_molte": "Nivult — {n} offres pour vous ({data})",
         "digest_del": "Digest du {data}",
@@ -118,6 +124,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/jour", "unita_settimana": "/semaine",
     },
     "de": {
+        "canale_ripiego_oggetto": 'Dein Digest kommt wieder per E-Mail',
+        "canale_ripiego_testo": 'Die Zustellung über Telegram hat nicht geklappt ({motivo}), daher kommt dein Digest wieder per E-Mail. Du kannst Telegram jederzeit in deinem Bereich auf nivult.com neu verbinden.',
         "oggetto_uno": "Nivult — 1 Job für dich ({data})",
         "oggetto_molte": "Nivult — {n} Jobs für dich ({data})",
         "digest_del": "Digest vom {data}",
@@ -141,6 +149,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/Tag", "unita_settimana": "/Woche",
     },
     "es": {
+        "canale_ripiego_oggetto": 'Tu resumen vuelve por correo',
+        "canale_ripiego_testo": 'No pudimos entregarlo en Telegram ({motivo}), así que tu resumen vuelve por correo. Puedes reconectar Telegram cuando quieras desde tu panel en nivult.com.',
         "oggetto_uno": "Nivult — 1 oferta para ti ({data})",
         "oggetto_molte": "Nivult — {n} ofertas para ti ({data})",
         "digest_del": "Digest del {data}",
@@ -164,6 +174,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/día", "unita_settimana": "/semana",
     },
     "pt": {
+        "canale_ripiego_oggetto": 'O teu resumo volta por email',
+        "canale_ripiego_testo": 'Não conseguimos entregar no Telegram ({motivo}), por isso o teu resumo volta por email. Podes voltar a ligar o Telegram quando quiseres no teu painel em nivult.com.',
         "oggetto_uno": "Nivult — 1 vaga para si ({data})",
         "oggetto_molte": "Nivult — {n} vagas para si ({data})",
         "digest_del": "Digest de {data}",
@@ -187,6 +199,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dia", "unita_settimana": "/semana",
     },
     "nl": {
+        "canale_ripiego_oggetto": 'Je digest komt weer per e-mail',
+        "canale_ripiego_testo": 'Bezorgen via Telegram lukte niet ({motivo}), dus je digest gaat weer per e-mail. Je kunt Telegram op elk moment opnieuw koppelen in je paneel op nivult.com.',
         "oggetto_uno": "Nivult — 1 baan voor je ({data})",
         "oggetto_molte": "Nivult — {n} banen voor je ({data})",
         "digest_del": "Digest van {data}",
@@ -210,6 +224,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dag", "unita_settimana": "/week",
     },
     "pl": {
+        "canale_ripiego_oggetto": 'Twój digest wraca na e-mail',
+        "canale_ripiego_testo": 'Nie udało się dostarczyć przez Telegram ({motivo}), więc digest wraca na e-mail. Telegram możesz podłączyć ponownie w dowolnej chwili w panelu na nivult.com.',
         "oggetto_uno": "Nivult — 1 oferta dla Ciebie ({data})",
         "oggetto_molte": "Nivult — {n} ofert dla Ciebie ({data})",
         "oggetto_poche": "Nivult — {n} oferty dla Ciebie ({data})",
@@ -234,6 +250,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dzień", "unita_settimana": "/tydz.",
     },
     "sv": {
+        "canale_ripiego_oggetto": 'Din sammanfattning kommer via e-post igen',
+        "canale_ripiego_testo": 'Vi kunde inte leverera via Telegram ({motivo}), så din sammanfattning går via e-post igen. Du kan koppla Telegram på nytt när du vill från din panel på nivult.com.',
         "oggetto_uno": "Nivult — 1 jobb till dig ({data})",
         "oggetto_molte": "Nivult — {n} jobb till dig ({data})",
         "digest_del": "Digest {data}",

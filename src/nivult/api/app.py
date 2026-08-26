@@ -34,8 +34,36 @@ from pydantic import BaseModel, EmailStr, Field
 from nivult import auth, oauth
 from nivult import crypto, cv, storage
 from nivult.config import database_url, load_dotenv
+from nivult.delivery import telegram as telegram_mod
 from nivult.matching.llm import GLM
 from nivult.matching.worker import calcola_slot
+
+# I messaggi che il bot manda durante il collegamento. Non stanno in
+# `delivery/testi.py` perche' non sono il digest: sono la conferma che il
+# collegamento e' andato a buon fine, e l'utente li legge una volta sola.
+# Il benvenuto e' tradotto perche' e' la prima frase che una persona riceve
+# da noi su quel canale; gli errori restano in inglese, li vede quasi
+# nessuno e tradurne nove copie non ripaga.
+TG_SENZA_GETTONE = (
+    "Hi! To receive your Nivult digest here, open the link from your "
+    "Nivult setup page \u2014 this chat needs to be connected to your account first.")
+TG_SCADUTO = (
+    "That link has expired or was already used. Open your Nivult page again "
+    "and generate a new one \u2014 they last ten minutes.")
+TG_GIA_COLLEGATA = (
+    "This Telegram account is already connected to another Nivult account. "
+    "Disconnect it there first.")
+TG_BENVENUTO = {
+    "en": "<b>Connected.</b> Your Nivult digest will arrive here from now on.",
+    "it": "<b>Collegato.</b> Da ora il tuo digest Nivult arriva qui.",
+    "fr": "<b>Connect\u00e9.</b> Votre digest Nivult arrivera d\u00e9sormais ici.",
+    "de": "<b>Verbunden.</b> Dein Nivult-Digest kommt ab jetzt hierher.",
+    "es": "<b>Conectado.</b> Tu resumen de Nivult llegar\u00e1 aqu\u00ed a partir de ahora.",
+    "pt": "<b>Ligado.</b> O teu resumo Nivult passa a chegar aqui.",
+    "nl": "<b>Verbonden.</b> Je Nivult-digest komt vanaf nu hier binnen.",
+    "pl": "<b>Po\u0142\u0105czono.</b> Tw\u00f3j digest Nivult b\u0119dzie odt\u0105d przychodzi\u0107 tutaj.",
+    "sv": "<b>Ansluten.</b> Din Nivult-sammanfattning kommer h\u00e4danefter hit.",
+}
 
 load_dotenv()
 log = logging.getLogger("nivult.api")
@@ -842,6 +870,130 @@ def create_app() -> FastAPI:
             cur.execute("DELETE FROM user_clusters WHERE user_id = %s "
                         "AND cluster_id = %s", (uid, cluster_id))
         conn.commit()
+
+    # --- collegamento Telegram ---------------------------------------------
+    #
+    # Un bot Telegram NON puo' scrivere per primo: senza che sia l'utente ad
+    # aprire la conversazione non esiste nessun chat_id. Il giro e' quindi
+    # obbligato, e sono queste tre rotte: si crea un gettone, si mostra
+    # t.me/<bot>?start=<gettone>, e quando l'utente preme START Telegram
+    # consegna l'update al webhook che risolve il gettone.
+
+    @app.post("/me/telegram/collega")
+    def telegram_collega(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Apre un collegamento: -> il deep link da toccare o inquadrare."""
+        if not telegram_mod.configurato():
+            raise HTTPException(503, "Telegram non configurato su questo server")
+        with conn.cursor() as cur:
+            # I gettoni aperti di questo utente si chiudono: se qualcuno
+            # riapre il pannello, il QR di prima non deve restare valido in
+            # giro. Uno alla volta, sempre.
+            cur.execute("UPDATE telegram_link_tokens SET consumed_at = now(), "
+                        "  chat_id = '(annullato)' "
+                        "WHERE user_id = %s AND consumed_at IS NULL", (uid,))
+            gettone = secrets.token_urlsafe(32)
+            cur.execute(
+                "INSERT INTO telegram_link_tokens (user_id, token_hash, expires_at) "
+                "VALUES (%s, %s, now() + interval '10 minutes')",
+                (uid, hashlib.sha256(gettone.encode()).hexdigest()))
+        conn.commit()
+        return {"link": telegram_mod.link_collegamento(gettone),
+                "bot": telegram_mod.utente_bot(),
+                "scade_tra_secondi": 600}
+
+    @app.get("/me/telegram/stato")
+    def telegram_stato(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Lo interroga la pagina mentre l'utente e' dentro Telegram.
+
+        Rotta minuscola e non /me apposta: viene chiesta ogni due secondi
+        finche' il pannello e' aperto, e /me fa molto piu' lavoro di quanto
+        serva per rispondere a una domanda sola.
+        """
+        with conn.cursor() as cur:
+            cur.execute("SELECT telegram_chat_id IS NOT NULL, delivery_channel "
+                        "FROM users WHERE id = %s", (uid,))
+            r = cur.fetchone()
+        if not r:
+            raise HTTPException(404, "utente inesistente")
+        return {"collegato": r[0], "canale": r[1]}
+
+    @app.delete("/me/telegram", status_code=204)
+    def telegram_scollega(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Stacca la chat. Se era il canale di consegna, si torna all'email.
+
+        Non si puo' lasciare delivery_channel a 'telegram' senza chat_id: il
+        vincolo users_channel_address_ck lo rifiuta, ed e' giusto cosi' —
+        sarebbe un utente che non riceve piu' niente senza saperlo.
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET telegram_chat_id = NULL, delivery_failures = 0, "
+                "  delivery_channel = CASE WHEN delivery_channel = 'telegram' "
+                "                          THEN 'email' ELSE delivery_channel END "
+                "WHERE id = %s", (uid,))
+        conn.commit()
+
+    @app.post("/telegram/webhook", include_in_schema=False)
+    async def telegram_webhook(request: Request, conn=Depends(connessione)):
+        """Dove Telegram consegna il «/start <gettone>».
+
+        **Rotta pubblica, e per questo autenticata dall'header segreto.**
+        Telegram rimanda il `secret_token` impostato con setWebhook in
+        X-Telegram-Bot-Api-Secret-Token a ogni chiamata. Senza quel controllo
+        chiunque potrebbe costruire un POST e collegare la PROPRIA chat
+        all'account di un altro, cioe' dirottargli addosso i digest. E'
+        il punto piu' delicato di tutta la funzione.
+
+        Si risponde 200 in ogni caso: a Telegram non si racconta niente, e un
+        errore lo farebbe ritentare in eterno su un update che non migliora.
+        """
+        atteso = os.environ.get("TELEGRAM_WEBHOOK_SECRET")
+        ricevuto = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if not atteso or not ricevuto or not secrets.compare_digest(ricevuto, atteso):
+            raise HTTPException(403, "no")
+
+        corpo = await request.json()
+        msg = (corpo or {}).get("message") or {}
+        chat_id = str(((msg.get("chat") or {}).get("id") or "")).strip()
+        testo = (msg.get("text") or "").strip()
+        if not chat_id or not testo.startswith("/start"):
+            return {"ok": True}
+        pezzi = testo.split(maxsplit=1)
+        gettone = pezzi[1].strip() if len(pezzi) > 1 else ""
+        if not gettone:
+            telegram_mod.invia_testo(chat_id, TG_SENZA_GETTONE)
+            return {"ok": True}
+
+        with conn.cursor() as cur:
+            # Consumo atomico nell'UPDATE condizionato, come per il magic
+            # link: due START con lo stesso gettone, uno solo vince.
+            cur.execute(
+                "UPDATE telegram_link_tokens SET consumed_at = now(), chat_id = %s "
+                "WHERE token_hash = %s AND consumed_at IS NULL AND expires_at > now() "
+                "RETURNING user_id::text",
+                (chat_id, hashlib.sha256(gettone.encode()).hexdigest()))
+            r = cur.fetchone()
+            if not r:
+                conn.rollback()
+                telegram_mod.invia_testo(chat_id, TG_SCADUTO)
+                return {"ok": True}
+            uid = r[0]
+            # Una chat appartiene a un utente solo: l'indice unico parziale
+            # lo impone, e qui si traduce in un messaggio comprensibile
+            # invece che in un 500 muto.
+            try:
+                cur.execute(
+                    "UPDATE users SET telegram_chat_id = %s, delivery_failures = 0 "
+                    "WHERE id = %s", (chat_id, uid))
+            except psycopg.errors.UniqueViolation:
+                conn.rollback()
+                telegram_mod.invia_testo(chat_id, TG_GIA_COLLEGATA)
+                return {"ok": True}
+            cur.execute("SELECT locale FROM users WHERE id = %s", (uid,))
+            locale = (cur.fetchone() or ["en"])[0]
+        conn.commit()
+        telegram_mod.invia_testo(chat_id, TG_BENVENUTO.get(locale, TG_BENVENUTO["en"]))
+        return {"ok": True}
 
     @app.put("/me")
     def aggiorna_me(pref: PreferenzeUtente, uid: str = Depends(utente),

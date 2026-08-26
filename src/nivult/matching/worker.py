@@ -36,8 +36,9 @@ from psycopg.rows import dict_row
 
 from nivult.config import database_url, load_dotenv, safe_dsn
 from nivult.delivery import email as email_mod
+from nivult.delivery import telegram as telegram_mod
 from nivult.matching import funnel
-from nivult.delivery.testi import LINGUA_PER_GLM
+from nivult.delivery.testi import LINGUA_PER_GLM, t
 from nivult.matching.llm import (GLM, motiva_offerta, profilo_come_testo,
                                  valuta_offerta)
 
@@ -69,6 +70,7 @@ class Utente:
     last_digest_at: datetime | None
     cv_id: str | None
     locale: str = "en"
+    delivery_failures: int = 0
     profilo: dict = field(default_factory=dict)
 
 
@@ -132,6 +134,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         "       u.delivery_email::text, u.telegram_chat_id, u.whatsapp_e164, "
         "       u.frequency, u.send_hour_local, u.send_weekday, u.send_monthday, "
         "       u.timezone, u.next_digest_at, u.last_digest_at, u.locale, "
+        "       u.delivery_failures, "
         "       cv.id::text AS cv_id, cv.families, cv.seniority, cv.skills, "
         "       cv.languages, cv.years_experience, e.label AS seniority_label "
         "FROM users u "
@@ -153,7 +156,49 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         send_weekday=r["send_weekday"], send_monthday=r["send_monthday"],
         timezone=r["timezone"], next_digest_at=r["next_digest_at"],
         last_digest_at=r["last_digest_at"], cv_id=r["cv_id"],
-        locale=r["locale"], profilo=_profilo(r)) for r in cur.fetchall()]
+        locale=r["locale"], delivery_failures=r["delivery_failures"],
+        profilo=_profilo(r)) for r in cur.fetchall()]
+
+
+def _canale_ok(conn, u) -> None:
+    """Una consegna riuscita azzera il contatore dei guasti."""
+    if u.delivery_failures:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET delivery_failures = 0 WHERE id = %s",
+                        (u.id,))
+        conn.commit()
+
+
+def _canale_fallito(conn, u) -> int:
+    """Segna un guasto e restituisce quanti ne sono andati storti di fila."""
+    with conn.cursor() as cur:
+        cur.execute("UPDATE users SET delivery_failures = delivery_failures + 1 "
+                    "WHERE id = %s RETURNING delivery_failures", (u.id,))
+        n = cur.fetchone()[0]
+    conn.commit()
+    return n
+
+
+def _torna_a_email(conn, u, motivo: str) -> None:
+    """Riporta l'utente sull'email e glielo DICE.
+
+    Il silenzio qui sarebbe la cosa peggiore: uno che ha scelto Telegram e
+    ricomincia a ricevere email senza spiegazione pensa che il prodotto sia
+    rotto. La riga in piu' costa nulla e risparmia una segnalazione.
+    """
+    with conn.cursor() as cur:
+        cur.execute("UPDATE users SET delivery_channel = 'email', "
+                    "  delivery_failures = 0 WHERE id = %s", (u.id,))
+    conn.commit()
+    u.delivery_channel = "email"
+    x = t(u.locale)
+    try:
+        email_mod.invia_generica(
+            u.delivery_email or u.email,
+            x["canale_ripiego_oggetto"],
+            x["canale_ripiego_testo"].format(motivo=motivo), "")
+    except Exception:
+        log.warning("%s: non sono riuscito ad avvisare del ripiego", u.email)
 
 
 def _orario(giorno: date, ora: int, tz: ZoneInfo) -> datetime:
@@ -400,7 +445,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                             (item["reason"], item["match_id"]))
             conn.commit()
 
-        if u.delivery_channel != "email":
+        if u.delivery_channel not in ("email", "telegram"):
             _chiudi(conn, digest_id, status="failed", valutate=esito["valutate"],
                     inviate=0, error=f"canale {u.delivery_channel} non ancora supportato")
             _rischedula(conn, u, started)
@@ -408,7 +453,36 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             return esito
 
         destinatario = u.delivery_email or u.email
-        if dry_run:
+        if u.delivery_channel == "telegram" and u.telegram_chat_id:
+            if dry_run:
+                message_id = None
+                log.info("%s: DRY RUN, %d messaggi Telegram compilati", u.email,
+                         len(telegram_mod.compila(items, u.locale)))
+            else:
+                try:
+                    message_id = telegram_mod.invia(
+                        u.telegram_chat_id, items, u.locale)
+                    _canale_ok(conn, u)
+                except telegram_mod.BotBloccato as exc:
+                    # 403 non e' un errore da ritentare: e' un canale che non
+                    # esiste piu', e riproverebbe per sempre. Si torna
+                    # SUBITO all'email e il digest parte lo stesso — quello
+                    # e' gia' stato pagato in valutazioni, buttarlo via
+                    # sarebbe il danno peggiore dei due.
+                    log.warning("%s: bot bloccato, torno all'email (%s)",
+                                u.email, exc)
+                    _torna_a_email(conn, u, "il bot e' stato bloccato")
+                    message_id = email_mod.invia(destinatario, items, u.locale)
+                except Exception:
+                    # Guasto passeggero: rete, 500 di Telegram. Si conta, e
+                    # al secondo di fila si molla il canale invece di
+                    # accumulare digest falliti che nessuno guarda.
+                    if _canale_fallito(conn, u) >= 2:
+                        _torna_a_email(conn, u, "consegna fallita due volte")
+                        message_id = email_mod.invia(destinatario, items, u.locale)
+                    else:
+                        raise
+        elif dry_run:
             percorsoHtml = email_mod.anteprima(destinatario, items, u.locale)
             message_id = None
             log.info("%s: DRY RUN, email compilata in %s", u.email, percorsoHtml)
