@@ -643,19 +643,43 @@ def create_app() -> FastAPI:
             # loghi veri leggerebbe come un buco — la vetrina è la faccia del
             # prodotto, e i ripieghi vanno bene ovunque tranne qui. Si
             # escludono anche i fallimenti noti (bytes NULL in cache).
+            # Un giro per PAESE, non un pescaggio cieco.
+            #
+            # `ORDER BY random()` da solo restituisce il corpus com'è, e il
+            # corpus è sbilanciato per costruzione: France Travail da sola
+            # porta l'80% delle offerte con logo, quindi il riquadro usciva
+            # quasi tutto francese mentre la pagina accanto promette 44
+            # paesi. Un visitatore tedesco leggeva una vetrina di annunci
+            # francesi e ne traeva la conclusione ovvia.
+            #
+            # `ROW_NUMBER` numera le offerte dentro ciascun paese; ordinare
+            # per quel numero prende prima una offerta per paese, poi la
+            # seconda di ciascuno, e così via. Si adatta da solo: con tre
+            # paesi ne dà sei a testa, con dodici ne dà una o due, senza
+            # nessuna quota scritta a mano da tenere aggiornata.
             cur.execute(
-                "SELECT j.title, j.organization, (j.cities)[1], (j.countries)[1], "
-                "       COALESCE(j.org_linkedin_slug, j.domain_derived) "
-                "FROM jobs j "
-                "LEFT JOIN company_logos cl "
-                "  ON cl.chiave = COALESCE(j.org_linkedin_slug, j.domain_derived) "
-                "WHERE j.status = 'active' AND j.duplicate_of_job_id IS NULL "
-                "  AND j.organization IS NOT NULL "
-                "  AND j.date_posted > now() - interval '7 days' "
-                "  AND COALESCE(j.org_linkedin_slug, j.domain_derived) IS NOT NULL "
-                "  AND (cl.bytes IS NOT NULL OR (cl.chiave IS NULL AND "
-                "       (j.org_logo_permalink IS NOT NULL OR j.organization_logo IS NOT NULL))) "
-                "ORDER BY random() LIMIT 18")
+                "WITH pescabili AS ( "
+                "  SELECT j.title, j.organization, (j.cities)[1] AS citta, "
+                "         (j.countries)[1] AS paese, "
+                "         COALESCE(j.org_linkedin_slug, j.domain_derived) AS logo, "
+                "         row_number() OVER (PARTITION BY (j.countries)[1] "
+                "                            ORDER BY random()) AS giro "
+                "  FROM jobs j "
+                "  LEFT JOIN company_logos cl "
+                "    ON cl.chiave = COALESCE(j.org_linkedin_slug, j.domain_derived) "
+                "  WHERE j.status = 'active' AND j.duplicate_of_job_id IS NULL "
+                "    AND j.organization IS NOT NULL "
+                "    AND j.date_posted > now() - interval '7 days' "
+                "    AND COALESCE(j.org_linkedin_slug, j.domain_derived) IS NOT NULL "
+                "    AND (cl.bytes IS NOT NULL OR (cl.chiave IS NULL AND "
+                "         (j.org_logo_permalink IS NOT NULL OR j.organization_logo IS NOT NULL))) "
+                "), scelte AS ( "
+                "  SELECT * FROM pescabili ORDER BY giro, random() LIMIT 18 "
+                ") "
+                # Rimescolate alla fine: senza, il riquadro scorrerebbe un
+                # paese per riga in ordine fisso e la rotazione si vedrebbe.
+                "SELECT title, organization, citta, paese, logo "
+                "FROM scelte ORDER BY random()")
             righe = cur.fetchall()
         return Response(
             content=json.dumps({
@@ -892,8 +916,36 @@ def create_app() -> FastAPI:
                                         datetime.now(timezone.utc))
                 except Exception as exc:
                     raise HTTPException(422, f"orario non calcolabile: {exc}")
+
+                # IL PRIMO DIGEST NON ASPETTA LO SLOT.
+                #
+                # `calcola_slot` dà la prossima occorrenza dell'orario
+                # scelto: fino a un giorno per chi lo vuole quotidiano, fino
+                # a un MESE per chi lo vuole mensile. Significa che qualcuno
+                # finiva l'iscrizione, caricava il CV, sceglieva le ricerche
+                # — e poi non riceveva niente per settimane. Il momento in
+                # cui una persona ha appena consegnato il proprio CV è
+                # esattamente quello in cui va mostrato che il motore
+                # funziona; un mese dopo si è già dimenticata di noi.
+                #
+                # Solo la PRIMA volta, e solo se il digest può davvero
+                # nascere: senza CV attivo o senza una ricerca attiva il
+                # worker registrerebbe un fallimento invece di una
+                # consegna, che è peggio dell'attesa. Dal secondo in poi
+                # comanda la frequenza scelta.
+                cur.execute(
+                    "SELECT u.last_digest_at IS NULL "
+                    "   AND u.next_digest_at IS NULL "
+                    "   AND EXISTS (SELECT 1 FROM user_cvs cv "
+                    "               WHERE cv.user_id = u.id AND cv.status = 'active') "
+                    "   AND EXISTS (SELECT 1 FROM user_clusters uc "
+                    "               JOIN clusters c ON c.id = uc.cluster_id "
+                    "               WHERE uc.user_id = u.id AND NOT uc.is_paused "
+                    "                 AND c.status = 'active') "
+                    "FROM users u WHERE u.id = %s", (uid,))
+                primo = cur.fetchone()[0]
                 cur.execute("UPDATE users SET next_digest_at = %s WHERE id = %s",
-                            (slot, uid))
+                            (datetime.now(timezone.utc) if primo else slot, uid))
         conn.commit()
         return me(uid=uid, conn=conn)
 

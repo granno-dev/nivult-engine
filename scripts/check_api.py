@@ -170,6 +170,69 @@ def main() -> int:
                            json={"display_name": "Giuseppe Ranno"})
             check("il nome si puo' scrivere", r.json().get("nome"), "Giuseppe Ranno")
 
+            print("\n— il primo digest non aspetta lo slot —")
+            # Chi finisce l'iscrizione ha appena consegnato il proprio CV: è
+            # il momento in cui va mostrato che il motore funziona. Con lo
+            # slot normale un mensile avrebbe aspettato fino a un mese.
+            # Vale solo se il digest può nascere davvero — CV attivo e una
+            # ricerca attiva — altrimenti si programmerebbe un fallimento.
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE email = 'pref@test.dev'")
+                    uid = cur.fetchone()[0]
+                    cur.execute(
+                        "INSERT INTO user_cvs (user_id, status, storage_key, "
+                        "  encryption_algo, encrypted_dek, nonce, auth_tag, "
+                        "  kek_version) "
+                        # Le lunghezze le impone user_cvs_encryption_ck: DEK
+                        # >= 32 byte, nonce 12, tag 16. Byte finti, misure vere.
+                        "VALUES (%s,'active','k/primo','aes-256-gcm', "
+                        "        decode(repeat('00', 40), 'hex'), "
+                        "        decode(repeat('00', 12), 'hex'), "
+                        "        decode(repeat('00', 16), 'hex'), 1)", (uid,))
+                    cur.execute("INSERT INTO user_clusters (user_id, cluster_id) "
+                                "VALUES (%s, %s)", (uid, cluster_id))
+                    # Si torna alla condizione di chi non ha ancora ricevuto
+                    # niente: è quella che decide, non l'ordine delle chiamate.
+                    cur.execute("UPDATE users SET next_digest_at = NULL, "
+                                "last_digest_at = NULL WHERE id = %s", (uid,))
+                setup.commit()
+
+            client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
+                       json={"frequency": "monthly", "send_monthday": 1,
+                             "send_weekday": None})
+            fra = seen_by_other(
+                "SELECT next_digest_at - now() < interval '2 minutes' "
+                "FROM users WHERE email = 'pref@test.dev'")
+            check("profilo completo: il primo digest e' adesso", fra, True)
+
+            # Dal secondo in poi comanda la frequenza scelta: se restasse
+            # "adesso" ogni salvataggio farebbe ripartire un digest.
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("UPDATE users SET last_digest_at = now() "
+                                "WHERE id = %s", (uid,))
+                setup.commit()
+            client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
+                       json={"send_monthday": 15})
+            check("gia' servito: si torna allo slot, non ad adesso",
+                  seen_by_other("SELECT next_digest_at - now() > interval '1 day' "
+                                "FROM users WHERE email = 'pref@test.dev'"), True)
+
+            # Si rimette com'era: le prove che seguono lavorano sullo stesso
+            # utente, e un mensile con send_monthday addosso fa rifiutare il
+            # loro primo `frequency: daily`. Un test che sporca lo stato
+            # rompe il vicino, e il guasto sembra del vicino.
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("DELETE FROM user_clusters WHERE user_id = %s", (uid,))
+                    cur.execute("DELETE FROM user_cvs WHERE user_id = %s", (uid,))
+                    cur.execute("UPDATE users SET frequency = 'daily', "
+                                "  send_hour_local = 19, send_weekday = NULL, "
+                                "  send_monthday = NULL, last_digest_at = NULL "
+                                "WHERE id = %s", (uid,))
+                setup.commit()
+
 
             print("\n— le offerte del pannello —")
             r = client.get("/me/offerte",

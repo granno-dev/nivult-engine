@@ -126,6 +126,20 @@ dall'utente (giornaliera / settimanale / mensile).
 Se nessuna offerta supera la soglia, **non si manda nulla**. Un digest vuoto è
 un esito legittimo (`digests.status = 'skipped_empty'`), non un fallimento.
 
+**Il primo digest non aspetta lo slot.** `calcola_slot` dà la prossima
+occorrenza dell'orario scelto: fino a un giorno per un quotidiano, fino a un
+**mese** per un mensile. Chi finiva l'iscrizione restava quindi settimane
+senza vedere niente, proprio nel momento in cui aveva appena consegnato il
+proprio CV ed era disposto a giudicarci. Alla prima scrittura delle
+preferenze `next_digest_at` diventa `now()` — ma **solo se il digest può
+davvero nascere**: CV attivo e almeno una ricerca attiva, altrimenti si
+programmerebbe un fallimento invece di una consegna. Dal secondo in poi
+comanda la frequenza scelta.
+
+Con il cron orario (`10 * * * *`) questo significa **entro l'ora**, ed è ciò
+che il sito promette nello Step 3. Se un giorno la riga dovrà dire «entro
+pochi minuti», è il cron che va stretto, non il testo.
+
 Il worker (`nivult.matching.worker`, orario via `deploy/digests.sh`) itera sugli
 **utenti dovuti**, non sui cluster: il corpus è condiviso, il giudizio no. È
 tutto riprendibile — un'offerta già valutata non si ripaga, un match passato e
