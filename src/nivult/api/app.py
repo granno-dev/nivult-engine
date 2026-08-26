@@ -629,24 +629,36 @@ def create_app() -> FastAPI:
 
         Niente URL delle offerte: questo è un assaggio, non una bacheca
         gratuita. Il prodotto è il digest.
+
+        E niente CONTEGGI. C'erano — offerte attive e datori distinti, contati
+        adesso — e facevano una bella prova di ampiezza, ma erano anche la
+        dimensione esatta del nostro indice servita a chiunque interroghi la
+        rotta, concorrenti compresi. Una rotta pubblica è pubblica per tutti:
+        nasconderli solo nel sito avrebbe lasciato il dato qui, a portata di
+        curl.
         """
         with conn.cursor() as cur:
+            # Solo offerte il cui logo ESISTE davvero: o la fonte porta
+            # l'immagine, o l'archivio ce l'ha già. Un monogramma in mezzo ai
+            # loghi veri leggerebbe come un buco — la vetrina è la faccia del
+            # prodotto, e i ripieghi vanno bene ovunque tranne qui. Si
+            # escludono anche i fallimenti noti (bytes NULL in cache).
             cur.execute(
-                "SELECT title, organization, (cities)[1], (countries)[1], "
-                "       date_posted, COALESCE(org_linkedin_slug, domain_derived) "
-                "FROM jobs "
-                "WHERE status = 'active' AND duplicate_of_job_id IS NULL "
-                "  AND organization IS NOT NULL "
-                "  AND date_posted > now() - interval '7 days' "
-                "ORDER BY random() LIMIT 14")
+                "SELECT j.title, j.organization, (j.cities)[1], (j.countries)[1], "
+                "       j.date_posted, COALESCE(j.org_linkedin_slug, j.domain_derived) "
+                "FROM jobs j "
+                "LEFT JOIN company_logos cl "
+                "  ON cl.chiave = COALESCE(j.org_linkedin_slug, j.domain_derived) "
+                "WHERE j.status = 'active' AND j.duplicate_of_job_id IS NULL "
+                "  AND j.organization IS NOT NULL "
+                "  AND j.date_posted > now() - interval '7 days' "
+                "  AND COALESCE(j.org_linkedin_slug, j.domain_derived) IS NOT NULL "
+                "  AND (cl.bytes IS NOT NULL OR (cl.chiave IS NULL AND "
+                "       (j.org_logo_permalink IS NOT NULL OR j.organization_logo IS NOT NULL))) "
+                "ORDER BY random() LIMIT 18")
             righe = cur.fetchall()
-            cur.execute(
-                "SELECT count(*), count(DISTINCT organization) FROM jobs "
-                "WHERE status = 'active' AND duplicate_of_job_id IS NULL")
-            offerte, datori = cur.fetchone()
         return Response(
             content=json.dumps({
-                "conteggi": {"offerte": offerte, "datori": datori},
                 "offerte": [{
                     "titolo": r[0], "azienda": r[1], "citta": r[2],
                     "paese": r[3],
