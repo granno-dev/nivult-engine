@@ -323,7 +323,8 @@ def create_app() -> FastAPI:
                 "SELECT email::text, plan, subscription_status, delivery_channel, "
                 "frequency, timezone, email_verified_at IS NOT NULL, status, "
                 "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
-                "send_monthday, delivery_email::text, display_name, locale "
+                "send_monthday, delivery_email::text, display_name, locale, "
+                "telegram_chat_id IS NOT NULL "
                 "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
         if not r:
@@ -337,7 +338,10 @@ def create_app() -> FastAPI:
                 "ultimo_digest": r[9].isoformat() if r[9] else None,
                 "ora_invio": r[10], "giorno_settimana": r[11],
                 "giorno_mese": r[12], "email_consegna": r[13],
-                "nome": r[14], "locale": r[15]}
+                "nome": r[14], "locale": r[15],
+                # Non il chat_id: al sito serve sapere SE si puo' scegliere
+                # Telegram, non a quale chat consegniamo.
+                "telegram_collegato": r[16]}
 
     # --- vocabolari e cluster ----------------------------------------------
 
