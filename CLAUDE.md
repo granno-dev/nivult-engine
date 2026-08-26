@@ -148,6 +148,46 @@ valutazione è per offerta, non anticipato: un errore a metà digest non butta v
 la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
 digest (quelle del run più le recuperate), non solo quelle appena pagate.
 
+### SMS: provato sul campo e scartato
+
+**Misurato il 2026-08-26 con Zernio, mittente alfanumerico `Nivult`, verso un
+Vodafone Italia.** Due invii, otto centesimi di dollaro l'uno:
+
+| Messaggio | Esito |
+|---|---|
+| 126 caratteri, **senza link** | **arrivato** |
+| 84 caratteri, **con `https://nivult.com/it`** | **mai arrivato** |
+
+Pagati entrambi. È il comportamento tipico dei filtri italiani sull'A2P: un
+mittente alfanumerico non registrato che porta un URL viene scartato dalla
+rete, e **l'addebito resta**. Zernio dichiara «nessuna registrazione
+necessaria», il che significa rotta grigia — e le rotte grigie si fermano
+esattamente sui messaggi con link.
+
+Non è solo un problema di consegna. Anche funzionando, l'SMS perdeva:
+
+| | Costo | Contenuto |
+|---|---|---|
+| WhatsApp (template `UTILITY`) | 0,055 € | il digest intero |
+| SMS | 0,074 € | 160 caratteri + un link |
+
+**Il 35% in più per un ventesimo del contenuto**, e senza garanzia che il
+link sia toccabile — da mittente alfanumerico molti telefoni non lo rendono
+cliccabile. Siccome tutto il senso dell'SMS era «tocca e leggi il digest»,
+senza link non serve a niente.
+
+*Se qualcuno riproporrà l'SMS come canale economico: non lo è, ed è stato
+misurato, non ipotizzato. L'unica variante non provata è un numero mittente
+vero al posto del nome — che però in Italia da Zernio si compra solo come
+fisso, e un fisso di Matera come mittente di un digest è peggio del
+problema.*
+
+**Chi manda deve sapere se è arrivato.** Zernio non espone lo stato di
+consegna in lettura: `message.delivered` e `message.failed` arrivano **solo
+via webhook**. Senza webhook registrato abbiamo pagato un messaggio perso
+senza accorgercene, ed è così che si scopre un canale rotto settimane dopo.
+Vale per qualunque canale a pagamento aggiungeremo.
+
 **La lingua del digest si GENERA, non si traduce** — e da agosto 2026 è
 implementato. `users.locale` (migrazione 0046, default `en`, CHECK sulle nove
 lingue del sito) viene letta in tre posti: il template dell'email
