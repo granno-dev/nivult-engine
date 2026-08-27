@@ -148,6 +148,60 @@ valutazione è per offerta, non anticipato: un errore a metà digest non butta v
 la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
 digest (quelle del run più le recuperate), non solo quelle appena pagate.
 
+### WhatsApp: la verifica aziendale NON è la porta d'ingresso
+
+**È l'errore da non rifare, ed è facile farlo**: `health_status` risponde
+`can_send_message: LIMITED` con l'errore `141010 The Business has not passed
+business verification`, e la parola *LIMITED* accanto a *verification* si
+legge come «bloccato finché non ti verifichi». Non è così.
+
+| | Senza verifica | Con verifica |
+|---|---|---|
+| Si può mandare | **sì, da subito** | sì |
+| Destinatari unici / 24 h | **250, per sempre** | 1.000 → 10.000 → 100.000 → illimitato |
+| Modelli | 250 | di più |
+| Numeri | 2 | di più |
+
+**La verifica alza i tetti, non concede l'accesso.** Serve a crescere: senza,
+si resta a 250 al giorno e non si sale mai; con, i gradini salgono da soli
+usando metà del tetto in sette giorni con qualità alta. Sono documenti
+societari in Meta Business Manager, 2–5 giorni lavorativi.
+
+**Per noi 250 destinatari unici al giorno bastano fino a ~250 utenti Ultra
+con digest quotidiano** — molto oltre il punto in cui avremo la partita IVA.
+Quindi la verifica non è sulla strada del primo iscritto: è sulla strada del
+duecentocinquantunesimo.
+
+**Cosa invece è obbligatorio anche senza verifica:**
+
+- **modelli approvati da Meta** per ogni messaggio che apre una
+  conversazione — approvazione in poche ore, poi il modello si riusa;
+- **consenso esplicito dell'utente**, che nomini WhatsApp e Nivult;
+- **privacy policy pubblicata** (c'è);
+- **numero dedicato**, non attivo sull'app WhatsApp normale.
+
+**Il vincolo vero non è la verifica, è il punteggio qualità.** Blocchi e
+segnalazioni di spam congelano o abbassano i tetti a prescindere da quanto
+sei verificato. Per questo il consenso esplicito e la gestione automatica
+delle parole di disiscrizione (`STOP`, `UNSUBSCRIBE`) sono **obbligatori,
+non opzionali**: sono ciò che tiene in piedi il canale, non una cortesia.
+
+**Fornitore scelto: Zernio.** API ufficiale via Meta Embedded Signup, zero
+ricarico sulle tariffe Meta, primi 2 account gratuiti, numero dedicato a
+~3–4 $/mese. Ci risparmia Business Manager, revisione dell'app e acquisto
+della SIM.
+
+Stato al 2026-08-27, misurato sul nostro account: numero **+1 646 914 3141**
+connesso, nome visualizzato **Nivult** (`AVAILABLE_WITHOUT_REVIEW`),
+`TIER_250`. **Direct Send** — i messaggi liberi senza modello — è **spento**
+sul nostro WABA (`"Direct Send is not enabled for this WhatsApp account"`),
+quindi i modelli non sono una scorciatoia evitabile: sono l'unica strada. Due
+modelli `UTILITY` in inglese sono in revisione.
+
+⚠ **Nessun lavoro su WhatsApp finché non serve.** È il canale dell'Ultra e
+non abbiamo ancora utenti. Email e Telegram coprono tutto, e Telegram è
+gratis su tutti i piani.
+
 ### SMS: provato sul campo e scartato
 
 **Misurato il 2026-08-26 con Zernio, mittente alfanumerico `Nivult`, verso un
