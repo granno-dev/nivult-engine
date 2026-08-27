@@ -362,12 +362,19 @@ def create_app() -> FastAPI:
     def me(uid: str = Depends(utente), conn=Depends(connessione)):
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT email::text, plan, subscription_status, delivery_channels, "
-                "frequency, timezone, email_verified_at IS NOT NULL, status, "
-                "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
-                "send_monthday, delivery_email::text, display_name, locale, "
-                "telegram_chat_id IS NOT NULL, whatsapp_e164 IS NOT NULL "
-                "FROM users WHERE id = %s", (uid,))
+                "SELECT u.email::text, u.plan, u.subscription_status, "
+                "u.delivery_channels, "
+                "u.frequency, u.timezone, u.email_verified_at IS NOT NULL, u.status, "
+                "u.next_digest_at, u.last_digest_at, u.send_hour_local, u.send_weekday, "
+                "u.send_monthday, u.delivery_email::text, u.display_name, u.locale, "
+                "u.telegram_chat_id IS NOT NULL, u.whatsapp_e164 IS NOT NULL, "
+                # Quante ricerche include il piano, e quante ne ha aperte:
+                # il pannello mostrava il piano senza dire cosa comprende,
+                # e «2 di 2» e' l'unico modo per sapere se ne resta una.
+                "q.max_searches, "
+                "(SELECT count(*) FROM user_clusters uc WHERE uc.user_id = u.id) "
+                "FROM users u JOIN plan_quotas q ON q.plan = u.plan "
+                "WHERE u.id = %s", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "utente inesistente")
@@ -383,7 +390,8 @@ def create_app() -> FastAPI:
                 "nome": r[14], "locale": r[15],
                 # Non gli indirizzi: al sito serve sapere SE un canale si
                 # puo' scegliere, non a quale chat o numero consegniamo.
-                "telegram_collegato": r[16], "whatsapp_collegato": r[17]}
+                "telegram_collegato": r[16], "whatsapp_collegato": r[17],
+                "max_ricerche": r[18], "ricerche_attive": r[19]}
 
     # --- vocabolari e cluster ----------------------------------------------
 
