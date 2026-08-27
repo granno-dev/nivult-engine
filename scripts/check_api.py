@@ -702,6 +702,28 @@ def main() -> int:
                 r = client.post("/me/cv", files={"file": ("cv.txt", b" corto ", "text/plain")},
                                 headers=auth_header)
                 check("un file senza testo sufficiente è rifiutato", r.status_code, 422)
+
+                # Il CV si rivede: e' il suo file, la sessione e' l'unica
+                # chiave e la query filtra per user_id — non c'e' un id da
+                # indovinare. Le intestazioni sono meta' della funzione,
+                # quindi si provano una per una. `storage.leggi` va
+                # sostituito come le altre: qui non si parla col bucket vero.
+                app_module.storage.leggi = lambda chiave: salvati[chiave]
+                r = client.get("/me/cv/file", headers=auth_header)
+                check("il proprietario rivede il suo CV", r.status_code, 200)
+                check("e i byte sono quelli in chiaro del CV ATTIVO "
+                      "(il secondo: il primo e' superseded)",
+                      secondo in r.content, True)
+                check("no-store: un CV in cache e' un CV altrove",
+                      "no-store" in r.headers.get("cache-control", ""), True)
+                check("nosniff", r.headers.get("x-content-type-options"), "nosniff")
+                check("sandbox in CSP",
+                      "sandbox" in r.headers.get("content-security-policy", ""), True)
+                check("mostrato, non scaricato",
+                      r.headers.get("content-disposition", "").startswith("inline"),
+                      True)
+                check("senza sessione: 401",
+                      client.get("/me/cv/file").status_code, 401)
             finally:
                 app_module.storage.salva = salva_originale
                 app_module.storage.elimina = elimina_originale

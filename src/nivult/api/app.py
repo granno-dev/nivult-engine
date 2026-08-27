@@ -1419,18 +1419,70 @@ def create_app() -> FastAPI:
     @app.get("/me/cv")
     def leggi_cv(uid: str = Depends(utente), conn=Depends(connessione)):
         """Il profilo del CV attivo: ciò che l'onboarding precompila e il
-        pannello mostra. Il file non si scarica da qui."""
+        pannello mostra. Il file vero sta in /me/cv/file."""
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT families, seniority, skills, languages, years_experience, "
-                "       uploaded_at FROM user_cvs "
+                "       uploaded_at, mime_type, original_filename FROM user_cvs "
                 "WHERE user_id = %s AND status = 'active'", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "nessun CV caricato")
         return {"families": r[0], "seniority": r[1], "skills": r[2],
                 "languages": r[3], "years_experience": r[4],
-                "caricato_il": r[5]}
+                "caricato_il": r[5], "tipo": r[6], "nome_file": r[7]}
+
+    # I tipi che accettiamo in caricamento, e gli UNICI che si riservono.
+    # Non si rimanda mai indietro il content-type dichiarato dal client: un
+    # file caricato come text/html e riservito tale sarebbe una pagina
+    # ospitata sul nostro dominio, scritta da chi l'ha caricata.
+    TIPI_CV = {"application/pdf": "application/pdf",
+               "text/plain": "text/plain; charset=utf-8"}
+
+    @app.get("/me/cv/file")
+    def leggi_cv_file(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Il CV vero dell'utente, decifrato, per l'anteprima nel pannello.
+
+        È il suo file e lo rivede lui: la sessione è l'unica chiave, e la
+        query filtra per user_id — non esiste un id da indovinare.
+
+        Le intestazioni sono la parte che conta:
+        - `no-store`, perché un CV in una cache condivisa è un CV altrove;
+        - `nosniff` più un content-type dalla NOSTRA lista, così nessun
+          caricamento può farsi servire come HTML dal nostro dominio;
+        - `sandbox` in CSP, perché un PDF può contenere script e qui viene
+          mostrato dentro un iframe — la stessa difesa già usata per gli
+          SVG dei loghi.
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT storage_key, encrypted_dek, mime_type, original_filename "
+                "FROM user_cvs WHERE user_id = %s AND status = 'active'", (uid,))
+            r = cur.fetchone()
+        if not r:
+            raise HTTPException(404, "nessun CV caricato")
+        chiave, dek, tipo, nome = r
+        tipo_servito = TIPI_CV.get(tipo or "", "application/octet-stream")
+        try:
+            dati = crypto.decifra(storage.leggi(chiave), bytes(dek))
+        except Exception as exc:
+            log.warning("CV non leggibile per %s: %s", uid, exc)
+            raise HTTPException(503, "il file non e' leggibile in questo momento")
+        return Response(
+            content=dati,
+            media_type=tipo_servito,
+            headers={
+                "Cache-Control": "no-store, private",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                # `inline`: l'anteprima lo mostra, non lo scarica. Il nome
+                # fra virgolette e ripulito: un a-capo in un header lo
+                # spezzerebbe in due.
+                "Content-Disposition":
+                    'inline; filename="%s"' % (
+                        (nome or "cv").replace('"', "").replace("\r", "")
+                                      .replace("\n", "")[:120]),
+            })
 
     return app
 
