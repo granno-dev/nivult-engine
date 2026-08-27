@@ -41,7 +41,7 @@ ATS_DSN = os.environ.get(
     "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
 
 # L'indice Common Crawl da interrogare (il più recente che risponde)
-CC_INDEX = "CC-MAIN-2026-30"
+CC_INDEX = "CC-MAIN-2026-34"
 
 
 def _cc_client() -> httpx.Client:
@@ -74,6 +74,13 @@ def cc_scopri_piattaforma(piattaforma: dict, limite: int = 5000) -> set[str]:
 
             try:
                 r = client.get(api_url)
+                if r.status_code in (502, 503, 504):
+                    # Common Crawl è spesso sovraccarico: riprova con calma
+                    for attesa in (10, 30, 60):
+                        time.sleep(attesa)
+                        r = client.get(api_url)
+                        if r.status_code == 200:
+                            break
                 if r.status_code != 200:
                     log.warning("  CC risponde %d per %s, fermo",
                                 r.status_code, piattaforma["id"])
@@ -245,8 +252,7 @@ def dns_scopri(dsn: str) -> dict:
                     continue
 
                 subdomains = set()
-                for line in r.text.strip().split("
-"):
+                for line in r.text.strip().split("\n"):
                     if "," in line:
                         sub = line.split(",")[0].lower().strip()
                         if sub.endswith(suffix) and sub != dominio:

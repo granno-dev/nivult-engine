@@ -733,3 +733,43 @@ class Homerun(BaseAdapter):
 
 
 ADAPTERS["homerun"] = Homerun
+
+
+class Freshteam(BaseAdapter):
+    """freshteam.com — listing server-rendered con data-attributes.
+
+    Ogni card offerta è un <a href="/jobs/{token}/{titolo-slug}"> con
+    data-portal-location per la città. Le pagine offerta sono JS-rendered,
+    quindi il titolo si ricava dallo slug dell'URL.
+    """
+    platform_id = "freshteam"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.freshteam.com/jobs")
+        if r.status_code != 200:
+            return []
+        # le card: href + data-portal-location nello stesso tag <a>
+        cards = re.findall(
+            r'<a href="(/jobs/([^/]+)/([^"]+))"[^>]*?'
+            r'data-portal-title="[^"]*"'
+            r'(?:[^>]*?data-portal-location="([^"]*)")?[^>]*>',
+            r.text)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for href, token, titolo_slug, citta in cards:
+            if token in visti:
+                continue
+            visti.add(token)
+            titolo = titolo_slug.replace("-", " ").replace("_", " ").strip()
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=token,
+                title=titolo,
+                url=f"https://{slug}.freshteam.com{href}",
+                location=citta or None,
+                city=citta or None,
+                raw={"token": token, "location": citta or None}))
+        return out
+
+
+ADAPTERS["freshteam"] = Freshteam
