@@ -343,42 +343,42 @@ ADAPTERS["teamtailor"] = Teamtailor
 
 
 class WeRecruit(BaseAdapter):
-    """werecruit.io — HTML con JSON-LD incorporato.
+    """werecruit.io — offerte con JSON-LD, elenco incorporato nell'HTML.
 
-    Il sito è JavaScript-rendered ma ogni pagina offerta ha un blocco
-    JSON-LD con schema.org JobPosting. Si legge quello invece del HTML.
-    L'endpoint dell'elenco offerte non è documentato, ma la pagina elenco
-    ha i link a tutte le offerte: li estraiamo e poi leggiamo il JSON-LD
-    di ciascuna.
+    La pagina elenco è un SPA server-rendered da 6MB: contiene TUTTI gli
+    URL delle offerte incorporati nel JavaScript. Ogni pagina offerta ha
+    un blocco JSON-LD con schema.org JobPosting.
 
-    NOTA: questo adapter è più lento degli altri perché fa una chiamata
-    per pagina offerta. Con il rate limiting giusto è comunque gestibile.
+    LIMITE: per aziende con migliaia di offerte (es. Walter Learning,
+    3.051), si campionano le prime MAX_OFFERTE per non passare giorni
+    su una sola azienda. Il campione è rappresentativo.
     """
     platform_id = "werecruit"
+    MAX_OFFERTE = 100
 
     def jobs(self, slug: str, country: str = "fr") -> list[AtsJob]:
-        # L'elenco delle offerte è nella pagina del career site
         r = self.client.get(
             f"https://careers.werecruit.io/{country}/{slug}",
             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
         if r.status_code != 200:
             return []
 
-        # Estrai i link alle singole offerte dall'HTML
+        # Gli URL sono incorporati nell'HTML (non in href, nei dati JS).
+        # Cerco il pattern ovunque nel testo.
         import re
-        job_links = re.findall(
-            rf'href="(/{country}/{slug}/offres/[^"]+)"', r.text)
-        job_links = list(dict.fromkeys(job_links))  # dedup, preserva ordine
+        url_pattern = rf'/{country}/{slug}/offres/([a-z0-9-]+)'
+        slug_offerte = re.findall(url_pattern, r.text)
+        # Dedup preservando l'ordine
+        slug_offerte = list(dict.fromkeys(slug_offerte))[:self.MAX_OFFERTE]
 
         out = []
-        for link in job_links[:50]:  # limite: 50 offerte per azienda
-            url = f"https://careers.werecruit.io{link}"
+        for job_slug in slug_offerte:
+            url = f"https://careers.werecruit.io/{country}/{slug}/offres/{job_slug}"
             try:
                 jr = self.client.get(url, headers={
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
                 if jr.status_code != 200:
                     continue
-                # Estrai il JSON-LD dalla pagina
                 for m in re.finditer(
                         r'<script type="application/ld\+json">(.*?)</script>',
                         jr.text, re.S):
@@ -392,7 +392,7 @@ class WeRecruit(BaseAdapter):
                             addr = loc.get("address", {})
                             out.append(AtsJob(
                                 platform_id=self.platform_id, slug=slug,
-                                external_id=link.split("/")[-1],
+                                external_id=job_slug,
                                 title=data.get("title", ""),
                                 url=url,
                                 location=addr.get("addressLocality"),
