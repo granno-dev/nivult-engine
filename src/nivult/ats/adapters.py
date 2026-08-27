@@ -248,3 +248,53 @@ ADAPTERS: dict[str, type[BaseAdapter]] = {
     "recruitee": Recruitee,
     "ashby": Ashby,
 }
+
+
+class Workday(BaseAdapter):
+    """Workday — POST JSON per tenant, il pattern varia per azienda.
+
+    Ogni azienda ha tre pezzi che cambiano: il tenant (abb, cc, eiffage),
+    il server (wd3, wd103, wd5) e l'istanza (Eiffage_Careers, Babilou).
+    Tutti e tre stanno nelle colonne wd_server e wd_instance di ats_companies.
+    """
+    platform_id = "workday"
+
+    # Workday rifiuta limit > 20: paginazione obbligatoria.
+    LIMITE_PAGINA = 20
+    MAX_PAGINE = 10    # 200 offerte per azienda: il taglio è voluto
+
+    def jobs(self, slug: str, wd_server: str | None = None,
+             wd_instance: str | None = None) -> list[AtsJob]:
+        if not wd_server or not wd_instance:
+            return []
+        base = f"https://{slug}.{wd_server}.myworkdayjobs.com/{wd_instance}"
+        url = (f"https://{slug}.{wd_server}.myworkdayjobs.com"
+               f"/wday/cxs/{slug}/{wd_instance}/jobs")
+        out = []
+        for pagina in range(self.MAX_PAGINE):
+            r = self.client.post(url, json={
+                "appliedFacets": {}, "limit": self.LIMITE_PAGINA,
+                "offset": pagina * self.LIMITE_PAGINA})
+            if r.status_code != 200:
+                break
+            postings = r.json().get("jobPostings", [])
+            if not postings:
+                break
+            for j in postings:
+                path = j.get("externalPath", "")
+                loc = j.get("locationsText") or ""
+                pezzi = [p.strip() for p in loc.split(",")] if loc else []
+                country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=(j.get("bulletFields") or ["unknown"])[0],
+                    title=j.get("title", ""),
+                    url=f"{base}{path}",
+                    location=loc,
+                    country=country,
+                    city=pezzi[0] if pezzi else None,
+                    raw=j))
+        return out
+
+
+ADAPTERS["workday"] = Workday

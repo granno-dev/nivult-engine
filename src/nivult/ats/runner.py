@@ -95,7 +95,8 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
     stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name "
+            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
+                   "       ac.wd_server, ac.wd_instance "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -113,7 +114,11 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
             stats["aziende"] += 1
             try:
                 with adapter_cls() as adapter:
-                    jobs = adapter.jobs(az["slug"])
+                    # Workday ha bisogno della configurazione tenant.
+                    if az["platform_id"] == "workday":
+                        jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
+                    else:
+                        jobs = adapter.jobs(az["slug"])
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s/%s: fetch fallita: %s",
                             az["platform_id"], az["slug"], exc)
