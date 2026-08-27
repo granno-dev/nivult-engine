@@ -1445,14 +1445,23 @@ def create_app() -> FastAPI:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT families, seniority, skills, languages, years_experience, "
-                "       uploaded_at, mime_type, original_filename FROM user_cvs "
-                "WHERE user_id = %s AND status = 'active'", (uid,))
+                "       uploaded_at, mime_type, original_filename, raw_extraction "
+                "FROM user_cvs WHERE user_id = %s AND status = 'active'", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "nessun CV caricato")
+        # I quattro campi «di racconto» vivono in raw_extraction, gia'
+        # ripuliti dall'estrazione. Un CV caricato prima che esistessero
+        # non li ha: si risponde vuoto e il pannello non li disegna —
+        # meglio una scheda piu' corta di un campo che dice «—».
+        estratto = r[8] if isinstance(r[8], dict) else {}
         return {"families": r[0], "seniority": r[1], "skills": r[2],
                 "languages": r[3], "years_experience": r[4],
-                "caricato_il": r[5], "tipo": r[6], "nome_file": r[7]}
+                "caricato_il": r[5], "tipo": r[6], "nome_file": r[7],
+                "sintesi": estratto.get("headline"),
+                "ruoli": estratto.get("roles") or [],
+                "certificazioni": estratto.get("certifications") or [],
+                "formazione": estratto.get("education") or []}
 
     # I tipi che accettiamo in caricamento, e gli UNICI che si riservono.
     # Non si rimanda mai indietro il content-type dichiarato dal client: un

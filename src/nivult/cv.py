@@ -45,7 +45,9 @@ profilo del candidato. Sarà l'utente a confermarlo: proponi, non decidere.
 
 Rispondi SOLO con questo JSON, niente altro:
 {{"families": ["..."], "seniority": "...", "skills": ["..."],
- "languages": ["..."], "years_experience": N}}
+ "languages": ["..."], "years_experience": N,
+ "headline": "...", "roles": [{{"title": "...", "employer": "...", "period": "..."}}],
+ "certifications": ["..."], "education": [{{"title": "...", "school": "..."}}]}}
 
 - families: da 1 a 3 voci, SOLO fra queste (sono le famiglie professionali
   del sistema): {famiglie}
@@ -53,6 +55,20 @@ Rispondi SOLO con questo JSON, niente altro:
 - skills: al massimo 15 competenze distintive del candidato, nella lingua del CV
 - languages: le lingue che il CV dimostra, SOLO fra: {lingue}
 - years_experience: anni totali di esperienza lavorativa (numero intero)
+
+I quattro campi seguenti servono a MOSTRARE al candidato che l'abbiamo
+letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
+
+- headline: UNA frase, massimo 20 parole, che dice chi è professionalmente.
+  Nella lingua del CV. Niente aggettivi da brochure: il mestiere, l'ambito,
+  il livello.
+- roles: gli ULTIMI 3 incarichi, dal più recente. `title` come scritto nel
+  CV, `employer` il datore, `period` come compare (es. "2023 — oggi").
+  Lista vuota se il CV non li espone in modo leggibile.
+- certifications: al massimo 6, il nome esatto (es. "Lean Six Sigma Black
+  Belt"). Solo certificazioni vere, mai corsi generici o competenze.
+- education: al massimo 2 titoli, dal più alto. `title` il titolo di studio,
+  `school` l'istituto.
 
 Se un campo non è deducibile, usa la lista vuota (o null per i numeri):
 meglio un campo vuoto che un valore inventato su cui poi si filtra."""
@@ -91,6 +107,38 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
     except (TypeError, ValueError):
         anni = None
 
+    def testo(v, massimo: int) -> str | None:
+        return v.strip()[:massimo] if isinstance(v, str) and v.strip() else None
+
+    def elenco(chiave: str, limite: int, massimo: int) -> list[str]:
+        v = grezzo.get(chiave) or []
+        if not isinstance(v, list):
+            return []
+        return [x.strip()[:massimo] for x in v
+                if isinstance(x, str) and x.strip()][:limite]
+
+    def oggetti(chiave: str, campi: tuple[str, ...], limite: int) -> list[dict]:
+        """Le liste di oggetti (ruoli, formazione) tenute alla LORO forma.
+
+        Il modello a volte restituisce stringhe al posto di oggetti, o
+        campi in piu'. Si prende quello che serve e si scarta il resto:
+        la scheda del pannello legge chiavi fisse, e una forma diversa
+        laggiu' e' una riga vuota che nessuno sa spiegare.
+        """
+        v = grezzo.get(chiave) or []
+        if not isinstance(v, list):
+            return []
+        esito = []
+        for x in v[: limite * 2]:
+            if not isinstance(x, dict):
+                continue
+            riga = {c: testo(x.get(c), 120) for c in campi}
+            if riga.get(campi[0]):
+                esito.append(riga)
+            if len(esito) >= limite:
+                break
+        return esito
+
     return {
         "families": puliti("families", famiglie, 3),
         "seniority": (grezzo.get("seniority")
@@ -99,7 +147,24 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
                    if isinstance(s, str) and s.strip()][:15],
         "languages": puliti("languages", lingue, 10),
         "years_experience": anni,
-        "raw_extraction": grezzo,
+        # I quattro campi «di racconto»: non si filtra su nessuno, servono
+        # a far vedere al candidato che l'abbiamo letto. Vivono dentro
+        # raw_extraction, che e' gia' jsonb — una colonna per ciascuno
+        # sarebbe una migrazione per dati che nessuna query interroga.
+        "headline": testo(grezzo.get("headline"), 200),
+        "roles": oggetti("roles", ("title", "employer", "period"), 3),
+        "certifications": elenco("certifications", 6, 100),
+        "education": oggetti("education", ("title", "school"), 2),
+        # In archivio va la versione RIPULITA dei quattro campi, non la
+        # risposta grezza: e' quella che il pannello legge, e validare in
+        # lettura vorrebbe dire rifare lo stesso lavoro a ogni apertura.
+        "raw_extraction": {
+            **grezzo,
+            "headline": testo(grezzo.get("headline"), 200),
+            "roles": oggetti("roles", ("title", "employer", "period"), 3),
+            "certifications": elenco("certifications", 6, 100),
+            "education": oggetti("education", ("title", "school"), 2),
+        },
     }
 
 
