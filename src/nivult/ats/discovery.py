@@ -197,6 +197,82 @@ def da_produzione(dsn: str, dsn_produzione: str) -> dict:
     return stats
 
 
+
+
+def dns_scopri(dsn: str) -> dict:
+    """Scopre le aziende cercando i sottodomini DNS di ogni piattaforma ATS.
+
+    Per ogni piattaforma che usa {slug}.{dominio} (es. teamtailor.com),
+    interroga Hackertarget per trovare TUTTI i sottodomini esistenti.
+    Ogni sottodominio è un'azienda con un career page su quella piattaforma.
+
+    GRATIS: 50 risultati per query (free tier di Hackertarget).
+    Più efficiente di Common Crawl: diretto, veloce, sempre aggiornato.
+    """
+    import httpx
+
+    # Le piattaforme che usano sottodomini per le aziende
+    PIATTAFORME_DNS = [
+        ("teamtailor", "teamtailor.com", ".teamtailor.com"),
+        ("personio", "jobs.personio.com", ".jobs.personio.com"),
+        ("recruitee", "recruitee.com", ".recruitee.com"),
+        ("breezy", "breezy.hr", ".breezy.hr"),
+        ("homerun", "homerun.co", ".homerun.co"),
+        ("icims", "icims.com", ".icims.com"),
+        ("zohorecruit", "zohorecruit.eu", ".zohorecruit.eu"),
+        ("workable", "workable.com", ".workable.com"),
+        ("bamboohr", "bamboohr.com", ".bamboohr.com"),
+        ("pinpoint", "pinpointhq.com", ".pinpointhq.com"),
+        ("join", "join.com", ".join.com"),
+        ("ashby", "ashbyhq.com", ".ashbyhq.com"),
+    ]
+
+    # Domini di infrastruttura da escludere (non sono aziende)
+    ESCLUDI = {
+        "www", "api", "app", "admin", "blog", "docs", "help", "support",
+        "status", "cdn", "assets", "static", "mail", "smtp", "ftp",
+        "staging", "dev", "test", "demo", "careers", "jobs", "portal",
+        "login", "auth", "sso", "oauth", "redirect",
+    }
+
+    stats: dict[str, int] = {}
+    with httpx.Client(timeout=30) as client:
+        for platform_id, dominio, suffix in PIATTAFORME_DNS:
+            try:
+                r = client.get(
+                    f"https://api.hackertarget.com/hostsearch/?q={dominio}")
+                if r.status_code != 200 or not r.text.strip():
+                    continue
+
+                subdomains = set()
+                for line in r.text.strip().split("
+"):
+                    if "," in line:
+                        sub = line.split(",")[0].lower().strip()
+                        if sub.endswith(suffix) and sub != dominio:
+                            slug = sub[:-len(suffix)]
+                            if slug and "." not in slug and slug not in ESCLUDI:
+                                subdomains.add(slug)
+
+                if subdomains:
+                    stats[platform_id] = len(subdomains)
+                    with psycopg.connect(dsn) as conn:
+                        with conn.cursor() as cur:
+                            for slug in subdomains:
+                                cur.execute(
+                                    "INSERT INTO ats_companies (platform_id, slug, "
+                                    "discovered_from) VALUES (%s, %s, 'dns_enumeration') "
+                                    "ON CONFLICT (platform_id, slug) DO NOTHING",
+                                    (platform_id, slug))
+                        conn.commit()
+                    log.info("  %s: %d aziende via DNS", platform_id, len(subdomains))
+
+            except Exception as exc:
+                log.warning("  %s: errore DNS: %s", platform_id, exc)
+
+    return stats
+
+
 def stats(dsn: str) -> None:
     """Lo stato dell'indice: quante aziende per piattaforma, da dove."""
     with psycopg.connect(dsn) as conn:
@@ -234,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--common-crawl", action="store_true",
                     help="scopri aziende via Common Crawl (gratis)")
+    ap.add_argument("--dns", action="store_true",
+                    help="scopri aziende via DNS enumeration (Hackertarget)")
     ap.add_argument("--from-production", action="store_true",
                     help="estrai aziende dal DB di produzione (sola lettura)")
     ap.add_argument("--priorita", type=int, default=3, choices=[1, 2, 3],
@@ -250,6 +328,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.common_crawl:
         s = cc_scopri_tutte(dsn, args.priorita, args.limite)
         print(f"\nCommon Crawl: {sum(s.values())} aziende totali scoperte")
+
+    if args.dns:
+        s = dns_scopri(dsn)
+        print(f"\nDNS: {sum(s.values())} aziende totali scoperte")
 
     if args.from_production:
         dsn_prod = os.environ.get(
