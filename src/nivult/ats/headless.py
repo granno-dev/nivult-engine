@@ -33,11 +33,33 @@ log = logging.getLogger("nivult.ats.headless")
 # un'offerta e quali campi estrarre.
 DOM_PATTERNS = {
     "personio": {
-        # Personio: Next.js, le offerte sono in articoli/sezioni
         "job_selector": "[class*='job'] a[href*='/job/']",
         "title_attr": "text",
         "url_attr": "href",
     },
+    "zohorecruit": {
+        "job_selector": "a[href*='Careers/'], [class*='job'] a",
+        "title_attr": "text",
+        "url_attr": "href",
+    },
+    "werecruit": {
+        "job_selector": "a[href*='/offres/']",
+        "title_attr": "text",
+        "url_attr": "href",
+    },
+    # iCIMS e SuccessFactors: da investigare
+    # Il loro JavaScript non espone le offerte in modo accessibile
+    "icims": {
+        "job_selector": "[class*='job'] a",
+        "title_attr": "text",
+        "url_attr": "href",
+    },
+    "successfactors": {
+        "job_selector": "a, [role='link']",
+        "title_attr": "text",
+        "url_attr": "href",
+    },
+}
     "successfactors": {
         # SAP UI5: tabella con righe di offerte
         "job_selector": "[class*='jobRequisition'] a, .sapUiTableRow",
