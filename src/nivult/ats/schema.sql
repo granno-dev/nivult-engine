@@ -68,3 +68,27 @@ CREATE TABLE IF NOT EXISTS job_classifications (
 );
 
 CREATE INDEX IF NOT EXISTS job_classifications_family_idx ON job_classifications(family);
+
+-- Il censimento dei domini aziendali per il detector.
+-- Fonti: Wikidata (aziende con sito ufficiale), DB di produzione
+-- (domain_derived). Il detector visita la homepage, segue il link
+-- careers e identifica l'ATS dalle impronte nell'HTML.
+CREATE TABLE IF NOT EXISTS company_domains (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain        TEXT NOT NULL UNIQUE,   -- il dominio del sito aziendale
+    company_name  TEXT,
+    country       TEXT,                   -- ISO del paese (Wikidata P17)
+    employees     INTEGER,               -- per prioritarizzare le grandi
+    source        TEXT NOT NULL,          -- 'wikidata' | 'production'
+    -- stato del detector: 'pending' | 'ats' (piattaforma identificata) |
+    -- 'no_ats' (pagina carriere senza impronte note) | 'no_careers' |
+    -- 'error' | 'dead' (dominio che non risponde)
+    status        TEXT NOT NULL DEFAULT 'pending',
+    platform_id   TEXT,                   -- l'ATS identificato, se 'ats'
+    careers_url   TEXT,                   -- la pagina carriere trovata
+    careers_kind  TEXT,                   -- 'custom' | 'platform'
+    checked_at    TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS company_domains_status_idx ON company_domains(status, employees DESC NULLS LAST);
