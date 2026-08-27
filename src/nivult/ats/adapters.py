@@ -11,7 +11,9 @@ contratto.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -80,8 +82,21 @@ def _iso(country: str | None) -> str | None:
              "SWEDEN": "SE", "NETHERLANDS": "NL", "BELGIUM": "BE",
              "AUSTRIA": "AT", "DENMARK": "DK", "FINLAND": "FI",
              "PORTUGAL": "PT", "IRELAND": "IE", "POLAND": "PL",
-             "SWITZERLAND": "CH", "NORWAY": "NO", "UNITED KINGDOM": "GB"}
-    return NAMES.get(c, c[:2] if len(c) > 2 else None)
+             "SWITZERLAND": "CH", "NORWAY": "NO", "UNITED KINGDOM": "GB",
+             "UNITED STATES": "US", "USA": "US", "CANADA": "CA",
+             "AUSTRALIA": "AU", "INDIA": "IN", "BRAZIL": "BR",
+             "MEXICO": "MX", "JAPAN": "JP", "LUXEMBOURG": "LU",
+             "CZECH REPUBLIC": "CZ", "CZECHIA": "CZ", "GREECE": "GR",
+             "HUNGARY": "HU", "ROMANIA": "RO", "SLOVAKIA": "SK",
+             "SLOVENIA": "SI", "ESTONIA": "EE", "LATVIA": "LV",
+             "LITHUANIA": "LT", "CROATIA": "HR", "BULGARIA": "BG",
+             "TURKEY": "TR", "ISRAEL": "IL", "SINGAPORE": "SG",
+             "UNITED ARAB EMIRATES": "AE", "NEW ZEALAND": "NZ",
+             "SOUTH AFRICA": "ZA", "ARGENTINA": "AR", "CHILE": "CL",
+             "COLOMBIA": "CO", "CHINA": "CN", "SOUTH KOREA": "KR"}
+    # niente first-2: 'UNITED STATES'→'UN' è un bug, meglio niente paese
+    # che un paese sbagliato.
+    return NAMES.get(c, None if len(c) > 2 else c)
 
 
 class BaseAdapter:
@@ -380,18 +395,29 @@ ADAPTERS["breezy"] = BreezyHR
 
 
 class WeRecruit(BaseAdapter):
-    """werecruit.io — offerte con JSON-LD, elenco incorporato nell'HTML.
+    """werecruit.io — dati offerta incorporati nella pagina elenco.
 
-    La pagina elenco è un SPA server-rendered da 6MB: contiene TUTTI gli
-    URL delle offerte incorporati nel JavaScript. Ogni pagina offerta ha
-    un blocco JSON-LD con schema.org JobPosting.
-
-    LIMITE: per aziende con migliaia di offerte (es. Walter Learning,
-    3.051), si campionano le prime MAX_OFFERTE per non passare giorni
-    su una sola azienda. Il campione è rappresentativo.
+    La pagina elenco incorpora un oggetto JSON per ogni offerta (titolo,
+    URL, città, data di pubblicazione): un'unica richiesta per azienda,
+    senza aprire le singole pagine. Il JSON-LD JobPosting che stavamo
+    leggendo sulle pagine offerta non c'è più (agosto 2026 resta solo
+    Organization).
     """
     platform_id = "werecruit"
-    MAX_OFFERTE = 100
+
+    @staticmethod
+    def _inizio_oggetto(testo: str, idx: int) -> int:
+        """L'indice della '{' che apre l'oggetto che contiene idx."""
+        prof = 0
+        for k in range(idx, -1, -1):
+            ch = testo[k]
+            if ch == '}':
+                prof += 1
+            elif ch == '{':
+                if prof == 0:
+                    return k
+                prof -= 1
+        return -1
 
     def jobs(self, slug: str, country: str = "fr") -> list[AtsJob]:
         r = self.client.get(
@@ -400,49 +426,310 @@ class WeRecruit(BaseAdapter):
         if r.status_code != 200:
             return []
 
-        # Gli URL sono incorporati nell'HTML (non in href, nei dati JS).
-        # Cerco il pattern ovunque nel testo.
-        import re
-        url_pattern = rf'/{country}/{slug}/offres/([a-z0-9-]+)'
-        slug_offerte = re.findall(url_pattern, r.text)
-        # Dedup preservando l'ordine
-        slug_offerte = list(dict.fromkeys(slug_offerte))[:self.MAX_OFFERTE]
-
-        out = []
-        for job_slug in slug_offerte:
-            url = f"https://careers.werecruit.io/{country}/{slug}/offres/{job_slug}"
-            try:
-                jr = self.client.get(url, headers={
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
-                if jr.status_code != 200:
-                    continue
-                for m in re.finditer(
-                        r'<script type="application/ld\+json">(.*?)</script>',
-                        jr.text, re.S):
-                    try:
-                        import json
-                        data = json.loads(m.group(1))
-                        if isinstance(data, dict) and data.get("@type") == "JobPosting":
-                            loc = data.get("jobLocation", {})
-                            if isinstance(loc, list):
-                                loc = loc[0] if loc else {}
-                            addr = loc.get("address", {})
-                            out.append(AtsJob(
-                                platform_id=self.platform_id, slug=slug,
-                                external_id=job_slug,
-                                title=data.get("title", ""),
-                                url=url,
-                                location=addr.get("addressLocality"),
-                                country=_iso(addr.get("addressCountry")) or country.upper(),
-                                city=addr.get("addressLocality"),
-                                posted_at=data.get("datePosted"),
-                                raw=data))
-                            break
-                    except (json.JSONDecodeError, KeyError, IndexError):
-                        continue
-            except Exception:
+        testo = r.text
+        dec = json.JSONDecoder()
+        out: list[AtsJob] = []
+        pos = 0
+        visti: set[str] = set()
+        while True:
+            i = testo.find('"PublicationStartDate"', pos)
+            if i == -1:
+                break
+            s = self._inizio_oggetto(testo, i - 1)
+            if s == -1 or s < pos:
+                # oggetto già consumato o non decodificabile: avanza
+                pos = i + 10
                 continue
+            obj = None
+            if s != -1:
+                try:
+                    decod, end = dec.raw_decode(testo[s:])
+                    if isinstance(decod, dict) and "Url" in decod:
+                        obj = decod
+                        pos = s + end
+                except json.JSONDecodeError:
+                    pass
+            if obj is None:
+                pos = i + 10
+                continue
+            if obj["Url"] in visti:
+                continue
+            visti.add(obj["Url"])
+            titolo = obj.get("TitleTranslated") or ""
+            if isinstance(titolo, dict):
+                titolo = next(iter(titolo.values()), "")
+            data = obj.get("PublicationStartDate") or ""
+            try:
+                posted = datetime.fromisoformat(data) if data else None
+            except ValueError:
+                posted = None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(obj.get("Id") or obj.get("Slug") or ""),
+                title=titolo,
+                url=obj["Url"],
+                location=obj.get("Address_City"),
+                country=_iso(obj.get("Address_State")) or country.upper(),
+                city=obj.get("Address_City"),
+                posted_at=posted,
+                raw=obj))
         return out
 
 
 ADAPTERS["werecruit"] = WeRecruit
+
+
+class BambooHR(BaseAdapter):
+    """bamboohr.com — la pagina carriere risponde in JSON con Accept json.
+
+    Endpoint: {slug}.bamboohr.com/careers/list → {meta, result[]}.
+    Il paese è scritto per esteso (Germany), la città in atsLocation.
+    """
+    platform_id = "bamboohr"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(
+            f"https://{slug}.bamboohr.com/careers/list",
+            headers={"Accept": "application/json"})
+        if r.status_code != 200:
+            return []
+        try:
+            data = r.json()
+        except ValueError:
+            return []
+        result = data.get("result") or []
+        return [
+            AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(j.get("id") or ""),
+                title=j.get("jobOpeningName") or "",
+                url=f"https://{slug}.bamboohr.com/careers/{j.get('id')}",
+                location=(j.get("atsLocation") or {}).get("city"),
+                country=_iso((j.get("atsLocation") or {}).get("country")),
+                city=(j.get("atsLocation") or {}).get("city"),
+                department=j.get("departmentLabel"),
+                raw=j)
+            for j in result if j.get("id") and j.get("jobOpeningName")
+        ]
+
+
+ADAPTERS["bamboohr"] = BambooHR
+
+
+class Workable(BaseAdapter):
+    """workable.com — widget pubblico con tutte le offerte in un colpo.
+
+    Endpoint: apply.workable.com/api/v1/widget/accounts/{slug}?details=true
+    Il campo jobs contiene tutto (titolo, shortcode, URL, città, data di
+    pubblicazione); le aziende senza posizioni aperte rispondono jobs=[].
+    """
+    platform_id = "workable"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(
+            f"https://apply.workable.com/api/v1/widget/accounts/{slug}"
+            "?details=true")
+        if r.status_code != 200:
+            return []
+        try:
+            data = r.json()
+        except ValueError:
+            return []
+        out = []
+        for j in data.get("jobs") or []:
+            if not j.get("shortcode"):
+                continue
+            posted = j.get("published_on") or j.get("created_at")
+            try:
+                dt = datetime.fromisoformat(posted) if posted else None
+            except ValueError:
+                dt = None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=j["shortcode"],
+                title=j.get("title") or "",
+                url=j.get("url") or
+                f"https://apply.workable.com/j/{j['shortcode']}",
+                location=j.get("city"),
+                country=_iso(j.get("country")),
+                city=j.get("city"),
+                posted_at=dt,
+                department=j.get("department"),
+                raw=j))
+        return out
+
+
+ADAPTERS["workable"] = Workable
+
+
+class Pinpoint(BaseAdapter):
+    """pinpointhq.com — feed JSON pubblico per azienda.
+
+    Endpoint: {slug}.pinpointhq.com/postings.json → {data: [...]}.
+    Il paese non è dichiarato (solo città/provincia): resta NULL e lo
+    recupera l'arricchimento.
+    """
+    platform_id = "pinpoint"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.pinpointhq.com/postings.json")
+        if r.status_code != 200:
+            return []
+        try:
+            data = r.json().get("data") or []
+        except ValueError:
+            return []
+        out = []
+        for j in data:
+            if not j.get("id"):
+                continue
+            loc = j.get("location") or {}
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(j["id"]),
+                title=j.get("title") or "",
+                url=j.get("url") or
+                f"https://{slug}.pinpointhq.com/en/postings/{j['id']}",
+                location=loc.get("name") or loc.get("city"),
+                city=loc.get("city") or loc.get("name"),
+                posted_at=None,
+                raw=j))
+        return out
+
+
+ADAPTERS["pinpoint"] = Pinpoint
+
+
+class Join(BaseAdapter):
+    """join.com — micrositio aziendale con __NEXT_DATA__.
+
+    La lista offerte sta in initialState.jobs (5 per pagina, ?page=N).
+    L'URL pubblica dell'offerta è join.com/companies/{slug}/{idParam}.
+    """
+    platform_id = "join"
+    MAX_PAGINE = 20
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, self.MAX_PAGINE + 1):
+            r = self.client.get(
+                f"https://{slug}.join.com/" + (f"?page={pagina}" if pagina > 1 else ""))
+            if r.status_code != 200:
+                break
+            m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                          r.text, re.S)
+            if not m:
+                break
+            try:
+                stato = json.loads(m.group(1))["props"]["pageProps"]["initialState"]
+                jobs = stato.get("jobs") or {}
+                items = jobs.get("items") or []
+            except (json.JSONDecodeError, KeyError):
+                break
+            if not items:
+                break
+            for j in items:
+                id_param = j.get("idParam") or str(j.get("id") or "")
+                if not id_param or id_param in visti:
+                    continue
+                visti.add(id_param)
+                citta = (j.get("city") or {})
+                creato = j.get("createdAt")
+                try:
+                    dt = datetime.fromisoformat(creato) if creato else None
+                except ValueError:
+                    dt = None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=id_param,
+                    title=j.get("title") or "",
+                    url=f"https://join.com/companies/{slug}/{id_param}",
+                    location=citta.get("cityName"),
+                    country=(j.get("country") or {}).get("iso3166"),
+                    city=citta.get("cityName"),
+                    posted_at=dt,
+                    raw=j))
+            pag = jobs.get("pagination") or {}
+            if pagina >= (pag.get("pageCount") or 1):
+                break
+        return out
+
+
+ADAPTERS["join"] = Join
+
+
+class JazzHR(BaseAdapter):
+    """applytojob.com (JazzHR) — offerte nell'HTML statico.
+
+    Ogni offerta è un link /apply/{codice}/{Titolo-Con-Trattini}.
+    Il titolo vero è il testo dell'ancora, non l'URL.
+    """
+    platform_id = "jazzhr"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.applytojob.com/")
+        if r.status_code != 200:
+            return []
+        found = re.findall(
+            r'<a[^>]*href="(https?://[^"]*\.applytojob\.com/apply/([A-Za-z0-9]+)/[^"]+)"[^>]*>(.*?)</a>',
+            r.text, re.S)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for url, code, txt in found:
+            if code in visti:
+                continue
+            visti.add(code)
+            titolo = re.sub(r'<[^>]+>', '', txt)
+            titolo = re.sub(r'\s+', ' ', titolo).strip()
+            if not titolo:
+                continue
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=code,
+                title=titolo,
+                url=url,
+                raw={"code": code}))
+        return out
+
+
+ADAPTERS["jazzhr"] = JazzHR
+
+
+class Homerun(BaseAdapter):
+    """homerun.co — offerte in un attributo Vue v-bind nell'HTML.
+
+    La lista sta in <job-list v-bind="{content:{vacancies:[...]}}">
+    con id, title e url già pronti. Le aziende chiuse rispondono 200
+    con una pagina 404 (marcata da hrc404).
+    """
+    platform_id = "homerun"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.homerun.co/")
+        if r.status_code != 200 or "hrc404" in r.text:
+            return []
+        m = re.search(r'<job-list[^>]*v-bind="([^"]*)"', r.text)
+        if not m:
+            return []
+        import html as html_mod
+        try:
+            dati = json.loads(html_mod.unescape(m.group(1)))
+            vacancies = (dati.get("content") or {}).get("vacancies") or []
+        except json.JSONDecodeError:
+            return []
+        out = []
+        for v in vacancies:
+            if not v.get("id"):
+                continue
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(v["id"]),
+                title=v.get("title") or "",
+                url=v.get("url") or
+                f"https://{slug}.homerun.co/{v.get('id')}",
+                raw=v))
+        return out
+
+
+ADAPTERS["homerun"] = Homerun
