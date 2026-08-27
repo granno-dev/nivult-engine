@@ -101,8 +101,8 @@ def seed(conn: psycopg.Connection) -> dict:
                     "VALUES ('Human Resources','IT',100) RETURNING id")
         ids["cluster"] = cur.fetchone()[0]
 
-        cur.execute("INSERT INTO users (email,plan,subscription_status,delivery_channel,"
-                    "frequency,timezone) VALUES ('mod@example.test','pro','active','email',"
+        cur.execute("INSERT INTO users (email,plan,subscription_status,delivery_channels,"
+                    "frequency,timezone) VALUES ('mod@example.test','pro','active','{email}',"
                     "'daily','Europe/Rome') RETURNING id")
         ids["user"] = cur.fetchone()[0]
 
@@ -173,9 +173,9 @@ def seed_digest(conn: psycopg.Connection) -> dict[str, str]:
 
         def utente(email, next_min_ago=60):
             cur.execute(
-                "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+                "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
                 "  frequency, timezone, next_digest_at) VALUES "
-                "(%s,'pro','active','email','daily','Europe/Rome', now() - make_interval(mins => %s::int)) "
+                "(%s,'pro','active','{email}','daily','Europe/Rome', now() - make_interval(mins => %s::int)) "
                 "RETURNING id", (email, next_min_ago))
             uid = cur.fetchone()[0]
             cur.execute(
@@ -475,9 +475,9 @@ def main() -> int:
         # offerte non partirebbero mai più.
         with work.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+                "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
                 "  frequency, timezone, next_digest_at) VALUES "
-                "('digest-c@example.test','pro','active','email','daily','Europe/Rome', "
+                "('digest-c@example.test','pro','active','{email}','daily','Europe/Rome', "
                 " now() - interval '15 min') RETURNING id")
             uc_id = cur.fetchone()[0]
             # Il CV serve: senza, il worker ora chiude il digest come

@@ -57,7 +57,7 @@ INDEXES = [
 ]
 
 CONSTRAINTS = [
-    "users_channel_address_ck", "users_schedule_ck", "users_deleted_ck",
+    "users_channels_ck", "users_schedule_ck", "users_deleted_ck",
     "user_cvs_embedding_ck",
     "clusters_family_country_key", "clusters_family_fk", "cluster_daily_budget_circuit_ck",
     "jobs_source_id_key", "jobs_canonical_url_key", "jobs_expiry_ck",

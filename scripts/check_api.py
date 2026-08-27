@@ -302,8 +302,8 @@ def main() -> int:
             with psycopg.connect(database_url()) as setup:
                 with setup.cursor() as cur:
                     cur.execute("INSERT INTO users (email, plan, frequency, "
-                                "  delivery_channel, subscription_status) "
-                                "VALUES ('tg2@test.dev','basic','daily','email',"
+                                "  delivery_channels, subscription_status) "
+                                "VALUES ('tg2@test.dev','basic','daily','{email}',"
                                 "        'trialing') RETURNING id")
                     altro = cur.fetchone()[0]
                     cur.execute(
@@ -322,13 +322,13 @@ def main() -> int:
 
             # Scollegando, il canale non puo' restare 'telegram': sarebbe un
             # utente che non riceve piu' niente senza saperlo.
-            client.put("/me", headers=auth_header, json={"delivery_channel": "telegram",
-                                                         "telegram_chat_id": "555001"})
+            client.put("/me", headers=auth_header,
+                       json={"delivery_channels": ["telegram"]})
             check("scollega: 204",
                   client.delete("/me/telegram", headers=auth_header).status_code, 204)
             check("e il canale torna a email",
-                  seen_by_other("SELECT delivery_channel FROM users "
-                                "WHERE email = 'pref@test.dev'"), "email")
+                  seen_by_other("SELECT delivery_channels FROM users "
+                                "WHERE email = 'pref@test.dev'"), ["email"])
 
             tg_mod.invia_testo = vero_invia_testo
             with psycopg.connect(database_url()) as setup:
@@ -352,10 +352,10 @@ def main() -> int:
 
             check("scegliere whatsapp SENZA collegamento: 422",
                   client.put("/me", headers=auth_header,
-                             json={"delivery_channel": "whatsapp"}).status_code, 422)
+                             json={"delivery_channels": ["whatsapp"]}).status_code, 422)
             check("e il numero NON si scrive dal PUT",
                   client.put("/me", headers=auth_header,
-                             json={"delivery_channel": "whatsapp",
+                             json={"delivery_channels": ["whatsapp", "email"],
                                    "whatsapp_e164": "+390000000001"}).status_code, 422)
 
             r = client.post("/me/whatsapp/collega", headers=auth_header)
@@ -400,7 +400,7 @@ def main() -> int:
                   len(wa_inviati), 1)
             check("adesso il canale whatsapp si puo' scegliere",
                   client.put("/me", headers=auth_header,
-                             json={"delivery_channel": "whatsapp"}).status_code, 200)
+                             json={"delivery_channels": ["email", "whatsapp"]}).status_code, 200)
 
             # Monouso: lo stesso gettone rigiocato non riassegna niente.
             wa2 = seen_by_other("SELECT count(*) FROM whatsapp_link_tokens "
@@ -436,8 +436,8 @@ def main() -> int:
             check("scollega: 204",
                   client.delete("/me/whatsapp", headers=auth_header).status_code, 204)
             check("e il canale torna a email",
-                  seen_by_other("SELECT delivery_channel FROM users "
-                                "WHERE email = 'pref@test.dev'"), "email")
+                  seen_by_other("SELECT delivery_channels FROM users "
+                                "WHERE email = 'pref@test.dev'"), ["email"])
 
             wa_mod.cerca_collegamenti = vero_cerca
             wa_mod.invia_testo = vero_wa_testo

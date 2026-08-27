@@ -58,7 +58,7 @@ class Utente:
     id: str
     email: str
     plan: str
-    delivery_channel: str
+    delivery_channels: list[str]
     delivery_email: str | None
     telegram_chat_id: str | None
     whatsapp_e164: str | None
@@ -132,7 +132,7 @@ def _profilo(cv: dict | None) -> dict:
 
 def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Utente]:
     sql = (
-        "SELECT u.id::text, u.email::text, u.plan, u.delivery_channel, "
+        "SELECT u.id::text, u.email::text, u.plan, u.delivery_channels, "
         "       u.delivery_email::text, u.telegram_chat_id, u.whatsapp_e164, "
         "       u.whatsapp_conversation_id, "
         "       u.frequency, u.send_hour_local, u.send_weekday, u.send_monthday, "
@@ -153,7 +153,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
     cur.execute(sql + " ORDER BY u.next_digest_at", params)
     return [Utente(
         id=r["id"], email=r["email"], plan=r["plan"],
-        delivery_channel=r["delivery_channel"], delivery_email=r["delivery_email"],
+        delivery_channels=r["delivery_channels"], delivery_email=r["delivery_email"],
         telegram_chat_id=r["telegram_chat_id"], whatsapp_e164=r["whatsapp_e164"],
         whatsapp_conversation_id=r["whatsapp_conversation_id"],
         frequency=r["frequency"], send_hour_local=r["send_hour_local"],
@@ -183,18 +183,29 @@ def _canale_fallito(conn, u) -> int:
     return n
 
 
-def _torna_a_email(conn, u, motivo: str) -> None:
-    """Riporta l'utente sull'email e glielo DICE.
+def _canale_principale(u) -> str:
+    """Il canale registrato sulla riga del digest: l'email se e' attiva,
+    altrimenti il primo. Ogni CONSEGNA avviene su un canale; e' l'utente
+    ad averne piu' d'uno."""
+    return "email" if "email" in u.delivery_channels else u.delivery_channels[0]
 
-    Il silenzio qui sarebbe la cosa peggiore: uno che ha scelto Telegram e
-    ricomincia a ricevere email senza spiegazione pensa che il prodotto sia
-    rotto. La riga in piu' costa nulla e risparmia una segnalazione.
+
+def _stacca_canale(conn, u, canale: str, motivo: str) -> None:
+    """Toglie UN canale dall'insieme e lo DICE via email.
+
+    Non si torna piu' «all'email»: si perde solo il canale rotto, gli altri
+    restano. Se era l'ultimo, l'email subentra — un utente senza nessun
+    canale e' un abbonato che paga per niente, e il vincolo in tabella
+    giustamente lo vieta. Il silenzio sarebbe la cosa peggiore: uno che ha
+    scelto Telegram e smette di ricevere li' senza spiegazione pensa che
+    il prodotto sia rotto.
     """
+    rimasti = [c for c in u.delivery_channels if c != canale] or ["email"]
     with conn.cursor() as cur:
-        cur.execute("UPDATE users SET delivery_channel = 'email', "
-                    "  delivery_failures = 0 WHERE id = %s", (u.id,))
+        cur.execute("UPDATE users SET delivery_channels = %s, "
+                    "  delivery_failures = 0 WHERE id = %s", (rimasti, u.id))
     conn.commit()
-    u.delivery_channel = "email"
+    u.delivery_channels = rimasti
     x = t(u.locale)
     try:
         email_mod.invia_generica(
@@ -202,7 +213,7 @@ def _torna_a_email(conn, u, motivo: str) -> None:
             x["canale_ripiego_oggetto"],
             x["canale_ripiego_testo"].format(motivo=motivo), "")
     except Exception:
-        log.warning("%s: non sono riuscito ad avvisare del ripiego", u.email)
+        log.warning("%s: non sono riuscito ad avvisare del distacco", u.email)
 
 
 def _orario(giorno: date, ora: int, tz: ZoneInfo) -> datetime:
@@ -292,7 +303,7 @@ def _digest_row(conn, u: Utente, started_at: datetime) -> str:
             "INSERT INTO digests (user_id, channel, scheduled_for, period_start, "
             "  period_end, started_at, attempt_count) VALUES (%s,%s,%s,%s,%s,%s,1) "
             "RETURNING id::text",
-            (u.id, u.delivery_channel, u.next_digest_at, u.last_digest_at,
+            (u.id, _canale_principale(u), u.next_digest_at, u.last_digest_at,
              u.next_digest_at, started_at))
         digest_id = cur.fetchone()[0]
     conn.commit()
@@ -439,7 +450,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             _rischedula(conn, u, started)
             return esito
 
-        if u.delivery_channel == "whatsapp":
+        if "whatsapp" in u.delivery_channels:
             # Il template promette «Reply STOP to stop this digest», e una
             # promessa stampata in ogni digest si mantiene PRIMA di inviare,
             # non dopo un reclamo. Oltre al rispetto dovuto, e' cio' che
@@ -448,18 +459,22 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             if u.whatsapp_conversation_id and not dry_run:
                 try:
                     if whatsapp_mod.ha_chiesto_stop(u.whatsapp_conversation_id):
-                        log.info("%s: STOP ricevuto su WhatsApp, torno all'email",
+                        log.info("%s: STOP ricevuto su WhatsApp, stacco il canale",
                                  u.email)
-                        _torna_a_email(conn, u, "hai risposto STOP su WhatsApp")
+                        _stacca_canale(conn, u, "whatsapp",
+                                       "hai risposto STOP su WhatsApp")
                 except Exception:
                     pass  # non riuscire a leggere non e' una richiesta di stop
-        if u.delivery_channel == "whatsapp" and len(items) > 3:
+        if u.delivery_channels == ["whatsapp"] and len(items) > 3:
             # I template hanno caselle fisse: tre offerte al massimo
-            # (nivult_digest_1/2/3). Le altre NON si buttano: restano fuori
-            # da digest_items e il recupero del giro successivo le riprende —
-            # lo stesso meccanismo degli invii falliti. Il taglio sta QUI,
-            # prima della motivazione: motivare offerte che non partono
-            # sarebbe spesa GLM buttata, e ripagata al prossimo giro.
+            # (nivult_digest_1/2/3). Il taglio GLOBALE pero' vale solo se
+            # WhatsApp e' l'UNICO canale: se c'e' anche l'email, e' lei a
+            # portare il digest intero e WhatsApp prende le sue tre in
+            # consegna — tagliare tutto per il canale piu' stretto
+            # degraderebbe quello largo. Solo-WhatsApp: le altre restano
+            # fuori da digest_items e il recupero del giro successivo le
+            # riprende. Il taglio sta QUI, prima della motivazione:
+            # motivare offerte che non partono sarebbe spesa GLM buttata.
             log.info("%s: %d offerte, WhatsApp ne porta 3 — %d rinviate "
                      "al prossimo digest", u.email, len(items), len(items) - 3)
             items = items[:3]
@@ -474,88 +489,94 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                             (item["reason"], item["match_id"]))
             conn.commit()
 
-        if u.delivery_channel not in ("email", "telegram", "whatsapp"):
-            _chiudi(conn, digest_id, status="failed", valutate=esito["valutate"],
-                    inviate=0, error=f"canale {u.delivery_channel} non ancora supportato")
-            _rischedula(conn, u, started)
-            esito["stato"] = "failed_canale"
-            return esito
-
-
         destinatario = u.delivery_email or u.email
-        if u.delivery_channel == "whatsapp" and u.whatsapp_e164:
-            if dry_run:
-                message_id = None
-                log.info("%s: DRY RUN, template nivult_digest_%d (%s)",
-                         u.email, len(items), u.locale)
-            else:
+
+        # UN GIRO SUI CANALI ATTIVI, non un ramo solo: l'utente puo' averne
+        # piu' d'uno e ogni canale consegna il suo formato — l'email il
+        # digest intero, Telegram lo stesso in chat, WhatsApp le prime tre
+        # via template. Un canale che inciampa non ferma gli altri: si
+        # annota e si prosegue, perche' il digest e' gia' stato pagato in
+        # valutazioni e UNA consegna riuscita vale piu' della purezza.
+        riusciti: list[str] = []
+        problemi: list[str] = []
+        message_id = None
+
+        if dry_run:
+            percorsoHtml = email_mod.anteprima(destinatario, items, u.locale)
+            log.info("%s: DRY RUN su %s, email compilata in %s", u.email,
+                     ",".join(u.delivery_channels), percorsoHtml)
+        else:
+            for canale in list(u.delivery_channels):
                 try:
-                    message_id, conv = whatsapp_mod.invia(
-                        u.whatsapp_e164, items, u.locale)
-                    if conv and conv != u.whatsapp_conversation_id:
-                        with conn.cursor() as cur:
-                            cur.execute("UPDATE users SET "
-                                        "whatsapp_conversation_id = %s "
-                                        "WHERE id = %s", (conv, u.id))
-                        conn.commit()
-                    _canale_ok(conn, u)
+                    if canale == "email":
+                        mid = email_mod.invia(destinatario, items, u.locale)
+                        # L'id registrato e' quello dell'email quando c'e':
+                        # e' il canale con la tracciabilita' migliore.
+                        message_id = mid
+                    elif canale == "telegram" and u.telegram_chat_id:
+                        mid = telegram_mod.invia(u.telegram_chat_id, items,
+                                                 u.locale)
+                        message_id = message_id or mid
+                    elif canale == "whatsapp" and u.whatsapp_e164:
+                        mid, conv = whatsapp_mod.invia(
+                            u.whatsapp_e164, items[:3], u.locale)
+                        if conv and conv != u.whatsapp_conversation_id:
+                            with conn.cursor() as cur:
+                                cur.execute(
+                                    "UPDATE users SET "
+                                    "whatsapp_conversation_id = %s "
+                                    "WHERE id = %s", (conv, u.id))
+                            conn.commit()
+                        message_id = message_id or mid
+                    else:
+                        continue
+                    riusciti.append(canale)
+                except telegram_mod.BotBloccato as exc:
+                    # 403 per sempre: non e' un guasto da ritentare, e' un
+                    # canale che non esiste piu'. Si stacca subito.
+                    log.warning("%s: bot bloccato (%s), stacco Telegram",
+                                u.email, exc)
+                    _stacca_canale(conn, u, "telegram",
+                                   "il bot e' stato bloccato")
+                    problemi.append("telegram: bot bloccato")
                 except whatsapp_mod.OptOut:
-                    # Disiscritto: come il bot bloccato di Telegram, non e'
-                    # un guasto da ritentare. Il digest parte via email —
-                    # e' gia' stato pagato in valutazioni.
-                    log.warning("%s: opt-out WhatsApp, torno all'email", u.email)
-                    _torna_a_email(conn, u, "il numero risulta disiscritto")
-                    message_id = email_mod.invia(destinatario, items, u.locale)
+                    log.warning("%s: opt-out WhatsApp, stacco il canale",
+                                u.email)
+                    _stacca_canale(conn, u, "whatsapp",
+                                   "il numero risulta disiscritto")
+                    problemi.append("whatsapp: opt-out")
                 except whatsapp_mod.TemplateNonPronto as exc:
                     # Finestra temporanea (Meta rivede in ore): il canale
-                    # scelto NON si molla. QUESTO digest va via email, il
-                    # prossimo riprova WhatsApp. Niente contatore di guasti:
-                    # non e' il canale a essere rotto.
-                    log.warning("%s: template non pronto (%s) — questo digest "
-                                "va via email, il canale resta WhatsApp",
+                    # NON si stacca, salta solo questo giro.
+                    log.warning("%s: template WhatsApp non pronto (%s)",
                                 u.email, exc)
-                    message_id = email_mod.invia(destinatario, items, u.locale)
-                except Exception:
-                    if _canale_fallito(conn, u) >= 2:
-                        _torna_a_email(conn, u, "consegna fallita due volte")
-                        message_id = email_mod.invia(destinatario, items, u.locale)
-                    else:
-                        raise
-        elif u.delivery_channel == "telegram" and u.telegram_chat_id:
-            if dry_run:
-                message_id = None
-                log.info("%s: DRY RUN, %d messaggi Telegram compilati", u.email,
-                         len(telegram_mod.compila(items, u.locale)))
+                    problemi.append(f"whatsapp: template non pronto")
+                except Exception as exc:
+                    # Guasto passeggero: si conta, e al secondo di fila il
+                    # canale si stacca invece di accumulare fallimenti che
+                    # nessuno guarda. L'email non si stacca mai: e' la rete
+                    # di sicurezza, e sotto ha i suoi retry SMTP.
+                    log.warning("%s: consegna %s fallita: %s", u.email,
+                                canale, exc)
+                    problemi.append(f"{canale}: {exc}")
+                    if canale != "email" and _canale_fallito(conn, u) >= 2:
+                        _stacca_canale(conn, u, canale,
+                                       "consegna fallita due volte")
+
+            if riusciti:
+                _canale_ok(conn, u)
             else:
-                try:
-                    message_id = telegram_mod.invia(
-                        u.telegram_chat_id, items, u.locale)
-                    _canale_ok(conn, u)
-                except telegram_mod.BotBloccato as exc:
-                    # 403 non e' un errore da ritentare: e' un canale che non
-                    # esiste piu', e riproverebbe per sempre. Si torna
-                    # SUBITO all'email e il digest parte lo stesso — quello
-                    # e' gia' stato pagato in valutazioni, buttarlo via
-                    # sarebbe il danno peggiore dei due.
-                    log.warning("%s: bot bloccato, torno all'email (%s)",
-                                u.email, exc)
-                    _torna_a_email(conn, u, "il bot e' stato bloccato")
+                # NESSUN canale ha consegnato. L'email di riserva parte
+                # anche se non era fra i canali scelti: un digest pagato e
+                # mai consegnato e' il danno peggiore, e la casella c'e'
+                # sempre. Se fallisce anche lei, l'eccezione risale e il
+                # digest resta pending per il ritento orario.
+                if "email" not in u.delivery_channels:
                     message_id = email_mod.invia(destinatario, items, u.locale)
-                except Exception:
-                    # Guasto passeggero: rete, 500 di Telegram. Si conta, e
-                    # al secondo di fila si molla il canale invece di
-                    # accumulare digest falliti che nessuno guarda.
-                    if _canale_fallito(conn, u) >= 2:
-                        _torna_a_email(conn, u, "consegna fallita due volte")
-                        message_id = email_mod.invia(destinatario, items, u.locale)
-                    else:
-                        raise
-        elif dry_run:
-            percorsoHtml = email_mod.anteprima(destinatario, items, u.locale)
-            message_id = None
-            log.info("%s: DRY RUN, email compilata in %s", u.email, percorsoHtml)
-        else:
-            message_id = email_mod.invia(destinatario, items, u.locale)
+                    riusciti.append("email(riserva)")
+                else:
+                    raise RuntimeError("; ".join(problemi) or
+                                       "nessuna consegna riuscita")
 
         # Le voci del digest si registrano DOPO l'invio riuscito: scriverle
         # prima renderebbe un invio fallito indistinguibile da uno avvenuto,

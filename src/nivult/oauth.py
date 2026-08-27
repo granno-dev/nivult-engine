@@ -280,9 +280,9 @@ def _collega_o_crea(cur, provider: str, subject: str,
         # un tenant aziendale resta con l'indirizzo non verificato: è vero, ed
         # è ciò che impedirà a quell'identità di raccoglierne i frutti dopo.
         cur.execute(
-            "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+            "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
             "  frequency, send_weekday, timezone) VALUES "
-            "(%s, 'basic', 'trialing', 'email', 'weekly', 1, 'UTC') RETURNING id::text",
+            "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC') RETURNING id::text",
             (email,))
         uid = cur.fetchone()[0]
         if email_fidata:

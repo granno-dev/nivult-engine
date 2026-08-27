@@ -56,9 +56,9 @@ def _utente_o_nuovo(cur, email: str, locale: str | None = None) -> str:
     # segnale che abbiamo alla nascita dell'account. Solo alla nascita: un
     # utente esistente ha gia' la sua, e una visita non e' una scelta.
     cur.execute(
-        "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+        "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
         "  frequency, send_weekday, timezone, locale) VALUES "
-        "(%s, 'basic', 'trialing', 'email', 'weekly', 1, 'UTC', %s) "
+        "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC', %s) "
         "RETURNING id::text",
         (email, locale or "en"))
     return cur.fetchone()[0]

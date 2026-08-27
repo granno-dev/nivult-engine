@@ -168,7 +168,7 @@ class PreferenzeUtente(BaseModel):
     send_hour_local: int | None = None
     send_weekday: int | None = None
     send_monthday: int | None = None
-    delivery_channel: str | None = None
+    delivery_channels: list[str] | None = None
     delivery_email: EmailStr | None = None
     # telegram_chat_id e whatsapp_e164 NON stanno qui, deliberatamente: gli
     # indirizzi di consegna nascono SOLO dai flussi di collegamento, che
@@ -341,7 +341,7 @@ def create_app() -> FastAPI:
     def me(uid: str = Depends(utente), conn=Depends(connessione)):
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT email::text, plan, subscription_status, delivery_channel, "
+                "SELECT email::text, plan, subscription_status, delivery_channels, "
                 "frequency, timezone, email_verified_at IS NOT NULL, status, "
                 "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
                 "send_monthday, delivery_email::text, display_name, locale, "
@@ -351,7 +351,7 @@ def create_app() -> FastAPI:
         if not r:
             raise HTTPException(404, "utente inesistente")
         return {"id": uid, "email": r[0], "piano": r[1], "abbonamento": r[2],
-                "canale": r[3], "frequenza": r[4], "fuso": r[5],
+                "canali": r[3], "frequenza": r[4], "fuso": r[5],
                 "email_verificata": r[6], "stato": r[7],
                 # La data vera, non la frequenza ripetuta: e' l'unica cosa
                 # che dice se il prodotto sta per fare qualcosa.
@@ -963,26 +963,31 @@ def create_app() -> FastAPI:
         serva per rispondere a una domanda sola.
         """
         with conn.cursor() as cur:
-            cur.execute("SELECT telegram_chat_id IS NOT NULL, delivery_channel "
+            cur.execute("SELECT telegram_chat_id IS NOT NULL, delivery_channels "
                         "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "utente inesistente")
-        return {"collegato": r[0], "canale": r[1]}
+        return {"collegato": r[0], "canali": r[1]}
 
     @app.delete("/me/telegram", status_code=204)
     def telegram_scollega(uid: str = Depends(utente), conn=Depends(connessione)):
         """Stacca la chat. Se era il canale di consegna, si torna all'email.
 
-        Non si puo' lasciare delivery_channel a 'telegram' senza chat_id: il
+        Non si puo' lasciare delivery_channels a 'telegram' senza chat_id: il
         vincolo users_channel_address_ck lo rifiuta, ed e' giusto cosi' —
         sarebbe un utente che non riceve piu' niente senza saperlo.
         """
         with conn.cursor() as cur:
             cur.execute(
+                # Via la chat E via il canale dall'insieme: il vincolo
+                # users_channels_ck non ammette 'telegram' senza chat_id.
+                # Se era l'unico canale, resta l'email.
                 "UPDATE users SET telegram_chat_id = NULL, delivery_failures = 0, "
-                "  delivery_channel = CASE WHEN delivery_channel = 'telegram' "
-                "                          THEN 'email' ELSE delivery_channel END "
+                "  delivery_channels = CASE "
+                "    WHEN array_remove(delivery_channels, 'telegram') = '{}' "
+                "    THEN ARRAY['email'] "
+                "    ELSE array_remove(delivery_channels, 'telegram') END "
                 "WHERE id = %s", (uid,))
         conn.commit()
 
@@ -1087,26 +1092,26 @@ def create_app() -> FastAPI:
         mentre qualcuno sta davvero collegando.
         """
         with conn.cursor() as cur:
-            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channel "
+            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channels "
                         "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
             if not r:
                 raise HTTPException(404, "utente inesistente")
             if r[0]:
-                return {"collegato": True, "canale": r[1]}
+                return {"collegato": True, "canali": r[1]}
             cur.execute("SELECT count(*) FROM whatsapp_link_tokens "
                         "WHERE user_id = %s AND consumed_at IS NULL "
                         "  AND expires_at > now()", (uid,))
             aperti = cur.fetchone()[0]
         if not aperti:
-            return {"collegato": False, "canale": r[1]}
+            return {"collegato": False, "canali": r[1]}
 
         try:
             trovati = whatsapp_mod.cerca_collegamenti()
         except Exception:
             # Un buco di rete verso Zernio non deve rompere il polling: la
             # pagina richiedera' fra due secondi.
-            return {"collegato": False, "canale": r[1]}
+            return {"collegato": False, "canali": r[1]}
 
         for tr in trovati:
             if not tr.get("telefono"):
@@ -1153,10 +1158,10 @@ def create_app() -> FastAPI:
                 pass
 
         with conn.cursor() as cur:
-            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channel "
+            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channels "
                         "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
-        return {"collegato": r[0], "canale": r[1]}
+        return {"collegato": r[0], "canali": r[1]}
 
     @app.delete("/me/whatsapp", status_code=204)
     def whatsapp_scollega(uid: str = Depends(utente), conn=Depends(connessione)):
@@ -1166,8 +1171,10 @@ def create_app() -> FastAPI:
             cur.execute(
                 "UPDATE users SET whatsapp_e164 = NULL, "
                 "  whatsapp_conversation_id = NULL, delivery_failures = 0, "
-                "  delivery_channel = CASE WHEN delivery_channel = 'whatsapp' "
-                "                          THEN 'email' ELSE delivery_channel END "
+                "  delivery_channels = CASE "
+                "    WHEN array_remove(delivery_channels, 'whatsapp') = '{}' "
+                "    THEN ARRAY['email'] "
+                "    ELSE array_remove(delivery_channels, 'whatsapp') END "
                 "WHERE id = %s", (uid,))
         conn.commit()
 
@@ -1201,23 +1208,31 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, "monthly non ammette send_weekday")
             if f == "monthly" and m is None:
                 raise HTTPException(422, "monthly richiede send_monthday (1–28)")
-        if "delivery_channel" in campi:
-            c = campi["delivery_channel"]
-            if c not in ("email", "telegram", "whatsapp"):
-                raise HTTPException(422, "delivery_channel: email, telegram o whatsapp")
-            # L'indirizzo si controlla nel DATABASE, non nel payload: il
-            # payload non puo' portarlo (vedi PreferenzeUtente), e un canale
-            # senza indirizzo gia' collegato sarebbe un utente che smette di
-            # ricevere senza saperlo.
-            if c in ("telegram", "whatsapp"):
-                colonna = ("telegram_chat_id" if c == "telegram"
-                           else "whatsapp_e164")
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT {colonna} IS NOT NULL FROM users "
-                                "WHERE id = %s", (uid,))
-                    if not cur.fetchone()[0]:
-                        raise HTTPException(422, f"{c} non e' collegato: "
-                                            "prima il collegamento, poi il canale")
+        if "delivery_channels" in campi:
+            # L'INSIEME dei canali: dedupe con ordine conservato, mai vuoto,
+            # solo valori noti. Gli indirizzi si controllano nel DATABASE,
+            # non nel payload: il payload non puo' portarli (vedi
+            # PreferenzeUtente), e un canale senza recapito collegato
+            # sarebbe un utente che smette di ricevere senza saperlo.
+            canali = list(dict.fromkeys(campi["delivery_channels"] or []))
+            if not canali:
+                raise HTTPException(422, "serve almeno un canale")
+            for c in canali:
+                if c not in ("email", "telegram", "whatsapp"):
+                    raise HTTPException(422, "delivery_channels: email, "
+                                        "telegram o whatsapp")
+            with conn.cursor() as cur:
+                cur.execute("SELECT telegram_chat_id IS NOT NULL, "
+                            "whatsapp_e164 IS NOT NULL FROM users "
+                            "WHERE id = %s", (uid,))
+                ha_tg, ha_wa = cur.fetchone()
+            if "telegram" in canali and not ha_tg:
+                raise HTTPException(422, "telegram non e' collegato: prima "
+                                    "il collegamento, poi il canale")
+            if "whatsapp" in canali and not ha_wa:
+                raise HTTPException(422, "whatsapp non e' collegato: prima "
+                                    "il collegamento, poi il canale")
+            campi["delivery_channels"] = canali
         if not campi:
             raise HTTPException(422, "nessun campo riconosciuto")
         if "delivery_email" in campi:

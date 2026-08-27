@@ -77,14 +77,14 @@ def fixtures(conn) -> dict[str, str]:
     ids: dict[str, str] = {}
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+            "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
             "frequency, timezone) VALUES "
-            "('a@example.test','pro','active','email','daily','Europe/Rome') RETURNING id")
+            "('a@example.test','pro','active','{email}','daily','Europe/Rome') RETURNING id")
         ids["user_a"] = cur.fetchone()[0]
         cur.execute(
-            "INSERT INTO users (email, plan, subscription_status, delivery_channel, "
+            "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
             "frequency, send_weekday, timezone) VALUES "
-            "('b@example.test','basic','active','email','weekly',1,'UTC') "
+            "('b@example.test','basic','active','{email}','weekly',1,'UTC') "
             "RETURNING id")
         ids["user_b"] = cur.fetchone()[0]
 
@@ -179,23 +179,29 @@ def main() -> int:
 
         section("users")
         expect_error(conn, "23514", "telegram senza chat_id rifiutato",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency) "
-            "VALUES ('t@example.test','pro','active','telegram','daily')")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency) "
+            "VALUES ('t@example.test','pro','active','{email,telegram}','daily')")
+        expect_error(conn, "23514", "insieme di canali vuoto rifiutato",
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency) "
+            "VALUES ('v@example.test','pro','active','{}','daily')")
+        expect_error(conn, "23514", "canale sconosciuto rifiutato",
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency) "
+            "VALUES ('p@example.test','pro','active','{piccione}','daily')")
         expect_error(conn, "23514", "weekly senza send_weekday rifiutato",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency) "
-            "VALUES ('w@example.test','pro','active','email','weekly')")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency) "
+            "VALUES ('w@example.test','pro','active','{email}','weekly')")
         expect_error(conn, "23514", "daily con send_weekday rifiutato",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency,"
-            "send_weekday) VALUES ('d@example.test','pro','active','email','daily',3)")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency,"
+            "send_weekday) VALUES ('d@example.test','pro','active','{email}','daily',3)")
         expect_error(conn, "23514", "status deleted senza deleted_at rifiutato",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency,"
-            "status) VALUES ('x@example.test','pro','active','email','daily','deleted')")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency,"
+            "status) VALUES ('x@example.test','pro','active','{email}','daily','deleted')")
         expect_error(conn, "23514", "fuso orario inesistente rifiutato",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency,"
-            "timezone) VALUES ('z@example.test','pro','active','email','daily','Europe/Atlantide')")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency,"
+            "timezone) VALUES ('z@example.test','pro','active','{email}','daily','Europe/Atlantide')")
         expect_error(conn, "23505", "email duplicata rifiutata",
-            "INSERT INTO users (email,plan,subscription_status,delivery_channel,frequency) "
-            "VALUES ('a@example.test','pro','active','email','daily')")
+            "INSERT INTO users (email,plan,subscription_status,delivery_channels,frequency) "
+            "VALUES ('a@example.test','pro','active','{email}','daily')")
 
         section("clusters e budget")
         expect_error(conn, "23514", "country minuscolo rifiutato",
