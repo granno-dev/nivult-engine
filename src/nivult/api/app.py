@@ -55,34 +55,55 @@ TG_SCADUTO = (
 TG_GIA_COLLEGATA = (
     "This Telegram account is already connected to another Nivult account. "
     "Disconnect it there first.")
-# La conferma di collegamento WhatsApp. Parte DENTRO la finestra di servizio
-# aperta dal messaggio dell'utente, quindi e' gratuita e senza template.
-# Testo semplice: WhatsApp non ha l'HTML di Telegram.
-WA_BENVENUTO = {
-    "en": "Connected. Your Nivult digest will arrive here from now on.",
-    "it": "Collegato. Da ora il tuo digest Nivult arriva qui.",
-    "fr": "Connect\u00e9. Votre digest Nivult arrivera d\u00e9sormais ici.",
-    "de": "Verbunden. Dein Nivult-Digest kommt ab jetzt hierher.",
-    "es": "Conectado. Tu resumen de Nivult llegar\u00e1 aqu\u00ed a partir de ahora.",
-    "pt": "Ligado. O teu resumo Nivult passa a chegar aqui.",
-    "nl": "Verbonden. Je Nivult-digest komt vanaf nu hier binnen.",
-    "pl": "Po\u0142\u0105czono. Tw\u00f3j digest Nivult b\u0119dzie odt\u0105d przychodzi\u0107 tutaj.",
-    "sv": "Ansluten. Din Nivult-sammanfattning kommer h\u00e4danefter hit.",
+# La conferma di collegamento: il PRIMO messaggio che il prodotto dice in
+# chat, e un «Collegato.» secco era da citofono. Nome, benvenuto e la
+# frequenza scelta — nella lingua dell'utente. Il segnaposto ~Nivult~
+# diventa grassetto nel dialetto del canale (<b> su Telegram, *...* su
+# WhatsApp); senza nome, il saluto sta in piedi da solo.
+# Su WhatsApp viaggia nella finestra di servizio aperta dal messaggio
+# dell'utente: gratuito, quindi il limite e' il gusto, non il costo.
+BENVENUTO = {
+    "en": "Hi{nome}! Welcome to ~Nivult~ \U0001F44B Your digest will arrive right here, {freq} \u2014 only the roles above your bar, scored, with the reason why.",
+    "it": "Ciao{nome}! Benvenuto su ~Nivult~ \U0001F44B Il tuo digest arriver\u00e0 proprio qui, {freq} \u2014 solo le offerte sopra la tua soglia, con punteggio e motivo.",
+    "fr": "Bonjour{nome} ! Bienvenue sur ~Nivult~ \U0001F44B Votre digest arrivera ici m\u00eame, {freq} \u2014 uniquement les offres au-dessus de votre seuil, avec score et raison.",
+    "de": "Hallo{nome}! Willkommen bei ~Nivult~ \U0001F44B Dein Digest kommt ab jetzt genau hierher, {freq} \u2014 nur die Stellen \u00fcber deiner Schwelle, mit Score und Begr\u00fcndung.",
+    "es": "\u00a1Hola{nome}! Bienvenido a ~Nivult~ \U0001F44B Tu resumen llegar\u00e1 aqu\u00ed mismo, {freq} \u2014 solo las ofertas por encima de tu umbral, con puntuaci\u00f3n y motivo.",
+    "pt": "Ol\u00e1{nome}! Bem-vindo ao ~Nivult~ \U0001F44B O teu resumo vai chegar aqui mesmo, {freq} \u2014 s\u00f3 as ofertas acima do teu limiar, com pontua\u00e7\u00e3o e motivo.",
+    "nl": "Hoi{nome}! Welkom bij ~Nivult~ \U0001F44B Je digest komt vanaf nu precies hier, {freq} \u2014 alleen de vacatures boven je lat, met score en reden.",
+    "pl": "Cze\u015b\u0107{nome}! Witaj w ~Nivult~ \U0001F44B Tw\u00f3j digest b\u0119dzie przychodzi\u0107 dok\u0142adnie tutaj, {freq} \u2014 tylko oferty powy\u017cej Twojego progu, z punktacj\u0105 i uzasadnieniem.",
+    "sv": "Hej{nome}! V\u00e4lkommen till ~Nivult~ \U0001F44B Din sammanfattning kommer h\u00e4danefter precis hit, {freq} \u2014 bara tj\u00e4nsterna \u00f6ver din ribba, med po\u00e4ng och motivering.",
 }
+FREQ_TESTO = {
+    "en": {"daily": "every day", "weekly": "every week", "monthly": "once a month"},
+    "it": {"daily": "ogni giorno", "weekly": "ogni settimana", "monthly": "una volta al mese"},
+    "fr": {"daily": "chaque jour", "weekly": "chaque semaine", "monthly": "une fois par mois"},
+    "de": {"daily": "jeden Tag", "weekly": "jede Woche", "monthly": "einmal im Monat"},
+    "es": {"daily": "cada d\u00eda", "weekly": "cada semana", "monthly": "una vez al mes"},
+    "pt": {"daily": "todos os dias", "weekly": "todas as semanas", "monthly": "uma vez por m\u00eas"},
+    "nl": {"daily": "elke dag", "weekly": "elke week", "monthly": "\u00e9\u00e9n keer per maand"},
+    "pl": {"daily": "codziennie", "weekly": "co tydzie\u0144", "monthly": "raz w miesi\u0105cu"},
+    "sv": {"daily": "varje dag", "weekly": "varje vecka", "monthly": "en g\u00e5ng i m\u00e5naden"},
+}
+
+
+def _benvenuto(locale: str, nome: str | None, frequency: str,
+               canale: str) -> str:
+    """Il messaggio di benvenuto, montato per lingua e canale."""
+    sagoma = BENVENUTO.get(locale, BENVENUTO["en"])
+    freq = FREQ_TESTO.get(locale, FREQ_TESTO["en"]).get(frequency, "")
+    battesimo = (nome or "").strip().split(" ")[0] if nome else ""
+    testo = sagoma.replace("{nome}", f" {battesimo}" if battesimo else "")
+    testo = testo.replace("{freq}", freq)
+    # ~Nivult~ nel dialetto del canale: HTML su Telegram, asterischi su
+    # WhatsApp. Il resto del testo non porta markup.
+    if canale == "telegram":
+        return testo.replace("~Nivult~", "<b>Nivult</b>")
+    return testo.replace("~Nivult~", "*Nivult*")
+
+
 WA_GIA_COLLEGATO = ("This WhatsApp number is already connected to another "
                     "Nivult account. Disconnect it there first.")
 
-TG_BENVENUTO = {
-    "en": "<b>Connected.</b> Your Nivult digest will arrive here from now on.",
-    "it": "<b>Collegato.</b> Da ora il tuo digest Nivult arriva qui.",
-    "fr": "<b>Connect\u00e9.</b> Votre digest Nivult arrivera d\u00e9sormais ici.",
-    "de": "<b>Verbunden.</b> Dein Nivult-Digest kommt ab jetzt hierher.",
-    "es": "<b>Conectado.</b> Tu resumen de Nivult llegar\u00e1 aqu\u00ed a partir de ahora.",
-    "pt": "<b>Ligado.</b> O teu resumo Nivult passa a chegar aqui.",
-    "nl": "<b>Verbonden.</b> Je Nivult-digest komt vanaf nu hier binnen.",
-    "pl": "<b>Po\u0142\u0105czono.</b> Tw\u00f3j digest Nivult b\u0119dzie odt\u0105d przychodzi\u0107 tutaj.",
-    "sv": "<b>Ansluten.</b> Din Nivult-sammanfattning kommer h\u00e4danefter hit.",
-}
 
 load_dotenv()
 log = logging.getLogger("nivult.api")
@@ -1047,10 +1068,12 @@ def create_app() -> FastAPI:
                 conn.rollback()
                 telegram_mod.invia_testo(chat_id, TG_GIA_COLLEGATA)
                 return {"ok": True}
-            cur.execute("SELECT locale FROM users WHERE id = %s", (uid,))
-            locale = (cur.fetchone() or ["en"])[0]
+            cur.execute("SELECT locale, display_name, frequency "
+                        "FROM users WHERE id = %s", (uid,))
+            locale, nome, freq = cur.fetchone() or ("en", None, "weekly")
         conn.commit()
-        telegram_mod.invia_testo(chat_id, TG_BENVENUTO.get(locale, TG_BENVENUTO["en"]))
+        telegram_mod.invia_testo(
+            chat_id, _benvenuto(locale, nome, freq, "telegram"))
         return {"ok": True}
 
     # --- collegamento WhatsApp ---------------------------------------------
@@ -1143,9 +1166,9 @@ def create_app() -> FastAPI:
                     except Exception:
                         pass
                     continue
-                cur.execute("SELECT locale FROM users WHERE id = %s",
-                            (proprietario,))
-                loc = (cur.fetchone() or ["en"])[0]
+                cur.execute("SELECT locale, display_name, frequency "
+                            "FROM users WHERE id = %s", (proprietario,))
+                loc, nome_wa, freq_wa = cur.fetchone() or ("en", None, "weekly")
             conn.commit()
             # La finestra di 24 ore e' aperta dal messaggio dell'utente:
             # questa conferma e' gratuita. Se fallisce, il collegamento
@@ -1153,7 +1176,7 @@ def create_app() -> FastAPI:
             try:
                 whatsapp_mod.invia_testo(
                     tr["conversazione"],
-                    WA_BENVENUTO.get(loc, WA_BENVENUTO["en"]))
+                    _benvenuto(loc, nome_wa, freq_wa, "whatsapp"))
             except Exception:
                 pass
 
