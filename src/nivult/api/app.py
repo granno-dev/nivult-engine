@@ -165,6 +165,20 @@ class FiltriCluster(BaseModel):
     wants: str | None = Field(default=None, max_length=1000)
 
 
+class ProfiloCv(BaseModel):
+    """Le correzioni al profilo letto dal CV.
+
+    L'onboarding lo lasciava correggere e poi buttava via le modifiche:
+    non esisteva una rotta per salvarle, e il testo che prometteva «ogni
+    riga e' tua da correggere» era una promessa non mantenuta.
+    """
+    families: list[str] = []
+    seniority: str | None = None
+    skills: list[str] = []
+    languages: list[str] = []
+    years_experience: int | None = None
+
+
 class NuovaRicerca(BaseModel):
     """Apri una ricerca: una famiglia professionale in un paese.
 
@@ -1446,6 +1460,63 @@ def create_app() -> FastAPI:
     # ospitata sul nostro dominio, scritta da chi l'ha caricata.
     TIPI_CV = {"application/pdf": "application/pdf",
                "text/plain": "text/plain; charset=utf-8"}
+
+    @app.put("/me/cv/profilo")
+    def aggiorna_profilo_cv(corpo: ProfiloCv, uid: str = Depends(utente),
+                            conn=Depends(connessione)):
+        """Corregge il profilo letto dal CV. -> il profilo salvato.
+
+        Vale la stessa regola dell'estrazione: cio' che sta fuori dai
+        vocabolari si SCARTA, non si corregge — un valore inventato su cui
+        poi si filtra e' peggio di un campo vuoto. Le competenze sono testo
+        libero (le scrive il candidato, non un vocabolario), quindi si
+        ripuliscono e si tagliano a quindici come fa GLM.
+        """
+        with conn.cursor() as cur:
+            cur.execute("SELECT family FROM job_families")
+            famiglie = {r[0] for r in cur.fetchall()}
+            cur.execute("SELECT code FROM experience_levels")
+            livelli = {r[0] for r in cur.fetchall()}
+            cur.execute("SELECT api_value FROM filter_values "
+                        "WHERE parameter = 'ai_language'")
+            lingue = {r[0] for r in cur.fetchall()}
+
+            fam = [f for f in dict.fromkeys(corpo.families) if f in famiglie][:3]
+            if not fam:
+                raise HTTPException(422, "serve almeno una famiglia "
+                                    "professionale del catalogo")
+            lin = [l for l in dict.fromkeys(corpo.languages) if l in lingue][:10]
+            sen = corpo.seniority if corpo.seniority in livelli else None
+            skl = [s.strip()[:80] for s in dict.fromkeys(corpo.skills)
+                   if isinstance(s, str) and s.strip()][:15]
+            anni = corpo.years_experience
+            if anni is not None:
+                anni = min(max(int(anni), 0), 70)
+
+            cur.execute(
+                "UPDATE user_cvs SET families = %s, seniority = %s, skills = %s, "
+                "  languages = %s, years_experience = %s "
+                "WHERE user_id = %s AND status = 'active' RETURNING id",
+                (fam, sen, skl, Json(lin), anni, uid))
+            if not cur.fetchone():
+                raise HTTPException(404, "nessun CV caricato")
+
+            # Il profilo E' cio' che GLM legge in testa a ogni valutazione:
+            # correggerlo cambia il giudizio, quindi i match non ancora
+            # consegnati si riaprono e verranno rivalutati. Quelli gia'
+            # entrati in un digest restano — sono il registro di cio' che
+            # l'utente ha ricevuto, e l'anti-ripetizione su quelli e' una
+            # promessa, non un ostacolo.
+            cur.execute(
+                "DELETE FROM matches m WHERE m.user_id = %s "
+                "AND NOT EXISTS (SELECT 1 FROM digest_items di "
+                "                WHERE di.match_id = m.id)", (uid,))
+            riaperti = cur.rowcount
+        conn.commit()
+        log.info("profilo CV corretto da %s: %d match riaperti", uid, riaperti)
+        return {"families": fam, "seniority": sen, "skills": skl,
+                "languages": lin, "years_experience": anni,
+                "riaperti": riaperti}
 
     @app.get("/me/cv/file")
     def leggi_cv_file(uid: str = Depends(utente), conn=Depends(connessione)):

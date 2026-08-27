@@ -724,6 +724,33 @@ def main() -> int:
                       True)
                 check("senza sessione: 401",
                       client.get("/me/cv/file").status_code, 401)
+
+                # Il profilo si CORREGGE: l'onboarding lo lasciava
+                # modificare e buttava via tutto, perche' la rotta non
+                # esisteva. Vale la regola dell'estrazione — fuori
+                # vocabolario si scarta, non si corregge.
+                r = client.put("/me/cv/profilo", headers=auth_header, json={
+                    "families": ["Human Resources", "Piccionaia"],
+                    "seniority": "10+", "skills": ["  Payroll  ", ""],
+                    "languages": ["Italian", "Klingon"],
+                    "years_experience": 999,
+                })
+                check("correggere il profilo: 200", r.status_code, 200)
+                d = r.json()
+                check("le famiglie fuori catalogo si scartano",
+                      d["families"], ["Human Resources"])
+                check("le lingue fuori vocabolario pure", d["languages"], ["Italian"])
+                check("la seniority valida passa", d["seniority"], "10+")
+                check("le competenze si ripuliscono", d["skills"], ["Payroll"])
+                check("gli anni si limitano a 70", d["years_experience"], 70)
+                check("e il database ha la correzione, non la lettura di GLM",
+                      seen_by_other("SELECT seniority FROM user_cvs "
+                                    "WHERE user_id = (SELECT id FROM users "
+                                    "  WHERE email = 'pref@test.dev') "
+                                    "AND status = 'active'"), "10+")
+                check("senza nemmeno una famiglia valida: 422",
+                      client.put("/me/cv/profilo", headers=auth_header,
+                                 json={"families": ["Piccionaia"]}).status_code, 422)
             finally:
                 app_module.storage.salva = salva_originale
                 app_module.storage.elimina = elimina_originale
