@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import ipaddress
+import re
 import os
 import secrets
 from datetime import datetime, timezone
@@ -669,6 +670,19 @@ def create_app() -> FastAPI:
             } for r in righe],
         }
 
+    # «Pflegefachkraft (m/w/d)», «Comptable unique F/H», «(d/f/m)»: il
+    # suffisso di genere obbligatorio negli annunci tedeschi e francesi.
+    # Nel digest resta — il titolo la' e' la chiave per ritrovare l'annuncio
+    # — ma nella vetrina della home e' rumore. Solo gruppi di lettere
+    # singole separate da barre: «HR Business Partner (Senior/Lead)» non
+    # viene toccato.
+    _GENERE = re.compile(
+        r"\s*[\(\[](?:[mwfdxhu]\s*/\s*){1,3}[mwfdxhu][\)\]]"
+        r"|\s+[MWFDH]/[MWFDH](?:/[MWFDX])?\s*$", re.IGNORECASE)
+
+    def _senza_genere(titolo: str) -> str:
+        return _GENERE.sub("", titolo).rstrip(" -–·,") or titolo
+
     @app.get("/vetrina")
     def vetrina(conn=Depends(connessione)):
         """Un assaggio VERO del corpus, per il riquadro della home.
@@ -709,13 +723,19 @@ def create_app() -> FastAPI:
             # seconda di ciascuno, e così via. Si adatta da solo: con tre
             # paesi ne dà sei a testa, con dodici ne dà una o due, senza
             # nessuna quota scritta a mano da tenere aggiornata.
+            # E un solo annuncio per DATORE, prima ancora del giro per
+            # paese: Schaeffler pubblica dieci varianti dello stesso ruolo
+            # (d/f/m, d/m/w...) e senza questo filtro tre righe su sei
+            # erano sue — una vetrina monopolizzata da un'azienda dice
+            # «corpus piccolo» esattamente come una monopolizzata da un
+            # paese.
             cur.execute(
-                "WITH pescabili AS ( "
+                "WITH per_datore AS ( "
                 "  SELECT j.title, j.organization, (j.cities)[1] AS citta, "
                 "         (j.countries)[1] AS paese, "
                 "         COALESCE(j.org_linkedin_slug, j.domain_derived) AS logo, "
-                "         row_number() OVER (PARTITION BY (j.countries)[1] "
-                "                            ORDER BY random()) AS giro "
+                "         row_number() OVER (PARTITION BY j.organization "
+                "                            ORDER BY random()) AS doppione "
                 "  FROM jobs j "
                 "  LEFT JOIN company_logos cl "
                 "    ON cl.chiave = COALESCE(j.org_linkedin_slug, j.domain_derived) "
@@ -725,6 +745,10 @@ def create_app() -> FastAPI:
                 "    AND COALESCE(j.org_linkedin_slug, j.domain_derived) IS NOT NULL "
                 "    AND (cl.bytes IS NOT NULL OR (cl.chiave IS NULL AND "
                 "         (j.org_logo_permalink IS NOT NULL OR j.organization_logo IS NOT NULL))) "
+                "), pescabili AS ( "
+                "  SELECT *, row_number() OVER (PARTITION BY paese "
+                "                               ORDER BY random()) AS giro "
+                "  FROM per_datore WHERE doppione = 1 "
                 "), scelte AS ( "
                 "  SELECT * FROM pescabili ORDER BY giro, random() LIMIT 18 "
                 ") "
@@ -736,8 +760,13 @@ def create_app() -> FastAPI:
         return Response(
             content=json.dumps({
                 "offerte": [{
-                    "titolo": r[0], "azienda": r[1], "citta": r[2],
-                    "paese": r[3],
+                    # I suffissi di genere («(m/w/d)», «F/H») restano nel
+                    # digest — lì il titolo e' la chiave per ritrovare
+                    # l'annuncio — ma in vetrina sono rumore burocratico,
+                    # come il codice di dipartimento davanti alle citta'
+                    # francesi.
+                    "titolo": _senza_genere(r[0]), "azienda": r[1],
+                    "citta": r[2], "paese": r[3],
                     "logo": f"/logo/{r[4]}" if r[4] else None,
                 } for r in righe],
             }),
