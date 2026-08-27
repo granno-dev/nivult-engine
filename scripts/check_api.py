@@ -336,6 +336,116 @@ def main() -> int:
                     cur.execute("DELETE FROM users WHERE email = 'tg2@test.dev'")
                 setup.commit()
 
+            print("\n— collegamento WhatsApp —")
+            # Qui la prova di possesso e' il punto: se bastasse digitare un
+            # numero, chiunque potrebbe inserire quello di un altro e
+            # fargli piovere addosso digest. Il numero entra SOLO dal
+            # messaggio che l'utente ci manda, mai dal PUT.
+            os.environ["ZERNIO_API_KEY"] = "sk_prova"
+            os.environ["ZERNIO_WHATSAPP_ACCOUNT_ID"] = "acc_prova"
+            os.environ["ZERNIO_WHATSAPP_NUMBER"] = "16469143141"
+            wa_mod = app_module.whatsapp_mod
+            vero_cerca = wa_mod.cerca_collegamenti
+            vero_wa_testo = wa_mod.invia_testo
+            wa_inviati: list[tuple] = []
+            wa_mod.invia_testo = lambda conv, testo: wa_inviati.append((conv, testo)) or "1"
+
+            check("scegliere whatsapp SENZA collegamento: 422",
+                  client.put("/me", headers=auth_header,
+                             json={"delivery_channel": "whatsapp"}).status_code, 422)
+            check("e il numero NON si scrive dal PUT",
+                  client.put("/me", headers=auth_header,
+                             json={"delivery_channel": "whatsapp",
+                                   "whatsapp_e164": "+390000000001"}).status_code, 422)
+
+            r = client.post("/me/whatsapp/collega", headers=auth_header)
+            check("apre un collegamento: 200", r.status_code, 200)
+            wa_link = r.json().get("link", "")
+            check("il link e' wa.me col testo precompilato",
+                  wa_link.startswith("https://wa.me/16469143141?text=NIVULT%20"), True)
+            wa_gettone = wa_link.rsplit("NIVULT%20", 1)[-1]
+            check("il gettone non e' in chiaro nel database",
+                  seen_by_other("SELECT count(*) FROM whatsapp_link_tokens "
+                                "WHERE token_hash = %s", (wa_gettone,)), 0)
+
+            # Nessun messaggio arrivato: non collegato.
+            wa_mod.cerca_collegamenti = lambda: []
+            check("inbox vuota: non collegato",
+                  client.get("/me/whatsapp/stato", headers=auth_header)
+                  .json()["collegato"], False)
+
+            # Un gettone INVENTATO nell'inbox non collega niente: l'hash fa
+            # da giudice.
+            wa_mod.cerca_collegamenti = lambda: [{
+                "gettone_hash": hashlib.sha256(b"inventato").hexdigest(),
+                "telefono": "+390000000009", "conversazione": "conv_x"}]
+            check("un gettone inventato non collega",
+                  client.get("/me/whatsapp/stato", headers=auth_header)
+                  .json()["collegato"], False)
+
+            # Il messaggio giusto: il gettone vero, dal telefono dell'utente.
+            wa_mod.cerca_collegamenti = lambda: [{
+                "gettone_hash": hashlib.sha256(wa_gettone.encode()).hexdigest(),
+                "telefono": "+393926045981", "conversazione": "conv_1"}]
+            check("il messaggio giusto collega",
+                  client.get("/me/whatsapp/stato", headers=auth_header)
+                  .json()["collegato"], True)
+            check("il numero e' quello del mittente",
+                  seen_by_other("SELECT whatsapp_e164 FROM users "
+                                "WHERE email = 'pref@test.dev'"), "+393926045981")
+            check("la conversazione e' registrata",
+                  seen_by_other("SELECT whatsapp_conversation_id FROM users "
+                                "WHERE email = 'pref@test.dev'"), "conv_1")
+            check("e la conferma e' partita (gratis, finestra aperta)",
+                  len(wa_inviati), 1)
+            check("adesso il canale whatsapp si puo' scegliere",
+                  client.put("/me", headers=auth_header,
+                             json={"delivery_channel": "whatsapp"}).status_code, 200)
+
+            # Monouso: lo stesso gettone rigiocato non riassegna niente.
+            wa2 = seen_by_other("SELECT count(*) FROM whatsapp_link_tokens "
+                                "WHERE consumed_at IS NOT NULL AND phone_e164 = "
+                                "'+393926045981'")
+            client.get("/me/whatsapp/stato", headers=auth_header)
+            check("il gettone e' monouso", seen_by_other(
+                "SELECT count(*) FROM whatsapp_link_tokens "
+                "WHERE consumed_at IS NOT NULL AND phone_e164 = "
+                "'+393926045981'"), wa2)
+
+            # Un numero gia' collegato non si ruba da un secondo account.
+            # Serve la SESSIONE del secondo account: la scansione dell'inbox
+            # parte solo quando chi interroga ha un gettone aperto — il
+            # lavoro si fa solo mentre qualcuno sta davvero collegando.
+            client.post("/auth/magic-link", json={"email": "wa2@test.dev"})
+            r = client.post("/auth/consuma", json={"token": tokens[-1]})
+            wa2_header = {"Authorization": f"Bearer {r.json()['sessione']}"}
+            r = client.post("/me/whatsapp/collega", headers=wa2_header)
+            wa2_gettone = r.json()["link"].rsplit("NIVULT%20", 1)[-1]
+            wa_inviati.clear()
+            wa_mod.cerca_collegamenti = lambda: [{
+                "gettone_hash": hashlib.sha256(wa2_gettone.encode()).hexdigest(),
+                "telefono": "+393926045981", "conversazione": "conv_2"}]
+            check("un numero gia' preso non si ruba",
+                  client.get("/me/whatsapp/stato", headers=wa2_header)
+                  .json()["collegato"], False)
+            check("il numero resta al primo account",
+                  seen_by_other("SELECT whatsapp_e164 IS NULL FROM users "
+                                "WHERE email = 'wa2@test.dev'"), True)
+            check("e a chi ci prova viene spiegato", len(wa_inviati), 1)
+
+            check("scollega: 204",
+                  client.delete("/me/whatsapp", headers=auth_header).status_code, 204)
+            check("e il canale torna a email",
+                  seen_by_other("SELECT delivery_channel FROM users "
+                                "WHERE email = 'pref@test.dev'"), "email")
+
+            wa_mod.cerca_collegamenti = vero_cerca
+            wa_mod.invia_testo = vero_wa_testo
+            with psycopg.connect(database_url()) as setup:
+                with setup.cursor() as cur:
+                    cur.execute("DELETE FROM users WHERE email = 'wa2@test.dev'")
+                setup.commit()
+
             print("\n— le offerte del pannello —")
             r = client.get("/me/offerte",
                            headers={"Authorization": f"Bearer {sessione}"})

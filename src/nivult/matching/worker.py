@@ -37,6 +37,7 @@ from psycopg.rows import dict_row
 from nivult.config import database_url, load_dotenv, safe_dsn
 from nivult.delivery import email as email_mod
 from nivult.delivery import telegram as telegram_mod
+from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
 from nivult.matching.llm import (GLM, motiva_offerta, profilo_come_testo,
@@ -61,6 +62,7 @@ class Utente:
     delivery_email: str | None
     telegram_chat_id: str | None
     whatsapp_e164: str | None
+    whatsapp_conversation_id: str | None
     frequency: str
     send_hour_local: int
     send_weekday: int | None
@@ -132,6 +134,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
     sql = (
         "SELECT u.id::text, u.email::text, u.plan, u.delivery_channel, "
         "       u.delivery_email::text, u.telegram_chat_id, u.whatsapp_e164, "
+        "       u.whatsapp_conversation_id, "
         "       u.frequency, u.send_hour_local, u.send_weekday, u.send_monthday, "
         "       u.timezone, u.next_digest_at, u.last_digest_at, u.locale, "
         "       u.delivery_failures, "
@@ -152,6 +155,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         id=r["id"], email=r["email"], plan=r["plan"],
         delivery_channel=r["delivery_channel"], delivery_email=r["delivery_email"],
         telegram_chat_id=r["telegram_chat_id"], whatsapp_e164=r["whatsapp_e164"],
+        whatsapp_conversation_id=r["whatsapp_conversation_id"],
         frequency=r["frequency"], send_hour_local=r["send_hour_local"],
         send_weekday=r["send_weekday"], send_monthday=r["send_monthday"],
         timezone=r["timezone"], next_digest_at=r["next_digest_at"],
@@ -435,6 +439,31 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             _rischedula(conn, u, started)
             return esito
 
+        if u.delivery_channel == "whatsapp":
+            # Il template promette «Reply STOP to stop this digest», e una
+            # promessa stampata in ogni digest si mantiene PRIMA di inviare,
+            # non dopo un reclamo. Oltre al rispetto dovuto, e' cio' che
+            # protegge il punteggio qualita' del numero — il vincolo vero
+            # del canale, che nessuna verifica aziendale ripara.
+            if u.whatsapp_conversation_id and not dry_run:
+                try:
+                    if whatsapp_mod.ha_chiesto_stop(u.whatsapp_conversation_id):
+                        log.info("%s: STOP ricevuto su WhatsApp, torno all'email",
+                                 u.email)
+                        _torna_a_email(conn, u, "hai risposto STOP su WhatsApp")
+                except Exception:
+                    pass  # non riuscire a leggere non e' una richiesta di stop
+        if u.delivery_channel == "whatsapp" and len(items) > 3:
+            # I template hanno caselle fisse: tre offerte al massimo
+            # (nivult_digest_1/2/3). Le altre NON si buttano: restano fuori
+            # da digest_items e il recupero del giro successivo le riprende —
+            # lo stesso meccanismo degli invii falliti. Il taglio sta QUI,
+            # prima della motivazione: motivare offerte che non partono
+            # sarebbe spesa GLM buttata, e ripagata al prossimo giro.
+            log.info("%s: %d offerte, WhatsApp ne porta 3 — %d rinviate "
+                     "al prossimo digest", u.email, len(items), len(items) - 3)
+            items = items[:3]
+
         # Seconda passata: la motivazione vera solo per ciò che viene inviato.
         if evaluatore is None:
             evaluatore = ValutatoreGLM()
@@ -445,15 +474,54 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                             (item["reason"], item["match_id"]))
             conn.commit()
 
-        if u.delivery_channel not in ("email", "telegram"):
+        if u.delivery_channel not in ("email", "telegram", "whatsapp"):
             _chiudi(conn, digest_id, status="failed", valutate=esito["valutate"],
                     inviate=0, error=f"canale {u.delivery_channel} non ancora supportato")
             _rischedula(conn, u, started)
             esito["stato"] = "failed_canale"
             return esito
 
+
         destinatario = u.delivery_email or u.email
-        if u.delivery_channel == "telegram" and u.telegram_chat_id:
+        if u.delivery_channel == "whatsapp" and u.whatsapp_e164:
+            if dry_run:
+                message_id = None
+                log.info("%s: DRY RUN, template nivult_digest_%d (%s)",
+                         u.email, len(items), u.locale)
+            else:
+                try:
+                    message_id, conv = whatsapp_mod.invia(
+                        u.whatsapp_e164, items, u.locale)
+                    if conv and conv != u.whatsapp_conversation_id:
+                        with conn.cursor() as cur:
+                            cur.execute("UPDATE users SET "
+                                        "whatsapp_conversation_id = %s "
+                                        "WHERE id = %s", (conv, u.id))
+                        conn.commit()
+                    _canale_ok(conn, u)
+                except whatsapp_mod.OptOut:
+                    # Disiscritto: come il bot bloccato di Telegram, non e'
+                    # un guasto da ritentare. Il digest parte via email —
+                    # e' gia' stato pagato in valutazioni.
+                    log.warning("%s: opt-out WhatsApp, torno all'email", u.email)
+                    _torna_a_email(conn, u, "il numero risulta disiscritto")
+                    message_id = email_mod.invia(destinatario, items, u.locale)
+                except whatsapp_mod.TemplateNonPronto as exc:
+                    # Finestra temporanea (Meta rivede in ore): il canale
+                    # scelto NON si molla. QUESTO digest va via email, il
+                    # prossimo riprova WhatsApp. Niente contatore di guasti:
+                    # non e' il canale a essere rotto.
+                    log.warning("%s: template non pronto (%s) — questo digest "
+                                "va via email, il canale resta WhatsApp",
+                                u.email, exc)
+                    message_id = email_mod.invia(destinatario, items, u.locale)
+                except Exception:
+                    if _canale_fallito(conn, u) >= 2:
+                        _torna_a_email(conn, u, "consegna fallita due volte")
+                        message_id = email_mod.invia(destinatario, items, u.locale)
+                    else:
+                        raise
+        elif u.delivery_channel == "telegram" and u.telegram_chat_id:
             if dry_run:
                 message_id = None
                 log.info("%s: DRY RUN, %d messaggi Telegram compilati", u.email,

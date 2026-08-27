@@ -35,6 +35,7 @@ from nivult import auth, oauth
 from nivult import crypto, cv, storage
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
+from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching.llm import GLM
 from nivult.matching.worker import calcola_slot
 
@@ -53,6 +54,23 @@ TG_SCADUTO = (
 TG_GIA_COLLEGATA = (
     "This Telegram account is already connected to another Nivult account. "
     "Disconnect it there first.")
+# La conferma di collegamento WhatsApp. Parte DENTRO la finestra di servizio
+# aperta dal messaggio dell'utente, quindi e' gratuita e senza template.
+# Testo semplice: WhatsApp non ha l'HTML di Telegram.
+WA_BENVENUTO = {
+    "en": "Connected. Your Nivult digest will arrive here from now on.",
+    "it": "Collegato. Da ora il tuo digest Nivult arriva qui.",
+    "fr": "Connect\u00e9. Votre digest Nivult arrivera d\u00e9sormais ici.",
+    "de": "Verbunden. Dein Nivult-Digest kommt ab jetzt hierher.",
+    "es": "Conectado. Tu resumen de Nivult llegar\u00e1 aqu\u00ed a partir de ahora.",
+    "pt": "Ligado. O teu resumo Nivult passa a chegar aqui.",
+    "nl": "Verbonden. Je Nivult-digest komt vanaf nu hier binnen.",
+    "pl": "Po\u0142\u0105czono. Tw\u00f3j digest Nivult b\u0119dzie odt\u0105d przychodzi\u0107 tutaj.",
+    "sv": "Ansluten. Din Nivult-sammanfattning kommer h\u00e4danefter hit.",
+}
+WA_GIA_COLLEGATO = ("This WhatsApp number is already connected to another "
+                    "Nivult account. Disconnect it there first.")
+
 TG_BENVENUTO = {
     "en": "<b>Connected.</b> Your Nivult digest will arrive here from now on.",
     "it": "<b>Collegato.</b> Da ora il tuo digest Nivult arriva qui.",
@@ -151,8 +169,10 @@ class PreferenzeUtente(BaseModel):
     send_monthday: int | None = None
     delivery_channel: str | None = None
     delivery_email: EmailStr | None = None
-    telegram_chat_id: str | None = None
-    whatsapp_e164: str | None = None
+    # telegram_chat_id e whatsapp_e164 NON stanno qui, deliberatamente: gli
+    # indirizzi di consegna nascono SOLO dai flussi di collegamento, che
+    # provano il possesso. Accettarli dal PUT permetterebbe di inserire la
+    # chat o il numero di qualcun altro e dirottargli addosso i digest.
     # La lingua in cui l'utente legge: email, magic link, motivazioni GLM.
     locale: str | None = Field(default=None, pattern="^[a-z]{2}$")
 
@@ -324,7 +344,7 @@ def create_app() -> FastAPI:
                 "frequency, timezone, email_verified_at IS NOT NULL, status, "
                 "next_digest_at, last_digest_at, send_hour_local, send_weekday, "
                 "send_monthday, delivery_email::text, display_name, locale, "
-                "telegram_chat_id IS NOT NULL "
+                "telegram_chat_id IS NOT NULL, whatsapp_e164 IS NOT NULL "
                 "FROM users WHERE id = %s", (uid,))
             r = cur.fetchone()
         if not r:
@@ -339,9 +359,9 @@ def create_app() -> FastAPI:
                 "ora_invio": r[10], "giorno_settimana": r[11],
                 "giorno_mese": r[12], "email_consegna": r[13],
                 "nome": r[14], "locale": r[15],
-                # Non il chat_id: al sito serve sapere SE si puo' scegliere
-                # Telegram, non a quale chat consegniamo.
-                "telegram_collegato": r[16]}
+                # Non gli indirizzi: al sito serve sapere SE un canale si
+                # puo' scegliere, non a quale chat o numero consegniamo.
+                "telegram_collegato": r[16], "whatsapp_collegato": r[17]}
 
     # --- vocabolari e cluster ----------------------------------------------
 
@@ -999,6 +1019,129 @@ def create_app() -> FastAPI:
         telegram_mod.invia_testo(chat_id, TG_BENVENUTO.get(locale, TG_BENVENUTO["en"]))
         return {"ok": True}
 
+    # --- collegamento WhatsApp ---------------------------------------------
+    #
+    # Il verso e' lo stesso di Telegram ma per una ragione diversa: su
+    # WhatsApp potremmo scrivere noi per primi (a pagamento, con template),
+    # pero' se per collegare bastasse digitare un numero nel pannello,
+    # chiunque potrebbe inserire il numero di qualcun altro e fargli piovere
+    # addosso i propri digest. La prova di possesso la da' l'utente
+    # scrivendoci per primo: wa.me con testo precompilato "NIVULT <gettone>".
+    # Non c'e' webhook: si legge l'inbox Zernio quando la pagina chiede lo
+    # stato — e' il polling della pagina a fare da motore.
+
+    @app.post("/me/whatsapp/collega")
+    def whatsapp_collega(uid: str = Depends(utente), conn=Depends(connessione)):
+        if not whatsapp_mod.configurato():
+            raise HTTPException(503, "WhatsApp non configurato su questo server")
+        with conn.cursor() as cur:
+            cur.execute("UPDATE whatsapp_link_tokens SET consumed_at = now(), "
+                        "  phone_e164 = '(annullato)' "
+                        "WHERE user_id = %s AND consumed_at IS NULL", (uid,))
+            gettone = secrets.token_urlsafe(32)
+            cur.execute(
+                "INSERT INTO whatsapp_link_tokens (user_id, token_hash, expires_at) "
+                "VALUES (%s, %s, now() + interval '10 minutes')",
+                (uid, hashlib.sha256(gettone.encode()).hexdigest()))
+        conn.commit()
+        return {"link": whatsapp_mod.link_collegamento(gettone),
+                "numero": f"+{whatsapp_mod.numero_bot()}",
+                "scade_tra_secondi": 600}
+
+    @app.get("/me/whatsapp/stato")
+    def whatsapp_stato(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Interrogata dalla pagina ogni pochi secondi durante il collegamento.
+
+        A differenza di Telegram non c'e' un webhook che ci chiama: e' QUESTA
+        rotta a leggere l'inbox Zernio e a consumare i gettoni che trova. Il
+        lavoro si fa solo se l'utente ha un gettone aperto — cioe' solo
+        mentre qualcuno sta davvero collegando.
+        """
+        with conn.cursor() as cur:
+            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channel "
+                        "FROM users WHERE id = %s", (uid,))
+            r = cur.fetchone()
+            if not r:
+                raise HTTPException(404, "utente inesistente")
+            if r[0]:
+                return {"collegato": True, "canale": r[1]}
+            cur.execute("SELECT count(*) FROM whatsapp_link_tokens "
+                        "WHERE user_id = %s AND consumed_at IS NULL "
+                        "  AND expires_at > now()", (uid,))
+            aperti = cur.fetchone()[0]
+        if not aperti:
+            return {"collegato": False, "canale": r[1]}
+
+        try:
+            trovati = whatsapp_mod.cerca_collegamenti()
+        except Exception:
+            # Un buco di rete verso Zernio non deve rompere il polling: la
+            # pagina richiedera' fra due secondi.
+            return {"collegato": False, "canale": r[1]}
+
+        for tr in trovati:
+            if not tr.get("telefono"):
+                continue
+            with conn.cursor() as cur:
+                # Consumo atomico: stesso UPDATE condizionato del magic link.
+                cur.execute(
+                    "UPDATE whatsapp_link_tokens SET consumed_at = now(), "
+                    "  phone_e164 = %s "
+                    "WHERE token_hash = %s AND consumed_at IS NULL "
+                    "  AND expires_at > now() RETURNING user_id::text",
+                    (tr["telefono"], tr["gettone_hash"]))
+                riga = cur.fetchone()
+                if not riga:
+                    conn.rollback()
+                    continue
+                proprietario = riga[0]
+                try:
+                    cur.execute(
+                        "UPDATE users SET whatsapp_e164 = %s, "
+                        "  whatsapp_conversation_id = %s, delivery_failures = 0 "
+                        "WHERE id = %s",
+                        (tr["telefono"], tr["conversazione"], proprietario))
+                except psycopg.errors.UniqueViolation:
+                    conn.rollback()
+                    try:
+                        whatsapp_mod.invia_testo(tr["conversazione"],
+                                                 WA_GIA_COLLEGATO)
+                    except Exception:
+                        pass
+                    continue
+                cur.execute("SELECT locale FROM users WHERE id = %s",
+                            (proprietario,))
+                loc = (cur.fetchone() or ["en"])[0]
+            conn.commit()
+            # La finestra di 24 ore e' aperta dal messaggio dell'utente:
+            # questa conferma e' gratuita. Se fallisce, il collegamento
+            # resta valido — la conferma e' cortesia, non condizione.
+            try:
+                whatsapp_mod.invia_testo(
+                    tr["conversazione"],
+                    WA_BENVENUTO.get(loc, WA_BENVENUTO["en"]))
+            except Exception:
+                pass
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT whatsapp_e164 IS NOT NULL, delivery_channel "
+                        "FROM users WHERE id = %s", (uid,))
+            r = cur.fetchone()
+        return {"collegato": r[0], "canale": r[1]}
+
+    @app.delete("/me/whatsapp", status_code=204)
+    def whatsapp_scollega(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Stacca il numero. Se era il canale di consegna, si torna all'email:
+        il vincolo users_channel_address_ck non ammette la via di mezzo."""
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE users SET whatsapp_e164 = NULL, "
+                "  whatsapp_conversation_id = NULL, delivery_failures = 0, "
+                "  delivery_channel = CASE WHEN delivery_channel = 'whatsapp' "
+                "                          THEN 'email' ELSE delivery_channel END "
+                "WHERE id = %s", (uid,))
+        conn.commit()
+
     @app.put("/me")
     def aggiorna_me(pref: PreferenzeUtente, uid: str = Depends(utente),
                     conn=Depends(connessione)):
@@ -1033,10 +1176,19 @@ def create_app() -> FastAPI:
             c = campi["delivery_channel"]
             if c not in ("email", "telegram", "whatsapp"):
                 raise HTTPException(422, "delivery_channel: email, telegram o whatsapp")
-            if c == "telegram" and not campi.get("telegram_chat_id"):
-                raise HTTPException(422, "telegram richiede telegram_chat_id")
-            if c == "whatsapp" and not campi.get("whatsapp_e164"):
-                raise HTTPException(422, "whatsapp richiede whatsapp_e164")
+            # L'indirizzo si controlla nel DATABASE, non nel payload: il
+            # payload non puo' portarlo (vedi PreferenzeUtente), e un canale
+            # senza indirizzo gia' collegato sarebbe un utente che smette di
+            # ricevere senza saperlo.
+            if c in ("telegram", "whatsapp"):
+                colonna = ("telegram_chat_id" if c == "telegram"
+                           else "whatsapp_e164")
+                with conn.cursor() as cur:
+                    cur.execute(f"SELECT {colonna} IS NOT NULL FROM users "
+                                "WHERE id = %s", (uid,))
+                    if not cur.fetchone()[0]:
+                        raise HTTPException(422, f"{c} non e' collegato: "
+                                            "prima il collegamento, poi il canale")
         if not campi:
             raise HTTPException(422, "nessun campo riconosciuto")
         if "delivery_email" in campi:
