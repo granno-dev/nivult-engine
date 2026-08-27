@@ -298,3 +298,114 @@ class Workday(BaseAdapter):
 
 
 ADAPTERS["workday"] = Workday
+
+
+class Teamtailor(BaseAdapter):
+    """Teamtailor — JSON Feed standard, gratis.
+
+    L'endpoint {slug}.teamtailor.com/jobs.json restituisce un JSON Feed 1.1
+    con un campo _jobposting che è un JobPosting schema.org incorporato.
+    È l'ATS più pulito che ci sia: dati strutturati, link diretto, data.
+    """
+    platform_id = "teamtailor"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.teamtailor.com/jobs.json")
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        out = []
+        for item in r.json().get("items", []):
+            jp = item.get("_jobposting", {})
+            # Il jobLocation è una lista di indirizzi
+            locations = jp.get("jobLocation", [])
+            if isinstance(locations, dict):
+                locations = [locations]
+            city = country = None
+            if locations:
+                addr = locations[0].get("address", {})
+                city = addr.get("addressLocality")
+                country = _iso(addr.get("addressCountry"))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(item.get("id", "")),
+                title=item.get("title", ""),
+                url=item.get("url", ""),
+                location=city,
+                country=country,
+                city=city,
+                posted_at=item.get("date_published") or jp.get("datePosted"),
+                raw=item))
+        return out
+
+
+ADAPTERS["teamtailor"] = Teamtailor
+
+
+class WeRecruit(BaseAdapter):
+    """werecruit.io — HTML con JSON-LD incorporato.
+
+    Il sito è JavaScript-rendered ma ogni pagina offerta ha un blocco
+    JSON-LD con schema.org JobPosting. Si legge quello invece del HTML.
+    L'endpoint dell'elenco offerte non è documentato, ma la pagina elenco
+    ha i link a tutte le offerte: li estraiamo e poi leggiamo il JSON-LD
+    di ciascuna.
+
+    NOTA: questo adapter è più lento degli altri perché fa una chiamata
+    per pagina offerta. Con il rate limiting giusto è comunque gestibile.
+    """
+    platform_id = "werecruit"
+
+    def jobs(self, slug: str, country: str = "fr") -> list[AtsJob]:
+        # L'elenco delle offerte è nella pagina del career site
+        r = self.client.get(
+            f"https://careers.werecruit.io/{country}/{slug}",
+            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+        if r.status_code != 200:
+            return []
+
+        # Estrai i link alle singole offerte dall'HTML
+        import re
+        job_links = re.findall(
+            rf'href="(/{country}/{slug}/offres/[^"]+)"', r.text)
+        job_links = list(dict.fromkeys(job_links))  # dedup, preserva ordine
+
+        out = []
+        for link in job_links[:50]:  # limite: 50 offerte per azienda
+            url = f"https://careers.werecruit.io{link}"
+            try:
+                jr = self.client.get(url, headers={
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"})
+                if jr.status_code != 200:
+                    continue
+                # Estrai il JSON-LD dalla pagina
+                for m in re.finditer(
+                        r'<script type="application/ld\+json">(.*?)</script>',
+                        jr.text, re.S):
+                    try:
+                        import json
+                        data = json.loads(m.group(1))
+                        if isinstance(data, dict) and data.get("@type") == "JobPosting":
+                            loc = data.get("jobLocation", {})
+                            if isinstance(loc, list):
+                                loc = loc[0] if loc else {}
+                            addr = loc.get("address", {})
+                            out.append(AtsJob(
+                                platform_id=self.platform_id, slug=slug,
+                                external_id=link.split("/")[-1],
+                                title=data.get("title", ""),
+                                url=url,
+                                location=addr.get("addressLocality"),
+                                country=_iso(addr.get("addressCountry")) or country.upper(),
+                                city=addr.get("addressLocality"),
+                                posted_at=data.get("datePosted"),
+                                raw=data))
+                            break
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+            except Exception:
+                continue
+        return out
+
+
+ADAPTERS["werecruit"] = WeRecruit
