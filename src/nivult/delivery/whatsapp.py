@@ -126,7 +126,8 @@ def _testo_msg(m: dict) -> str:
 
 
 def _telefono_conversazione(c: dict) -> str | None:
-    for k in ("participantId", "participant", "phoneNumber", "recipientId"):
+    for k in ("participantId", "participantUsername", "participant",
+              "phoneNumber", "recipientId"):
         v = c.get(k)
         if isinstance(v, dict):
             v = v.get("id") or v.get("phoneNumber")
@@ -149,23 +150,47 @@ def cerca_collegamenti() -> list[dict]:
     d = _http("GET", "/inbox/conversations/search",
               params={"query": "NIVULT", "direction": "incoming",
                       "accountId": account, "limit": 10})
+
+    # L'id di conversazione VERO sta nell'elenco, non nella ricerca: la
+    # ricerca risponde {conversation: {id: <telefono>}, matches: [...]} —
+    # misurato sul primo collegamento reale, dove il parser precedente
+    # cercava l'id sul contenitore sbagliato e scartava tutto in silenzio.
+    # La mappa telefono -> id si costruisce una volta per giro.
+    lista = _http("GET", "/inbox/conversations",
+                  params={"accountId": account, "limit": 50})
+    conv_per_telefono: dict[str, str] = {}
+    for c in lista.get("data") or []:
+        tel = _telefono_conversazione(c)
+        cid = c.get("id") or c.get("_id")
+        if tel and cid:
+            conv_per_telefono[tel] = str(cid)
+
     trovati: list[dict] = []
-    for conv in d.get("data") or d.get("conversations") or []:
-        conv_id = conv.get("_id") or conv.get("id")
+    for voce in d.get("data") or d.get("conversations") or []:
+        # Le due forme viste: {conversation, matches} dalla ricerca vera,
+        # o la conversazione nuda se un giorno cambiano di nuovo.
+        conv = voce.get("conversation") or voce
         telefono = _telefono_conversazione(conv)
-        if not conv_id:
-            continue
-        m = _http("GET", f"/inbox/conversations/{conv_id}/messages",
-                  params={"accountId": account, "limit": 20})
-        for msg in m.get("messages") or m.get("data") or []:
-            match = re.search(r"NIVULT\s+([A-Za-z0-9_-]{20,64})",
-                              _testo_msg(msg))
-            if match:
+        # I matches portano gia' il testo: la seconda chiamata per i
+        # messaggi serve solo se mancano.
+        testi = [m.get("text") or "" for m in voce.get("matches") or []]
+        if not testi:
+            cid = conv.get("id") or conv.get("_id")
+            if cid:
+                m = _http("GET", f"/inbox/conversations/{cid}/messages",
+                          params={"accountId": account, "limit": 20})
+                testi = [_testo_msg(x)
+                         for x in m.get("messages") or m.get("data") or []]
+        for testo in testi:
+            match = re.search(r"NIVULT\s+([A-Za-z0-9_-]{20,64})", testo)
+            if match and telefono:
                 trovati.append({
                     "gettone_hash": hashlib.sha256(
                         match.group(1).encode()).hexdigest(),
                     "telefono": telefono,
-                    "conversazione": str(conv_id)})
+                    "conversazione": conv_per_telefono.get(telefono)
+                        or str(conv.get("id") or ""),
+                })
     return trovati
 
 
