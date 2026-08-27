@@ -341,6 +341,43 @@ class Teamtailor(BaseAdapter):
 
 ADAPTERS["teamtailor"] = Teamtailor
 
+class BreezyHR(BaseAdapter):
+    """Breezy HR — {slug}.breezy.hr/json, formato standard con tutti i campi.
+
+    L'endpoint restituisce una lista JSON con: id, name, url, published_date,
+    location (con city e country), department, salary, company, locations.
+    È dei JSON API il più completo dopo SmartRecruiters.
+    """
+    platform_id = "breezy"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(f"https://{slug}.breezy.hr/json")
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        out = []
+        for j in r.json():
+            loc = j.get("location") or {}
+            if isinstance(loc, str):
+                loc = {"name": loc}
+            locations = j.get("locations") or []
+            city = loc.get("name") or (locations[0].get("name") if locations else None)
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(j.get("id", "")),
+                title=j.get("name", ""),
+                url=j.get("url", ""),
+                location=city,
+                city=city,
+                posted_at=j.get("published_date"),
+                department=(j.get("department") or {}).get("name")
+                if isinstance(j.get("department"), dict) else j.get("department"),
+                raw=j))
+        return out
+
+
+ADAPTERS["breezy"] = BreezyHR
+
 
 class WeRecruit(BaseAdapter):
     """werecruit.io — offerte con JSON-LD, elenco incorporato nell'HTML.
