@@ -214,7 +214,8 @@ def _link_carriere(home_url: str, html: str) -> list[str]:
 def _pattern_registro(url: str) -> tuple[str, str] | None:
     """Se l'URL carriere matcha un pattern del registro, (piattaforma, slug)."""
     INFRA = {"www", "cdn", "static", "api", "assets", "app", "jobs",
-             "careers", "apply", "boards", "help", "support"}
+             "careers", "career", "apply", "boards", "help", "support",
+             "tt", "pp-cdn"}
     for p in REGISTRY:
         pattern = p.get("url_pattern", "")
         if not pattern:
@@ -222,7 +223,8 @@ def _pattern_registro(url: str) -> tuple[str, str] | None:
         m = re.search(pattern, url)
         if m and m.lastindex and m.group(1):
             slug = m.group(1).lower()
-            if "." not in slug and len(slug) > 1 and slug not in INFRA:
+            if ("." not in slug and len(slug) > 2 and slug not in INFRA
+                    and "@" not in slug and "cdn" not in slug):
                 return p["id"], slug
     return None
 
