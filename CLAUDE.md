@@ -690,6 +690,15 @@ In `user_filters`, con il fill-rate misurato accanto. Promessi: modalità di
 lavoro, esperienza, tipo di contratto, lingua, sponsorship del visto, agenzie —
 tutti con campo pieno al 100% — e **dimensione azienda**.
 
+**Filtri per piano (deciso il 2026-08-27, venduto sul sito):** Basic nessuno;
+Pro dimensione azienda, seniority, remoto, lingua; **Ultra tutti** — anche tipo
+di contratto, visto, agenzie e settore — più `wants`/`target_role`, le parole
+libere che entrano nel prompt di GLM. ⚠ **Il funnel oggi non guarda il piano:
+applica tutto a tutti.** Va imposto quando arriva il billing, e fino ad allora
+regalare più del venduto è l'errore giusto. Il contrario — vendere filtri che
+il funnel non applica — non lo è mai stato: per questo la lista del sito
+elenca solo filtri che il funnel applica davvero.
+
 Non promessi: **titolo di studio** (48%) e **stipendio come filtro** (24%). Lo
 stipendio si **mostra quando c'è**, non ci si filtra: filtrarci nasconderebbe
 tre offerte su quattro per assenza di dato, non per scelta dell'utente.
