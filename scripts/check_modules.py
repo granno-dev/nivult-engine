@@ -245,7 +245,9 @@ class ValutatoreFinto:
     def motiva(self, profilo_testo, offerta, lingua="English"):
         sid = offerta["source_job_id"]
         self.totale["chiamate"] += 1
-        return f"motivazione piena {sid}", {"input": 80, "output": 20}
+        # come il vero ValutatoreGLM.motiva: (motivazione, analisi, uso)
+        return (f"motivazione piena {sid}", {},
+                {"input": 80, "output": 20})
 
 
 def main() -> int:
