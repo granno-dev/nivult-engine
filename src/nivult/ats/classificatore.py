@@ -121,43 +121,68 @@ def classifica(dsn: str, limite: int = 500, solo_paesi: str | None = None) -> di
             offerte = cur.fetchall()
 
     log.info("classificatore: %d offerte da etichettare", len(offerte))
-    for jid, titolo, slug, citta, paese in offerte:
-        stats["viste"] += 1
+
+    def etichetta(riga):
+        jid, titolo, slug, citta, paese = riga
         prompt = PROMPT.format(
             famiglie=", ".join(FAMIGLIE),
             titolo=(titolo or "")[:120],
             azienda=(slug or "")[:40],
             luogo=(citta or paese or "")[:40])
-        try:
-            risposta = _estrai_json(modello.chat(
-                [{"role": "user", "content": prompt}]))
-            famiglia = risposta.get("famiglia", "")
-            sicurezza = float(risposta.get("sicurezza", 0.5))
-            if famiglia not in FAMIGLIE:
-                # il modello ha inventato: prova a recuperare
-                for f in FAMIGLIE:
-                    if f.lower() in famiglia.lower():
-                        famiglia = f
-                        break
-                else:
-                    stats["scartate"] += 1
-                    continue
-            with psycopg.connect(dsn) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO job_classifications
-                          (job_id, family, confidence, model)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (job_id) DO NOTHING
-                    """, (jid, famiglia, sicurezza, MODELLO))
-                conn.commit()
-            stats["classificate"] += 1
-        except Exception as exc:  # noqa: BLE001
-            log.warning("  errore su %s: %s", (titolo or "")[:40],
-                        str(exc)[:80])
-            stats["errore"] += 1
-        if stats["viste"] % 100 == 0:
-            log.info("  … %d viste: %s", stats["viste"], stats)
+        risposta = _estrai_json(modello.chat(
+            [{"role": "user", "content": prompt}]))
+        famiglia = risposta.get("famiglia", "")
+        sicurezza = float(risposta.get("sicurezza", 0.5))
+        if famiglia not in FAMIGLIE:
+            for f in FAMIGLIE:
+                if f.lower() in famiglia.lower():
+                    famiglia = f
+                    break
+            else:
+                return None
+        return (jid, famiglia, sicurezza, MODELLO)
+
+    # le chiamate GLM in parallelo (HttpSource regola già il ritmo
+    # complessivo), le scritture DB in batch dal thread principale:
+    # una connessione per tutto il giro, non una per offerta
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    da_scrivere: list[tuple] = []
+    with psycopg.connect(dsn) as conn:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(etichetta, r) for r in offerte]
+            for fut in as_completed(futures):
+                stats["viste"] += 1
+                try:
+                    riga = fut.result()
+                    if riga:
+                        da_scrivere.append(riga)
+                        stats["classificate"] += 1
+                    else:
+                        stats["scartate"] += 1
+                except Exception as exc:  # noqa: BLE001
+                    stats["errore"] += 1
+                    log.warning("  errore: %s", str(exc)[:80])
+                if len(da_scrivere) >= 200:
+                    with conn.cursor() as cur:
+                        cur.executemany("""
+                            INSERT INTO job_classifications
+                              (job_id, family, confidence, model)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (job_id) DO NOTHING
+                        """, da_scrivere)
+                    conn.commit()
+                    da_scrivere.clear()
+                if stats["viste"] % 500 == 0:
+                    log.info("  … %d viste: %s", stats["viste"], stats)
+        if da_scrivere:
+            with conn.cursor() as cur:
+                cur.executemany("""
+                    INSERT INTO job_classifications
+                      (job_id, family, confidence, model)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (job_id) DO NOTHING
+                """, da_scrivere)
+            conn.commit()
     return stats
 
 
