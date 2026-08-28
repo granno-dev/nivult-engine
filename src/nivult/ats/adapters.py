@@ -1219,3 +1219,151 @@ class Eightfold(BaseAdapter):
 
 
 ADAPTERS["eightfold"] = Eightfold
+
+
+class Cornerstone(BaseAdapter):
+    """Cornerstone (csod.com) — API rec-job-search con token incorporato.
+
+    Il sito carriere dell'azienda linka
+    {tenant}.csod.com/ux/ats/careersite/{id}/home?c={tenant}; quella
+    pagina incorpora nel JSON di configurazione il token Bearer e
+    l'endpoint cloud (es. eu-cdg-hs.api.csod.com). Con entrambi la
+    REST cerca le offerte, 25 per pagina. Lo slug è il hostname del
+    sito carriere dell'azienda.
+    """
+    platform_id = "cornerstone"
+    PER_PAGINA = 25
+    MAX_PAGINE = 30
+
+    PERCORSI = ("/", "/karriere", "/careers", "/jobs", "/en", "/de",
+                "/unternehmen/karriere", "/en/careers")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        portal = None
+        for path in self.PERCORSI:
+            try:
+                r = self.client.get(f"{base}{path}")
+            except httpx.HTTPError:
+                continue
+            if r.status_code != 200:
+                continue
+            m = re.search(
+                r'https://([a-z0-9-]+)\.csod\.com/ux/ats/careersite/(\d+)/',
+                r.text)
+            if m:
+                portal = m.group(1), int(m.group(2))
+                break
+        if not portal:
+            return []
+        tenant, site_id = portal
+
+        # la pagina del portale contiene token e endpoint cloud
+        try:
+            rp = self.client.get(
+                f"https://{tenant}.csod.com/ux/ats/careersite/{site_id}/"
+                f"home?c={tenant}")
+        except httpx.HTTPError:
+            return []
+        mt = re.search(r'"token"\s*:\s*"(eyJ[^"]+)"', rp.text)
+        me = re.search(r'"cloud"\s*:\s*"(https://[^"]+)"', rp.text)
+        if not mt or not me:
+            return []
+        token, cloud = mt.group(1), me.group(1).rstrip("/")
+
+        out: list[AtsJob] = []
+        for pagina in range(1, self.MAX_PAGINE + 1):
+            body = {"careerSiteId": site_id, "careerSitePageId": site_id,
+                    "pageNumber": pagina, "pageSize": self.PER_PAGINA,
+                    "searchText": "", "states": [], "countryCodes": [],
+                    "cities": [], "placeID": "", "radius": None,
+                    "postingsWithinDays": None}
+            try:
+                rr = self.client.post(
+                    f"{cloud}/rec-job-search/external/jobs",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {token}",
+                             "Origin": f"https://{tenant}.csod.com"},
+                    json=body)
+            except httpx.HTTPError:
+                break
+            if rr.status_code != 200:
+                break
+            try:
+                dati = rr.json().get("data") or {}
+                requisitions = dati.get("requisitions") or []
+            except (ValueError, AttributeError):
+                break
+            if not requisitions:
+                break
+            for req in requisitions:
+                rid = str(req.get("requisitionId") or "")
+                if not rid:
+                    continue
+                luoghi = req.get("locations") or []
+                citta = None
+                if luoghi and isinstance(luoghi[0], dict):
+                    citta = luoghi[0].get("city") or luoghi[0].get("name")
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=rid,
+                    title=req.get("displayJobTitle") or "",
+                    url=(f"https://{tenant}.csod.com/ux/ats/careersite/"
+                         f"{site_id}/job/{rid}?c={tenant}"),
+                    location=citta,
+                    posted_at=None,
+                    raw=req))
+            if len(requisitions) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["cornerstone"] = Cornerstone
+
+
+class Avature(BaseAdapter):
+    """Avature — feed RSS pubblico del portale carriere.
+
+    Lo slug è il hostname del portale (jobs.totalenergies.com o
+    {azienda}.avature.net). Il feed vive su
+    /{locale}/careers/Home/feed/ e restituisce le ultime 20 offerte:
+    la lista completa è sulla pagina SearchJobs (JS), il feed è il
+    compromesso senza browser.
+    """
+    platform_id = "avature"
+    LOCALI = ("en_US", "en_GB", "en", "de", "fr", "nl", "es", "it")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        testo = None
+        for loc in self.LOCALI:
+            try:
+                r = self.client.get(f"{base}/{loc}/careers/Home/feed/")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and "<item>" in r.text:
+                testo = r.text
+                break
+        if not testo:
+            return []
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for item in re.findall(r'<item>(.*?)</item>', testo, re.S):
+            t = re.search(r'<title>(?:<!\[CDATA\[)?([^<\]]+)', item)
+            l = re.search(r'<link>([^<]+)</link>', item)
+            if not (t and l):
+                continue
+            m = re.search(r'/JobDetail/[^/]+/(\d+)', l.group(1))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=t.group(1).strip(),
+                url=l.group(1).strip(),
+                raw={}))
+        return out
+
+
+ADAPTERS["avature"] = Avature
