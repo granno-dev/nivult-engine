@@ -1911,3 +1911,38 @@ class Manatal(BaseAdapter):
 
 
 ADAPTERS["manatal"] = Manatal
+
+
+class Paradox(BaseAdapter):
+    """Paradox (Olivia) — siti carriere su CDN paradox con rendering JS.
+
+    La pagina /jobs elenca le offerte come /{titolo-slug}/job/{id}
+    dopo il rendering. Lo slug è il hostname del sito carriere.
+    """
+    platform_id = "paradox"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/jobs", "a[href*='/job/']", attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/job/([A-Za-z0-9-]+)$', l.get("href", ""))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            titolo = (l.get("text") or "").strip()
+            if not titolo or titolo.lower() == "view job":
+                # il titolo è nello slug dell'URL
+                titolo = l["href"].rstrip("/").split("/")[-2]
+                titolo = titolo.replace("-", " ").strip()
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=titolo,
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["paradox"] = Paradox
