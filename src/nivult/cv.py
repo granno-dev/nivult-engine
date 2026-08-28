@@ -62,9 +62,9 @@ letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
 - headline: UNA frase, massimo 20 parole, che dice chi è professionalmente.
   Nella lingua del CV. Niente aggettivi da brochure: il mestiere, l'ambito,
   il livello.
-- roles: gli ULTIMI 3 incarichi, dal più recente. `title` come scritto nel
-  CV, `employer` il datore, `period` come compare (es. "2023 — oggi").
-  Lista vuota se il CV non li espone in modo leggibile.
+- roles: TUTTI gli incarichi, dal più recente al più vecchio. `title` come
+  scritto nel CV, `employer` il datore, `period` come compare (es.
+  "2023 — oggi"). Lista vuota se il CV non li espone in modo leggibile.
 - certifications: al massimo 6, il nome esatto (es. "Lean Six Sigma Black
   Belt"). Solo certificazioni vere, mai corsi generici o competenze.
 - education: al massimo 2 titoli, dal più alto. `title` il titolo di studio,
@@ -152,7 +152,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         # raw_extraction, che e' gia' jsonb — una colonna per ciascuno
         # sarebbe una migrazione per dati che nessuna query interroga.
         "headline": testo(grezzo.get("headline"), 200),
-        "roles": oggetti("roles", ("title", "employer", "period"), 3),
+        "roles": oggetti("roles", ("title", "employer", "period"), 15),
         "certifications": elenco("certifications", 6, 100),
         "education": oggetti("education", ("title", "school"), 2),
         # In archivio va la versione RIPULITA dei quattro campi, non la
@@ -161,7 +161,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         "raw_extraction": {
             **grezzo,
             "headline": testo(grezzo.get("headline"), 200),
-            "roles": oggetti("roles", ("title", "employer", "period"), 3),
+            "roles": oggetti("roles", ("title", "employer", "period"), 15),
             "certifications": elenco("certifications", 6, 100),
             "education": oggetti("education", ("title", "school"), 2),
         },
