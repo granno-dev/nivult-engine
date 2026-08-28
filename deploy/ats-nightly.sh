@@ -95,7 +95,23 @@ for pid in selezioni:
 PYEOF
 echo "   ok"
 
-# ── 5. Wikidata esteso: solo domenica, il bacino cresce ────────────
+# ── 5. Mantenimento: expira, normalizza i nuovi, dedup ────────────
+echo "── mantenimento (expira/normalizza/dedup)"
+"$PY" -m nivult.ats.mantenimento --expira >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+"$PY" -m nivult.ats.mantenimento --normalizza --limite 20000 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+"$PY" -m nivult.ats.mantenimento --dedup >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+# ── 6. Classificazione GLM: 1500 nuove offerte per notte ──────────
+echo "── classificatore (1500)"
+"$PY" -m nivult.ats.classificatore --limite 1500 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+# ── 7. Wikidata esteso: solo domenica, il bacino cresce ────────────
 if [ "$(date +%u)" = "7" ]; then
   echo "── wikidata esteso (domenica)"
   "$PY" -m nivult.ats.detector --wikidata-estesa \
