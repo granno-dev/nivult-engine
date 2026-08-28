@@ -1461,7 +1461,8 @@ def create_app() -> FastAPI:
                 "sintesi": estratto.get("headline"),
                 "ruoli": estratto.get("roles") or [],
                 "certificazioni": estratto.get("certifications") or [],
-                "formazione": estratto.get("education") or []}
+                "formazione": estratto.get("education") or [],
+                "ricerche_consigliate": estratto.get("suggested_searches") or []}
 
     # I tipi che accettiamo in caricamento, e gli UNICI che si riservono.
     # Non si rimanda mai indietro il content-type dichiarato dal client: un

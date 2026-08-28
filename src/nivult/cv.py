@@ -67,7 +67,12 @@ letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
   "2023 — oggi"). Lista vuota se il CV non li espone in modo leggibile.
 - certifications: TUTTE le certificazioni vere, il nome esatto (es. "Lean
   Six Sigma Black Belt"). Mai corsi generici o competenze.
-- education: tutti i titoli di studio, dal più alto. `title` il titolo di studio,
+- education: tutti i titoli di studio, dal più alto.
+- suggested_searches: 2-3 titoli di ruolo che il candidato dovrebbe
+  cercare ADESSO — il passo naturale successivo della carriera, non i
+  titoli già avuti. Brevi (2-4 parole), senza nome del datore, senza
+  sigle di area geografica. Nella lingua del CV. Il primo è il più
+  ovvio, gli altri allargano. `title` il titolo di studio,
   `school` l'istituto.
 
 Se un campo non è deducibile, usa la lista vuota (o null per i numeri):
@@ -155,6 +160,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         "roles": oggetti("roles", ("title", "employer", "period"), 15),
         "certifications": elenco("certifications", 12, 100),
         "education": oggetti("education", ("title", "school"), 5),
+        "suggested_searches": elenco("suggested_searches", 3, 60),
         # In archivio va la versione RIPULITA dei quattro campi, non la
         # risposta grezza: e' quella che il pannello legge, e validare in
         # lettura vorrebbe dire rifare lo stesso lavoro a ogni apertura.
@@ -164,6 +170,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
             "roles": oggetti("roles", ("title", "employer", "period"), 15),
             "certifications": elenco("certifications", 12, 100),
             "education": oggetti("education", ("title", "school"), 5),
+            "suggested_searches": elenco("suggested_searches", 3, 60),
         },
     }
 
