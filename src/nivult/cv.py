@@ -65,9 +65,9 @@ letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
 - roles: TUTTI gli incarichi, dal più recente al più vecchio. `title` come
   scritto nel CV, `employer` il datore, `period` come compare (es.
   "2023 — oggi"). Lista vuota se il CV non li espone in modo leggibile.
-- certifications: al massimo 6, il nome esatto (es. "Lean Six Sigma Black
-  Belt"). Solo certificazioni vere, mai corsi generici o competenze.
-- education: al massimo 2 titoli, dal più alto. `title` il titolo di studio,
+- certifications: TUTTE le certificazioni vere, il nome esatto (es. "Lean
+  Six Sigma Black Belt"). Mai corsi generici o competenze.
+- education: tutti i titoli di studio, dal più alto. `title` il titolo di studio,
   `school` l'istituto.
 
 Se un campo non è deducibile, usa la lista vuota (o null per i numeri):
@@ -86,7 +86,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         lingue=", ".join(lingue))
     risposta = modello.chat([
         {"role": "system", "content": rubrica},
-        {"role": "user", "content": "CV\n" + testo_cv}], max_tokens=2000)
+        {"role": "user", "content": "CV\n" + testo_cv}], max_tokens=2500)
     grezzo = _json(risposta)
 
     def puliti(chiave: str, ammessi: list[str], limite: int) -> list[str]:
@@ -153,8 +153,8 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         # sarebbe una migrazione per dati che nessuna query interroga.
         "headline": testo(grezzo.get("headline"), 200),
         "roles": oggetti("roles", ("title", "employer", "period"), 15),
-        "certifications": elenco("certifications", 6, 100),
-        "education": oggetti("education", ("title", "school"), 2),
+        "certifications": elenco("certifications", 12, 100),
+        "education": oggetti("education", ("title", "school"), 5),
         # In archivio va la versione RIPULITA dei quattro campi, non la
         # risposta grezza: e' quella che il pannello legge, e validare in
         # lettura vorrebbe dire rifare lo stesso lavoro a ogni apertura.
@@ -162,8 +162,8 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
             **grezzo,
             "headline": testo(grezzo.get("headline"), 200),
             "roles": oggetti("roles", ("title", "employer", "period"), 15),
-            "certifications": elenco("certifications", 6, 100),
-            "education": oggetti("education", ("title", "school"), 2),
+            "certifications": elenco("certifications", 12, 100),
+            "education": oggetti("education", ("title", "school"), 5),
         },
     }
 
