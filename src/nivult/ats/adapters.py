@@ -297,6 +297,10 @@ class Workday(BaseAdapter):
             if not postings:
                 break
             for j in postings:
+                # alcuni posting hanno solo bulletFields (l'ID) e niente
+                # titolo: righe vuote, si scartano — verificate sul giro reale
+                if not j.get("title"):
+                    continue
                 path = j.get("externalPath", "")
                 loc = j.get("locationsText") or ""
                 pezzi = [p.strip() for p in loc.split(",")] if loc else []
@@ -304,7 +308,7 @@ class Workday(BaseAdapter):
                 out.append(AtsJob(
                     platform_id=self.platform_id, slug=slug,
                     external_id=(j.get("bulletFields") or ["unknown"])[0],
-                    title=j.get("title", ""),
+                    title=j["title"],
                     url=f"{base}{path}",
                     location=loc,
                     country=country,
