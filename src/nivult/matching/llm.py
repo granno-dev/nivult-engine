@@ -155,6 +155,17 @@ Rispondi SOLO con questo JSON, niente altro:
 # arriva a utenti in nove lingue. Si genera direttamente nella loro — costa
 # un'istruzione, non una seconda chiamata — perché tradotta a valle suonerebbe
 # tradotta. Prima diceva "in italiano" per tutti, tedeschi compresi.
+RUBRICA_ANALISI = """Sei un selezionatore esperto che spiega un match al
+candidato. Rispondi SOLO con JSON:
+{{"pros": ["..."], "cons": ["..."]}}
+- pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
+  Fatti presi dal profilo e dall'offerta, mai lodi generiche.
+- cons: da 1 a 3 punti in cui non combacia, o su cui il colloquio farà
+  domande (requisiti scoperti, lingua, sede, livello). Onesti, mai
+  scoraggianti: sono cose da preparare, non condanne.
+- Ogni punto: una frase, massimo 18 parole, in {lingua}. Dai del tu.
+"""
+
 RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase di
 massimo 25 parole, scritta in {lingua}, perché questa offerta è adatta al
 profilo del candidato. Sii concreto: ruolo, competenze, livello. Niente
@@ -246,6 +257,23 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
     score = max(0, min(100, int(p.get("score", 0))))
     reason = str(p.get("reason") or "")[:400].strip() or "—"
     return score, reason, dict(modello.last_usage)
+
+
+def analizza_allineamento(modello: ChatModel, profilo_testo: str,
+                          offerta: dict, desiderio: str | None = None,
+                          lingua: str = "English") -> dict:
+    """Pro e attenzioni del match, per la finestra di dettaglio del pannello.
+
+    Stessa testa in cache delle altre chiamate (profilo + rubrica), stessa
+    coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
+    """
+    corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
+        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
+    risposta = modello.chat(corpo, max_tokens=400)
+    p = _estrai_json(risposta)
+    pros = [str(x)[:160] for x in (p.get("pros") or []) if str(x).strip()][:4]
+    cons = [str(x)[:160] for x in (p.get("cons") or []) if str(x).strip()][:3]
+    return {"pros": pros, "cons": cons, "lang": lingua}
 
 
 def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,

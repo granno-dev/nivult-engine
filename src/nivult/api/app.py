@@ -688,6 +688,7 @@ def create_app() -> FastAPI:
             cur.execute(
                 "SELECT m.score, m.reason, m.evaluated_at, "
                 "       j.title, j.organization, j.url, j.link_kind, "
+                "       m.id::text, "
                 "       j.employer_kind, j.cities, j.salary, "
                 "       COALESCE(j.org_linkedin_slug, j.domain_derived), "
                 "       j.purged_at IS NOT NULL "
@@ -706,11 +707,93 @@ def create_app() -> FastAPI:
                 "titolo": r[3], "azienda": r[4], "url": r[5],
                 # Serve al sito per l'etichetta di trasparenza: "candidatura
                 # diretta" oppure "via <agenzia nazionale>".
-                "link_kind": r[6], "tipo_datore": r[7],
-                "citta": (r[8] or [None])[0], "stipendio": r[9],
-                "logo": f"/logo/{r[10]}" if r[10] else None,
-                "archiviata": r[11],
+                "link_kind": r[6], "id": r[7], "tipo_datore": r[8],
+                "citta": (r[9] or [None])[0], "stipendio": r[10],
+                "logo": f"/logo/{r[11]}" if r[11] else None,
+                "archiviata": r[12],
             } for r in righe],
+        }
+
+    @app.get("/me/offerte/{match_id}")
+    def dettaglio_offerta(match_id: str, uid: str = Depends(utente),
+                          conn=Depends(connessione)):
+        """La finestra di dettaglio di UN match: l'annuncio in breve e
+        l'analisi di allineamento.
+
+        L'analisi (pro e attenzioni, scritti da GLM contro il profilo del
+        candidato) si genera alla PRIMA apertura e si salva sul match: una
+        chiamata per offerta aperta, mai due. Se il credito e' esaurito o
+        l'offerta e' stata purgata, la finestra vive con quello che c'e' —
+        il motivo del punteggio resta sempre.
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT m.score, m.reason, m.evaluated_at, m.analysis, "
+                "       j.raw, j.purged_at IS NOT NULL, j.title, "
+                "       j.organization, j.url, j.link_kind, j.employer_kind, "
+                "       j.cities, j.salary, "
+                "       COALESCE(j.org_linkedin_slug, j.domain_derived) "
+                "FROM matches m JOIN jobs j ON j.id = m.job_id "
+                "WHERE m.id = %s AND m.user_id = %s AND m.passed",
+                (match_id, uid))
+            r = cur.fetchone()
+        if not r:
+            raise HTTPException(404, "offerta non trovata")
+        (score, reason, quando, analisi, raw, purgata, titolo, azienda,
+         url, link_kind, tipo_datore, citta, stipendio, slug) = r
+        raw = raw or {}
+
+        if analisi is None and not purgata and os.environ.get("GLM_API_KEY"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT c.families, c.seniority, c.skills, c.languages, "
+                    "       c.years_experience, u.locale "
+                    "FROM user_cvs c JOIN users u ON u.id = c.user_id "
+                    "WHERE c.user_id = %s AND c.status = 'active'", (uid,))
+                pr = cur.fetchone()
+            if pr:
+                from nivult.delivery.testi import LINGUA_PER_GLM
+                from nivult.matching.llm import (GLM, analizza_allineamento,
+                                                 profilo_come_testo)
+                profilo = {
+                    "ruolo": ", ".join(pr[0] or []),
+                    "seniority": pr[1] or "—",
+                    "competenze": list(pr[2] or []),
+                    "lingue": list(pr[3] or []),
+                    "sedi": [],
+                    "note": (f"{pr[4]} anni di esperienza" if pr[4] else None),
+                }
+                try:
+                    analisi = analizza_allineamento(
+                        GLM(), profilo_come_testo(profilo), raw,
+                        lingua=LINGUA_PER_GLM.get(pr[5], "English"))
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE matches SET analysis = %s WHERE id = %s",
+                            (Json(analisi), match_id))
+                    conn.commit()
+                except Exception as exc:
+                    log.warning("analisi allineamento fallita per %s: %s",
+                                match_id, exc)
+                    analisi = None
+
+        return {
+            "punteggio": score, "motivo": reason,
+            "quando": quando.isoformat() if quando else None,
+            "titolo": titolo, "azienda": azienda, "url": url,
+            "link_kind": link_kind, "tipo_datore": tipo_datore,
+            "citta": (citta or [None])[0], "stipendio": stipendio,
+            "logo": f"/logo/{slug}" if slug else None,
+            "archiviata": purgata,
+            "annuncio": {
+                "responsabilita": raw.get("ai_core_responsibilities"),
+                "requisiti": raw.get("ai_requirements_summary"),
+                "benefit": raw.get("ai_benefits"),
+                "orario": raw.get("ai_working_hours"),
+            },
+            "analisi": ({"pro": analisi.get("pros") or [],
+                         "attenzioni": analisi.get("cons") or []}
+                        if analisi else None),
         }
 
     # «Pflegefachkraft (m/w/d)», «Comptable unique F/H», «(d/f/m)»: il
