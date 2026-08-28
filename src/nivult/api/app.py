@@ -1544,7 +1544,8 @@ def create_app() -> FastAPI:
         return {"id": cv_id, "profilo": profilo, "match_riaperti": riaperti}
 
     @app.get("/me/cv")
-    def leggi_cv(uid: str = Depends(utente), conn=Depends(connessione)):
+    def leggi_cv(lingua: str | None = None, uid: str = Depends(utente),
+                 conn=Depends(connessione)):
         """Il profilo del CV attivo: ciò che l'onboarding precompila e il
         pannello mostra. Il file vero sta in /me/cv/file."""
         with conn.cursor() as cur:
@@ -1560,10 +1561,49 @@ def create_app() -> FastAPI:
         # non li ha: si risponde vuoto e il pannello non li disegna —
         # meglio una scheda piu' corta di un campo che dice «—».
         estratto = r[8] if isinstance(r[8], dict) else {}
+
+        # La sintesi e' prosa NOSTRA (scritta da GLM all'estrazione), e la
+        # prosa segue la lingua del pannello che la chiede: si traduce una
+        # volta per lingua e si salva nel dizionario headline_i18n. I fatti
+        # del CV (ruoli, titoli, certificazioni) restano nella lingua del
+        # CV: sono citazioni, non racconto.
+        sintesi = estratto.get("headline")
+        from nivult.delivery.testi import LINGUA_PER_GLM
+        voluta = LINGUA_PER_GLM.get(lingua or "")
+        if sintesi and voluta:
+            traduzioni = estratto.get("headline_i18n") or {}
+            if voluta in traduzioni:
+                sintesi = traduzioni[voluta]
+            elif os.environ.get("GLM_API_KEY"):
+                try:
+                    from nivult.matching.llm import GLM
+                    tradotta = GLM().chat([
+                        {"role": "system", "content":
+                         f"Riscrivi questa headline professionale in "
+                         f"{voluta}. Mantieni nomi propri, tecnologie e "
+                         f"sigle. Massimo 20 parole. Rispondi SOLO con la "
+                         f"frase."},
+                        {"role": "user", "content": sintesi},
+                    ], max_tokens=60).strip().strip('"')
+                    if tradotta:
+                        traduzioni[voluta] = tradotta[:200]
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "UPDATE user_cvs SET raw_extraction = "
+                                "jsonb_set(raw_extraction, "
+                                "'{headline_i18n}', %s, true) "
+                                "WHERE user_id = %s AND status = 'active'",
+                                (Json(traduzioni), uid))
+                        conn.commit()
+                        sintesi = traduzioni[voluta]
+                except Exception as exc:
+                    log.warning("traduzione sintesi fallita per %s: %s",
+                                uid, exc)
+
         return {"families": r[0], "seniority": r[1], "skills": r[2],
                 "languages": r[3], "years_experience": r[4],
                 "caricato_il": r[5], "tipo": r[6], "nome_file": r[7],
-                "sintesi": estratto.get("headline"),
+                "sintesi": sintesi,
                 "ruoli": estratto.get("roles") or [],
                 "certificazioni": estratto.get("certifications") or [],
                 "formazione": estratto.get("education") or [],
