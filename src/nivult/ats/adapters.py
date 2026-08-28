@@ -849,3 +849,119 @@ class Radancy(BaseAdapter):
 
 
 ADAPTERS["radancy"] = Radancy
+
+
+class Phenom(BaseAdapter):
+    """Phenom People — careers.azienda.com con l'API widgets protetta.
+
+    L'API /widgets (POST con CSRF e token di sessione) è barricata:
+    risponde 'tokenAvailable' a ogni replay fuori browser, Cloudflare
+    incluso. La via libera è il sitemap: ogni sito Phenom espone
+    sitemap.xml (o un indice di sitemap1.xml, sitemap2.xml, …) con
+    tutte le offerte come /job/{jobId}/{titolo-slug}.
+    Lo slug è il hostname del sito carriere (careers.roche.com).
+    """
+    platform_id = "phenom"
+    MAX_SITEMAP = 12
+    RX_OFFERTA = re.compile(r'/job/([A-Za-z0-9]+)/([^/]+)/?$')
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        r = self.client.get(f"{base}/sitemap.xml")
+        if r.status_code != 200:
+            return []
+        if "sitemapindex" in r.text:
+            file_sitemap = re.findall(r'<loc>([^<]+)</loc>', r.text)
+            file_sitemap = file_sitemap[:self.MAX_SITEMAP]
+        else:
+            file_sitemap = [f"{base}/sitemap.xml"]
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for fs in file_sitemap:
+            try:
+                rs = self.client.get(fs)
+            except httpx.HTTPError:
+                continue
+            if rs.status_code != 200:
+                continue
+            for loc in re.findall(r'<loc>([^<]+)</loc>', rs.text):
+                m = self.RX_OFFERTA.search(loc)
+                if not m or m.group(1) in visti:
+                    continue
+                visti.add(m.group(1))
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=m.group(1),
+                    title=unquote(m.group(2)).replace("-", " ").strip(),
+                    url=loc,
+                    raw={"sitemap": fs}))
+        return out
+
+
+ADAPTERS["phenom"] = Phenom
+
+
+class SuccessFactors(BaseAdapter):
+    """SAP SuccessFactors — portali /go/{nome}/{id} server-rendered.
+
+    Lo slug è il hostname del sito carriere (careers.grunenthal.com).
+    Dalla homepage si trovano i link /go/… (le bacheche), che elencano
+    le offerte come /job/{luogo-titolo}/{id}/ paginando con l'offset
+    come segmento di percorso: /go/{nome}/{id}/25/, /50/, …
+    I feed RSS /services/rss/ esistono ma restituiscono 10 elementi.
+    """
+    platform_id = "successfactors"
+    MAX_PAGINE = 30
+    MAX_BACHECHE = 3
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import html as html_mod
+        base = f"https://{slug}"
+        try:
+            r = self.client.get(f"{base}/")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        # le bacheche /go/ linkate dalla homepage (con entità HTML da
+        # scodare: '/go/R&amp;D-Scientists/…'); finiscono in /{id}/ ma
+        # NON sono offset: l'offset è un segmento in più
+        bacheche = [html_mod.unescape(b)
+                    for b in re.findall(r'href="(/go/[^"]+)"', r.text)]
+        bacheche = [b for b in bacheche
+                    if len(b.rstrip("/").split("/")) == 4]
+        bacheche = list(dict.fromkeys(bacheche))[:self.MAX_BACHECHE]
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        elenco = bacheche or ["/"]
+        for bacheca in elenco:
+            for pagina in range(self.MAX_PAGINE):
+                url = f"{base}{bacheca}" + (f"{pagina * 25}/" if pagina else "")
+                try:
+                    rp = self.client.get(url)
+                except httpx.HTTPError:
+                    break
+                if rp.status_code != 200:
+                    break
+                nuove = 0
+                for href in re.findall(r'href="(/job/[^"]+/(\d+)/)"', rp.text):
+                    path, id_offerta = href
+                    if id_offerta in visti:
+                        continue
+                    visti.add(id_offerta)
+                    nuove += 1
+                    titolo_slug = path.rstrip("/").split("/")[-2]
+                    out.append(AtsJob(
+                        platform_id=self.platform_id, slug=slug,
+                        external_id=id_offerta,
+                        title=unquote(titolo_slug).replace("-", " ").strip(),
+                        url=urljoin(base, path),
+                        raw={"path": path}))
+                if nuove == 0:
+                    break
+        return out
+
+
+ADAPTERS["successfactors"] = SuccessFactors
