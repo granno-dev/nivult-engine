@@ -758,6 +758,7 @@ def create_app() -> FastAPI:
         from nivult.delivery.testi import LINGUA_PER_GLM
         lingua_voluta = LINGUA_PER_GLM.get(lingua or "", None)
         da_scrivere = (analisi is None
+                       or "perche" not in analisi
                        or (lingua_voluta
                            and analisi.get("lang") != lingua_voluta))
         if da_scrivere and not purgata and os.environ.get("GLM_API_KEY"):
@@ -795,7 +796,8 @@ def create_app() -> FastAPI:
                                 match_id, exc)
 
         return {
-            "punteggio": score, "motivo": reason,
+            "punteggio": score,
+            "motivo": (analisi or {}).get("perche") or reason,
             "quando": quando.isoformat() if quando else None,
             "titolo": titolo, "azienda": azienda, "url": url,
             "link_kind": link_kind, "tipo_datore": tipo_datore,
@@ -803,9 +805,12 @@ def create_app() -> FastAPI:
             "logo": f"/logo/{slug}" if slug else None,
             "archiviata": purgata,
             "annuncio": {
-                "responsabilita": _campo_testo(raw.get("ai_core_responsibilities")),
-                "requisiti": _campo_testo(raw.get("ai_requirements_summary")),
-                "benefit": _campo_testo(raw.get("ai_benefits")),
+                "responsabilita": ((analisi or {}).get("responsabilita")
+                                   or _campo_testo(raw.get("ai_core_responsibilities"))),
+                "requisiti": ((analisi or {}).get("requisiti")
+                              or _campo_testo(raw.get("ai_requirements_summary"))),
+                "benefit": ((analisi or {}).get("benefit")
+                            or _campo_testo(raw.get("ai_benefits"))),
                 "orario": _campo_testo(raw.get("ai_working_hours")),
             },
             "analisi": ({"pro": analisi.get("pros") or [],

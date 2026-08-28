@@ -157,13 +157,17 @@ Rispondi SOLO con questo JSON, niente altro:
 # tradotta. Prima diceva "in italiano" per tutti, tedeschi compresi.
 RUBRICA_ANALISI = """Sei un selezionatore esperto che spiega un match al
 candidato. Rispondi SOLO con JSON:
-{{"pros": ["..."], "cons": ["..."]}}
+{{"perche": "...", "pros": ["..."], "cons": ["..."],
+  "responsabilita": "...", "requisiti": "...", "benefit": "..."}}
+- perche: UNA frase (max 25 parole) che dice perché questa offerta è
+  arrivata proprio a questo candidato.
 - pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
   Fatti presi dal profilo e dall'offerta, mai lodi generiche.
-- cons: da 1 a 3 punti in cui non combacia, o su cui il colloquio farà
-  domande (requisiti scoperti, lingua, sede, livello). Onesti, mai
-  scoraggianti: sono cose da preparare, non condanne.
-- Ogni punto: una frase, massimo 18 parole, in {lingua}. Dai del tu.
+- cons: da 1 a 3 punti su cui il colloquio farà domande (requisiti
+  scoperti, lingua, sede, livello). Onesti, mai scoraggianti.
+- responsabilita, requisiti, benefit: il contenuto dei blocchi omonimi
+  dell'offerta, reso fedele e compatto. null se il blocco manca.
+- TUTTO in {lingua}, ogni frase breve. Dai del tu.
 """
 
 RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase di
@@ -267,13 +271,36 @@ def analizza_allineamento(modello: ChatModel, profilo_testo: str,
     Stessa testa in cache delle altre chiamate (profilo + rubrica), stessa
     coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
     """
+    def _blocco(v) -> str:
+        if isinstance(v, list):
+            v = " · ".join(str(x).strip() for x in v if str(x).strip())
+        return str(v or "").strip()
+
+    # La coda standard non porta responsabilita' e benefit (il punteggio
+    # non ne ha bisogno); l'analisi li riscrive nella lingua del lettore,
+    # quindi qui entrano per intero.
+    extra = []
+    for etichetta, chiave in (("RESPONSABILITÀ", "ai_core_responsibilities"),
+                              ("BENEFIT", "ai_benefits"),
+                              ("ORARIO", "ai_working_hours")):
+        val = _blocco(offerta.get(chiave))
+        if val:
+            extra.append(f"{etichetta}\n{val[:900]}")
+    coda = _coda_offerta(offerta, desiderio)
+    if extra:
+        coda += "\n\n" + "\n\n".join(extra)
+
     corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
-    risposta = modello.chat(corpo, max_tokens=400)
+        "role": "user", "content": coda}]
+    risposta = modello.chat(corpo, max_tokens=900)
     p = _estrai_json(risposta)
     pros = [str(x)[:160] for x in (p.get("pros") or []) if str(x).strip()][:4]
     cons = [str(x)[:160] for x in (p.get("cons") or []) if str(x).strip()][:3]
-    return {"pros": pros, "cons": cons, "lang": lingua}
+    testo = lambda k, tetto: (str(p.get(k) or "").strip()[:tetto] or None)
+    return {"perche": testo("perche", 300), "pros": pros, "cons": cons,
+            "responsabilita": testo("responsabilita", 700),
+            "requisiti": testo("requisiti", 700),
+            "benefit": testo("benefit", 500), "lang": lingua}
 
 
 def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
