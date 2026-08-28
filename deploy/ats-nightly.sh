@@ -27,10 +27,10 @@ STATE=/opt/nivult/ats-nightly-state
 LOG_DIR=/opt/nivult/engine/logs
 mkdir -p "$STATE" "$LOG_DIR"
 
-# le credenziali (POSTGRES_PASSWORD) stanno nell'env del motore
-set -a
-. /opt/nivult/.env
-set +a
+# le credenziali: solo POSTGRES_PASSWORD, il resto dell'env del motore
+# ha righe con spazi (SMTP_FROM='Nivult <digest@…>') che rompono source
+POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+export POSTGRES_PASSWORD
 
 # Il DSN del database ATS: dentro Docker, utente del motore
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
