@@ -1605,3 +1605,309 @@ class Jobtoolz(BaseAdapter):
 
 
 ADAPTERS["jobtoolz"] = Jobtoolz
+
+
+class PageUp(BaseAdapter):
+    """PageUp People — pagine /careers/vacancies/ renderizzate via JS.
+
+    Le offerte sono link ?job={id} sulla pagina vacancies, caricati
+    client-side. Lo slug è il hostname del sito carriere.
+    """
+    platform_id = "pageup"
+
+    PERCORSI = ("/careers/vacancies/", "/vacancies/", "/careers/vacancies",
+                "/en/careers/vacancies/", "/cw/en/listing/")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        link: list[dict] = []
+        for path in self.PERCORSI:
+            link = _renderizza_estrai(f"{base}{path}", "a[href*='job=']",
+                                      attesa=10000)
+            if link:
+                break
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'[?&]job=(\d+)', l.get("href", ""))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=l.get("text") or "",
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["pageup"] = PageUp
+
+
+class WelcomeToTheJungle(BaseAdapter):
+    """Welcome to the Jungle — pagina azienda con offerte a scroll.
+
+    Le offerte si caricano con lazy loading sulla pagina
+    /{lang}/companies/{slug}/jobs: si scrolla e si raccolgono i link
+    con titolo. Pochi posti per azienda (piattaforma di employer
+    branding), ma le aziende sono decine. Lo slug è il hostname del
+    sito carriere dell'azienda.
+    """
+    platform_id = "welcometothejungle"
+    SCROLL = 8
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        m = None
+        for host in (f"https://{slug}", f"https://www.{slug}"):
+            for path in ("/", "/careers", "/jobs", "/job-offers", "/en",
+                         "/fr", "/en/careers", "/about-us/careers"):
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(r'welcometothejungle\.com/([a-z]{2})/companies/'
+                              r'([a-z0-9-]+)', r.text)
+                if m:
+                    break
+            if m:
+                break
+        if not m:
+            return []
+        lingua, azienda = m.group(1), m.group(2)
+        porta = (f"https://www.welcometothejungle.com/{lingua}/companies/"
+                 f"{azienda}/jobs")
+
+        from playwright.sync_api import sync_playwright
+        raccolti: dict[str, str] = {}
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto(porta, wait_until="domcontentloaded",
+                          timeout=40000)
+                page.wait_for_timeout(6000)
+                for _ in range(self.SCROLL):
+                    page.mouse.wheel(0, 3000)
+                    page.wait_for_timeout(2000)
+                raccolti = page.evaluate("""() => {
+                    const visti = {};
+                    for (const e of document.querySelectorAll('a')) {
+                        const t = (e.textContent || '').replace(/\\s+/g, ' ').trim();
+                        const coda = (e.href.split('/').pop() || '');
+                        if (e.href.includes('/jobs/') && t.length > 5
+                                && coda.includes('_')) {
+                            visti[e.href] = t.slice(0, 200);
+                        }
+                    }
+                    return visti;
+                }""")
+                browser.close()
+        except Exception:
+            pass
+
+        out: list[AtsJob] = []
+        for href, titolo in raccolti.items():
+            coda = href.rstrip("/").split("/")[-1]
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=coda,
+                title=titolo,
+                url=href,
+                raw={"porta": porta}))
+        return out
+
+
+ADAPTERS["welcometothejungle"] = WelcomeToTheJungle
+
+
+class Varbi(BaseAdapter):
+    """Varbi — portali dei comuni svedesi ({comune}.varbi.com).
+
+    Listing server-rendered in tabella: td.pos-title con l'ancora
+    titolo, td.pos-town con la città. Lo slug è il hostname del
+    portale varbi.
+    """
+    platform_id = "varbi"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        try:
+            r = self.client.get(f"{base}/")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        righe = re.findall(
+            r'<td class="[^"]*pos-title[^"]*">\s*'
+            r'<a href="https?://[^"]*what:job/jobID:(\d+)/">([^<]+)</a>'
+            r'.*?<td class="[^"]*pos-town[^"]*">\s*'
+            r'<a href="[^"]*">([^<]*)</a>',
+            r.text, re.S)
+        import html as html_mod
+        return [
+            AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=id_offerta,
+                title=html_mod.unescape(titolo).strip(),
+                url=f"{base}/se/what:job/jobID:{id_offerta}/",
+                location=html_mod.unescape(citta).strip() or None,
+                city=html_mod.unescape(citta).strip() or None,
+                raw={})
+            for id_offerta, titolo, citta in righe
+        ]
+
+
+ADAPTERS["varbi"] = Varbi
+
+
+class Factorial(BaseAdapter):
+    """Factorial HR — portale {azienda}.factorial.it renderizzato via JS.
+
+    Le offerte sono link /job_posting/{titolo-slug}-{id}; il titolo
+    si legge dallo slug. Lo slug è il hostname del portale factorial.
+    """
+    platform_id = "factorial"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/", "a[href*='job_posting']", attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/job_posting/([a-z0-9-]+)-(\d+)$',
+                          l.get("href", "").rstrip("/"))
+            if not m or m.group(2) in visti:
+                continue
+            visti.add(m.group(2))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(2),
+                title=m.group(1).replace("-", " ").strip(),
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["factorial"] = Factorial
+
+
+class InRecruiting(BaseAdapter):
+    """InRecruiting / Intervieweb (Zucchetti) — portali intervieweb.it.
+
+    Lo slug è il hostname del portale (zinrec.intervieweb.it); il
+    listing carica via JS. Le offerte sono link con ID.
+    """
+    platform_id = "inrecruiting"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/", "a[href*='job'], a[href*='annunci']",
+            attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/(?:job|annuncio|position)[s]?/(\d+)',
+                          l.get("href", ""))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            titolo = (l.get("text") or "").strip()
+            if len(titolo) < 4:
+                continue
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=titolo,
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["inrecruiting"] = InRecruiting
+
+
+class Zvoove(BaseAdapter):
+    """Zvoove (ex inter-connect) — portali carriere tedeschi server-rendered.
+
+    Le offerte sono link /stellenangebot/{titolo}-{luogo}/{uuid};
+    titolo e luogo si leggono dallo slug dell'URL. Lo slug è il
+    hostname del sito carriere.
+    """
+    platform_id = "zvoove"
+    PERCORSI = ("/gute-jobs/", "/jobs/", "/stellen/", "/karriere/",
+                "/stellenangebote/", "/job-offers/")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        jobs_url = None
+        for path in self.PERCORSI:
+            try:
+                r = self.client.get(f"{base}{path}")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and "stellenangebot" in r.text:
+                jobs_url = f"{base}{path}"
+                testo = r.text
+                break
+        if not jobs_url:
+            return []
+        import html as html_mod
+        hrefs = re.findall(r'href="(https?://[^"]*/stellenangebot/[^"]+)"',
+                           testo)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for href in hrefs:
+            id_offerta = href.rstrip("/").split("/")[-1]
+            if id_offerta in visti:
+                continue
+            visti.add(id_offerta)
+            slug_titolo = href.rstrip("/").split("/")[-2]
+            titolo = html_mod.unescape(slug_titolo).replace("-", " ").strip()
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=id_offerta[:36],
+                title=titolo,
+                url=href,
+                raw={}))
+        return out
+
+
+ADAPTERS["zvoove"] = Zvoove
+
+
+class Manatal(BaseAdapter):
+    """Manatal — portali su careers-page.com/{azienda}.
+
+    Listing server-rendered con Vue: il titolo sta in un <h5> dentro
+    l'ancora dell'offerta. Lo slug è '{azienda}' del percorso
+    careers-page.com.
+    """
+    platform_id = "manatal"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            r = self.client.get(f"https://www.careers-page.com/{slug}")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        import html as html_mod
+        righe = re.findall(
+            r'href="/' + re.escape(slug) +
+            r'/job/([A-Za-z0-9]+)"[^>]*>\s*<h5[^>]*>\s*([^<]+?)\s*</h5>',
+            r.text)
+        return [
+            AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=jid,
+                title=html_mod.unescape(titolo),
+                url=f"https://www.careers-page.com/{slug}/job/{jid}",
+                raw={})
+            for jid, titolo in righe
+        ]
+
+
+ADAPTERS["manatal"] = Manatal
