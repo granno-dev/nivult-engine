@@ -50,7 +50,7 @@ FINGERPRINT: dict[str, list[str]] = {
     "greenhouse": ["greenhouse.io"],
     "lever": ["lever.co"],
     "smartrecruiters": ["smartrecruiters.com"],
-    "avature": ["avature.net"],
+    "avature": ["avature.net", "avature"],
     "teamtailor": ["teamtailor.com"],
     "personio": ["personio.com"],
     "bamboohr": ["bamboohr.com"],
@@ -67,6 +67,7 @@ FINGERPRINT: dict[str, list[str]] = {
     "werecruit": ["werecruit"],
     "zohorecruit": ["zohorecruit"],
     # piattaforme del mercato europeo aggiunte dopo la miniera del censimento
+    "paradox": ["paradox.ai"],
     "oracle": ["oraclecloud.com/hcm", "fa.ocs.oraclecloud"],
     "adp": ["workforcenow.adp.com", "adp.com/careers"],
     "ukg": ["ukg.net", "recruiting.ultipro.com", "ukg.com/careers"],
@@ -105,7 +106,8 @@ FINGERPRINT: dict[str, list[str]] = {
 # dei paesi che ci interessano.
 PAROLE_CARRIERE = re.compile(
     r"careers?|jobs?|karriere|recrutement|recruitment|stellenangebote"
-    r"|stellenangebote|lavora|emploi|offres", re.I)
+    r"|stellenangebote|lavora|lavoro|carriere|opportunit|emploi|emplois"
+    r"|offres|empleo|vacantes|trabaja|urząd|praca", re.I)
 
 PAESI_EU = ["Q142", "Q183", "Q145", "Q38", "Q29", "Q55", "Q754", "Q34",
             "Q36", "Q39", "Q40", "Q31", "Q45", "Q35", "Q27", "Q20", "Q191"]
@@ -354,50 +356,94 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
 
 
 def _renderizza_e_analizza(dominio: str) -> tuple:
-    """Variante Playwright: rende la pagina carriere e cerca le impronte.
+    """Variante Playwright: due livelli di navigazione con fingerprint.
 
-    Per i siti JS: molte grandi aziende hanno l'ATS che si carica a
-    runtime e nell'HTML statico non c'è niente. Rende homepage e la
-    pagina carriere linkata, fingerprint sull'HTML renderizzato.
+    Per i siti JS delle grandi aziende: la homepage è marketing, la
+    pagina carriere è una landing del gruppo, e l'ATS si vede solo
+    sulla pagina di ricerca offerte, due clic più in profondità.
+    Livello 1: homepage → pagina carriere.
+    Livello 2: pagina carriere → pagina 'cerca offerte/vacancies'.
+    Fingerprint a ogni passo.
     """
     esito, piattaforma, careers_url, kind = "no_careers", None, None, None
     html_carriere = ""
+    # le parole dei link alla pagina RICERCA offerte (più strette di
+    # quelle della pagina carriere: evitano di vagare per il sito)
+    PAROLE_RICERCA = re.compile(
+        r'search[-_]?jobs?|job[-_]?search|vacanc|stellenangebote'
+        r'|offres?-d|job-listings|open[-_]?positions?|find-a-job'
+        r'|job-openings|current[-_]?openings|job-angebote|vagas', re.I)
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(f"https://{dominio}", wait_until="domcontentloaded",
-                      timeout=30000)
-            page.wait_for_timeout(6000)
-            html = page.content()
-            impronte = _trova_impronte(html)
-            if impronte:
-                piattaforma = impronte[0]
-                careers_url = page.url
-                kind = "custom"
-                esito = "ats"
-                html_carriere = html
-            else:
-                link = _link_carriere(page.url, html)[:2]
-                for url in link:
+
+            # LIVELLO 0: i sottodomini carriere ipotizzati — molte big
+            # (Siemens, Bosch) non linkano il sito carriere dalla
+            # homepage: è un dominio a parte (jobs.azienda.com)
+            url_home = None
+            html = ""
+            for candidato in (f"https://{dominio}",
+                              f"https://jobs.{dominio}",
+                              f"https://careers.{dominio}",
+                              f"https://career.{dominio}"):
+                try:
+                    page.goto(candidato, wait_until="domcontentloaded",
+                              timeout=20000)
+                    page.wait_for_timeout(6000)
+                    h = page.content()
+                except Exception:
+                    continue
+                impronte = _trova_impronte(h)
+                if impronte:
+                    browser.close()
+                    return ("ats", impronte[0], page.url, "custom", h)
+                # il primo che risponde con contenuto vero è la base
+                if url_home is None and len(h) > 5000:
+                    url_home, html = page.url, h
+
+            if url_home is None:
+                browser.close()
+                return ("dead", None, None, None, "")
+
+            # LIVELLO 1: la pagina carriere
+            link_carriere = _link_carriere(url_home, html)[:2]
+            for url_c in link_carriere:
+                try:
+                    page.goto(url_c, wait_until="domcontentloaded",
+                              timeout=25000)
+                    page.wait_for_timeout(6000)
+                    html_c = page.content()
+                except Exception:
+                    continue
+                impronte = _trova_impronte(html_c)
+                if impronte:
+                    browser.close()
+                    return ("ats", impronte[0], page.url, "custom", html_c)
+
+                # LIVELLO 2: la pagina di ricerca offerte
+                grezzi = re.findall(r'href="([^"]+)"', html_c)
+                candidati = [urljoin(str(page.url), g) for g in grezzi
+                             if PAROLE_RICERCA.search(g)]
+                candidati = [c for c in dict.fromkeys(candidati)
+                             if urlparse(c).netloc][:2]
+                for url_r in candidati:
                     try:
-                        page.goto(url, wait_until="domcontentloaded",
+                        page.goto(url_r, wait_until="domcontentloaded",
                                   timeout=25000)
-                        page.wait_for_timeout(6000)
-                        html_c = page.content()
-                        impronte = _trova_impronte(html_c)
-                        if impronte:
-                            piattaforma = impronte[0]
-                            careers_url = page.url
-                            kind = "custom"
-                            esito = "ats"
-                            html_carriere = html_c
-                            break
+                        page.wait_for_timeout(7000)
+                        html_r = page.content()
                     except Exception:
                         continue
-                if esito != "ats":
-                    esito = "no_careers" if not link else "no_ats"
+                    impronte = _trova_impronte(html_r)
+                    if impronte:
+                        browser.close()
+                        return ("ats", impronte[0], page.url, "custom",
+                                html_r)
+
+            if link_carriere:
+                esito = "no_ats"
             browser.close()
     except Exception:
         esito = "error"
@@ -500,7 +546,7 @@ def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
             cur.execute("""
                 SELECT domain, company_name, country, employees
                   FROM company_domains
-                 WHERE status IN ('no_ats', 'dead')
+                 WHERE status IN ('no_ats', 'dead', 'no_careers')
                    AND COALESCE(employees, 0) >= %s
                  ORDER BY employees DESC
                  LIMIT %s
