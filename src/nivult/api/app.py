@@ -714,8 +714,20 @@ def create_app() -> FastAPI:
             } for r in righe],
         }
 
+    def _campo_testo(v) -> str | None:
+        """Un campo del corpus che puo' essere testo o lista: reso testo.
+
+        Le liste incollate senza separatore («EnvironmentHybrid Working
+        Model…») erano il primo difetto visibile della finestra.
+        """
+        if isinstance(v, list):
+            v = " · ".join(str(x).strip() for x in v if str(x).strip())
+        v = (str(v).strip() if v is not None else "")
+        return v or None
+
     @app.get("/me/offerte/{match_id}")
-    def dettaglio_offerta(match_id: str, uid: str = Depends(utente),
+    def dettaglio_offerta(match_id: str, lingua: str | None = None,
+                          uid: str = Depends(utente),
                           conn=Depends(connessione)):
         """La finestra di dettaglio di UN match: l'annuncio in breve e
         l'analisi di allineamento.
@@ -743,7 +755,12 @@ def create_app() -> FastAPI:
          url, link_kind, tipo_datore, citta, stipendio, slug) = r
         raw = raw or {}
 
-        if analisi is None and not purgata and os.environ.get("GLM_API_KEY"):
+        from nivult.delivery.testi import LINGUA_PER_GLM
+        lingua_voluta = LINGUA_PER_GLM.get(lingua or "", None)
+        da_scrivere = (analisi is None
+                       or (lingua_voluta
+                           and analisi.get("lang") != lingua_voluta))
+        if da_scrivere and not purgata and os.environ.get("GLM_API_KEY"):
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT c.families, c.seniority, c.skills, c.languages, "
@@ -752,7 +769,6 @@ def create_app() -> FastAPI:
                     "WHERE c.user_id = %s AND c.status = 'active'", (uid,))
                 pr = cur.fetchone()
             if pr:
-                from nivult.delivery.testi import LINGUA_PER_GLM
                 from nivult.matching.llm import (GLM, analizza_allineamento,
                                                  profilo_come_testo)
                 profilo = {
@@ -764,18 +780,19 @@ def create_app() -> FastAPI:
                     "note": (f"{pr[4]} anni di esperienza" if pr[4] else None),
                 }
                 try:
-                    analisi = analizza_allineamento(
+                    nuova = analizza_allineamento(
                         GLM(), profilo_come_testo(profilo), raw,
-                        lingua=LINGUA_PER_GLM.get(pr[5], "English"))
+                        lingua=(lingua_voluta
+                                or LINGUA_PER_GLM.get(pr[5], "English")))
                     with conn.cursor() as cur:
                         cur.execute(
                             "UPDATE matches SET analysis = %s WHERE id = %s",
-                            (Json(analisi), match_id))
+                            (Json(nuova), match_id))
                     conn.commit()
+                    analisi = nuova
                 except Exception as exc:
                     log.warning("analisi allineamento fallita per %s: %s",
                                 match_id, exc)
-                    analisi = None
 
         return {
             "punteggio": score, "motivo": reason,
@@ -786,10 +803,10 @@ def create_app() -> FastAPI:
             "logo": f"/logo/{slug}" if slug else None,
             "archiviata": purgata,
             "annuncio": {
-                "responsabilita": raw.get("ai_core_responsibilities"),
-                "requisiti": raw.get("ai_requirements_summary"),
-                "benefit": raw.get("ai_benefits"),
-                "orario": raw.get("ai_working_hours"),
+                "responsabilita": _campo_testo(raw.get("ai_core_responsibilities")),
+                "requisiti": _campo_testo(raw.get("ai_requirements_summary")),
+                "benefit": _campo_testo(raw.get("ai_benefits")),
+                "orario": _campo_testo(raw.get("ai_working_hours")),
             },
             "analisi": ({"pro": analisi.get("pros") or [],
                          "attenzioni": analisi.get("cons") or []}
