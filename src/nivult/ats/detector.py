@@ -353,6 +353,57 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
     return esito, piattaforma, careers_url, kind, html_carriere
 
 
+def _renderizza_e_analizza(dominio: str) -> tuple:
+    """Variante Playwright: rende la pagina carriere e cerca le impronte.
+
+    Per i siti JS: molte grandi aziende hanno l'ATS che si carica a
+    runtime e nell'HTML statico non c'è niente. Rende homepage e la
+    pagina carriere linkata, fingerprint sull'HTML renderizzato.
+    """
+    esito, piattaforma, careers_url, kind = "no_careers", None, None, None
+    html_carriere = ""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"https://{dominio}", wait_until="domcontentloaded",
+                      timeout=30000)
+            page.wait_for_timeout(6000)
+            html = page.content()
+            impronte = _trova_impronte(html)
+            if impronte:
+                piattaforma = impronte[0]
+                careers_url = page.url
+                kind = "custom"
+                esito = "ats"
+                html_carriere = html
+            else:
+                link = _link_carriere(page.url, html)[:2]
+                for url in link:
+                    try:
+                        page.goto(url, wait_until="domcontentloaded",
+                                  timeout=25000)
+                        page.wait_for_timeout(6000)
+                        html_c = page.content()
+                        impronte = _trova_impronte(html_c)
+                        if impronte:
+                            piattaforma = impronte[0]
+                            careers_url = page.url
+                            kind = "custom"
+                            esito = "ats"
+                            html_carriere = html_c
+                            break
+                    except Exception:
+                        continue
+                if esito != "ats":
+                    esito = "no_careers" if not link else "no_ats"
+            browser.close()
+    except Exception:
+        esito = "error"
+    return esito, piattaforma, careers_url, kind, html_carriere
+
+
 def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
            thread: int = 16) -> dict:
     """Il giro di riconoscimento sui domini in attesa.
@@ -434,6 +485,80 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
     return stats
 
 
+def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
+                  thread: int = 4) -> dict:
+    """Riprova con Playwright i domini grossi finiti 'no_ats' o 'dead'.
+
+    Molti siti carriere delle grandi aziende sono app JavaScript:
+    l'HTML statico non contiene le impronte, ma dopo il rendering sì.
+    Seccatura: un browser per thread, si va lenti di proposito.
+    """
+    stats = {"visitati": 0, "ats": 0, "no_ats": 0, "no_careers": 0,
+             "dead": 0, "error": 0}
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT domain, company_name, country, employees
+                  FROM company_domains
+                 WHERE status IN ('no_ats', 'dead')
+                   AND COALESCE(employees, 0) >= %s
+                 ORDER BY employees DESC
+                 LIMIT %s
+            """, (dip_minimi, int(limite)))
+            domini = cur.fetchall()
+
+    log.info("Detector render: %s domini grandi da riprovare", len(domini))
+    if not domini:
+        return stats
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def lavoro(riga):
+        dominio = riga[0]
+        return riga, _renderizza_e_analizza(dominio)
+
+    with ThreadPoolExecutor(max_workers=thread) as pool:
+        futures = [pool.submit(lavoro, riga) for riga in domini]
+        for fut in as_completed(futures):
+            try:
+                riga, risultato = fut.result()
+            except Exception:  # noqa: BLE001
+                stats["error"] += 1
+                continue
+            dominio, nome, paese, dip = riga
+            esito, piattaforma, careers_url, kind = risultato[:4]
+            html_carriere = risultato[4] if len(risultato) > 4 else ""
+            stats["visitati"] += 1
+            if esito == "ats" and piattaforma:
+                stats["ats"] += 1
+                hit = (_pattern_registro(careers_url or "")
+                       or _url_piattaforma_in_html(html_carriere))
+                if hit:
+                    pid, slug = hit[0], hit[1]
+                    url_p = hit[2] if len(hit) > 2 else careers_url
+                    _registra_azienda(dsn, pid, slug, nome, paese, url_p)
+                    kind = "platform"
+                    log.info("  %s → %s (%s, scrapeable)", dominio, pid,
+                             slug)
+                else:
+                    log.info("  %s → %s (custom)", dominio, piattaforma)
+            else:
+                stats[esito if esito in stats else "error"] += 1
+
+            with psycopg.connect(dsn) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE company_domains SET status = %s,
+                          platform_id = %s, careers_url = %s,
+                          careers_kind = %s, checked_at = now()
+                        WHERE domain = %s
+                    """, (esito, piattaforma, careers_url, kind, dominio))
+                conn.commit()
+            if stats["visitati"] % 50 == 0:
+                log.info("  … %d renderizzati: %s", stats["visitati"], stats)
+    return stats
+
+
 def stats(dsn: str) -> None:
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -475,6 +600,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="quanti domini visitare per giro (default 200)")
     ap.add_argument("--thread", type=int, default=16,
                     help="thread paralleli (default 16)")
+    ap.add_argument("--render", action="store_true",
+                    help="riprova con Playwright i grossi domini no_ats/dead")
+    ap.add_argument("--dip-minimi", type=int, default=1000,
+                    help="soglia dipendenti per il render (default 1000)")
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
 
@@ -488,9 +617,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.rileva:
         s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread)
         print(f"\nDetector: {s}")
+    if args.render:
+        s = rileva_render(ATS_DSN, args.limite, args.dip_minimi,
+                          min(args.thread, 4))
+        print(f"\nDetector render: {s}")
     if args.stats:
         stats(ATS_DSN)
-    if not (args.wikidata or args.produzione or args.rileva or args.stats):
+    if not (args.wikidata or args.produzione or args.rileva
+            or args.render or args.stats):
         ap.print_help()
     return 0
 
