@@ -123,6 +123,23 @@ SELECT ?cLabel ?sito ?paese ?dip WHERE {
 }
 """
 
+# Il giro esteso: 'company' (Q783794) e 'publicly traded company' (Q891723)
+# valgono da sole decine di migliaia di aziende europee. La query è più
+# lenta e va in timeout ogni tanto: si usa nel giro settimanale, con
+# i retry per paese che già我们有.
+QUERY_WIKIDATA_ESTESA = """
+SELECT ?cLabel ?sito ?paese ?dip WHERE {
+  ?c wdt:P856 ?sito .
+  ?c wdt:P17 ?pa .
+  FILTER(?pa IN (%PAESI%))
+  { ?c wdt:P31 wd:Q4830453 . } UNION { ?c wdt:P31 wd:Q6881511 . }
+  UNION { ?c wdt:P31 wd:Q13360664 . } UNION { ?c wdt:P31 wd:Q783794 . }
+  UNION { ?c wdt:P31 wd:Q891723 . } UNION { ?c wdt:P31 wd:Q167667 . }
+  OPTIONAL { ?c wdt:P1128 ?dip . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+"""
+
 
 def _estrai_iso(paese_uri: str) -> str | None:
     """'http://www.wikidata.org/entity/Q142' → 'FR' (solo paesi UE noti)."""
@@ -134,15 +151,18 @@ def _estrai_iso(paese_uri: str) -> str | None:
     return ISO.get(qid)
 
 
-def carica_wikidata(dsn: str, limite: int = 0) -> int:
+def carica_wikidata(dsn: str, limite: int = 0, estesa: bool = False) -> int:
     """Scarica le aziende europee con sito ufficiale da Wikidata.
 
     Una query per paese: la risposta completa (17 paesi insieme) supera
     i 9MB e la connessione si tronca a metà JSON — verificato.
+    Con estesa=True aggiunge 'company' e 'publicly traded company':
+    decine di migliaia di aziende in più, per il giro settimanale.
     """
+    template = QUERY_WIKIDATA_ESTESA if estesa else QUERY_WIKIDATA
     inseriti = 0
     for paese_qid in PAESI_EU:
-        q = QUERY_WIKIDATA.replace("%PAESI%", f"wd:{paese_qid}")
+        q = template.replace("%PAESI%", f"wd:{paese_qid}")
         for tentativo in range(3):
             try:
                 r = httpx.get("https://query.wikidata.org/sparql",
@@ -636,6 +656,8 @@ def main(argv: list[str] | None = None) -> int:
                                  description=__doc__)
     ap.add_argument("--wikidata", action="store_true",
                     help="carica i domini aziendali da Wikidata")
+    ap.add_argument("--wikidata-estesa", action="store_true",
+                    help="Wikidata con classi extra (company, quotata): giro settimanale")
     ap.add_argument("--produzione", action="store_true",
                     help="carica i domini dal DB del motore")
     ap.add_argument("--rileva", action="store_true",
@@ -655,6 +677,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.wikidata:
         carica_wikidata(ATS_DSN)
+    if args.wikidata_estesa:
+        carica_wikidata(ATS_DSN, estesa=True)
     if args.produzione:
         dsn_prod = os.environ.get(
             "DATABASE_URL",
@@ -669,8 +693,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nDetector render: {s}")
     if args.stats:
         stats(ATS_DSN)
-    if not (args.wikidata or args.produzione or args.rileva
-            or args.render or args.stats):
+    if not (args.wikidata or args.wikidata_estesa or args.produzione
+            or args.rileva or args.render or args.stats):
         ap.print_help()
     return 0
 
