@@ -965,3 +965,257 @@ class SuccessFactors(BaseAdapter):
 
 
 ADAPTERS["successfactors"] = SuccessFactors
+
+
+class Jobvite(BaseAdapter):
+    """Jobvite — il portale pubblico è jobs.jobvite.com/{token}/jobs/alljobs.
+
+    Lo slug è il hostname del sito carriere dell'azienda: la homepage
+    contiene il link a jobs.jobvite.com/{token}/ da cui si ricava il
+    token. Il listing è server-rendered con nome e località in
+    jv-job-list-name / jv-job-list-location.
+    """
+    platform_id = "jobvite"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        try:
+            r = self.client.get(f"{base}/")
+        except httpx.HTTPError:
+            return []
+        m = re.search(r'jobs\.jobvite\.com/([a-z0-9-]+)/', r.text, re.I)
+        if not m:
+            return []
+        token = m.group(1)
+        try:
+            rj = self.client.get(f"https://jobs.jobvite.com/{token}/jobs/alljobs")
+        except httpx.HTTPError:
+            return []
+        if rj.status_code != 200:
+            return []
+        righe = re.findall(
+            r'href="/%s/job/([A-Za-z0-9]+)"[^>]*>\s*'
+            r'<div class="jv-job-list-name[^"]*">\s*([^<]+?)\s*</div>\s*'
+            r'<div class="jv-job-list-location[^"]*">\s*([^<]*?)\s*</div>'
+            % token, rj.text)
+        return [
+            AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=code,
+                title=titolo,
+                url=f"https://jobs.jobvite.com/{token}/job/{code}",
+                location=luogo or None,
+                city=luogo or None,
+                raw={"token": token})
+            for code, titolo, luogo in righe
+        ]
+
+
+ADAPTERS["jobvite"] = Jobvite
+
+
+class OracleRecruiting(BaseAdapter):
+    """Oracle Recruiting Cloud — CandidateExperience con REST pubblica.
+
+    Ogni azienda ha host ({tenant}.fa.{region}.oraclecloud.com) e
+    siteNumber (CX_1, CX_2…): entrambi compaiono nel link
+    /hcmUI/CandidateExperience/…/sites/{siteNumber} che il sito
+    carriere dell'azienda contiene. Lo slug è il hostname del sito
+    carriere; l'API è aperta, senza token.
+    """
+    platform_id = "oracle"
+    PER_PAGINA = 25
+    MAX_PAGINE = 30
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        try:
+            r = self.client.get(f"{base}/")
+        except httpx.HTTPError:
+            return []
+        m = re.search(
+            r'https://([a-z0-9.-]+\.oraclecloud\.com)/hcmUI/'
+            r'CandidateExperience/[a-zA-Z-]+/sites/([A-Za-z0-9_]+)', r.text)
+        if not m:
+            return []
+        host, sito = m.group(1), m.group(2)
+
+        out: list[AtsJob] = []
+        for pagina in range(self.MAX_PAGINE):
+            offset = pagina * self.PER_PAGINA
+            url = (f"https://{host}/hcmRestApi/resources/latest/"
+                   f"recruitingCEJobRequisitions?onlyData=true"
+                   f"&expand=requisitionList.workLocation,"
+                   f"requisitionList.otherWorkLocations,"
+                   f"requisitionList.secondaryLocations"
+                   f"&finder=findReqs;siteNumber={sito},limit={self.PER_PAGINA},"
+                   f"offset={offset},sortBy=POSTING_DATES_DESC")
+            try:
+                rr = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if rr.status_code != 200:
+                break
+            try:
+                items = rr.json().get("items") or []
+            except ValueError:
+                break
+            rl = items[0].get("requisitionList") or [] if items else []
+            if not rl:
+                break
+            for j in rl:
+                if not j.get("Id"):
+                    continue
+                try:
+                    dt = datetime.fromisoformat(j["PostedDate"]) \
+                        if j.get("PostedDate") else None
+                except ValueError:
+                    dt = None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=str(j["Id"]),
+                    title=j.get("Title") or "",
+                    url=(f"https://{host}/hcmUI/CandidateExperience/en/sites/"
+                         f"{sito}/job/{j['Id']}"),
+                    location=j.get("PrimaryLocation"),
+                    posted_at=dt,
+                    department=j.get("Department"),
+                    raw=j))
+            if len(rl) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["oracle"] = OracleRecruiting
+
+
+class Softgarden(BaseAdapter):
+    """Softgarden — feed JSON schema.org pubblico per portale.
+
+    Il feed vive su {azienda}.career.softgarden.de/jobs.feed.json con
+    dataFeedElement[] di JobPosting (titolo, url, datePosted, id).
+    I portali nuovi ({azienda}.softgarden.io) espongono lo stesso feed
+    sul dominio classico: da guentner.softgarden.io si deriva
+    guentner.career.softgarden.de. Lo slug è il hostname del sito
+    carriere dell'azienda.
+    """
+    platform_id = "softgarden"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        m = None
+        # il link al portale può stare in homepage o nella pagina karriere
+        for path in ("/", "/careers", "/karriere", "/jobs", "/en", "/de",
+                     "/unternehmen/karriere", "/de-de/unternehmen/karriere"):
+            try:
+                r = self.client.get(f"{base}{path}")
+            except httpx.HTTPError:
+                continue
+            if r.status_code != 200:
+                continue
+            m = re.search(
+                r'https?://([a-z0-9-]+)\.(?:career\.)?softgarden\.(?:de|io)',
+                r.text)
+            if m:
+                break
+        if not m:
+            return []
+        feed = f"https://{m.group(1)}.career.softgarden.de/jobs.feed.json"
+        try:
+            rf = self.client.get(feed)
+        except httpx.HTTPError:
+            return []
+        if rf.status_code != 200:
+            return []
+        try:
+            dati = rf.json()
+        except ValueError:
+            return []
+        out: list[AtsJob] = []
+        for voce in dati.get("dataFeedElement") or []:
+            item = voce.get("item") or {}
+            ident = item.get("identifier") or {}
+            if not item.get("url") or not ident.get("value"):
+                continue
+            try:
+                dt = datetime.fromisoformat(item["datePosted"]) \
+                    if item.get("datePosted") else None
+            except ValueError:
+                dt = None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(ident["value"]),
+                title=item.get("title") or "",
+                url=item["url"],
+                posted_at=dt,
+                raw=item))
+        return out
+
+
+ADAPTERS["softgarden"] = Softgarden
+
+
+class Eightfold(BaseAdapter):
+    """Eightfold AI — API pcsx/search pubblica.
+
+    Host tipo apply.azienda.com; il parametro domain= si legge nella
+    pagina carriere (incorporato negli script della SPA). Pagina con
+    start={offset}. Lo slug è il hostname del sito carriere.
+    """
+    platform_id = "eightfold"
+    PER_PAGINA = 10
+    MAX_PAGINE = 50
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        try:
+            r = self.client.get(f"{base}/careers")
+        except httpx.HTTPError:
+            return []
+        m = re.search(r'domain=([a-z0-9.-]+\.[a-z]{2,})', r.text)
+        if not m:
+            # ripiego: il dominio azienda dal referer
+            m2 = re.search(r'"domain"\s*:\s*"([^"]+)"', r.text)
+            if not m2:
+                return []
+            dominio = m2.group(1)
+        else:
+            dominio = m.group(1)
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(self.MAX_PAGINE):
+            url = (f"{base}/api/pcsx/search?domain={dominio}&query=&location="
+                   f"&start={pagina * self.PER_PAGINA}&")
+            try:
+                rr = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if rr.status_code != 200:
+                break
+            try:
+                dati = rr.json().get("data") or {}
+                posizioni = dati.get("positions") or []
+            except (ValueError, AttributeError):
+                break
+            if not posizioni:
+                break
+            for p in posizioni:
+                pid = str(p.get("id") or "")
+                if not pid or pid in visti:
+                    continue
+                visti.add(pid)
+                luoghi = p.get("work_locations") or []
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=pid,
+                    title=p.get("name") or "",
+                    url=f"{base}/job/{pid}",
+                    location=luoghi[0] if luoghi else None,
+                    raw=p))
+            if len(posizioni) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["eightfold"] = Eightfold
