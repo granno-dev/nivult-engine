@@ -106,11 +106,18 @@ def compila(items: list[dict], locale: str = "en") -> list[str]:
              else None),
         ] if m]
         datore = it.get("organization") or x["datore_non_dichiarato"]
+        # Il punteggio come ancora visiva al posto del numero d'ordine, il
+        # titolo che E' il link, datore e citta' su una riga: le stesse
+        # scelte della finestra del pannello, nel dialetto di Telegram.
+        citta = ", ".join(it.get("cities") or [])
+        sotto = " · ".join(z for z in [datore, citta] if z)
+        meta_fini = [m for m in meta if m and m != citta]
         blocchi.append(
-            f"<b>{pos}. {_esc(it['title'])}</b>\n"
-            f"{_esc(datore)}\n"
-            f"<i>{_esc(', '.join(meta))}</i>\n"
-            f"{it['score']}/100 — {_esc(it['reason'])}\n"
+            f"<b>{it['score']}</b> · <a href=\"{_esc(it['url'])}\">"
+            f"<b>{_esc(it['title'])}</b></a>\n"
+            f"{_esc(sotto)}\n"
+            + (f"<i>{_esc(' · '.join(meta_fini))}</i>\n" if meta_fini else "")
+            + f"{_esc(it['reason'])}\n"
             f'<a href="{_esc(it["url"])}">'
             f'{_esc(etichetta_link(it, locale))} →</a>')
 

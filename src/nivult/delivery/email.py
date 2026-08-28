@@ -109,37 +109,76 @@ def compila(items: list[dict], locale: str = "en") -> tuple[str, str, str]:
             f"   {', '.join(meta)}\n"
             f"   {x['aderenza']} {it['score']}/100. {it['reason']}\n"
             f"   {etichetta_link(it, locale)}: {it['url']}\n")
+        # La riga datore · citta' sta sotto il titolo; il resto dei meta
+        # (stipendio, data, agenzia) in una riga fine sotto.
+        citta = ", ".join(it.get("cities") or [])
+        sotto_titolo = " · ".join(z for z in [_datore(it, locale), citta] if z)
+        meta_fini = [m for m in meta if m and m != citta]
         parti_html.append(
-            f'<div style="margin:0 0 28px 0;padding:0 0 28px 0;'
-            f'border-bottom:1px solid #e5e5e5;">'
-            f'<p style="margin:0;font-size:19px;line-height:1.3;">'
-            f'<a href="{_esc(it["url"])}" style="color:#111;text-decoration:none;">'
-            f'{_esc(it["title"])}</a></p>'
-            f'<p style="margin:4px 0 0 0;color:#555;font-size:15px;">'
-            f'{_esc(_datore(it, locale))}</p>'
-            f'<p style="margin:6px 0 0 0;color:#888;font-size:13px;">'
-            f'{_esc(", ".join(meta))}</p>'
-            f'<p style="margin:10px 0 0 0;font-size:15px;line-height:1.45;">'
-            f'<strong style="color:#111;">{it["score"]}/100</strong> — '
-            f'{_esc(it["reason"])}</p>'
-            f'<p style="margin:10px 0 0 0;font-size:14px;">'
-            f'<a href="{_esc(it["url"])}" style="color:#0a5a3c;">'
-            f'{_esc(etichetta_link(it, locale))} →</a></p></div>')
+            f'<tr><td style="padding:6px 0;">'
+            f'<table role="presentation" width="100%" cellpadding="0" '
+            f'cellspacing="0" style="background:#ffffff;border:1px solid '
+            f'#e5e7eb;border-radius:14px;">'
+            f'<tr><td style="padding:20px 22px;">'
+            # titolo a sinistra, badge del punteggio a destra
+            f'<table role="presentation" width="100%" cellpadding="0" '
+            f'cellspacing="0"><tr>'
+            f'<td valign="top" style="padding-right:12px;">'
+            f'<a href="{_esc(it["url"])}" style="color:#0f172a;'
+            f'text-decoration:none;font-size:17px;font-weight:600;'
+            f'line-height:1.35;">{_esc(it["title"])}</a>'
+            f'<div style="margin-top:3px;color:#4b5563;font-size:14px;">'
+            f'{_esc(sotto_titolo)}</div></td>'
+            f'<td valign="top" align="right" width="48">'
+            f'<span style="display:inline-block;background:#3355ff;'
+            f'color:#ffffff;font-size:14px;font-weight:700;'
+            f'padding:6px 10px;border-radius:9px;">{it["score"]}</span>'
+            f'</td></tr></table>'
+            + (f'<div style="margin-top:10px;color:#9ca3af;font-size:12.5px;">'
+               f'{_esc(" · ".join(meta_fini))}</div>' if meta_fini else "")
+            + f'<div style="margin-top:12px;color:#374151;font-size:14px;'
+              f'line-height:1.55;">{_esc(it["reason"])}</div>'
+            # bottone a prova di Outlook: una cella colorata, non un CSS
+            f'<table role="presentation" cellpadding="0" cellspacing="0" '
+            f'style="margin-top:14px;"><tr>'
+            f'<td style="background:#3355ff;border-radius:9px;">'
+            f'<a href="{_esc(it["url"])}" style="display:inline-block;'
+            f'padding:10px 18px;color:#ffffff;font-size:14px;'
+            f'font-weight:600;text-decoration:none;">'
+            f'{_esc(etichetta_link(it, locale))} &rarr;</a>'
+            f'</td></tr></table>'
+            f'</td></tr></table></td></tr>')
 
     testo = (f"Nivult — {x['digest_del'].format(data=oggi)}\n\n"
              + "\n".join(righe_testo)
              + "\n" + x["piede_testo"] + "\n")
 
+    # Tabelle e stili inline: e' l'unico dialetto che Outlook capisce.
+    # Palette e voce del sito: canvas fuori, card bianche dentro, accent
+    # solo dove si agisce (badge e bottone).
+    carattere = ("-apple-system,'Segoe UI',Roboto,Helvetica,Arial,"
+                 "sans-serif")
     html = (
-        '<div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;'
-        'padding:32px 24px;color:#111;">'
-        '<p style="margin:0 0 4px 0;font-size:13px;letter-spacing:0.12em;'
-        'color:#888;">N I V U L T</p>'
-        f'<p style="margin:0 0 28px 0;font-size:15px;color:#555;">'
-        f'{_esc(x["digest_del"].format(data=oggi))}</p>'
+        f'<table role="presentation" width="100%" cellpadding="0" '
+        f'cellspacing="0" style="background:#f4f6f5;">'
+        f'<tr><td align="center" style="padding:28px 12px;">'
+        f'<table role="presentation" width="600" cellpadding="0" '
+        f'cellspacing="0" style="max-width:600px;width:100%;'
+        f'font-family:{carattere};">'
+        # testata: il marchio a sinistra, la data a destra
+        f'<tr><td style="padding:0 6px 14px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" '
+        f'cellspacing="0"><tr>'
+        f'<td style="font-size:19px;font-weight:700;color:#0f172a;">'
+        f'Nivult<span style="color:#3355ff;">.</span></td>'
+        f'<td align="right" style="font-size:13px;color:#6b7280;">'
+        f'{_esc(x["digest_del"].format(data=oggi))}</td>'
+        f'</tr></table></td></tr>'
         + "".join(parti_html)
-        + f'<p style="margin:28px 0 0 0;font-size:12px;color:#999;">'
-          f'{_esc(x["piede"])}</p></div>')
+        + f'<tr><td style="padding:18px 6px 0;color:#9ca3af;'
+          f'font-size:12px;line-height:1.55;">{_esc(x["piede"])}'
+          f'</td></tr>'
+          f'</table></td></tr></table>')
     return oggetto, testo, html
 
 
