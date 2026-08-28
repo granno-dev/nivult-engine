@@ -68,6 +68,11 @@ letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
 - certifications: TUTTE le certificazioni vere, il nome esatto (es. "Lean
   Six Sigma Black Belt"). Mai corsi generici o competenze.
 - education: tutti i titoli di studio, dal più alto.
+- cv_tips: 2-3 consigli CONCRETI per migliorare QUESTO CV, nella lingua
+  del CV. Ognuno una frase, max 18 parole. Mai generici («aggiungi più
+  dettagli»): indica cosa manca o cosa rende poco leggibile — un numero
+  che darebbe forza a un risultato, una sezione confusa, una competenza
+  usata ma non dichiarata. Tono da collega, mai da maestro.
 - suggested_searches: 2-3 titoli di ruolo che il candidato dovrebbe
   cercare ADESSO — il passo naturale successivo della carriera, non i
   titoli già avuti. Brevi (2-4 parole), senza nome del datore, senza
@@ -161,6 +166,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         "certifications": elenco("certifications", 12, 100),
         "education": oggetti("education", ("title", "school"), 5),
         "suggested_searches": elenco("suggested_searches", 3, 60),
+        "cv_tips": elenco("cv_tips", 3, 200),
         # In archivio va la versione RIPULITA dei quattro campi, non la
         # risposta grezza: e' quella che il pannello legge, e validare in
         # lettura vorrebbe dire rifare lo stesso lavoro a ogni apertura.
@@ -171,6 +177,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
             "certifications": elenco("certifications", 12, 100),
             "education": oggetti("education", ("title", "school"), 5),
             "suggested_searches": elenco("suggested_searches", 3, 60),
+            "cv_tips": elenco("cv_tips", 3, 200),
         },
     }
 
