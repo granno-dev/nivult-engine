@@ -86,7 +86,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
         lingue=", ".join(lingue))
     risposta = modello.chat([
         {"role": "system", "content": rubrica},
-        {"role": "user", "content": "CV\n" + testo_cv}], max_tokens=500)
+        {"role": "user", "content": "CV\n" + testo_cv}], max_tokens=2000)
     grezzo = _json(risposta)
 
     def puliti(chiave: str, ammessi: list[str], limite: int) -> list[str]:
