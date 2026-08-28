@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from urllib.parse import unquote, urljoin
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -773,3 +774,78 @@ class Freshteam(BaseAdapter):
 
 
 ADAPTERS["freshteam"] = Freshteam
+
+
+class Radancy(BaseAdapter):
+    """Radancy (ex-TMP) — siti carriere tipo jobs.azienda.com.
+
+    Lo slug è il hostname del sito carriere (es. 'jobs.veolia.com').
+    La search page è server-rendered con 15 offerte per pagina e
+    paginazione ?p=N. Le offerte hanno URL
+    /{lingua}/{sezione}/{luogo}/{titolo-slug}/{n1}/{n2}.
+    I siti renderizzati client-side (ISS, Jerónimo Martins) non sono
+    raggiungibili con httpx: restano al detector.
+    """
+    platform_id = "radancy"
+    MAX_PAGINE = 40
+
+    PERCORSI_RICERCA = [
+        "/search/", "/search-jobs/",
+        "/en/search/", "/en/search-jobs/",
+        "/fr/search/", "/fr/search-jobs/",
+    ]
+    RX_OFFERTA = re.compile(
+        r'href="(/(?:[a-z]{2}(?:[-_][A-Za-z]{2})?/)?'
+        r'(?:job|jobs|emploi|emplois|empleo|vacancies|vacature|stellen'
+        r'|offres|offerte|tarjoukset)/[^"]+/(\d+)/(\d+))"')
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        # trova il percorso di ricerca che risponde con offerte
+        percorso = None
+        for p in self.PERCORSI_RICERCA:
+            try:
+                r = self.client.get(f"{base}{p}")
+                if r.status_code == 200 and self.RX_OFFERTA.search(r.text):
+                    percorso = p
+                    break
+            except httpx.HTTPError:
+                continue
+        if not percorso:
+            return []
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, self.MAX_PAGINE + 1):
+            url = f"{base}{percorso}" + (f"?p={pagina}" if pagina > 1 else "")
+            try:
+                r = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if r.status_code != 200:
+                break
+            trovate = 0
+            for href, _, id_offerta in self.RX_OFFERTA.findall(r.text):
+                if id_offerta in visti:
+                    continue
+                visti.add(id_offerta)
+                trovate += 1
+                segmenti = href.rstrip("/").split("/")
+                # [-1]=id2 [-2]=id1 [-3]=titolo [-4]=luogo
+                titolo = unquote(segmenti[-3]).replace("-", " ").strip()
+                luogo = unquote(segmenti[-4]).replace("-", " ").strip() \
+                    if len(segmenti) >= 5 else None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=id_offerta,
+                    title=titolo,
+                    url=urljoin(base, href),
+                    location=luogo,
+                    city=luogo,
+                    raw={"href": href}))
+            if trovate == 0:
+                break
+        return out
+
+
+ADAPTERS["radancy"] = Radancy
