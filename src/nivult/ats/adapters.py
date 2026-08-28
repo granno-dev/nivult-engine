@@ -1946,3 +1946,537 @@ class Paradox(BaseAdapter):
 
 
 ADAPTERS["paradox"] = Paradox
+
+
+class Workbuster(BaseAdapter):
+    """Workbuster (Svezia/Norvegia) — listing /all-jobs renderizzato.
+
+    Le offerte sono /jobs/{id}-{titolo-slug}, il titolo si legge dallo
+    slug. Lo slug è il hostname del portale.
+    """
+    platform_id = "workbuster"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/all-jobs", "a[href*='/jobs/']", attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/jobs/(\d+)-([a-z0-9-]+)$',
+                          l.get("href", "").rstrip("/"))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=m.group(2).replace("-", " ").strip(),
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["workbuster"] = Workbuster
+
+
+class Jobsoid(BaseAdapter):
+    """Jobsoid — portali con offerte /j/{id}/{titolo-slug} renderizzate.
+
+    Lo slug è il hostname del portale (jobs.azienda.com).
+    """
+    platform_id = "jobsoid"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/", "a[href*='/j/']", attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/j/(\d+)/([a-z0-9-]+)$',
+                          l.get("href", "").rstrip("/"))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=m.group(2).replace("-", " ").strip(),
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["jobsoid"] = Jobsoid
+
+
+class WelcomeKit(BaseAdapter):
+    """WelcomeKit (gruppo WTTJ) — widget incorporato renderizzato via JS.
+
+    Le offerte compaiono nel DOM dopo il rendering con classi CSS
+    welcomekit-jobs-list-item. Lo slug è il hostname del sito carriere.
+    """
+    platform_id = "welcomekit"
+    PERCORSI = ("/jobs", "/en/jobs", "/careers", "/en/careers", "/")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        from playwright.sync_api import sync_playwright
+        raccolti: list[dict] = []
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                for host in (f"https://{slug}", f"https://www.{slug}"):
+                    for path in self.PERCORSI:
+                        try:
+                            page.goto(f"{host}{path}",
+                                      wait_until="domcontentloaded",
+                                      timeout=30000)
+                        except Exception:
+                            continue
+                        page.wait_for_timeout(8000)
+                        raccolti = page.eval_on_selector_all(
+                            ".welcomekit-jobs-list-item a",
+                            """els => els.map(e => ({
+                                href: e.href,
+                                text: (e.textContent || '')
+                                        .replace(/\\s+/g, ' ').trim()
+                                        .slice(0, 200)}))""")
+                        if raccolti:
+                            break
+                    if raccolti:
+                        break
+                browser.close()
+        except Exception:
+            pass
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in raccolti:
+            m = re.search(r'/jobs/([^/]+)$', l.get("href", "").rstrip("/"))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            titolo = (l.get("text") or "").strip()
+            if len(titolo) < 4:
+                titolo = m.group(1).split("_")[0].replace("-", " ")
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=titolo,
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["welcomekit"] = WelcomeKit
+
+
+class Hireserve(BaseAdapter):
+    """Hireserve (iTris) — portali wd_portal con offerte /vacancy/.
+
+    Listing server-rendered: le offerte sono link
+    /vacancy/{titolo-slug}-{id}.html. Lo slug è il hostname del
+    portale (jobs.azienda.com).
+    """
+    platform_id = "hireserve"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        # la pagina dei lavori: la home può linkare il listing; anche il
+        # listing wd_portal.list serve il site_id — si trova nella home
+        r = None
+        try:
+            r = self.client.get(f"{base}/")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        testo = r.text
+        m = re.search(r'wd_portal\.list\?p_web_site_id=(\d+)', testo)
+        if m:
+            try:
+                rl = self.client.get(
+                    f"{base}/wd/plsql/wd_portal.list?p_web_site_id={m.group(1)}")
+                if rl.status_code == 200:
+                    testo = rl.text
+            except httpx.HTTPError:
+                pass
+        righe = re.findall(
+            r'href="(/vacancy/([a-z0-9-]+)-(\d+)\.html)"', testo)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for href, titolo_slug, id_offerta in righe:
+            if id_offerta in visti:
+                continue
+            visti.add(id_offerta)
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=id_offerta,
+                title=titolo_slug.replace("-", " ").strip(),
+                url=f"{base}{href}",
+                raw={}))
+        return out
+
+
+ADAPTERS["hireserve"] = Hireserve
+
+
+class Tribepad(BaseAdapter):
+    """Tribepad (UK) — portali renderizzati con offerte /jobs/job/.
+
+    Lo slug è il hostname del portale (jobsearch.azienda.com).
+    """
+    platform_id = "tribepad"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        link = _renderizza_estrai(
+            f"https://{slug}/", "a[href*='/jobs/job/']", attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/jobs/job/([^/]+)/(\d+)$',
+                          l.get("href", "").rstrip("/"))
+            if not m or m.group(2) in visti:
+                continue
+            visti.add(m.group(2))
+            titolo = (l.get("text") or "").strip() or m.group(1).replace("-", " ")
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(2),
+                title=titolo,
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["tribepad"] = Tribepad
+
+
+class TalentSoft(BaseAdapter):
+    """TalentSoft (CEA e simili) — listing ASPX paginato server-rendered.
+
+    Le offerte sono /offre-de-emploi/emploi-{titolo}_{id}.aspx, la
+    paginazione è ?page=N. Lo slug è il hostname del portale.
+    """
+    platform_id = "talentsoft"
+    MAX_PAGINE = 20
+
+    PERCORSI = ("/offre-de-emploi/liste-toutes-offres.aspx",
+                "/offre-de-emploi/liste-offres.aspx", "/")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        listing = None
+        base = None
+        for host in (f"https://{slug}", f"https://www.{slug}"):
+            for path in self.PERCORSI:
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code == 200 and "offre-de-emploi/emploi-" in r.text:
+                    base, listing = host, path
+                    break
+            if listing:
+                break
+        if not listing:
+            return []
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, self.MAX_PAGINE + 1):
+            url = f"{base}{listing}"
+            if pagina > 1:
+                url += f"?page={pagina}"
+            try:
+                rp = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if rp.status_code != 200:
+                break
+            righe = re.findall(
+                r'href="(/offre-de-emploi/(?:emploi-)?([a-z0-9-]+)_(\d+)\.aspx)"',
+                rp.text)
+            nuove = 0
+            for href, titolo_slug, id_offerta in righe:
+                if id_offerta in visti:
+                    continue
+                visti.add(id_offerta)
+                nuove += 1
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=id_offerta,
+                    title=titolo_slug.replace("-", " ").replace("emploi ", "").strip(),
+                    url=f"{base}{href}",
+                    raw={}))
+            if nuove == 0:
+                break
+        return out
+
+
+ADAPTERS["talentsoft"] = TalentSoft
+
+
+class ADP(BaseAdapter):
+    """ADP WorkforceNow — career center pubblico con API REST.
+
+    Il link della pagina carriere contiene il cid del tenant; l'API
+    job-requisitions è aperta e paginata con startAt. Lo slug è il
+    hostname del sito carriere dell'azienda.
+    """
+    platform_id = "adp"
+    PER_PAGINA = 20
+    MAX_PAGINE = 25
+
+    PERCORSI = ("/", "/careers", "/jobs", "/en", "/career")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        cid = None
+        for host in (base, f"https://www.{slug}"):
+            for path in self.PERCORSI:
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(r'workforcenow\.adp\.com[^"]*?cid=([0-9a-f-]{36})',
+                              r.text)
+                if m:
+                    cid = m.group(1)
+                    break
+            if cid:
+                break
+        if not cid:
+            return []
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(self.MAX_PAGINE):
+            url = ("https://workforcenow.adp.com/mascsr/default/careercenter"
+                   f"/public/events/staffing/v1/job-requisitions"
+                   f"?cid={cid}&startAt={pagina * self.PER_PAGINA}")
+            try:
+                rr = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if rr.status_code != 200:
+                break
+            try:
+                jr = rr.json().get("jobRequisitions") or []
+            except ValueError:
+                break
+            if not jr:
+                break
+            for req in jr:
+                rid = req.get("itemID")
+                if not rid or rid in visti:
+                    continue
+                visti.add(rid)
+                luoghi = req.get("requisitionLocations") or []
+                citta = None
+                if luoghi:
+                    citta = (luoghi[0].get("nameCode") or {}).get("shortName")
+                try:
+                    dt = datetime.fromisoformat(req["postDate"]) \
+                        if req.get("postDate") else None
+                except ValueError:
+                    dt = None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=rid,
+                    title=req.get("requisitionTitle") or "",
+                    url=("https://workforcenow.adp.com/mascsr/default/"
+                         f"mdf/recruitment/recruitment.html?cid={cid}"),
+                    location=citta,
+                    posted_at=dt,
+                    raw=req))
+            if len(jr) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["adp"] = ADP
+
+
+class Carerix(BaseAdapter):
+    """Carerix (Benelux) — API public_api/fo/process visibile a runtime.
+
+    L'UUID del processo si costruisce solo nel browser: l'adapter
+    rende la pagina vacatures con Playwright e cattura la risposta
+    dell'API, poi la ripete con paginazione via httpx. Lo slug è il
+    hostname del portale.
+    """
+    platform_id = "carerix"
+    PER_PAGINA = 25
+    MAX_PAGINE = 20
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        from playwright.sync_api import sync_playwright
+        api_url = None
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+
+                def on_req(req):
+                    nonlocal api_url
+                    if "public_api/fo/process/" in req.url \
+                            and "count=" in req.url:
+                        api_url = req.url
+
+                page.on("request", on_req)
+                page.goto(f"{base}/jobportal/vacatures",
+                          wait_until="domcontentloaded", timeout=40000)
+                page.wait_for_timeout(12000)
+                browser.close()
+        except Exception:
+            return []
+        if not api_url:
+            return []
+
+        out: list[AtsJob] = []
+        for pagina in range(self.MAX_PAGINE):
+            url = re.sub(r"start=\d+",
+                         f"start={pagina * self.PER_PAGINA}", api_url)
+            try:
+                rr = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if rr.status_code != 200:
+                break
+            try:
+                dati = rr.json().get("data") or []
+            except ValueError:
+                break
+            if not dati:
+                break
+            for v in dati:
+                pid = str(v.get("publicationID") or "")
+                if not pid:
+                    continue
+                try:
+                    dt = datetime.strptime(v["publicationStart"],
+                                           "%d-%m-%Y") \
+                        if v.get("publicationStart") else None
+                except ValueError:
+                    dt = None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=pid,
+                    title=v.get("titleInformation") or "",
+                    url=f"{base}/jobportal/vacatures",
+                    location=v.get("workLocation"),
+                    city=v.get("workLocation"),
+                    posted_at=dt,
+                    raw=v))
+            if len(dati) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["carerix"] = Carerix
+
+
+class Paylocity(BaseAdapter):
+    """Paylocity — portali recruiting.paylocity.com renderizzati via JS.
+
+    Lo slug è il hostname del sito carriere; il link al portale con
+    l'UUID del tenant sta nella pagina. Le offerte sono
+    /Recruiting/Jobs/Details/{id} dopo il rendering.
+    """
+    platform_id = "paylocity"
+    PERCORSI = ("/", "/careers", "/career", "/jobs", "/en", "/de",
+                 "/career/job-offers", "/en/careers", "/company/careers")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        porta = None
+        for host in (base, f"https://www.{slug}"):
+            for path in self.PERCORSI:
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(
+                    r'(https://recruiting\.paylocity\.com/recruiting/'
+                    r'jobs/All/[0-9a-f-]{36}[^"\'\s]*)', r.text)
+                if m:
+                    porta = m.group(1).replace("&amp;", "&")
+                    break
+            if porta:
+                break
+        if not porta:
+            return []
+        link = _renderizza_estrai(porta, "a[href*='Jobs/Details/']",
+                                  attesa=10000)
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m = re.search(r'/Jobs/Details/(\d+)', l.get("href", ""))
+            if not m or m.group(1) in visti:
+                continue
+            visti.add(m.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m.group(1),
+                title=(l.get("text") or "").strip(),
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["paylocity"] = Paylocity
+
+
+class Jibe(BaseAdapter):
+    """Jibe (gruppo iCIMS) — portali careers.azienda.com con /api/jobs.
+
+    L'API REST del portale è pubblica e paginata con ?page=N; ogni
+    offerta ha req_id, title e description completi. Lo slug è il
+    hostname del portale carriere.
+    """
+    platform_id = "jibe"
+    PER_PAGINA = 10
+    MAX_PAGINE = 20
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, self.MAX_PAGINE + 1):
+            url = f"{base}/api/jobs"
+            if pagina > 1:
+                url += f"?page={pagina}"
+            try:
+                r = self.client.get(url)
+            except httpx.HTTPError:
+                break
+            if r.status_code != 200:
+                break
+            try:
+                d = r.json()
+                jobs = d.get("jobs") or []
+            except ValueError:
+                break
+            if not jobs:
+                break
+            for j in jobs:
+                dati = j.get("data") or {}
+                rid = str(dati.get("req_id") or dati.get("slug") or "")
+                if not rid or rid in visti:
+                    continue
+                visti.add(rid)
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=rid,
+                    title=dati.get("title") or "",
+                    url=f"{base}/jobs/{rid}",
+                    raw=dati))
+            if len(jobs) < self.PER_PAGINA:
+                break
+        return out
+
+
+ADAPTERS["jibe"] = Jibe
