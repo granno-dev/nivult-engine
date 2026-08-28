@@ -1591,7 +1591,7 @@ def create_app() -> FastAPI:
                             cur.execute(
                                 "UPDATE user_cvs SET raw_extraction = "
                                 "jsonb_set(raw_extraction, "
-                                "'{headline_i18n}', %s, true) "
+                                "'{headline_i18n}', %s::jsonb, true) "
                                 "WHERE user_id = %s AND status = 'active'",
                                 (Json(traduzioni), uid))
                         conn.commit()
