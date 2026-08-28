@@ -1568,37 +1568,50 @@ def create_app() -> FastAPI:
         # del CV (ruoli, titoli, certificazioni) restano nella lingua del
         # CV: sono citazioni, non racconto.
         sintesi = estratto.get("headline")
+        consigli = estratto.get("cv_tips") or []
         from nivult.delivery.testi import LINGUA_PER_GLM
         voluta = LINGUA_PER_GLM.get(lingua or "")
-        if sintesi and voluta:
-            traduzioni = estratto.get("headline_i18n") or {}
-            if voluta in traduzioni:
-                sintesi = traduzioni[voluta]
-            elif os.environ.get("GLM_API_KEY"):
+        if voluta and (sintesi or consigli):
+            tr_sintesi = estratto.get("headline_i18n") or {}
+            tr_consigli = estratto.get("cv_tips_i18n") or {}
+            manca = ((sintesi and voluta not in tr_sintesi)
+                     or (consigli and voluta not in tr_consigli))
+            if manca and os.environ.get("GLM_API_KEY"):
+                # UNA chiamata per lingua: sintesi e consigli insieme,
+                # salvati nei rispettivi dizionari — le visite successive
+                # leggono dall'archivio.
                 try:
                     from nivult.matching.llm import GLM
-                    tradotta = GLM().chat([
+                    risposta = GLM().chat([
                         {"role": "system", "content":
-                         f"Riscrivi questa headline professionale in "
-                         f"{voluta}. Mantieni nomi propri, tecnologie e "
-                         f"sigle. Massimo 20 parole. Rispondi SOLO con la "
-                         f"frase."},
-                        {"role": "user", "content": sintesi},
-                    ], max_tokens=60).strip().strip('"')
-                    if tradotta:
-                        traduzioni[voluta] = tradotta[:200]
-                        with conn.cursor() as cur:
-                            cur.execute(
-                                "UPDATE user_cvs SET raw_extraction = "
-                                "jsonb_set(raw_extraction, "
-                                "'{headline_i18n}', %s::jsonb, true) "
-                                "WHERE user_id = %s AND status = 'active'",
-                                (Json(traduzioni), uid))
-                        conn.commit()
-                        sintesi = traduzioni[voluta]
+                         f"Traduci in {voluta} mantenendo nomi propri, "
+                         f"tecnologie e sigle. Rispondi SOLO con JSON: "
+                         f'{{"headline": "...", "tips": ["..."]}}'},
+                        {"role": "user", "content": json.dumps(
+                            {"headline": sintesi or "",
+                             "tips": consigli}, ensure_ascii=False)},
+                    ], max_tokens=300)
+                    dati = json.loads(re.search(r"\{.*\}", risposta,
+                                                re.S).group(0))
+                    if sintesi and dati.get("headline"):
+                        tr_sintesi[voluta] = str(dati["headline"])[:200]
+                    if consigli and isinstance(dati.get("tips"), list):
+                        tr_consigli[voluta] = [str(x)[:200]
+                                               for x in dati["tips"]][:3]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE user_cvs SET raw_extraction = "
+                            "jsonb_set(jsonb_set(raw_extraction, "
+                            "'{headline_i18n}', %s::jsonb, true), "
+                            "'{cv_tips_i18n}', %s::jsonb, true) "
+                            "WHERE user_id = %s AND status = 'active'",
+                            (Json(tr_sintesi), Json(tr_consigli), uid))
+                    conn.commit()
                 except Exception as exc:
-                    log.warning("traduzione sintesi fallita per %s: %s",
+                    log.warning("traduzione profilo fallita per %s: %s",
                                 uid, exc)
+            sintesi = tr_sintesi.get(voluta) or sintesi
+            consigli = tr_consigli.get(voluta) or consigli
 
         return {"families": r[0], "seniority": r[1], "skills": r[2],
                 "languages": r[3], "years_experience": r[4],
@@ -1608,7 +1621,7 @@ def create_app() -> FastAPI:
                 "certificazioni": estratto.get("certifications") or [],
                 "formazione": estratto.get("education") or [],
                 "ricerche_consigliate": estratto.get("suggested_searches") or [],
-                "consigli_cv": estratto.get("cv_tips") or []}
+                "consigli_cv": consigli}
 
     # I tipi che accettiamo in caricamento, e gli UNICI che si riservono.
     # Non si rimanda mai indietro il content-type dichiarato dal client: un
