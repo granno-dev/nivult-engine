@@ -1367,3 +1367,241 @@ class Avature(BaseAdapter):
 
 
 ADAPTERS["avature"] = Avature
+
+
+class Taleo(BaseAdapter):
+    """Oracle Taleo — la REST rifiuta i replay, si cattura dal browser.
+
+    searchjobs risponde 500 a ogni replay fuori dalla sessione, anche
+    via fetch dentro la pagina. L'unico canale affidabile: far girare
+    la pagina e catturare le risposte di searchjobs, cliccando il
+    bottone 'pagina successiva' per paginare. Lo slug è
+    'host#sezione' del portale (textron.taleo.net#kautex).
+    """
+    platform_id = "taleo"
+    MAX_CLIC = 20
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        if "#" not in slug:
+            return []
+        host, sezione = slug.split("#", 1)
+        from playwright.sync_api import sync_playwright
+        requisitions: list[dict] = []
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+
+                def on_resp(resp):
+                    if "searchjobs" not in resp.url:
+                        return
+                    try:
+                        d = resp.json()
+                        requisitions.extend(d.get("requisitionList") or [])
+                    except Exception:
+                        pass
+
+                page.on("response", on_resp)
+                page.goto(f"https://{host}/careersection/{sezione}/"
+                          f"jobsearch.ftl", wait_until="domcontentloaded",
+                          timeout=40000)
+                page.wait_for_timeout(10000)
+                for _ in range(self.MAX_CLIC):
+                    try:
+                        btn = page.locator(
+                            "a[title='Go to the next page'], .pagerNext"
+                        ).first
+                        if not btn.is_visible(timeout=2000):
+                            break
+                        btn.click()
+                        page.wait_for_timeout(4000)
+                    except Exception:
+                        break
+                browser.close()
+        except Exception:
+            pass
+
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for req in requisitions:
+            rid = str(req.get("jobId") or "")
+            col = req.get("column") or []
+            if not rid or rid in visti or len(col) < 3:
+                continue
+            visti.add(rid)
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=rid,
+                title=col[0] or "",
+                url=(f"https://{host}/careersection/{sezione}/"
+                     f"jobdetail.ftl?job={rid}"),
+                location=(col[1] or "").strip('[]"'),
+                raw=req))
+        return out
+
+
+ADAPTERS["taleo"] = Taleo
+
+
+def _renderizza_estrai(url: str, selettore: str, attesa: int = 8000
+                       ) -> list[dict]:
+    """Renderizza una pagina con Playwright e ritorna href+testo dei link."""
+    from playwright.sync_api import sync_playwright
+    risultati: list[dict] = []
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=40000)
+            page.wait_for_timeout(attesa)
+            risultati = page.eval_on_selector_all(
+                selettore,
+                """els => els.map(e => ({href: e.href,
+                    text: (e.textContent || '').replace(/\\s+/g, ' ')
+                            .trim().slice(0, 200)}))""")
+            browser.close()
+    except Exception:
+        pass
+    return risultati
+
+
+class Comeet(BaseAdapter):
+    """Comeet — pagina offerte renderizzata via JS.
+
+    Lo slug è il hostname del sito carriere; il link
+    comeet.com/jobs/{azienda}/{token} sta nella homepage.
+    """
+    platform_id = "comeet"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        m = None
+        for host in (base, f"https://www.{slug}"):
+            for path in ("/", "/careers", "/jobs", "/en", "/nl", "/de", "/fr",
+                         "/en/careers", "/company/careers", "/about-us/careers"):
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(r'https://www\.comeet\.com/jobs/([a-z0-9-]+)/([0-9.]+)',
+                              r.text)
+                if m:
+                    break
+        if not m:
+            return []
+        porta = f"https://www.comeet.com/jobs/{m.group(1)}/{m.group(2)}"
+        link = _renderizza_estrai(porta, "a[href*='/jobs/']")
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            if not l.get("text") or l["href"].rstrip("/") == porta:
+                continue
+            m2 = re.search(r'/jobs/[^/]+/[^/]+/([^/]+)/([0-9A-Fa-f.]+)$',
+                           l["href"])
+            if not m2 or m2.group(2) in visti:
+                continue
+            visti.add(m2.group(2))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m2.group(2),
+                title=l["text"],
+                url=l["href"],
+                raw={"porta": porta}))
+        return out
+
+
+ADAPTERS["comeet"] = Comeet
+
+
+class ApplicantPro(BaseAdapter):
+    """ApplicantPro — listing JS su {azienda}.applicantpro.com/jobs/.
+
+    Lo slug è il hostname del sito carriere dell'azienda.
+    """
+    platform_id = "applicantpro"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        m = None
+        for host in (base, f"https://www.{slug}"):
+            for path in ("/", "/careers", "/jobs", "/en", "/nl", "/de", "/fr",
+                         "/en/careers", "/company/careers", "/about-us/careers"):
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(r'https?://([a-z0-9-]+)\.applicantpro\.com', r.text)
+                if m:
+                    break
+        if not m:
+            return []
+        link = _renderizza_estrai(
+            f"https://{m.group(1)}.applicantpro.com/jobs/",
+            "a[href*='/jobs/']")
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m2 = re.search(r'/jobs/(\d+)$', l.get("href", ""))
+            if not m2 or m2.group(1) in visti:
+                continue
+            visti.add(m2.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m2.group(1),
+                title=l.get("text") or "",
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["applicantpro"] = ApplicantPro
+
+
+class Jobtoolz(BaseAdapter):
+    """Jobtoolz — portale belga JS su {azienda}.jobtoolz.com.
+
+    Lo slug è il hostname del sito carriere; il link al portale sta
+    nella homepage dell'azienda.
+    """
+    platform_id = "jobtoolz"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://{slug}"
+        m = None
+        for host in (base, f"https://www.{slug}"):
+            for path in ("/", "/careers", "/jobs", "/en", "/nl", "/de", "/fr",
+                         "/en/careers", "/company/careers", "/about-us/careers"):
+                try:
+                    r = self.client.get(f"{host}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(r'https?://([a-z0-9-]+)\.jobtoolz\.com', r.text)
+                if m:
+                    break
+        if not m:
+            return []
+        link = _renderizza_estrai(
+            f"https://{m.group(1)}.jobtoolz.com/nl", "a[href*='vacature']")
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for l in link:
+            m2 = re.search(r'/(\d+)', l.get("href", ""))
+            if not m2 or m2.group(1) in visti or not l.get("text"):
+                continue
+            visti.add(m2.group(1))
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=m2.group(1),
+                title=l["text"],
+                url=l["href"],
+                raw={}))
+        return out
+
+
+ADAPTERS["jobtoolz"] = Jobtoolz
