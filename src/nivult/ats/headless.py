@@ -60,35 +60,6 @@ DOM_PATTERNS = {
         "url_attr": "href",
     },
 }
-    "successfactors": {
-        # SAP UI5: tabella con righe di offerte
-        "job_selector": "[class*='jobRequisition'] a, .sapUiTableRow",
-        "title_attr": "text",
-        "url_attr": "href",
-    },
-    "icims": {
-        # iCIMS: iframe con lista offerte (ma anche dirette)
-        "job_selector": ".iCIMS_JobsTable a, [class*='jobTitle'] a",
-        "title_attr": "text",
-        "url_attr": "href",
-    },
-    "zohorecruit": {
-        # Zoho: Vue.js, lista con classi zoho
-        "job_selector": "[class*='job'] a, .careerJobOpening",
-        "title_attr": "text",
-        "url_attr": "href",
-    },
-    "softgarden": {
-        "job_selector": "[class*='job'] a, .sg-job-item",
-        "title_attr": "text",
-        "url_attr": "href",
-    },
-    "werecruit": {
-        "job_selector": "a[href*='/offres/']",
-        "title_attr": "text",
-        "url_attr": "href",
-    },
-}
 
 
 @dataclass(slots=True)
