@@ -181,6 +181,23 @@ Rispondi SOLO con questo JSON, niente altro:
 """
 
 
+RUBRICA_CONSEGNA = """Sei un selezionatore esperto che consegna un'offerta
+al candidato giusto. Rispondi SOLO con questo JSON:
+{{"reason": "...", "perche": "...", "pros": ["..."], "cons": ["..."],
+  "responsabilita": "...", "requisiti": "...", "benefit": "..."}}
+- reason: UNA frase di massimo 25 parole che spiega perché questa offerta
+  è adatta al profilo. Concreta: ruolo, competenze, livello.
+- perche: la stessa idea detta AL candidato, dandogli del tu.
+- pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
+  Fatti presi dal profilo e dall'offerta, mai lodi generiche.
+- cons: da 1 a 3 punti su cui il colloquio farà domande (requisiti
+  scoperti, lingua, sede, livello). Onesti, mai scoraggianti.
+- responsabilita, requisiti, benefit: il contenuto dei blocchi omonimi
+  dell'offerta, reso fedele e compatto. null se il blocco manca.
+- TUTTO in {lingua}, ogni frase breve.
+"""
+
+
 def profilo_come_testo(profilo: dict) -> str:
     parti = [f"Ruolo cercato: {profilo.get('ruolo','—')}",
              f"Seniority: {profilo.get('seniority','—')}",
@@ -263,22 +280,14 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
     return score, reason, dict(modello.last_usage)
 
 
-def analizza_allineamento(modello: ChatModel, profilo_testo: str,
-                          offerta: dict, desiderio: str | None = None,
-                          lingua: str = "English") -> dict:
-    """Pro e attenzioni del match, per la finestra di dettaglio del pannello.
-
-    Stessa testa in cache delle altre chiamate (profilo + rubrica), stessa
-    coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
-    """
+def _coda_analisi(offerta: dict, desiderio: str | None) -> str:
+    """La coda per le chiamate che riscrivono l'annuncio: la coda standard
+    piu' i blocchi che il punteggio non usa ma il lettore si'."""
     def _blocco(v) -> str:
         if isinstance(v, list):
             v = " · ".join(str(x).strip() for x in v if str(x).strip())
         return str(v or "").strip()
 
-    # La coda standard non porta responsabilita' e benefit (il punteggio
-    # non ne ha bisogno); l'analisi li riscrive nella lingua del lettore,
-    # quindi qui entrano per intero.
     extra = []
     for etichetta, chiave in (("RESPONSABILITÀ", "ai_core_responsibilities"),
                               ("BENEFIT", "ai_benefits"),
@@ -289,11 +298,10 @@ def analizza_allineamento(modello: ChatModel, profilo_testo: str,
     coda = _coda_offerta(offerta, desiderio)
     if extra:
         coda += "\n\n" + "\n\n".join(extra)
+    return coda
 
-    corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
-        "role": "user", "content": coda}]
-    risposta = modello.chat(corpo, max_tokens=900)
-    p = _estrai_json(risposta)
+
+def _campi_analisi(p: dict, lingua: str) -> dict:
     pros = [str(x)[:160] for x in (p.get("pros") or []) if str(x).strip()][:4]
     cons = [str(x)[:160] for x in (p.get("cons") or []) if str(x).strip()][:3]
     testo = lambda k, tetto: (str(p.get(k) or "").strip()[:tetto] or None)
@@ -301,6 +309,39 @@ def analizza_allineamento(modello: ChatModel, profilo_testo: str,
             "responsabilita": testo("responsabilita", 700),
             "requisiti": testo("requisiti", 700),
             "benefit": testo("benefit", 500), "lang": lingua}
+
+
+def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
+                      desiderio: str | None = None,
+                      lingua: str = "English") -> tuple[str, dict, dict]:
+    """Seconda passata di consegna: motivazione E analisi in UNA chiamata.
+
+    Nasce dal conto della serva: la finestra di dettaglio del pannello
+    chiamava GLM al primo clic, a cache fredda, ripagando tutto il
+    prefisso. Qui il prefisso e' gia' caldo (stesso profilo della
+    valutazione appena fatta) e la chiamata esisteva comunque per la
+    motivazione: l'analisi costa solo l'output in piu'.
+    """
+    corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
+        "role": "user", "content": _coda_analisi(offerta, desiderio)}]
+    risposta = modello.chat(corpo, max_tokens=900)
+    p = _estrai_json(risposta)
+    reason = str(p.get("reason") or "")[:400].strip() or "—"
+    return reason, _campi_analisi(p, lingua), dict(modello.last_usage)
+
+
+def analizza_allineamento(modello: ChatModel, profilo_testo: str,
+                          offerta: dict, desiderio: str | None = None,
+                          lingua: str = "English") -> dict:
+    """Pro e attenzioni del match, per la finestra di dettaglio del pannello.
+
+    Stessa testa in cache delle altre chiamate (profilo + rubrica), stessa
+    coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
+    """
+    corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
+        "role": "user", "content": _coda_analisi(offerta, desiderio)}]
+    risposta = modello.chat(corpo, max_tokens=900)
+    return _campi_analisi(_estrai_json(risposta), lingua)
 
 
 def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,

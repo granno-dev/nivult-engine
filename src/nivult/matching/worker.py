@@ -32,6 +32,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import psycopg
+from psycopg.types.json import Json
 from psycopg.rows import dict_row
 
 from nivult.config import database_url, load_dotenv, safe_dsn
@@ -40,7 +41,7 @@ from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
-from nivult.matching.llm import (GLM, motiva_offerta, profilo_come_testo,
+from nivult.matching.llm import (GLM, motiva_e_analizza, profilo_come_testo,
                                  valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
@@ -100,13 +101,16 @@ class ValutatoreGLM:
         return score, reason, uso
 
     def motiva(self, profilo_testo: str, offerta: dict, lingua: str = "English"):
-        """-> (motivazione, uso token della chiamata)."""
-        reason, uso = motiva_offerta(self.model, profilo_testo, offerta,
-                                     offerta.get("_wants"), lingua)
+        # Motivazione E analisi insieme: la chiamata c'era comunque, e
+        # l'analisi qui costa solo output — al clic sarebbe costata
+        # l'intero prefisso a cache fredda.
+        reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
+                                                 offerta, offerta.get("_wants"),
+                                                 lingua)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
-        return reason, uso
+        return reason, analisi, uso
 
 
 def _lingua(v) -> str:
@@ -483,10 +487,13 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
         if evaluatore is None:
             evaluatore = ValutatoreGLM()
         for item in items:
-            item["reason"], _ = evaluatore.motiva(profilo_testo, item, lingua_glm)
+            item["reason"], analisi, _ = evaluatore.motiva(profilo_testo, item,
+                                                           lingua_glm)
             with conn.cursor() as cur:
-                cur.execute("UPDATE matches SET reason = %s WHERE id = %s",
-                            (item["reason"], item["match_id"]))
+                cur.execute(
+                    "UPDATE matches SET reason = %s, analysis = %s "
+                    "WHERE id = %s",
+                    (item["reason"], Json(analisi), item["match_id"]))
             conn.commit()
 
         destinatario = u.delivery_email or u.email
