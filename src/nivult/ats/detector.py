@@ -271,8 +271,63 @@ def _registra_azienda(dsn: str, piattaforma: str, slug: str,
         conn.commit()
 
 
-def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False) -> dict:
-    """Il giro di riconoscimento sui domini in attesa."""
+def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
+    """Il lavoro HTTP per un dominio. Puro, niente DB: parallelizzabile.
+
+    Ritorna (esito, piattaforma, careers_url, kind, html_carriere).
+    """
+    esito, piattaforma, careers_url, kind = "no_careers", None, None, None
+    html_carriere = ""
+    try:
+        r = client.get(f"https://{dominio}")
+        if r.status_code >= 400:
+            esito = "dead"
+        else:
+            # 1) l'ATS può già dichiararsi in homepage
+            impronte = _trova_impronte(r.text)
+            if impronte:
+                piattaforma = impronte[0]
+                careers_url = str(r.url)
+                kind = "custom"
+                esito = "ats"
+                html_carriere = r.text
+            else:
+                # 2) segue il link carriere
+                link = _link_carriere(str(r.url), r.text)
+                for url in link:
+                    try:
+                        rc = client.get(url)
+                        if rc.status_code != 200 or len(rc.text) < 300:
+                            continue
+                        impronte = _trova_impronte(rc.text)
+                        if impronte:
+                            piattaforma = impronte[0]
+                            careers_url = str(rc.url)
+                            kind = "custom"
+                            esito = "ats"
+                            html_carriere = rc.text
+                            break
+                    except httpx.HTTPError:
+                        continue
+                if esito != "ats" and not link:
+                    esito = "no_careers"
+                elif esito != "ats":
+                    esito = "no_ats"
+    except httpx.HTTPError:
+        esito = "dead"
+    except Exception:  # noqa: BLE001
+        esito = "error"
+    return esito, piattaforma, careers_url, kind, html_carriere
+
+
+def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
+           thread: int = 16) -> dict:
+    """Il giro di riconoscimento sui domini in attesa.
+
+    I domini sono tutti siti diversi: connessioni simultanee verso
+    host diversi non sovraccaricano nessuno, quindi si parallelizza
+    con un pool di thread (l'HTTP rilascia il GIL).
+    """
     stats = {"visitati": 0, "ats": 0, "no_ats": 0, "no_careers": 0,
              "dead": 0, "error": 0}
     with psycopg.connect(dsn) as conn:
@@ -286,52 +341,31 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False) -> dict:
             cur.execute(sql)
             domini = cur.fetchall()
 
-    log.info("Detector: %s domini da visitare", len(domini))
-    with httpx.Client(timeout=12, follow_redirects=True,
-                      headers={"User-Agent": "nivult-ats/0.1"}) as client:
-        for dominio, nome, paese, dip in domini:
-            stats["visitati"] += 1
-            esito, piattaforma, careers_url, kind = "no_careers", None, None, None
-            html_carriere = ""
+    log.info("Detector: %s domini da visitare (%s thread)",
+             len(domini), thread)
+    if not domini:
+        return stats
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def lavoro(riga):
+        dominio, nome, paese, dip = riga
+        with httpx.Client(timeout=12, follow_redirects=True,
+                          headers={"User-Agent": "nivult-ats/0.1"}) as client:
+            return riga, _analizza_dominio(client, dominio)
+
+    with ThreadPoolExecutor(max_workers=thread) as pool:
+        futures = [pool.submit(lavoro, riga) for riga in domini]
+        for fut in as_completed(futures):
             try:
-                r = client.get(f"https://{dominio}")
-                if r.status_code >= 400:
-                    esito = "dead"
-                else:
-                    # 1) l'ATS può già dichiararsi in homepage
-                    impronte = _trova_impronte(r.text)
-                    if impronte:
-                        piattaforma = impronte[0]
-                        careers_url = str(r.url)
-                        kind = "custom"
-                        esito = "ats"
-                        html_carriere = r.text
-                    else:
-                        # 2) segue il link carriere
-                        for url in _link_carriere(str(r.url), r.text):
-                            try:
-                                rc = client.get(url)
-                                if rc.status_code != 200 or len(rc.text) < 300:
-                                    continue
-                                impronte = _trova_impronte(rc.text)
-                                if impronte:
-                                    piattaforma = impronte[0]
-                                    careers_url = str(rc.url)
-                                    kind = "custom"
-                                    esito = "ats"
-                                    html_carriere = rc.text
-                                    break
-                            except httpx.HTTPError:
-                                continue
-                        if esito != "ats" and not _link_carriere(str(r.url), r.text):
-                            esito = "no_careers"
-                        elif esito != "ats":
-                            esito = "no_ats"
-            except httpx.HTTPError:
-                esito = "dead"
-            except Exception as exc:  # noqa: BLE001
-                log.warning("  %s: errore %s", dominio, str(exc)[:60])
-                esito = "error"
+                riga, risultato = fut.result()
+            except Exception:  # noqa: BLE001
+                stats["error"] += 1
+                continue
+            dominio, nome, paese, dip = riga
+            esito, piattaforma, careers_url, kind = risultato[:4]
+            html_carriere = risultato[4] if len(risultato) > 4 else ""
+            stats["visitati"] += 1
 
             if esito == "ats" and piattaforma:
                 stats["ats"] += 1
@@ -346,24 +380,23 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False) -> dict:
                     kind = "platform"
                     log.info("  %s → %s (%s, scrapeable)", dominio, pid, slug)
                 else:
-                    log.info("  %s → %s (custom domain)", dominio, piattaforma)
-            elif esito == "no_ats":
-                stats["no_ats"] += 1
-            elif esito == "no_careers":
-                stats["no_careers"] += 1
-            elif esito == "dead":
-                stats["dead"] += 1
+                    log.info("  %s → %s (custom domain)", dominio,
+                             piattaforma)
             else:
-                stats["error"] += 1
+                stats[esito if esito in stats else "error"] += 1
 
             with psycopg.connect(dsn) as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
-                        UPDATE company_domains SET status = %s, platform_id = %s,
-                          careers_url = %s, careers_kind = %s, checked_at = now()
+                        UPDATE company_domains SET status = %s,
+                          platform_id = %s, careers_url = %s,
+                          careers_kind = %s, checked_at = now()
                         WHERE domain = %s
                     """, (esito, piattaforma, careers_url, kind, dominio))
                 conn.commit()
+
+            if stats["visitati"] % 500 == 0:
+                log.info("  … %d visitati: %s", stats["visitati"], stats)
 
     return stats
 
@@ -407,6 +440,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="solo aziende con 500+ dipendenti (più alte probabilità)")
     ap.add_argument("--limite", type=int, default=200,
                     help="quanti domini visitare per giro (default 200)")
+    ap.add_argument("--thread", type=int, default=16,
+                    help="thread paralleli (default 16)")
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
 
@@ -418,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
             "postgresql://giusepperanno@127.0.0.1:5432/nivult_dev")
         carica_produzione(ATS_DSN, dsn_prod)
     if args.rileva:
-        s = rileva(ATS_DSN, args.limite, args.solo_grandi)
+        s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread)
         print(f"\nDetector: {s}")
     if args.stats:
         stats(ATS_DSN)
