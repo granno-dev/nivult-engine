@@ -78,7 +78,7 @@ def _chiavi() -> tuple[str, str]:
 
 
 def numero_bot() -> str:
-    return os.environ.get("ZERNIO_WHATSAPP_NUMBER", "16469143141")
+    return os.environ.get("ZERNIO_WHATSAPP_NUMBER", "390698236573")
 
 
 def link_collegamento(gettone: str) -> str:
