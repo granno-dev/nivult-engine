@@ -17,6 +17,8 @@ dependencies = [
   # falliva — ed è il motivo per cui quella pipeline non è MAI stata verde.
   "cryptography>=43",   # busta AES-256-GCM dei CV
   "boto3>=1.35",        # Hetzner Object Storage, S3-compatibile
+  "pypdf>=5",           # estrai_testo: i CV in PDF
+  "python-docx>=1.1",   # estrai_testo: i CV in DOCX
 ]
 
 [project.optional-dependencies]
