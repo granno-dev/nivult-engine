@@ -68,11 +68,15 @@ letto davvero. Copiali dal CV, non inventarli, e usa le sue stesse parole:
 - certifications: TUTTE le certificazioni vere, il nome esatto (es. "Lean
   Six Sigma Black Belt"). Mai corsi generici o competenze.
 - education: tutti i titoli di studio, dal più alto.
-- cv_tips: 2-3 consigli CONCRETI per migliorare QUESTO CV, nella lingua
-  del CV. Ognuno una frase, max 18 parole. Mai generici («aggiungi più
-  dettagli»): indica cosa manca o cosa rende poco leggibile — un numero
-  che darebbe forza a un risultato, una sezione confusa, una competenza
-  usata ma non dichiarata. Tono da collega, mai da maestro.
+- cv_tips: da 0 a 3 consigli per migliorare QUESTO CV. ATTENZIONE: il
+  testo che leggi viene da un'estrazione automatica che può mescolare
+  l'ordine (colonne, intestazioni): NON commentare mai impaginazione,
+  ordine, frasi che sembrano tronche o cose che «mancano» ma potrebbero
+  solo essere finite altrove nell'estrazione. Consiglia SOLO sul
+  contenuto di cui sei certo: un risultato senza numero, un livello di
+  lingua vago, una competenza usata nei ruoli ma assente dall'elenco.
+  Se non sei sicuro, lista vuota: meglio nessun consiglio che uno
+  sbagliato. Max 18 parole l'uno, tono da collega, mai da maestro.
 - suggested_searches: 2-3 titoli di ruolo che il candidato dovrebbe
   cercare ADESSO — il passo naturale successivo della carriera, non i
   titoli già avuti. Brevi (2-4 parole), senza nome del datore, senza
