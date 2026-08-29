@@ -185,9 +185,42 @@ RUBRICA_CONSEGNA = """Sei un selezionatore esperto che consegna un'offerta
 al candidato giusto. Rispondi SOLO con questo JSON:
 {{"reason": "...", "perche": "...", "pros": ["..."], "cons": ["..."],
   "responsabilita": "...", "requisiti": "...", "benefit": "..."}}
-- reason: UNA frase di massimo 25 parole che spiega perché questa offerta
-  è adatta al profilo. Concreta: ruolo, competenze, livello.
-- perche: la stessa idea detta AL candidato, dandogli del tu.
+- reason: la riga che il lettore vede NEL DIGEST. Massimo 25 parole, in
+  DUE frasi brevi: la prima dice cosa chiede QUESTA offerta, la seconda
+  cosa, nel suo percorso, la soddisfa. Dagli del TU: stai scrivendo a lui,
+  non a un selezionatore che valuta una pratica.
+  LA FORMA LA SCEGLIE IL CONTENUTO, non il caso. Ogni motivazione nasce
+  da una chiamata separata: il modello non sa cosa ha scritto per le altre
+  offerte dello stesso digest, quindi «varia» non è un'istruzione che può
+  eseguire. Sceglila invece così, e l'alternanza viene dai dati:
+    · l'offerta pone una CONDIZIONE netta (patente, certificazione,
+      lingua obbligatoria) → parti da quella:
+      «L'ADR è obbligatorio e ce l'hai. L'aggiornamento lo pagano loro.»
+    · la sovrapposizione è una COMPETENZA precisa che torna nel suo
+      percorso → parti da quella:
+      «Montaggio quadri e ricerca guasti: le due cose su cui si reggono
+      i tuoi ultimi tre lavori.»
+    · negli altri casi → parti dal requisito:
+      «Vogliono qualcuno che abbia gestito i turni. Tu lo hai fatto per
+      quattro anni.»
+
+  ⚠ Gli esempi qui sopra sono in italiano SOLO per mostrare la forma. La
+  motivazione va scritta in {lingua}, sempre: copiare la lingua degli
+  esempi manderebbe una riga italiana a un lettore inglese.
+  VIETATO, e sono i difetti misurati sui digest veri:
+    · cominciare con «Questo ruolo…» o col titolo dell'offerta — nove
+      motivazioni su nove avevano lo stesso identico attacco, e il lettore
+      ne vede tre di fila in un solo messaggio;
+    · parlare di lui in terza persona («il candidato», «il suo profilo»);
+    · rielencare le sue competenze separate da virgole: le conosce già,
+      è venuto a sapere cosa chiede QUESTO annuncio;
+    · superlativi — «perfetto», «ideale», «eccellente». La soglia è 80 su
+      100, non la perfezione, e su un punteggio di 85 «combacia
+      perfettamente» è una bugia piccola ma è una bugia.
+  Nessun fatto inventato: solo ciò che sta nell'offerta e nel profilo.
+- perche: la stessa cosa distesa, per la finestra di dettaglio del
+  pannello: due o tre frasi, sempre dandogli del tu, con un dettaglio in
+  più preso dall'offerta che nel digest non c'è entrato.
 - pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
   Fatti presi dal profilo e dall'offerta, mai lodi generiche.
 - cons: da 1 a 3 punti su cui il colloquio farà domande (requisiti
