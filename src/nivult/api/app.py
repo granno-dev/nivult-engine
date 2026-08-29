@@ -1345,24 +1345,47 @@ def create_app() -> FastAPI:
             f = campi["frequency"]
             if f not in ("daily", "weekly", "monthly"):
                 raise HTTPException(422, "frequency: daily, weekly o monthly")
-            # Se la frequenza cambia, i campi giorno arrivano nello stesso
-            # corpo o restano quelli che ci sono già: li si legge entrambi.
+            # Il giorno che non appartiene alla nuova frequenza si AZZERA,
+            # non si rifiuta.
+            #
+            # Prima si leggevano i valori vecchi dalla riga e li si trattava
+            # come se il chiamante li avesse mandati: chi passava da
+            # settimanale a giornaliero riceveva «daily non ammette
+            # send_weekday» per un valore che non aveva spedito e che non
+            # poteva togliere. L'onboarding parte da «weekly», quindi
+            # bastava salvare una volta e poi cambiare idea per restare
+            # bloccati sul quarto passo, con il pulsante che sembrava morto.
+            #
+            # Un residuo della frequenza precedente non e' un errore del
+            # chiamante: e' memoria nostra, e tocca a noi ripulirla. Resta
+            # invece un 422 se la contraddizione e' ESPLICITA nella stessa
+            # richiesta — «daily» insieme a un send_weekday scritto a mano
+            # e' un chiamante confuso, e dirglielo aiuta.
             with conn.cursor() as cur:
                 cur.execute("SELECT send_weekday, send_monthday FROM users "
                             "WHERE id = %s", (uid,))
                 vecchio_w, vecchio_m = cur.fetchone()
-            w = campi.get("send_weekday", vecchio_w)
-            m = campi.get("send_monthday", vecchio_m)
-            if f == "daily" and (w is not None or m is not None):
-                raise HTTPException(422, "daily non ammette send_weekday né send_monthday")
-            if f == "weekly" and m is not None:
-                raise HTTPException(422, "weekly non ammette send_monthday")
-            if f == "weekly" and w is None:
-                raise HTTPException(422, "weekly richiede send_weekday (1=lunedì … 7=domenica)")
-            if f == "monthly" and w is not None:
-                raise HTTPException(422, "monthly non ammette send_weekday")
-            if f == "monthly" and m is None:
-                raise HTTPException(422, "monthly richiede send_monthday (1–28)")
+            if f == "daily":
+                if campi.get("send_weekday") is not None or campi.get("send_monthday") is not None:
+                    raise HTTPException(422, "daily non ammette send_weekday né send_monthday")
+                campi["send_weekday"] = None
+                campi["send_monthday"] = None
+            elif f == "weekly":
+                if campi.get("send_monthday") is not None:
+                    raise HTTPException(422, "weekly non ammette send_monthday")
+                w = campi.get("send_weekday", vecchio_w)
+                if w is None:
+                    raise HTTPException(422, "weekly richiede send_weekday (1=lunedì … 7=domenica)")
+                campi["send_weekday"] = w
+                campi["send_monthday"] = None
+            elif f == "monthly":
+                if campi.get("send_weekday") is not None:
+                    raise HTTPException(422, "monthly non ammette send_weekday")
+                m = campi.get("send_monthday", vecchio_m)
+                if m is None:
+                    raise HTTPException(422, "monthly richiede send_monthday (1–28)")
+                campi["send_monthday"] = m
+                campi["send_weekday"] = None
         if "delivery_channels" in campi:
             # L'INSIEME dei canali: dedupe con ordine conservato, mai vuoto,
             # solo valori noti. Gli indirizzi si controllano nel DATABASE,
