@@ -37,6 +37,9 @@ Fonti:
   auth `Bearer`, parametri `title`, `location`, `time_frame`, `limit`.
 - **API pubbliche nazionali gratuite** — France Travail, Arbetsförmedlingen,
   NAV, Työmarkkinatori.
+- **Sistema ATS interno** — legge direttamente le pagine carriere delle
+  aziende, vive in un database suo (`nivult_ats`) e arriva nel funnel
+  attraverso un ponte. Vedi «Il ponte ATS» più sotto.
 
 > **La Bundesagentur für Arbeit è fuori, deliberatamente.** Non offre una API
 > pubblica: la vecchia chiave nota risponde `403`, e quello che circola come
@@ -78,6 +81,95 @@ Due vincoli sul funnel, che lo schema supporta ma che vanno applicati a valle:
 trasformerebbe una svista in una bugia all'utente.
 
 > Il copy del sito pubblico va allineato. Sta nell'altro repo.
+
+### Il ponte ATS
+
+Il sistema ATS è autonomo: scopre aziende, legge le loro pagine carriere,
+classifica le offerte in famiglie professionali e scrive tutto in
+`nivult_ats`. Vive in `src/nivult/ats/` e **non si tocca da qui**: il suo
+database non prende migrazioni nostre e il suo codice ha un altro
+proprietario.
+
+`nivult.ponte_ats` è l'unica cucitura fra i due mondi, e travasa nel funnel
+le offerte pronte a entrare.
+
+**Perché un ponte e non una fonte.** Le fonti di `ingestion/sources/` sono
+client HTTP e devono restare senza database — è la regola che tiene in piedi
+il probe. L'ATS invece è già in casa: leggerlo è una query, non una fetch.
+Il ponte riusa `RawJob` e `upsert_job`, quindi da lì in poi il motore non sa
+più da dove viene un'offerta.
+
+**Legge e non può scrivere, per privilegio.** `nivult_app` ha sul database
+dell'ATS il solo `SELECT`, e solo sulle tre tabelle che il ponte legge
+(`deploy/ponte-ats-grants.sh`, idempotente, con `--check`). Il vincolo «il
+ponte non tocca l'ATS» è così imposto da Postgres, non promesso dal codice.
+Niente `ALTER DEFAULT PRIVILEGES`: darebbe lettura su qualunque tabella
+l'ATS creerà in futuro senza che nessuno lo decida.
+
+**Le famiglie combaciano alla lettera.** `job_classifications.family` usa lo
+stesso vocabolario di `job_families` — tutte e 33 identiche, verificate
+stringa per stringa. È ciò che rende il ponte una mappatura dritta invece di
+una tabella di corrispondenze da mantenere.
+
+**La soglia d'ingresso.** Passa solo ciò che è utilizzabile: classificata,
+con un paese (famiglia × paese *è* la definizione di cluster), con una data
+(`jobs.date_posted` è `NOT NULL`), e **fresca entro 30 giorni**.
+
+⚠ **La freschezza non è prudenza, è una toppa.** Nel database ATS non è mai
+scaduto niente: `expired_at` è `NULL` su tutte le righe e la più vecchia è
+del 2013. Un ponte che le importasse tutte manderebbe annunci morti nel
+digest — l'unica cosa che il prodotto promette di non fare. Se un domani
+l'ATS imparerà a dichiarare le scadenze, questa finestra si può allargare;
+finché non lo fa, no.
+
+**La scadenza a semantica di istantanea.** Qui si legge l'intero database
+locale, non una pagina che può troncarsi: «non c'è più, quindi è scaduta» è
+quindi una deduzione legittima, ed è l'unica fonte in cui `fetch_complete`
+è onestamente vero. Il controllo scorre le NOSTRE righe, non le 177.000
+dell'ATS: costa quanto abbiamo importato.
+
+**Il nome del datore ha due ripieghi sul grezzo.**
+`ats_companies.company_name` è l'autorità ma è vuoto sul 55% delle aziende;
+il payload della piattaforma invece lo porta — `raw->company->>'name'` su
+SmartRecruiters, `raw->>'Company_Name'` su WeRecruit. Misurato sul corpus
+classificato: **52% col solo campo denormalizzato, 97% coi due ripieghi.**
+Non è un valore inventato: è la dichiarazione della fonte, letta dove la
+fonte l'ha scritta. Workday e Ashby restano scoperti e le loro offerte
+entrano `undisclosed`, che è meglio di un nome sbagliato. *La cura vera è a
+monte, riempiendo `ats_companies.company_name`, ed è dominio dell'ATS.*
+
+**La deduplica con Fantastic era già risolta, e non da noi.** `jobs` ha
+`UNIQUE` su `canonical_url` e `upsert_job` la insegue. Misurato al primo
+travaso reale: **15 offerte su 24 esistevano già da Fantastic allo stesso
+identico URL di career site**, e sono state aggiornate invece di duplicate.
+Fantastic legge gli stessi ATS, quindi la sovrapposizione è strutturale e
+non un caso: il valore del ponte non è il volume, è ciò che l'ATS trova e
+Fantastic no.
+
+**Non entra in `cluster_source_queries` né in `cluster_source_cursors`**, e
+non è una dimenticanza: quelle tabelle servono alle fonti che vanno
+interrogate con termini di ricerca e paginate. L'ATS non è nessuna delle
+due — la famiglia gliel'ha già assegnata la sua classificazione, e la
+lettura vede tutto in un colpo. Metterlo lì creerebbe configurazione che
+nessuno riempirà e `cluster_coverage_v` segnalerebbe per sempre cluster
+«scoperti» da una fonte che non ha bisogno di coprirli.
+
+La quota in `provider_quotas` è a **zero**: fonte gratuita, contabilizzata
+in `api_usage` ma mai bloccante. Costa davvero zero — il database è sulla
+stessa macchina.
+
+```bash
+python scripts/ponte_ats.py --dry-run    # cosa entrerebbe
+python scripts/ponte_ats.py              # travasa
+python scripts/ponte_ats.py --giorni 60  # allarga la finestra
+./deploy/ponte-ats-grants.sh --check     # la lettura sola è a posto?
+```
+
+In cron alle **05:00** (`deploy/cron.sh`): dopo l'ATS delle 02:30 che deve
+aver finito di classificare, dopo il riavvio automatico delle 04:00 che
+troncherebbe un travaso a metà, e prima del primo digest utile delle 07:10 —
+così un'offerta travasata la mattina può finire nel digest di quella stessa
+mattina.
 
 ### 2. Matching — valutazione diretta, non a imbuto
 
@@ -826,6 +918,8 @@ python scripts/check_modules.py          # lo strato Python committa davvero? (s
 python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
 python scripts/check_oauth.py            # OAuth: state, claim, collegamento (solo db _test/_dev)
 python scripts/delete_user.py --user-id <uuid>
+python scripts/ponte_ats.py --dry-run     # travaso ATS -> funnel, senza scrivere
+python scripts/ponte_ats.py               # travasa
 python scripts/purge_jobs.py --dry-run    # retention offerte morte
 python scripts/purge_jobs.py --stats      # aggregati per cluster e mese
 
@@ -1093,6 +1187,28 @@ per i backup significa considerare compromesso tutto lo storico cifrato con essa
   ciò che fa la CI, e per questo va guardata. I log dei run richiedono
   autenticazione; l'elenco con l'esito no:
   `curl -s "https://api.github.com/repos/granno-dev/nivult-engine/actions/runs?per_page=10"`.
+- **Una colonna era stata aggiunta a mano in produzione.** `matches.analysis`
+  esisteva nel database mentre la 0050 risultava «in attesa»: qualcuno aveva
+  fatto l'`ALTER TABLE` fuori dal runner. Riconciliata il 2026-08-29 con
+  `IF NOT EXISTS`, dopo aver verificato che la colonna vera fosse identica a
+  quella dichiarata e non una variante somigliante.
+
+  **La lezione, non il caso:** una modifica applicata a mano non lascia
+  traccia nel registro, quindi ogni ambiente nuovo — la CI, un ripristino,
+  il portatile di chiunque — sarebbe partito senza quella colonna e si
+  sarebbe rotto sul pannello, con un errore che non somiglia alla sua causa.
+  Il registro delle migrazioni vale solo se è l'unica strada.
+- **Un controllo segnalava un guasto inesistente, e non poteva spegnersi.**
+  `verify_schema.py` confrontava `employer_kind` con la sola
+  `classify_employer(organization)`, mentre `reclassify_employers()` usa tre
+  rami: datore non dichiarato, poi **agenzia dichiarata dalla fonte** (che
+  per regola vince sulla nostra lista), e solo in fondo i pattern. Le 200
+  righe «disallineate» erano agenzie che la fonte riconosceva e i nostri
+  pattern no — cioè il comportamento giusto. Corretto il 2026-08-29.
+
+  Un avviso che nessuna esecuzione può spegnere insegna a ignorare gli
+  avvisi, ed è peggio di nessun controllo: il prossimo, vero, passa
+  inosservato.
 - **`pg_hba` del container ha `trust` per 127.0.0.1 interno.** Significa che una
   verifica di password fatta con `docker exec ... psql -h 127.0.0.1` passa
   sempre, qualunque password si usi, e non dimostra niente. Le credenziali si

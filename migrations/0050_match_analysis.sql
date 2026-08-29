@@ -5,4 +5,15 @@
 -- alla PRIMA apertura e si salva qui: una chiamata per offerta aperta,
 -- mai rigenerata. jsonb {"pros":[...],"cons":[...],"lang":"Italian"} —
 -- nessuna query filtra su questi campi.
-ALTER TABLE matches ADD COLUMN analysis jsonb;
+--
+-- `IF NOT EXISTS` perché la colonna era già stata aggiunta a mano in
+-- produzione, fuori dal runner: il registro delle migrazioni diceva «in
+-- attesa» mentre il database ce l'aveva già. Verificato prima di
+-- riconciliare che fosse identica a quella dichiarata qui — jsonb,
+-- nullable, senza default — e non una variante somigliante.
+--
+-- La lezione, non il caso: una modifica applicata a mano non lascia
+-- traccia nel registro, quindi ogni ambiente nuovo (la CI, un ripristino,
+-- il portatile di chiunque) sarebbe partito senza la colonna e si sarebbe
+-- rotto sul pannello, con un errore che non somiglia alla sua causa.
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS analysis jsonb;

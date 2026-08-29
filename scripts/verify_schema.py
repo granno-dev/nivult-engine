@@ -231,8 +231,24 @@ def main() -> int:
         cur.execute("SELECT count(*) FROM staffing_agency_patterns")
         n_pat = cur.fetchone()[0]
         rep.check(n_pat > 0, f"lista agenzie popolata ({n_pat} pattern)")
+        # Il confronto deve usare la STESSA espressione di
+        # reclassify_employers(), non solo `classify_employer`. La lista
+        # dei pattern e' l'ultimo dei tre rami: viene prima il datore non
+        # dichiarato, e prima ancora l'agenzia dichiarata dalla fonte, che
+        # per regola vince sulla nostra lista. Confrontando con la sola
+        # lista, ogni agenzia riconosciuta dalla fonte ma assente dai
+        # nostri pattern risultava «disallineata» — 200 righe che
+        # reclassify_employers() lasciava giustamente stare, e un avviso
+        # che nessuna esecuzione avrebbe mai potuto spegnere.
+        #
+        # Un controllo che segnala un guasto inesistente e non si spegne
+        # mai insegna a ignorare gli avvisi, ed e' peggio di nessun
+        # controllo: il prossimo, vero, passa inosservato.
         cur.execute("SELECT count(*) FROM jobs "
-                    "WHERE employer_kind IS DISTINCT FROM classify_employer(organization)")
+                    "WHERE employer_kind IS DISTINCT FROM CASE "
+                    "  WHEN normalize_org(organization) = '' THEN 'undisclosed' "
+                    "  WHEN employer_agency_declared IS TRUE THEN 'staffing_agency' "
+                    "  ELSE classify_employer(organization) END")
         drift = cur.fetchone()[0]
         if drift:
             rep.warn(f"{drift} offerte con etichetta datore disallineata dalla lista — "

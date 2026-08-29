@@ -24,6 +24,11 @@
 #   02:30  ATS/Wikidata — dopo l'ingestione, prima del backup
 #   03:00  backup — a valle di tutto, con il riavvio automatico alle 04:00
 #          che resta fuori dalla finestra del dump
+#   05:00  ponte ATS — dopo che l'ATS delle 02:30 ha scaricato e
+#          classificato, e dopo il riavvio delle 04:00 che troncherebbe un
+#          travaso a meta'. Prima del primo digest utile delle 07:10:
+#          un'offerta travasata alle 05:00 puo' finire nel digest di quella
+#          stessa mattina
 #   :10    digest, OGNI ORA — l'orario di invio e' quello dell'utente, nel
 #          suo fuso: un giro solo al giorno consegnerebbe in ritardo
 
@@ -35,6 +40,7 @@ RIGHE=$(cat <<'EOF'
 0 1 * * * /opt/nivult/nightly.sh >> /var/log/nivult-nightly.log 2>&1
 30 2 * * * /opt/nivult/ats-nightly.sh >> /opt/nivult/engine/logs/ats-cron.log 2>&1
 0 3 * * * /opt/nivult/backup.sh >> /var/log/nivult-backup.log 2>&1
+0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
 EOF
 )
