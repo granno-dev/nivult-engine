@@ -105,6 +105,15 @@ echo "── mantenimento (expira/normalizza/dedup)"
 "$PY" -m nivult.ats.mantenimento --dedup >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── 5b. Arricchimento: paese/data dalle pagine di dettaglio ──────
+echo "── arricchisci (phenom 1000)"
+"$PY" -m nivult.ats.arricchisci --phenom --limite 1000 --thread 8 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+"$PY" -m nivult.ats.arricchisci --da-azienda \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── 6. Classificazione GLM: 1500 nuove offerte per notte ──────────
 echo "── classificatore (1500)"
 "$PY" -m nivult.ats.classificatore --limite 1500 \
