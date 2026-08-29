@@ -8,6 +8,37 @@ Configurazione del server, versionata. Nessun segreto qui dentro.
 | certificato pubblico | `/opt/nivult/backup-recipient.pem` (0644) | **non versionato**: `.gitignore` blocca ogni `*.pem`, e la regola resta assoluta per non lasciare varchi |
 | `backup.env.example` | `/opt/nivult/backup.env` (0600) | credenziali Storage Box, **mai** nel repo |
 | `52nivult-security` | `/etc/apt/apt.conf.d/` | solo canale security, riavvio 04:00 |
+| `cron.sh` | resta in `deploy/` | installa TUTTI i lavori periodici, senza cancellare gli altri |
+
+## I lavori periodici si installano con `cron.sh`, mai a mano
+
+```bash
+sudo deploy/cron.sh          # installa o aggiorna
+sudo deploy/cron.sh --check  # verifica e basta, esce 1 se manca qualcosa
+```
+
+| Orario | Lavoro | Perche' li' |
+|---|---|---|
+| 01:00 | ingestione (`nightly.sh`) | prima dei digest: il primo giro del mattino deve trovare le offerte della notte |
+| 02:30 | ATS/Wikidata (`ats-nightly.sh`) | dopo l'ingestione, prima del backup |
+| 03:00 | backup (`backup.sh`) | a valle di tutto, e prima del riavvio automatico delle 04:00 |
+| ogni ora al :10 | digest (`digests.sh`) | l'orario di invio e' quello dell'utente, nel suo fuso: un giro al giorno consegnerebbe in ritardo |
+
+**Perche' esiste questo script.** Il 2026-08-28 alle 17:53 il crontab e'
+stato riscritto a mano per installare `ats-nightly`, e `crontab <file>`
+**sostituisce l'intera tabella**: sono spariti in un colpo i digest orari,
+l'ingestione notturna e il backup. E' sopravvissuto solo il lavoro che si
+stava installando.
+
+Nessuno se n'e' accorto per quindici ore, perche' **un cron che non c'e'
+piu' non fallisce: tace**. Il mattino dopo l'utente non ha ricevuto il
+digest, la notte non era entrata nessuna offerta (quindi il digest sarebbe
+comunque uscito vuoto), e il backup mancava da ventiquattro ore.
+
+`cron.sh` e' idempotente e conservativo: rimpiazza solo le righe che
+puntano a `/opt/nivult` e lascia intatto il resto della tabella. Chiamare
+`--check` dopo ogni deploy costa un secondo e chiude questa classe di
+guasti.
 
 ## Chiave dei backup
 

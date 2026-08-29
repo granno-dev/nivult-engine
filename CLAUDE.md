@@ -828,6 +828,9 @@ python scripts/check_oauth.py            # OAuth: state, claim, collegamento (so
 python scripts/delete_user.py --user-id <uuid>
 python scripts/purge_jobs.py --dry-run    # retention offerte morte
 python scripts/purge_jobs.py --stats      # aggregati per cluster e mese
+
+sudo deploy/cron.sh                       # installa i lavori periodici (idempotente)
+sudo deploy/cron.sh --check               # verifica che ci siano tutti, esce 1 se no
 ```
 
 Le migrazioni sono file SQL numerati in `migrations/`, applicati in ordine da un
@@ -918,6 +921,35 @@ dentro l'application id. Sta in `public/` nel repo del sito: è l'unica
 directory che l'export statico copia alla lettera, e il punto iniziale di
 `.well-known` sopravvive all'export — cosa da sapere prima che qualcuno lo
 sposti «per ordine».
+
+**La schermata di consenso Microsoft si forza in inglese (`mkt=en-US`), e
+non è una preferenza: è una toppa a un difetto loro.** Misurato il
+2026-08-29 sullo stesso `client_id`, cambiando **solo** quel parametro: in
+`en-US` la pagina mostra i collegamenti a condizioni e privacy; in `it-IT`
+stampa alla lettera i segnaposto del proprio modello — `<appTerms>`,
+`<appPrivacy>` e persino `<missingTermsWarning>`, cioè l'avviso
+«l'autore non ha fornito collegamenti», che compare anche quando i
+collegamenti ci sono. Un renderer che non sostituisce nemmeno i propri
+segnaposto non sta valutando una condizione: sta scaricando la stringa
+grezza.
+
+Sta in `PROVIDERS['microsoft']['extra']`. Le altre otto lingue non sono
+state provate: quando Microsoft correggerà l'italiano, la riga si toglie e
+la lingua torna a seguire il browser, oppure ci si passa quella
+dell'utente. Google non ha il difetto e non va toccato.
+
+> *Cosa NON era, per non ricontrollarlo un'altra volta:* gli URL di
+> branding erano corretti e raggiungibili, il file del dominio editore era
+> online con l'application id giusto, e l'app **sta in un tenant Entra
+> vero** (ImproveKnowledge) — non è un'app creata da account personale. La
+> scheda «Applications from personal account» del portale è vuota.
+
+**«Autore non verificato» è un'altra cosa e non si toglie con la verifica
+del dominio.** Sono due processi distinti: il dominio prova che è tuo e
+**non produce alcun badge**; il badge blu richiede la *publisher
+verification*, cioè l'iscrizione al Partner Program con verifica
+societaria. Confermato dalla risposta ufficiale Microsoft a un caso
+identico. Va con la partita IVA, non prima.
 
 ### CV: cifratura lato client, a busta
 
