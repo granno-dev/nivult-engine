@@ -111,12 +111,13 @@ echo "── classificatore (1500)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
-# ── 7. Wikidata esteso: solo domenica, il bacino cresce ────────────
-if [ "$(date +%u)" = "7" ]; then
-  echo "── wikidata esteso (domenica)"
-  "$PY" -m nivult.ats.detector --wikidata-estesa \
-    >> "$LOG_DIR/ats-nightly.log" 2>&1 \
-    && echo "   ok" || echo "   FALLITO"
-fi
+# ── 7. Wikidata esteso: ogni notte, il bacino cresce ──────────────
+# La query riscarica tutto (non incrementale) e le novità reali sono
+# decine a settimana, ma costa 15 minuti e tiene il censimento sempre
+# fresco: preferiamo la ridondanza all'attesa.
+echo "── wikidata esteso"
+"$PY" -m nivult.ats.detector --wikidata-estesa \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
 
 echo "=== ATS nightly completato $(date -Is) ==="
