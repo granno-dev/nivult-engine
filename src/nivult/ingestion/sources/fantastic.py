@@ -281,7 +281,12 @@ class FantasticClient(HttpSource):
             ai_work_arrangement_office_days=r.get("ai_work_arrangement_office_days"),
             org_size=r.get("org_linkedin_size"),
             org_headcount=_int_or_none(r.get("org_linkedin_headcount")),
-            org_industry=r.get("org_linkedin_industry"),
+            # NULLIF a mano: LinkedIn a volte consegna il settore come
+            # stringa vuota, e '' non e' NULL — chi filtra per settore
+            # escluderebbe un'offerta il cui settore e' solo ignoto,
+            # violando la regola «un campo assente non esclude mai».
+            # Stesso vizio del false del visto: un'assenza travestita.
+            org_industry=r.get("org_linkedin_industry") or None,
             org_logo_permalink=r.get("org_logo_permalink"),
             employer_agency_declared=r.get("org_linkedin_recruitment_agency_derived"),
             raw=r,
