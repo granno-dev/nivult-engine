@@ -77,6 +77,24 @@ Due vincoli sul funnel, che lo schema supporta ma che vanno applicati a valle:
    ammettere le agenzie senza tradire la promessa. `link_kinds.is_direct` dice
    quale delle due formule usare.
 
+**Il visto è l'unica preferenza pesata, non filtrata.** La spunta «serve
+sponsorizzazione» non esclude in SQL: Fantastic marca `ai_visa_sponsorship
+= false` anche quando l'annuncio non ne parla (misurato: 2.332 false, 2
+true sulle attive), quindi un'esclusione dura filtrava «chi lo scrive
+nell'annuncio», non «chi sponsorizza» — e chi la spuntava riceveva digest
+vuoti per sempre, successo davvero al primo digest di un utente reale. Il
+bisogno viaggia nel prompt come preferenza forte e l'offerta che dichiara
+la sponsorizzazione lo dice al modello. Vedi `matching/funnel.py`.
+
+**Le fonti a pagamento si chiamano solo dove ci sono iscritti.** Il cluster
+si apre da solo alla prima iscrizione ma niente lo chiudeva all'ultima
+disdetta: HR × FR ha consumato per giorni la fetta più grossa del tetto
+Fantastic per nessuno. Ora `ingestion/runner.py` salta le fonti a
+pagamento sui cluster con zero iscritti attivi; le gratuite e il ponte ATS
+continuano, così il corpus resta caldo e il primo iscritto non parte dal
+vuoto. «A pagamento» lo decide `provider_quotas.monthly_credits_cap > 0`,
+non una lista nel codice.
+
 `jobs.link_kind` è `NOT NULL` **senza default**: un default silenzioso
 trasformerebbe una svista in una bugia all'utente.
 

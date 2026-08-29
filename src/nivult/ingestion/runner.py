@@ -48,6 +48,9 @@ class Cluster:
     family: str
     country: str
     in_backfill: bool = False
+    # Iscritti attivi e non in pausa: decide se le fonti A PAGAMENTO
+    # vengono chiamate. Le gratuite girano comunque.
+    iscritti: int = 0
     # Cursore e termine di ricerca per fonte: le fonti di un cluster procedono
     # ognuna per conto suo, e non devono nulla l'una all'altra.
     cursors: dict[str, datetime] = field(default_factory=dict)
@@ -59,18 +62,27 @@ class Cluster:
 
 
 def due_clusters(cur, cluster_id: str | None) -> list[Cluster]:
+    # Il conteggio degli iscritti viaggia con il cluster: e' cio' che decide
+    # se le fonti a pagamento si chiamano (vedi ingest_cluster).
+    conteggio = ("(SELECT count(*) FROM user_clusters uc "
+                 "  JOIN users u ON u.id = uc.user_id "
+                 " WHERE uc.cluster_id = clusters.id AND NOT uc.is_paused "
+                 "   AND u.status = 'active')")
     if cluster_id:
         cur.execute(
             "SELECT id, family, country, "
-            "       backfill_completed_at IS NULL FROM clusters WHERE id = %s",
+            f"      backfill_completed_at IS NULL, {conteggio} "
+            "FROM clusters WHERE id = %s",
             (cluster_id,))
     else:
         # NULLS FIRST: chi non è mai stato scaricato ha la precedenza.
         cur.execute(
             "SELECT id, family, country, "
-            "       backfill_completed_at IS NULL FROM clusters "
+            f"      backfill_completed_at IS NULL, {conteggio} "
+            "FROM clusters "
             "WHERE status = 'active' ORDER BY last_fetched_at NULLS FIRST")
-    clusters = [Cluster(str(r[0]), r[1], r[2], r[3]) for r in cur.fetchall()]
+    clusters = [Cluster(str(r[0]), r[1], r[2], r[3], iscritti=r[4])
+                for r in cur.fetchall()]
     if clusters:
         cur.execute(
             "SELECT cluster_id, source, query FROM cluster_source_queries "
@@ -132,6 +144,11 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
         log.warning("%s: nessuna fonte copre %s", cluster.label, cluster.country)
         return totals
 
+    with conn.cursor() as cur:
+        cur.execute("SELECT provider FROM provider_quotas "
+                    "WHERE monthly_credits_cap > 0")
+        a_pagamento = {r[0] for r in cur.fetchall()}
+
     # Il backfill attinge a una dotazione dedicata: senza, il primo giro di ogni
     # cluster nuovo aprirebbe il breaker giornaliero e resterebbe a metà.
     # NON è un'esenzione dai soldi — provider_budget continua a valere.
@@ -139,6 +156,12 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
     # funnel: là costano zero e non lasciano buchi nel corpus quando cambiano
     # gli iscritti. Un archivio che dipende da chi era iscritto quel giorno vale
     # meno dei crediti che farebbe risparmiare.
+    #
+    # Il confine di quella regola: vale per i FILTRI di chi e' iscritto, non
+    # per l'esistenza di iscritti. Zero iscritti non e' un filtro piu'
+    # severo — e' l'assenza del motivo per cui il cluster spende. Da qui il
+    # salto delle fonti a pagamento qui sotto, che con le gratuite attive
+    # non buca il corpus: lo fa solo costare zero.
 
     # in_backfill resta valido per TUTTE le fonti del cluster: chiuderlo dopo la
     # prima faceva rifiutare le successive, che si trovavano a chiedere una
@@ -160,6 +183,29 @@ def ingest_cluster(conn: psycopg.Connection, cluster: Cluster, *, limit: int,
         # il termine di ricerca specifico. Senza termine la fonte non può fare
         # nulla di sensato, e saltarla in silenzio è il modo di ritrovarsi un
         # cluster mezzo vuoto senza capire perché.
+        # I soldi seguono i clienti. Un cluster senza iscritti attivi non
+        # chiama le fonti a pagamento: il cluster si apre da solo quando un
+        # utente si iscrive, ma niente lo chiudeva quando l'ultimo se ne
+        # andava — e HR × FR ha continuato a consumare la fetta piu' grossa
+        # del tetto Fantastic per nessuno. Le fonti GRATUITE e il ponte ATS
+        # continuano: costano zero e tengono caldo il corpus, cosi' il primo
+        # iscritto che arriva non parte dal vuoto.
+        #
+        # «A pagamento» lo dice provider_quotas (monthly_credits_cap > 0),
+        # non una lista nel codice: se un giorno una fonte cambia prezzo,
+        # cambia la riga in tabella, non questo file.
+        #
+        # NB: il campo scoperto non vede piu' fetch da questa fonte, quindi
+        # per le sue offerte gia' scaricate la scadenza non si puo' piu'
+        # dedurre («non piu' vista» presuppone una fetch che copriva). E'
+        # accettato: nessun digest le sta leggendo, e expiry_blind_spots_v
+        # le tiene in vista.
+        if cluster.iscritti == 0 and cls.source in a_pagamento:
+            log.info("%s: nessun iscritto attivo — fonte a pagamento %s "
+                     "saltata (le gratuite continuano)",
+                     cluster.label, cls.source)
+            continue
+
         taxonomy = cluster.family if cls.source in TAXONOMY_SOURCES else None
         query = cluster.queries.get(cls.source, "")
         if not taxonomy and not query:

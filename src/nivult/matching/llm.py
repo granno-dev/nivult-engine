@@ -257,6 +257,10 @@ def offerta_come_testo(job: dict) -> str:
         pezzi.append(f"modalità: {job['ai_work_arrangement']}")
     if job.get("cities"):
         pezzi.append(f"sede: {', '.join(job['cities'][:2])}")
+    # Solo quando e' true: il false di Fantastic significa «l'annuncio non
+    # ne parla», e scriverlo qui insegnerebbe al modello una bugia.
+    if job.get("ai_visa_sponsorship"):
+        pezzi.append("sponsorizzazione visto: dichiarata dall'annuncio")
     if job.get("ai_key_skills"):
         pezzi.append(f"competenze: {', '.join(job['ai_key_skills'][:12])}")
     if job.get("ai_requirements_summary"):

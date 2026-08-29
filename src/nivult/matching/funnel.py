@@ -11,6 +11,12 @@ la personalizzazione è per coppia utente-cluster, e la stessa offerta può
 passare per un cluster e restare fuori per un altro. La seniority è un
 intervallo di rank in experience_levels, non un elenco di codici, perché
 min e max possono essere aperti da un lato.
+
+ECCEZIONE, una sola: il bisogno di visto non e' un filtro deterministico ma
+una preferenza pesata dal modello. Il campo dell'offerta e' inaffidabile
+nella direzione negativa (false = «non menzionato», misurato 2.332 false
+contro 2 true) e un'esclusione dura svuotava il digest di chiunque la
+chiedesse. Vedi il commento dove si costruisce il desiderio.
 """
 
 from __future__ import annotations
@@ -48,8 +54,6 @@ WHERE jc.cluster_id = %(cluster_id)s
   AND j.employer_kind = ANY(%(employer_kinds)s::text[])
   AND (j.ai_experience_level IS NULL
        OR j.ai_experience_level = ANY(%(livelli)s::text[]))
-  AND (%(needs_visa)s = false OR j.ai_visa_sponsorship IS NULL
-       OR j.ai_visa_sponsorship)
   AND (cardinality(%(industries)s::text[]) = 0 OR j.org_industry IS NULL
        OR j.org_industry = ANY(%(industries)s::text[]))
   AND (%(min_headcount)s::int IS NULL OR j.org_headcount IS NULL
@@ -105,7 +109,6 @@ def candidati(conn: psycopg.Connection, user_id: str) -> list[dict]:
                 "employment_types": f["employment_types"] or [],
                 "employer_kinds": f["accepted_employer_kinds"],
                 "livelli": livelli,
-                "needs_visa": f["needs_visa_sponsorship"],
                 "industries": f["industries"] or [],
                 "min_headcount": f["min_headcount"],
                 "max_headcount": f["max_headcount"],
@@ -118,6 +121,20 @@ def candidati(conn: psycopg.Connection, user_id: str) -> list[dict]:
                 parti = []
                 if f.get("target_role"):
                     parti.append(f"Ruolo a cui punta: {f['target_role']}")
+                # Il visto NON esclude in SQL, deliberatamente, e la ragione
+                # e' una misura: Fantastic marca ai_visa_sponsorship=false
+                # anche quando l'annuncio semplicemente non ne parla — 2.332
+                # false contro 2 true sulle attive. Un'esclusione dura su
+                # quel campo filtrava «chi lo scrive nell'annuncio», non
+                # «chi sponsorizza», e chi spuntava la casella riceveva
+                # digest vuoti per sempre. Quindi il bisogno viaggia come
+                # preferenza forte nel prompt: GLM premia chi la dichiara
+                # senza azzerare tutto il resto.
+                if f.get("needs_visa_sponsorship"):
+                    parti.append(
+                        "Ha bisogno di sponsorizzazione del visto per "
+                        "lavorare: un datore esplicitamente disposto a "
+                        "sponsorizzare conta molto a suo favore.")
                 if f.get("wants"):
                     parti.append(f["wants"])
                 j["_wants"] = "\n".join(parti) or None
