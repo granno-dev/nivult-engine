@@ -56,6 +56,31 @@ PROVIDERS = {
         "token": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
         "scope": "openid email profile",
         "env": ("MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET"),
+        # La schermata di consenso si forza in inglese, ed e' una toppa a un
+        # difetto di Microsoft, non una preferenza.
+        #
+        # Misurato il 2026-08-29 sullo stesso client_id, cambiando solo
+        # questo parametro: in `en-US` la pagina mostra i collegamenti a
+        # condizioni e privacy come deve; in `it-IT` stampa alla lettera i
+        # segnaposto del proprio modello —
+        #     «...nelle rispettive <appTerms>condizioni per l'utilizzo del
+        #     servizio</appTerms> e nell'<appPrivacy>informativa sulla
+        #     privacy</appPrivacy>. <missingTermsWarning>L'autore non ha
+        #     fornito collegamenti...</missingTermsWarning>»
+        # — compreso il tag dell'avviso «collegamenti mancanti», che quindi
+        # compare anche quando i collegamenti ci sono. Un renderer che non
+        # sostituisce nemmeno i propri segnaposto non sta valutando niente:
+        # sta scaricando la stringa grezza. Il difetto e' loro, dalla nostra
+        # parte gli URL sono configurati, senza www e raggiungibili (200).
+        #
+        # Una schermata inglese pulita e' meglio di una italiana che mostra
+        # codice proprio mentre chiedi a qualcuno di fidarsi.
+        #
+        # Le altre otto lingue del sito NON sono state provate: finche' non
+        # lo saranno, questa resta en-US per tutti. Quando Microsoft avra'
+        # corretto la stringa italiana, la riga si toglie e la lingua torna
+        # a seguire il browser — oppure si passa qui quella dell'utente.
+        "extra": {"mkt": "en-US"},
     },
 }
 
@@ -215,6 +240,7 @@ def inizia(conn: psycopg.Connection, provider: str) -> str:
         "nonce": nonce,
         "code_challenge": sfida,
         "code_challenge_method": "S256",
+        **cfg.get("extra", {}),
     }
     from urllib.parse import urlencode
     return f"{cfg['autorizzazione']}?{urlencode(parametri)}"
