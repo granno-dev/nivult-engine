@@ -46,8 +46,22 @@ from nivult.matching.llm import (GLM, motiva_e_analizza, profilo_come_testo,
 
 log = logging.getLogger("nivult.matching.worker")
 
-# Soglia alta: meglio un digest vuoto che un digest scadente.
-THRESHOLD = 80
+# Soglia alta: meglio un digest vuoto che un digest scadente. Alta, non
+# proibitiva — ed era diventata proibitiva.
+#
+# A 80 passava la meta' ALTA della fascia che la rubrica stessa chiama
+# «buona: il ruolo e' giusto, con qualche scarto di livello o di ambito».
+# Misurato su un utente reale, sulle offerte ancora vive: 10 sopra 80, 18
+# sopra 70. E le sette escluse non erano scarti — HR Business Partner in
+# Amazon, Global HR Business Partner, People & HR Operations Specialist
+# Italia, Change Specialist Milano. Tenerle fuori non proteggeva nessuno.
+#
+# 70 e' il confine che la rubrica gia' dichiara fra «buona» e
+# «plausibile»: sotto ci finiscono le mosse laterali credibili (un
+# consulente HR che guarda una posizione commerciale), e quelle e' giusto
+# che restino fuori. La soglia non si muove per riempire una quota — si e'
+# mossa perche' era tarata male.
+THRESHOLD = 70
 # Le "prime 30" delle decisioni di architettura: la motivazione di qualità
 # si paga solo per ciò che il destinatario vedrà davvero.
 MAX_ITEMS = 30
