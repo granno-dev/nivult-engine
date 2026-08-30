@@ -1,4 +1,4 @@
-"""Accesso con Google e Microsoft, sopra lo stesso impianto senza password.
+"""Accesso con Google, Microsoft e LinkedIn, sopra lo stesso impianto senza password.
 
 Non è un secondo sistema di autenticazione: è una seconda porta sullo stesso.
 Il giro finisce esattamente dove finisce il magic link — un token monouso di
@@ -49,6 +49,7 @@ PROVIDERS = {
         "token": "https://oauth2.googleapis.com/token",
         "scope": "openid email profile",
         "env": ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"),
+        "pkce": True,
     },
     "microsoft": {
         # `common` è l'autorità che accetta sia account aziendali sia
@@ -83,6 +84,30 @@ PROVIDERS = {
         # corretto la stringa italiana, la riga si toglie e la lingua torna
         # a seguire il browser — oppure si passa qui quella dell'utente.
         "extra": {"mkt": "en-US"},
+        "pkce": True,
+    },
+    "linkedin": {
+        # LinkedIn e' OpenID Connect standard, con due differenze che
+        # contano e sono gestite sotto:
+        #
+        #   - NIENTE PKCE. Il loro documento di discovery non dichiara
+        #     `code_challenge_methods_supported` (verificato il 2026-08-30):
+        #     mandare `code_challenge` e poi `code_verifier` e' nel migliore
+        #     dei casi ignorato, nel peggiore un motivo di rifiuto. Il flag
+        #     `pkce` sotto tiene i due parametri fuori da questo giro.
+        #   - l'emittente e' `https://www.linkedin.com/oauth`, una stringa
+        #     fissa: si controlla in `_verifica_claim`.
+        #
+        # I campi che torna sono gli STESSI di Google — sub, name, email,
+        # email_verified, locale, picture — e nulla di piu'. Non da' la
+        # storia professionale: quella e' dietro il programma partner Talent
+        # Solutions, un'altra cosa. Questo e' un terzo modo di ACCEDERE, non
+        # una scorciatoia che riempie il profilo.
+        "autorizzazione": "https://www.linkedin.com/oauth/v2/authorization",
+        "token": "https://www.linkedin.com/oauth/v2/accessToken",
+        "scope": "openid profile email",
+        "env": ("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"),
+        "pkce": False,
     },
 }
 
@@ -162,6 +187,9 @@ def _verifica_claim(provider: str, claim: dict, client_id: str, nonce_hash: str)
     if provider == "google":
         if iss not in ("https://accounts.google.com", "accounts.google.com"):
             raise OAuthError("iss_inatteso", "Risposta del provider non attendibile.")
+    elif provider == "linkedin":
+        if iss != "https://www.linkedin.com/oauth":
+            raise OAuthError("iss_inatteso", "Risposta del provider non attendibile.")
     else:
         # Con l'autorità `common` l'emittente è specifico del tenant, quindi non
         # è una stringa fissa: si verifica che sia la forma attesa E che il
@@ -204,7 +232,11 @@ def _email_attendibile(provider: str, claim: dict) -> tuple[str | None, bool]:
     if not email:
         return None, False
 
-    if provider == "google":
+    # Google e LinkedIn dichiarano `email_verified` e ognuno possiede la
+    # propria identita': non c'e' l'amministratore di tenant che decide
+    # l'indirizzo di un altro, quindi il claim vale. LinkedIn verifica
+    # sempre l'email prima di darla.
+    if provider in ("google", "linkedin"):
         verificata = claim.get("email_verified")
         return email, verificata is True or verificata == "true"
 
@@ -240,10 +272,14 @@ def inizia(conn: psycopg.Connection, provider: str) -> str:
         "scope": cfg["scope"],
         "state": state,
         "nonce": nonce,
-        "code_challenge": sfida,
-        "code_challenge_method": "S256",
         **cfg.get("extra", {}),
     }
+    # PKCE solo dove il provider lo accetta. LinkedIn non lo dichiara, e
+    # spedirglielo e' un rischio senza guadagno: il verifier resta comunque
+    # generato e in tabella, ignorato per questo giro.
+    if cfg.get("pkce"):
+        parametri["code_challenge"] = sfida
+        parametri["code_challenge_method"] = "S256"
     from urllib.parse import urlencode
     return f"{cfg['autorizzazione']}?{urlencode(parametri)}"
 
@@ -362,8 +398,9 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
         "code": code,
         "redirect_uri": redirect_uri(provider),
         "grant_type": "authorization_code",
-        "code_verifier": verifier,
     }
+    if cfg.get("pkce"):
+        dati["code_verifier"] = verifier
     try:
         if client is None:
             with httpx.Client(timeout=15) as c:
