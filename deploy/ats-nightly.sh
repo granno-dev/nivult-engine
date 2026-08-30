@@ -114,6 +114,18 @@ echo "── arricchisci (phenom 1000)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── 5c. Servizi pubblici europei: API dirette ─────────────────────
+echo "── arbetsformedlingen (Svezia)"
+"$PY" -m nivult.ats.servizi_pubblici --arbetsformedlingen --limite 2000 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+if [ -n "$FRANCE_TRAVAIL_CLIENT_ID" ]; then
+  echo "── francetravail (Francia)"
+  "$PY" -m nivult.ats.servizi_pubblici --francetravail --limite 2000 \
+    >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+    && echo "   ok" || echo "   FALLITO"
+fi
+
 # ── 6. Classificazione GLM: 1500 nuove offerte per notte ──────────
 echo "── classificatore (1500)"
 "$PY" -m nivult.ats.classificatore --limite 1500 \
