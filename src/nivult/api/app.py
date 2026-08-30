@@ -463,6 +463,10 @@ def create_app() -> FastAPI:
         try:
             gettone = oauth.concludi(conn, provider, code, state)
         except oauth.OAuthError as e:
+            # Il codice finisce nell'URL di ritorno, dove nessuno lo legge in
+            # un guasto: anche a log, cosi' un login OAuth che fallisce si
+            # diagnostica senza ricostruirlo dal browser.
+            log.warning("oauth callback %s fallita: %s", provider, e.codice)
             return _al_sito(f"/login?errore={e.codice}")
         return _al_sito(f"/verify?token={gettone}")
 

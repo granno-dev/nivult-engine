@@ -28,9 +28,12 @@ import secrets
 from datetime import timedelta
 
 import httpx
+import logging
 import psycopg
 
 from nivult.config import VERSIONE_TERMINI
+
+log = logging.getLogger("nivult.oauth")
 
 # Il flusso vive quanto basta ad andare dal provider e tornare. Dieci minuti
 # sono già larghi: chi ci mette di più ha abbandonato la scheda.
@@ -108,6 +111,8 @@ PROVIDERS = {
         "scope": "openid profile email",
         "env": ("LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"),
         "pkce": False,
+        # LinkedIn non rimanda il nonce nell'id_token: vedi _verifica_claim.
+        "verifica_nonce": False,
     },
 }
 
@@ -202,11 +207,18 @@ def _verifica_claim(provider: str, claim: dict, client_id: str, nonce_hash: str)
     if aud != client_id:
         raise OAuthError("aud_inatteso", "Risposta del provider non attendibile.")
 
-    nonce = claim.get("nonce", "")
-    if not nonce or _sha256(nonce) != nonce_hash:
-        # Il nonce lega l'id_token alla NOSTRA richiesta: senza, un token
-        # valido ottenuto altrove sarebbe rigiocabile qui.
-        raise OAuthError("nonce_inatteso", "Risposta del provider non attendibile.")
+    # Il nonce lega l'id_token alla NOSTRA richiesta e va verificato quando
+    # il provider lo rimanda. LinkedIn NON lo rimanda: il suo id_token non
+    # contiene il claim `nonce` (non e' fra i `claims_supported` del suo
+    # documento di discovery), ed e' una non-conformita' nota. Per LinkedIn
+    # la protezione contro il replay resta affidata a `state`, consumato in
+    # modo atomico, e al fatto che l'id_token arriva da uno scambio
+    # back-channel col nostro segreto — non puo' essere iniettato da fuori.
+    if PROVIDERS[provider].get("verifica_nonce", True):
+        nonce = claim.get("nonce", "")
+        if not nonce or _sha256(nonce) != nonce_hash:
+            raise OAuthError("nonce_inatteso",
+                             "Risposta del provider non attendibile.")
 
 
 def _email_attendibile(provider: str, claim: dict) -> tuple[str | None, bool]:
@@ -412,7 +424,11 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
                          "Il provider non risponde. Riprova fra poco.") from e
 
     if risposta.status_code != 200:
-        # Il corpo può contenere dettagli del client: non finisce all'utente.
+        # Il corpo NON finisce all'utente, ma nei log si': senza, un rifiuto
+        # del provider e' una diagnosi al buio. Il corpo di un token
+        # endpoint non contiene segreti, solo il motivo del rifiuto.
+        log.warning("scambio token %s fallito: HTTP %s %s", provider,
+                    risposta.status_code, risposta.text[:300])
         raise OAuthError("scambio_fallito",
                          "Il provider ha rifiutato l'accesso. Riprova ad accedere.")
 
