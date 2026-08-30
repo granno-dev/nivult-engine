@@ -262,11 +262,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "amministrazione", "bürokaufmann", "kontorist",
         "office clerk", "impiegato", "impiegata", "employé",
    
-        "workplace assistant",
-        "engagement assistant",
-        "assistante",
         "assistante de direction",
-        "office assistant",
     ],
     "Education": [
         "teacher", "insegnante", "lehrer", "lehrerin", "lärare",
@@ -313,7 +309,6 @@ DIZIONARIO: dict[str, list[str]] = {
         "general manager", "direttore generale", "geschäftsführer",
         "project manager", "projectleider", "projektledare",
    
-        "vertical lead",
     ],
     "Consulting": [
         "consultant", "consulente", "berater", "beraterin",
@@ -346,7 +341,7 @@ DIZIONARIO: dict[str, list[str]] = {
     "Creative & Media": [
         "journalist", "giornalista", "journalist", "journalist",
         "editor", "redattore", "redakteur", "redaktör",
-        "writer", "scrittore", "autor", "författare",
+        "scrittore", "autor", "författare",
         "content creator", "video editor", "videomaker",
         "producer", "produttore", "produzent", "producent",
         "copywriter", "social media manager",
@@ -410,7 +405,9 @@ def classifica_titolo(titolo: str) -> tuple[str | None, float]:
     if not t or len(t) < 3:
         return None, 0.0
     for parola, famiglia in _LOOKUP:
-        if parola in t:
+        # WORD BOUNDARY: 'sem' non deve matchare dentro 'Assembler'.
+        # Una parola matcha solo se è una parola intera nel titolo.
+        if re.search(r"\b" + re.escape(parola) + r"\b", t):
             # confidenza più alta se la parola è lunga (più specifica)
             conf = min(len(parola) / len(t) + 0.3, 0.95)
             return famiglia, round(conf, 2)

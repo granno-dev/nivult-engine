@@ -110,10 +110,13 @@ def _match_titoli_noti(titolo: str, firme: dict[str, str]) -> tuple[str | None, 
             migliore_score = score
             migliore_famiglia = famiglia
 
-    # soglia: almeno il 45% di sovrapposizione — il fuzzy matching
-    # non deve essere perfetto, deve catturare i "Senior ICU Nurse"
-    # quando "ICU Nurse" è già classificato
-    if migliore_score >= 0.45:
+    # soglia ALTISSIMA: il fuzzy matching a soglia bassa (0.45) classificava
+    # 'ordinatore pacchi' come Energy e 'consegnatore giornali' come Food.
+    # Un'offerta nella famiglia SBAGLIATA entra nel cluster sbagliato e
+    # arriva nel digest di chi non c'entra — peggio di non classificarla.
+    # A 0.85 passa solo il quasi-identico: 'Senior ICU Nurse' quando
+    # 'ICU Nurse' è già noto. Il resto va a GLM.
+    if migliore_score >= 0.85:
         return migliore_famiglia, round(migliore_score, 2)
     return None, 0.0
 
