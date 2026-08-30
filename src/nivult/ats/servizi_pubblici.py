@@ -134,8 +134,8 @@ def scarica_arbetsformedlingen(dsn: str, limite: int = 1000) -> dict:
 def _ft_token(client_id: str, client_secret: str) -> str | None:
     """Il token OAuth2 per France Travail (flusso client_credentials)."""
     r = httpx.post(
-        "https://entreprise.francetravail.fr/connexion/oauth2/access-token"
-        "?realm=%2Fpartenaire",
+        "https://entreprise.francetravail.fr/connexion/oauth2/access_token",
+        params={"realm": "/partenaire"},
         data={"grant_type": "client_credentials",
               "client_id": client_id,
               "client_secret": client_secret,
