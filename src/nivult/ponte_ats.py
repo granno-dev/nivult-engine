@@ -15,10 +15,19 @@ fonte senza toccare niente a valle.
 
 **La soglia d'ingresso.** Passa solo ciò che è utilizzabile davvero:
 
-  · classificata — la famiglia arriva da `job_classifications` e usa lo
-    STESSO vocabolario di `job_families`, tutte e 33 identiche. È la
-    decisione che rende questo ponte una mappatura dritta invece di una
-    tabella di corrispondenze;
+  · classificata, E CON FIDUCIA — la famiglia arriva da
+    `job_classifications` e usa lo STESSO vocabolario di `job_families`,
+    tutte e 33 identiche: è la decisione che rende questo ponte una
+    mappatura dritta invece di una tabella di corrispondenze.
+
+    Sotto 0.5 di fiducia però non entra, e non è prudenza generica: quando
+    il classificatore non sa decidere ripiega su «Retail» con fiducia 0.2,
+    e si vede a occhio — «Nacelliste» (operatore su piattaforma aerea),
+    «Technicien(ne)», «Supervisor», tutti Retail a 0.2. Sono l'1,7% del
+    classificato, ma senza questa soglia finirebbero nei cluster Retail
+    veri, e chi cerca lavoro nel commercio si vedrebbe arrivare un
+    gruista. Meglio un'offerta che non entra di una che entra nel posto
+    sbagliato: il ponte importa ciò di cui è sicuro;
   · con un paese — famiglia × paese È la definizione di cluster, senza
     paese non c'è dove metterla;
   · con una data — `jobs.date_posted` è NOT NULL, e senza data l'offerta
@@ -149,6 +158,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
                         j.raw->>'Company_Name')
         FROM ats_jobs j
         JOIN job_classifications c ON c.job_id = j.id
+                                  AND coalesce(c.confidence, 0) >= 0.5
         JOIN unnest(%s::text[], %s::text[]) AS want(family, country)
              ON want.family = c.family AND want.country = j.country
         LEFT JOIN ats_companies co
