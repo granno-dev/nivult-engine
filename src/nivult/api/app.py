@@ -21,6 +21,7 @@ import ipaddress
 import re
 import os
 import secrets
+import socket
 from datetime import datetime, timezone
 
 import httpx
@@ -233,6 +234,79 @@ def _analizza_cv(conn, testo: str) -> dict:
                                   seniority=seniority, lingue=lingue)
 
 
+def _ip_pubblico(host: str) -> bool:
+    """L'host risolve SOLO a indirizzi instradabili su internet?
+
+    E' la difesa contro l'SSRF: la rotta dei loghi scarica un URL che viene
+    dai dati delle offerte, cioe' da terzi, e senza questo controllo un URL
+    costruito ad arte farebbe bussare il server a `169.254.169.254` (i
+    metadati del cloud), a `127.0.0.1` o alla rete privata di Hetzner —
+    posti che dall'esterno non si raggiungono e che rispondono solo perche'
+    la richiesta parte da dentro.
+
+    Si guardano TUTTI gli indirizzi a cui l'host risolve, non il primo: un
+    host ostile puo' pubblicare un record pubblico e uno privato e sperare
+    che il controllo veda quello buono e la connessione usi quello cattivo.
+    Se anche uno solo e' privato, riservato, loopback, link-local o
+    multicast, si rifiuta tutto.
+
+    Resta una finestra teorica di DNS rebinding fra questo controllo e la
+    connessione vera di httpx. E' stretta, e il fatto che la risposta torni
+    al chiamante solo se e' un'immagine valida sotto i 512 KB la rende
+    inservibile per esfiltrare: chi la volesse chiudere del tutto dovrebbe
+    fissare la connessione all'IP gia' risolto, ma quello rompe TLS sui CDN
+    che servono per SNI. La difesa qui e' proporzionata alla minaccia.
+    """
+    try:
+        info = socket.getaddrinfo(host, None)
+    except (socket.gaierror, UnicodeError, ValueError):
+        return False
+    if not info:
+        return False
+    for famiglia, _, _, _, indirizzo in info:
+        try:
+            ip = ipaddress.ip_address(indirizzo[0])
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
+def _scarica_logo(url: str, *, max_byte: int = 512_000,
+                  salti: int = 2) -> bytes | None:
+    """Scarica un logo con i redirect gestiti a mano e ogni salto validato.
+
+    `follow_redirects=True` era la seconda meta' del buco: un URL in un host
+    innocuo poteva rimbalzare su uno interno, e il controllo sull'URL di
+    partenza non l'avrebbe visto. Qui ogni tappa passa per `_ip_pubblico`
+    prima di essere seguita, e si accettano solo http/https — mai `file://`
+    o `gopher://`.
+    """
+    for _ in range(salti + 1):
+        parti = httpx.URL(url)
+        if parti.scheme not in ("http", "https") or not parti.host:
+            return None
+        if not _ip_pubblico(parti.host):
+            return None
+        try:
+            with httpx.Client(timeout=8, follow_redirects=False) as c:
+                risp = c.get(url)
+        except httpx.HTTPError:
+            return None
+        if risp.is_redirect:
+            prossimo = risp.headers.get("location")
+            if not prossimo:
+                return None
+            url = str(httpx.URL(url).join(prossimo))
+            continue
+        if risp.status_code == 200 and len(risp.content) <= max_byte:
+            return risp.content
+        return None
+    return None
+
+
 def _tipo_immagine(dati: bytes) -> str | None:
     """Il MIME dai primi byte. None se non e' un'immagine che sappiamo servire.
 
@@ -288,6 +362,24 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware, allow_origins=origini, allow_methods=["*"],
         allow_headers=["Authorization", "Content-Type"])
+
+    @app.middleware("http")
+    async def intestazioni_sicurezza(request: Request, call_next):
+        """Header di sicurezza su ogni risposta.
+
+        HSTS impedisce il declassamento a HTTP dopo la prima visita;
+        nosniff toglie al browser la liberta' di indovinare il
+        content-type di una risposta e trattarla per quello che non e'.
+        Costano poco e chiudono due porte piccole. Cloudflare sta davanti
+        e potrebbe aggiungerli, ma un default sano non va delegato a una
+        configurazione che vive altrove.
+        """
+        risposta = await call_next(request)
+        risposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+        risposta.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=63072000; includeSubDomains")
+        return risposta
 
     def connessione():
         """Una connessione per richiesta: il pattern di tutto il motore."""
@@ -1076,19 +1168,18 @@ def create_app() -> FastAPI:
                     url = f"https://img.logo.dev/{dominio}?size=128&format=png"
                 mime = dati = None
                 if url:
-                    try:
-                        with httpx.Client(timeout=8, follow_redirects=True) as c:
-                            risp = c.get(url)
-                        if risp.status_code == 200 and len(risp.content) <= 512_000:
-                            # Il tipo si riconosce dai BYTE, non dall'header:
-                            # l'S3 che ospita questi loghi li serve tutti come
-                            # `binary/octet-stream`, e fidarsi dell'header
-                            # scartava immagini perfettamente valide.
-                            mime = _tipo_immagine(risp.content)
-                            if mime:
-                                dati = risp.content
-                    except httpx.HTTPError:
-                        pass
+                    # Lo scarico passa da `_scarica_logo`, che valida l'host
+                    # e ogni redirect contro gli IP privati: l'URL viene dai
+                    # dati delle offerte, cioe' da terzi, e senza questo era
+                    # un SSRF. Il tipo si riconosce dai BYTE, non dall'header:
+                    # l'S3 che ospita questi loghi li serve tutti come
+                    # `binary/octet-stream`, e fidarsi dell'header scartava
+                    # immagini perfettamente valide.
+                    contenuto = _scarica_logo(url)
+                    if contenuto:
+                        mime = _tipo_immagine(contenuto)
+                        if mime:
+                            dati = contenuto
                 # La riga si scrive anche quando il download fallisce: senza,
                 # ogni visita riproverebbe lo stesso scarico che non riesce.
                 cur.execute(
