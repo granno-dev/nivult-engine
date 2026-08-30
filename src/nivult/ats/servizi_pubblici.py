@@ -68,6 +68,7 @@ def scarica_arbetsformedlingen(dsn: str, limite: int = 1000) -> dict:
                 r = c.get(base, params={
                     "limit": PER_PAGINA,
                     "offset": offset,
+                    "sort": "pubdate-desc",
                 })
                 if r.status_code != 200:
                     log.warning("AF %d a offset %d", r.status_code, offset)
