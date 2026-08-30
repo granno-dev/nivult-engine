@@ -29,6 +29,9 @@
 #          travaso a meta'. Prima del primo digest utile delle 07:10:
 #          un'offerta travasata alle 05:00 puo' finire nel digest di quella
 #          stessa mattina
+#   04:30  retention dei dati personali — dopo il backup delle 03:00, cosi'
+#          se un termine e' sbagliato i dati sono ancora nel dump della
+#          notte, e prima del ponte delle 05:00
 #   :10    digest, OGNI ORA — l'orario di invio e' quello dell'utente, nel
 #          suo fuso: un giro solo al giorno consegnerebbe in ritardo
 
@@ -41,6 +44,7 @@ RIGHE=$(cat <<'EOF'
 30 2 * * * /opt/nivult/ats-nightly.sh >> /opt/nivult/engine/logs/ats-cron.log 2>&1
 0 3 * * * /opt/nivult/backup.sh >> /var/log/nivult-backup.log 2>&1
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
+30 4 * * * /opt/nivult/engine/deploy/retention-utenti.sh >> /var/log/nivult-retention.log 2>&1
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
 EOF
 )

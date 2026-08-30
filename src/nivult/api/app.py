@@ -1626,7 +1626,8 @@ def create_app() -> FastAPI:
                 # Le chiavi si RACCOLGONO qui ma si eliminano DOPO il commit:
                 # eliminandole subito, un INSERT fallito più sotto avrebbe
                 # rimesso 'active' il CV vecchio... senza più il suo file.
-                cur.execute("UPDATE user_cvs SET status = 'superseded' "
+                cur.execute("UPDATE user_cvs SET status = 'superseded', "
+                            "       superseded_at = now() "
                             "WHERE user_id = %s AND status = 'active' "
                             "RETURNING storage_key", (uid,))
                 da_eliminare = [r[0] for r in cur.fetchall()]
