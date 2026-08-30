@@ -126,6 +126,12 @@ if [ -n "$FRANCE_TRAVAIL_CLIENT_ID" ]; then
     && echo "   ok" || echo "   FALLITO"
 fi
 
+# ── Bundesagentur (Germania) — API pubblica, 100k+ offerte ──────
+echo "── bundesanstellung (Germania)"
+"$PY" -m nivult.ats.servizi_pubblici --bundesanstellung --limite 2000 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── 6. Classificazione a 3 livelli: dizionario + fuzzy + GLM ────
 echo "── classificatore a livelli (5000)"
 "$PY" -m nivult.ats.classificatore_livelli --limite 5000 \
