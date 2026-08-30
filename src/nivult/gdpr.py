@@ -10,10 +10,14 @@ Regole rispettate qui:
   - le chiavi object storage vengono raccolte PRIMA di cancellare le righe,
     altrimenti i blob resterebbero orfani e la cancellazione sarebbe incompleta.
 
-Lo storage non è ancora configurato: le chiavi vengono depositate in
-deletion_requests.pending_storage_keys e la richiesta NON viene chiusa finché
-qualcuno non le ha rimosse. Meglio una richiesta che resta aperta di una
-cancellazione che si dichiara completa mentre i file sono ancora lì.
+Chi esegue la cancellazione passa `rimuovi_blob`: una funzione che sa
+togliere un file dallo storage. Senza, le chiavi restano depositate in
+deletion_requests.pending_storage_keys e la richiesta NON viene chiusa —
+meglio una richiesta che resta aperta di una cancellazione che si dichiara
+completa mentre i file sono ancora lì.
+
+Il parametro è opzionale e non per pigrizia: questo modulo non deve sapere
+che esiste S3. Chi lo chiama sì, e gli passa `storage.elimina`.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ import logging
 import time
 
 import psycopg
+from collections.abc import Callable
 
 log = logging.getLogger("nivult.gdpr")
 
@@ -97,6 +102,7 @@ def execute_deletion(
     batch_size: int = 5000,
     pause_seconds: float = 0.0,
     max_batches: int = 10_000,
+    rimuovi_blob: Callable[[str], None] | None = None,
 ) -> dict[str, int]:
     """Esegue la cancellazione a lotti. Riprendibile: rilanciarla è sicuro."""
     _require_clean_connection(conn)
@@ -158,9 +164,35 @@ def execute_deletion(
         conn.commit()
         raise
 
-    # I blob restano da rimuovere: la richiesta resta aperta finché non c'è un
-    # backend di storage che sappia farlo.
+    # I BLOB, per ultimi e uno alla volta.
+    #
+    # Dopo le righe, non prima: se il giro si interrompe a metà, un file
+    # rimasto senza la sua riga è invisibile ma innocuo, mentre una riga
+    # rimasta senza il suo file punterebbe nel vuoto — e il pannello
+    # dell'utente proverebbe a scaricarlo.
+    #
+    # Una chiave che fallisce NON ferma le altre e resta nell'elenco: la
+    # richiesta rimane aperta, e rilanciarla riprende da lì. Un errore su un
+    # file non deve trasformarsi in nove file che nessuno rimuove più.
     remaining = list(storage_keys or [])
+    if rimuovi_blob is not None and remaining:
+        falliti: list[str] = []
+        for chiave in remaining:
+            try:
+                rimuovi_blob(chiave)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("richiesta %s: blob %s non rimosso: %s",
+                            request_id, chiave, str(exc)[:120])
+                falliti.append(chiave)
+        remaining = falliti
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE deletion_requests SET pending_storage_keys = %s "
+                "WHERE id = %s",
+                (json.dumps(remaining), request_id),
+            )
+        conn.commit()
+
     final_status = "pending" if remaining else "completed"
     with conn.cursor() as cur:
         cur.execute(

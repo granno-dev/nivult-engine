@@ -34,7 +34,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
-from nivult import crypto, cv, ponte_ats, storage
+from nivult import crypto, cv, gdpr, ponte_ats, storage
 from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
@@ -709,6 +709,56 @@ def create_app() -> FastAPI:
         # ingestione notturna: un mercato appena aperto non ha ancora offerte,
         # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.
         return {"id": cluster_id, "nuovo": not gia_letto, "famiglia": famiglia}
+
+    def _svuota(request_id: str, email: str) -> None:
+        """Lo svuotamento vero, in sottofondo e su una connessione sua.
+
+        `execute_deletion` committa dopo OGNI lotto — e' tutto il suo punto:
+        transazioni brevi invece di un lock lungo su tabelle calde. Con la
+        connessione della richiesta HTTP, che una transazione ce l'ha gia'
+        aperta, `conn.transaction()` aprirebbe un semplice SAVEPOINT e i lotti
+        non verrebbero committati affatto. Il modulo lo rifiuta a voce alta
+        (`_require_clean_connection`), ed e' giusto cosi'.
+
+        Se si interrompe non si perde niente: la richiesta resta aperta e
+        rilanciarla riprende da dove era. Per questo l'utente puo' andarsene
+        subito — `request_deletion` ha gia' fatto la parte che lui vede.
+        """
+        try:
+            with psycopg.connect(database_url()) as c:
+                totali = gdpr.execute_deletion(
+                    c, request_id, rimuovi_blob=storage.elimina)
+            log.info("cancellazione %s completata: %s", request_id, totali)
+        except Exception as exc:  # noqa: BLE001
+            log.error("cancellazione %s fallita: %s", request_id, str(exc)[:300])
+
+    @app.delete("/me", status_code=202)
+    def cancella_account(sfondo: BackgroundTasks, uid: str = Depends(utente),
+                         conn=Depends(connessione)):
+        """Cancella l'account e tutto cio' che ne dipende. Irreversibile.
+
+        202 e non 204, e la differenza e' onesta: quando questa risposta parte
+        l'account E' cancellato — `request_deletion` ha gia' marcato l'utente,
+        azzerato `next_digest_at` e depositato le chiavi dei file. Da quel
+        momento non arriva piu' nessun digest e la sessione non vale piu'.
+        Lo SVUOTAMENTO invece dura: righe a lotti e file su object storage, e
+        va avanti in sottofondo. Dire 204 significherebbe «finito», e non lo e'
+        ancora.
+
+        Il diritto alla cancellazione e' del GDPR: non si chiede il motivo,
+        non si offre uno sconto per restare, non si mette un modulo in mezzo.
+        Un clic dal pannello, una conferma perche' e' irreversibile, e basta.
+        """
+        # La connessione della richiesta ha una transazione aperta: la chiudo
+        # prima, perche' `request_deletion` pretende — a ragione — di poter
+        # committare da sola.
+        conn.commit()
+        try:
+            request_id = gdpr.request_deletion(conn, uid)
+        except gdpr.DeletionError as exc:
+            raise HTTPException(404, str(exc))
+        sfondo.add_task(_svuota, request_id, uid)
+        return {"esito": "cancellazione avviata", "richiesta": request_id}
 
     @app.get("/me/offerte")
     def mie_offerte(uid: str = Depends(utente), conn=Depends(connessione),
