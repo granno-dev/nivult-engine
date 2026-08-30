@@ -78,3 +78,13 @@ def safe_dsn(url: str) -> str:
         user, _, _ = creds.partition(":")
         creds = f"{user}:***"
     return f"{scheme}{sep}{creds}@{tail}"
+
+# La revisione dei documenti che l'utente accetta creando l'account.
+# SI ALZA A MANO quando termini o privacy cambiano nella sostanza.
+#
+# La base giuridica del trattamento del CV e' il contratto, non il
+# consenso (art. 6(1)(b)): e' la scelta giusta, perche' senza CV non c'e'
+# prodotto. Ma di un contratto bisogna poter mostrare CHE COSA e' stato
+# accettato e QUANDO, e cambiare i documenti senza alzare questa stringa
+# significa perdere la risposta per tutti gli iscritti precedenti.
+VERSIONE_TERMINI = "2026-08-28"

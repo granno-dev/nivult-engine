@@ -19,6 +19,17 @@ from dataclasses import dataclass
 
 from nivult.ingestion.base import HttpSource
 
+# La versione delle rubriche di punteggio. SI ALZA A MANO, e si alza ogni
+# volta che una modifica sposta i punteggi: soglie, regole di valutazione,
+# pesi. Non per una correzione di refuso.
+#
+# Finisce in `matches.rubric_version` e risponde a una domanda che prima
+# non aveva risposta: con quale metro e' stato misurato QUESTO candidato
+# contro QUESTA offerta. Il 30/08/2026 la rubrica e' cambiata due volte in
+# un giorno, e senza questa stringa i punteggi di ieri e quelli di oggi
+# sembrano confrontabili mentre non lo sono.
+VERSIONE_RUBRICA = "2026-08-30.r3"
+
 
 @dataclass(slots=True)
 class Punteggio:

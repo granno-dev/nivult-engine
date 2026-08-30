@@ -25,6 +25,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from nivult.config import database_url, load_dotenv, safe_dsn
+from nivult.config import VERSIONE_TERMINI
 
 # Finestra di vita del magic link. Corta di proposito: è un rinvio da email,
 # non un oggetto che viaggia in tasca per giorni.
@@ -56,11 +57,16 @@ def _utente_o_nuovo(cur, email: str, locale: str | None = None) -> str:
     # segnale che abbiamo alla nascita dell'account. Solo alla nascita: un
     # utente esistente ha gia' la sua, e una visita non e' una scelta.
     cur.execute(
+        # L'accettazione si registra alla NASCITA dell'account, che e'
+        # il momento in cui il contratto si forma: la pagina di accesso
+        # dice che proseguire vale come accettazione, e questa riga e'
+        # la prova che quel passaggio c'e' stato e su quale revisione.
         "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
-        "  frequency, send_weekday, timezone, locale) VALUES "
-        "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC', %s) "
+        "  frequency, send_weekday, timezone, locale, terms_accepted_at, "
+        "  terms_version) VALUES "
+        "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC', %s, now(), %s) "
         "RETURNING id::text",
-        (email, locale or "en"))
+        (email, locale or "en", VERSIONE_TERMINI))
     return cur.fetchone()[0]
 
 

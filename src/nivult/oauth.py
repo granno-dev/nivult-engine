@@ -30,6 +30,8 @@ from datetime import timedelta
 import httpx
 import psycopg
 
+from nivult.config import VERSIONE_TERMINI
+
 # Il flusso vive quanto basta ad andare dal provider e tornare. Dieci minuti
 # sono già larghi: chi ci mette di più ha abbandonato la scheda.
 FLUSSO_VALIDITA = timedelta(minutes=10)
@@ -307,9 +309,11 @@ def _collega_o_crea(cur, provider: str, subject: str,
         # è ciò che impedirà a quell'identità di raccoglierne i frutti dopo.
         cur.execute(
             "INSERT INTO users (email, plan, subscription_status, delivery_channels, "
-            "  frequency, send_weekday, timezone) VALUES "
-            "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC') RETURNING id::text",
-            (email,))
+            "  frequency, send_weekday, timezone, terms_accepted_at, "
+            "  terms_version) VALUES "
+            "(%s, 'basic', 'trialing', '{email}', 'weekly', 1, 'UTC', now(), %s) "
+            "RETURNING id::text",
+            (email, VERSIONE_TERMINI))
         uid = cur.fetchone()[0]
         if email_fidata:
             cur.execute("UPDATE users SET email_verified_at = now() WHERE id = %s", (uid,))

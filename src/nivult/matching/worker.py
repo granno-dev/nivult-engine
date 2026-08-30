@@ -41,8 +41,8 @@ from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
-from nivult.matching.llm import (GLM, motiva_e_analizza, profilo_come_testo,
-                                 valuta_offerta)
+from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, motiva_e_analizza,
+                                 profilo_come_testo, valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
 
@@ -474,10 +474,13 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             with conn.cursor() as cur:
                 cur.execute(
                     "INSERT INTO matches (user_id, job_id, cv_id, score, reason, "
-                    "  threshold_used, model, input_tokens, output_tokens) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (user_id, job_id) DO NOTHING",
+                    "  threshold_used, model, rubric_version, input_tokens, "
+                    "  output_tokens) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "ON CONFLICT (user_id, job_id) DO NOTHING",
                     (u.id, offerta["id"], u.cv_id, score, reason, threshold,
-                     MODELLO, uso.get("input"), uso.get("output")))
+                     MODELLO, VERSIONE_RUBRICA, uso.get("input"),
+                     uso.get("output")))
             esito["valutate"] += 1
             valutate_adesso.add(offerta["id"])
             if i % 50 == 49:
