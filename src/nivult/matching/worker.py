@@ -326,6 +326,38 @@ def _chiudi(conn, digest_id: str, *, status: str, valutate: int, inviate: int,
     conn.commit()
 
 
+def _segna_fallito(conn, u: Utente, errore: str) -> None:
+    """Scrive il guasto sulla riga del digest, non solo nel log.
+
+    NASCE DA UN GUASTO VERO. Il 2026-08-30 il credito GLM si e' esaurito e
+    i digest sono falliti per quattro ore di fila. Il gestore in cima al
+    giro registrava l'errore SOLO col logger: la riga restava `pending` con
+    `error_message` vuoto, quindi niente che interroghi il database poteva
+    accorgersene — gli allarmi compresi, che infatti uscivano puliti. Se ne
+    e' accorto l'utente, che il digest lo aspettava.
+
+    `failed` non blocca il ritentativo: `_digest_row` riporta a `pending`
+    una riga fallita al giro successivo, e `next_digest_at` non e' stato
+    avanzato — quindi appena la causa sparisce la consegna riparte da sola.
+
+    Il rollback prima dell'UPDATE non e' prudenza: l'eccezione puo' aver
+    lasciato la connessione in transazione abortita, e senza rollback anche
+    questa scrittura fallirebbe — perdendo di nuovo la traccia, proprio nel
+    momento in cui serve.
+    """
+    try:
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE digests SET status = 'failed', error_message = %s "
+                "WHERE user_id = %s AND scheduled_for = %s "
+                "  AND status NOT IN ('sent', 'skipped_empty')",
+                (errore, u.id, u.next_digest_at))
+        conn.commit()
+    except Exception:  # noqa: BLE001
+        log.warning("digest di %s: guasto non registrato a database", u.email)
+
+
 def _items_del_digest(conn, user_id: str) -> list[dict]:
     """I match che superano la soglia e non sono MAI stati spediti.
 
@@ -663,6 +695,7 @@ def main(argv: list[str] | None = None) -> int:
                                   threshold=args.threshold)
             except Exception as exc:  # noqa: BLE001
                 log.error("digest di %s fallito: %s", u.email, exc)
+                _segna_fallito(conn, u, str(exc)[:500])
                 e = {"utente": u.email, "stato": "errore", "errore": str(exc)[:200]}
             esiti.append(e)
             log.info("%s: %s (valutate %s, inviate %s)", u.email, e["stato"],

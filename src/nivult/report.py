@@ -123,6 +123,31 @@ def allarmi(cur) -> list[str]:
                     f"{p}: a questo ritmo il mese finisce a {proiezione} crediti su {cap} "
                     f"— la quota si esaurirebbe intorno al giorno {giorno}")
 
+    # I DIGEST FALLITI. Vengono prima di tutto il resto: un'ingestione
+    # persa si recupera la notte dopo e nessuno se ne accorge, un digest
+    # non consegnato e' il prodotto che non arriva.
+    #
+    # Mancava, e si e' visto: il 2026-08-30 il credito GLM si e' esaurito,
+    # i digest sono falliti per quattro ore e questo controllo usciva
+    # pulito. L'ha scoperto l'utente.
+    for email, n_falliti, motivo in _fetch(cur,
+        "SELECT u.email, count(*), max(d.error_message) "
+        "FROM digests d JOIN users u ON u.id = d.user_id "
+        "WHERE d.status = 'failed' AND d.started_at > now() - interval '24 hours' "
+        "GROUP BY 1 ORDER BY 2 DESC"):
+        fuori.append(f"{email}: {n_falliti} digest falliti nelle ultime 24 ore "
+                     f"— {(motivo or 'motivo non registrato')[:120]}")
+
+    # Uno slot aperto e mai chiuso: il worker e' morto a meta' del giro,
+    # senza nemmeno arrivare a scrivere il guasto. Tre ore di margine,
+    # perche' il giro parte ogni ora e un digest lento non e' un guasto.
+    for email, quando in _fetch(cur,
+        "SELECT u.email, d.scheduled_for FROM digests d "
+        "JOIN users u ON u.id = d.user_id "
+        "WHERE d.status = 'pending' AND d.started_at < now() - interval '3 hours'"):
+        fuori.append(f"{email}: digest dello slot {quando:%d/%m %H:%M} "
+                     f"rimasto aperto — il giro non l'ha mai chiuso")
+
     # Breaker rimasti aperti.
     for p, motivo in _fetch(cur,
         "SELECT provider, circuit_reason FROM provider_budget "
