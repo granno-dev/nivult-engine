@@ -338,7 +338,8 @@ def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
     return score, reason, dict(modello.last_usage)
 
 
-def _coda_analisi(offerta: dict, desiderio: str | None) -> str:
+def _coda_analisi(offerta: dict, desiderio: str | None,
+                  lingua: str | None = None) -> str:
     """La coda per le chiamate che riscrivono l'annuncio: la coda standard
     piu' i blocchi che il punteggio non usa ma il lettore si'."""
     def _blocco(v) -> str:
@@ -356,6 +357,17 @@ def _coda_analisi(offerta: dict, desiderio: str | None) -> str:
     coda = _coda_offerta(offerta, desiderio)
     if extra:
         coda += "\n\n" + "\n\n".join(extra)
+    # La lingua torna QUI, in fondo al messaggio dell'utente, e non solo
+    # nella rubrica di sistema. L'ultima cosa che il modello legge e' il
+    # testo dell'annuncio, che e' quasi sempre nella lingua del paese: su
+    # una richiesta in tedesco, con un annuncio di Torino, ha risposto in
+    # italiano. E' un errore che non si ripara da solo, perche' `lang`
+    # registra la lingua CHIESTA e non quella ottenuta: la risposta fuori
+    # lingua resta in cache e la finestra non la rigenera piu'.
+    if lingua:
+        coda += (f"\n\nSCRIVI OGNI CAMPO IN {lingua.upper()}. L'annuncio "
+                 "qui sopra e' probabilmente in un'altra lingua: traducine "
+                 "il contenuto, non copiarlo.")
     return coda
 
 
@@ -381,7 +393,7 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
     motivazione: l'analisi costa solo l'output in piu'.
     """
     corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_analisi(offerta, desiderio)}]
+        "role": "user", "content": _coda_analisi(offerta, desiderio, lingua)}]
     risposta = modello.chat(corpo, max_tokens=900)
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
@@ -397,7 +409,7 @@ def analizza_allineamento(modello: ChatModel, profilo_testo: str,
     coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
     """
     corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_analisi(offerta, desiderio)}]
+        "role": "user", "content": _coda_analisi(offerta, desiderio, lingua)}]
     risposta = modello.chat(corpo, max_tokens=900)
     return _campi_analisi(_estrai_json(risposta), lingua)
 
