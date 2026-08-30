@@ -112,8 +112,21 @@ class Riepilogo:
         self.scartate[motivo] = self.scartate.get(motivo, 0) + 1
 
 
-def _clusters_attivi(cur: psycopg.Cursor) -> dict[tuple[str, str], str]:
-    cur.execute("SELECT id::text, family, country FROM clusters WHERE status = 'active'")
+def _clusters_attivi(cur: psycopg.Cursor,
+                     solo: str | None = None) -> dict[tuple[str, str], str]:
+    """I cluster attivi, o soltanto quello chiesto.
+
+    `solo` serve all'apertura di una ricerca: chi ha appena scelto un
+    mercato non deve aspettare il giro delle 05:00 per vederlo riempirsi,
+    e travasare gli altri 1.226 mercati mentre lui aspetta la risposta
+    HTTP sarebbe assurdo.
+    """
+    sql = "SELECT id::text, family, country FROM clusters WHERE status = 'active'"
+    par: tuple = ()
+    if solo:
+        sql += " AND id = %s"
+        par = (solo,)
+    cur.execute(sql, par)
     return {(f, p): i for i, f, p in cur.fetchall()}
 
 
@@ -272,10 +285,11 @@ def _scadi_sparite(cur: psycopg.Cursor, cur_ats: psycopg.Cursor,
 
 
 def importa(conn: psycopg.Connection, conn_ats: psycopg.Connection, *,
-            giorni: int = GIORNI_FRESCHEZZA, dry_run: bool = False) -> Riepilogo:
+            giorni: int = GIORNI_FRESCHEZZA, dry_run: bool = False,
+            solo_cluster: str | None = None) -> Riepilogo:
     r = Riepilogo()
     with conn.cursor() as cur, conn_ats.cursor() as cur_ats:
-        clusters = _clusters_attivi(cur)
+        clusters = _clusters_attivi(cur, solo_cluster)
         if not clusters:
             return r
 
@@ -317,6 +331,11 @@ def importa(conn: psycopg.Connection, conn_ats: psycopg.Connection, *,
                 record_usage(cur, provider=SORGENTE, cluster_id=cluster_id,
                              run_id=run_id, requests=1, credits=0,
                              http_status=None, latency_ms=None)
+            # Lo sweep delle scadute scorre le NOSTRE righe di tutti i
+        # cluster: non c'entra con l'apertura di uno solo, e farlo
+        # aspettare a chi sta creando una ricerca sarebbe tempo
+        # regalato. Lo fa il giro delle 05:00.
+        if solo_cluster is None:
             r.scadute = _scadi_sparite(cur, cur_ats, giorni)
             conn.commit()
     return r

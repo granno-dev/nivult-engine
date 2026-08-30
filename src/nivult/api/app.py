@@ -27,13 +27,15 @@ import httpx
 import psycopg
 from psycopg import Binary
 from psycopg.types.json import Json
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
+                     Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
-from nivult import crypto, cv, storage
+from nivult import crypto, cv, ponte_ats, storage
+from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
@@ -603,8 +605,39 @@ def create_app() -> FastAPI:
              (filtri.target_role or "").strip() or None,
              filtri.industries))
 
+    def _riempi_dal_archivio(cluster_id: str) -> None:
+        """Travasa subito nel cluster appena aperto cio' che l'archivio ha.
+
+        PERCHE' NON SI ASPETTA LA NOTTE. Il sito promette il primo digest
+        entro 24 ore, e finora un mercato appena aperto restava vuoto fino
+        all'ingestione dell'una: il digest partiva puntuale e non trovava
+        niente da mandare.
+
+        Non serve pero' chiamare una fonte a pagamento per riempirlo:
+        l'archivio ATS ha gia' 31.380 offerte fresche e classificate,
+        distribuite su 1.227 combinazioni mestiere x paese. Il ponte le
+        travasa in secondi e non costa un centesimo — e' roba gia'
+        scaricata, le manca solo di essere messa sullo scaffale giusto.
+
+        In background perche' chi ha appena scelto un mercato non deve
+        guardare una rotella: la risposta parte subito, il travaso finisce
+        prima che il giro dei digest arrivi alle :10. Se fallisce non
+        succede niente di grave — l'ingestione notturna e il ponte delle
+        05:00 lo riprendono, e il primo digest riprova il giorno dopo.
+        """
+        try:
+            with psycopg.connect(database_url()) as c, \
+                 psycopg.connect(ats_database_url()) as c_ats:
+                r = ponte_ats.importa(c, c_ats, solo_cluster=cluster_id)
+            log.info("cluster %s riempito dall'archivio: %d nuove, %d aggiornate",
+                     cluster_id, r.importate, r.aggiornate)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("cluster %s: riempimento dall'archivio fallito: %s",
+                        cluster_id, str(exc)[:200])
+
     @app.post("/me/ricerca", status_code=201)
-    def apri_ricerca(corpo: NuovaRicerca, uid: str = Depends(utente),
+    def apri_ricerca(corpo: NuovaRicerca, sfondo: BackgroundTasks,
+                     uid: str = Depends(utente),
                      conn=Depends(connessione)):
         """Apre una ricerca e ci iscrive l'utente, creando il cluster se non
         c'e' ancora.
@@ -669,6 +702,9 @@ def create_app() -> FastAPI:
                         "FROM clusters WHERE id = %s", (cluster_id,))
             _, gia_letto = cur.fetchone()
         conn.commit()
+        # Il mercato si riempie SUBITO da cio' che abbiamo gia' in archivio,
+        # senza chiamare nessuna fonte a pagamento e senza aspettare la notte.
+        sfondo.add_task(_riempi_dal_archivio, cluster_id)
         # `nuovo` dice al sito se il primo digest deve aspettare la prima
         # ingestione notturna: un mercato appena aperto non ha ancora offerte,
         # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.

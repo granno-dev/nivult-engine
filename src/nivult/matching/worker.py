@@ -411,7 +411,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
     if not u.cv_id:
         _chiudi(conn, digest_id, status="failed", valutate=0, inviate=0,
                 error="nessun CV attivo: profilo non valutabile")
-        _rischedula(conn, u, started)
+        _rischedula(conn, u, started, consegnato=False)
         esito["stato"] = "failed_senza_cv"
         return esito
 
@@ -483,7 +483,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                 _chiudi(conn, digest_id, status="skipped_empty",
                         valutate=esito["valutate"], inviate=0)
                 esito["stato"] = "skipped_empty"
-            _rischedula(conn, u, started)
+            _rischedula(conn, u, started, consegnato=False)
             return esito
 
         if "whatsapp" in u.delivery_channels:
@@ -641,7 +641,7 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             1 for it in items if it["id"] not in valutate_adesso)
         _chiudi(conn, digest_id, status="sent", valutate=alimentano,
                 inviate=len(items), message_id=message_id)
-        _rischedula(conn, u, started)
+        _rischedula(conn, u, started, consegnato=True)
         esito["stato"] = "sent"
         esito["inviate"] = len(items)
         return esito
@@ -658,11 +658,37 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
             conn.commit()
 
 
-def _rischedula(conn, u: Utente, adesso: datetime) -> None:
+def _rischedula(conn, u: Utente, adesso: datetime, *, consegnato: bool) -> None:
+    """Sposta l'appuntamento. Il PRIMO digest pero' non si perde per un vuoto.
+
+    NASCE DA UN CONTO CHE NON TORNAVA. Il sito promette il primo digest
+    entro 24 ore, ma la frequenza predefinita e' SETTIMANALE — e un giro
+    vuoto avanzava lo stesso allo slot regolare. Chi si iscriveva su un
+    mercato appena aperto riceveva quindi: un digest vuoto entro l'ora,
+    l'appuntamento spostato al lunedi' dopo, e il primo digest vero fino a
+    SETTE GIORNI piu' tardi. Chi sceglieva mensile, fino a un mese. Nel
+    frattempo `last_digest_at` veniva scritto lo stesso, quindi l'utente
+    risultava servito.
+
+    Finche' non e' arrivato NIENTE davvero, il primo digest riprova il
+    giorno dopo invece di cadere nella cadenza scelta: e' il momento in cui
+    una persona ha appena consegnato il proprio CV e sta decidendo se
+    fidarsi. Dal primo invio riuscito in poi comanda la frequenza, sempre.
+    """
+    mai_ricevuto = u.last_digest_at is None
+    if not consegnato and mai_ricevuto:
+        prossimo = adesso + timedelta(days=1)
+    else:
+        prossimo = prossimo_slot(u, adesso)
     with conn.cursor() as cur:
-        cur.execute("UPDATE users SET last_digest_at = %s, next_digest_at = %s "
-                    "WHERE id = %s",
-                    (u.next_digest_at, prossimo_slot(u, adesso), u.id))
+        cur.execute(
+            "UPDATE users SET last_digest_at = %s, next_digest_at = %s "
+            "WHERE id = %s",
+            # `last_digest_at` resta NULL finche' non e' partito niente: e'
+            # cio' che rende riconoscibile «non ha mai ricevuto nulla» al
+            # giro successivo, ed e' anche piu' onesto verso il pannello.
+            (u.next_digest_at if consegnato else u.last_digest_at,
+             prossimo, u.id))
     conn.commit()
 
 
