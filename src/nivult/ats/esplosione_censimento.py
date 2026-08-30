@@ -155,6 +155,70 @@ def _nome_a_dominio(nome: str, iso: str) -> str | None:
     return nome + tld
 
 
+
+def scarica_gleif_completo(dsn: str, paesi: str) -> dict:
+    """Scarica TUTTE le aziende di un paese con query multiple per lettera.
+
+    GLEIF limita a 10.000 risultati per query, ma il limite è PER QUERY
+    non globale. Con 24 query (una per lettera) per paese, possiamo
+    catturare tutte le aziende che contengono quella lettera nel nome.
+    """
+    stats = {"aziende": 0, "inserite": 0, "query": 0}
+    
+    with httpx.Client(timeout=30,
+                      headers={"Accept": "application/vnd.api+json"}) as c:
+        for iso in paesi.split(","):
+            for lettera in "ABCDEFGHIJKLMNOPQRSTUVWZ":
+                page = 1
+                while page <= 50:  # max 10k per query
+                    try:
+                        r = c.get("https://api.gleif.org/api/v1/lei-records",
+                                  params={
+                                      "filter[entity.legalAddress.country]": iso,
+                                      "filter[entity.legalName]": lettera,
+                                      "page[size]": "200",
+                                      "page[number]": str(page),
+                                  })
+                        if r.status_code != 200:
+                            break
+                        data = r.json().get("data", [])
+                        if not data:
+                            break
+                    except httpx.HTTPError:
+                        break
+
+                    for item in data:
+                        attr = item.get("attributes", {})
+                        entity = attr.get("entity", {})
+                        ln = entity.get("legalName") or {}
+                        nome = ln.get("name", "") if isinstance(ln, dict) else str(ln or "")
+                        if not nome or len(nome) < 3:
+                            continue
+                        stats["aziende"] += 1
+
+                        dominio = _nome_a_dominio(nome, iso)
+                        if not dominio:
+                            continue
+
+                        with psycopg.connect(dsn) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO company_domains
+                                      (domain, company_name, country, source)
+                                    VALUES (%s, %s, %s, 'gleif')
+                                    ON CONFLICT (domain) DO NOTHING
+                                """, (dominio, nome[:200], iso))
+                                if cur.rowcount:
+                                    stats["inserite"] += 1
+                            conn.commit()
+
+                    page += 1
+                stats["query"] += 1
+                log.info("  %s/%s: %d aziende (%d inserite, %d query)",
+                         iso, lettera, stats["aziende"],
+                         stats["inserite"], stats["query"])
+    return stats
+
 # ── 2. SCHEMA.ORG UNIVERSALE ──────────────────────────────────────
 
 def leggi_schema_org(dsn: str, limite: int = 100) -> dict:
@@ -263,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--paesi", default="IT,FR,DE,GB,ES,NL,BE",
                     help="paesi ISO separati da virgola")
     ap.add_argument("--per-paese", type=int, default=2000)
+    ap.add_argument("--gleif-completo", action="store_true",
+                    help="scarica TUTTE le aziende con query per lettera")
     ap.add_argument("--schema-org", action="store_true",
                     help="analizza le aziende senza offerte con JSON-LD/sitemap")
     ap.add_argument("--limite", type=int, default=100)
@@ -272,12 +338,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.gleif:
         s = scarica_gleif(ATS_DSN, args.paesi, args.per_paese)
         print(f"\nGLEIF: {s}")
+    if args.gleif_completo:
+        s = scarica_gleif_completo(ATS_DSN, args.paesi)
+        print(f"\nGLEIF completo: {s}")
     if args.schema_org:
         s = leggi_schema_org(ATS_DSN, args.limite)
         print(f"\nSchema.org: {s}")
     if args.stats:
         stats(ATS_DSN)
-    if not (args.gleif or args.schema_org or args.stats):
+    if not (args.gleif or args.gleif_completo
+            or args.schema_org or args.stats):
         ap.print_help()
     return 0
 
