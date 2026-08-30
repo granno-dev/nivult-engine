@@ -50,9 +50,16 @@ _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b")
 # internazionale o zero iniziale, poi da 8 a 13 cifre con spazi, punti,
 # trattini o parentesi in mezzo. Il confine a sinistra esclude le cifre
 # attaccate, cosi' un importo o un anno non diventano un telefono.
+#
+# SPAZI ORIZZONTALI, non `\s`: `\s` comprende il ritorno a capo, e con
+# quello la regex saltava a fine riga per continuare a contare cifre.
+# Su un CV vero «+39 333 1234567» seguito da «2020-2024 HR, Ferrero» si
+# mangiava anche il «202» dell'anno, e la riga successiva arrivava al
+# modello monca. Un numero di telefono sta su una riga sola.
 _TELEFONO = re.compile(
-    r"(?<![\d/])(?:\+|00)\s?\d{1,3}[\s.\-/]?(?:\(0\)[\s.\-]?)?(?:\d[\s.\-]?){7,12}\d"
-    r"|(?<![\d/+])0\d{1,3}[\s.\-/]?(?:\d[\s.\-]?){6,11}\d(?![\d/])")
+    r"(?<![\d/])(?:\+|00)[ \t]?\d{1,3}[ \t.\-/]?(?:\(0\)[ \t.\-]?)?"
+    r"(?:\d[ \t.\-]?){7,12}\d"
+    r"|(?<![\d/+])0\d{1,3}[ \t.\-/]?(?:\d[ \t.\-]?){6,11}\d(?![\d/])")
 
 _URL = re.compile(
     r"\b(?:https?://|www\.)\S+"
@@ -73,7 +80,7 @@ _IDENTIFICATIVI = [
         r"\b(?:p\.?\s?iva|partita iva|vat|nif|n\.?i\.?f|dni|nie|cif"
         r"|pesel|personnummer|person\s?nr|bsn|nino|national insurance"
         r"|steuer-?id|steuernummer|num[eé]ro de s[eé]curit[eé] sociale"
-        r"|nir|ssn|social security)\s*[:.\-]?\s*[A-Z0-9][A-Z0-9\s.\-/]{5,20}",
+        r"|nir|ssn|social security)[ \t]*[:.\-]?[ \t]*[A-Z0-9][A-Z0-9 \t.\-/]{5,20}",
         re.I),
     re.compile(r"\b[A-Z]{2}\d{2}[\sA-Z0-9]{11,30}\b"),   # IBAN
 ]
@@ -85,7 +92,7 @@ _NASCITA = re.compile(
     r"\b(?:nat[oa](?: il)?|data di nascita|date of birth|d\.?o\.?b|born"
     r"|geboren|geburtsdatum|n[eé]\(?e\)? le|fecha de nacimiento"
     r"|data de nascimento|geboortedatum|f[oö]dd|data urodzenia)"
-    r"\s*[:.\-]?\s*\d{1,4}[\s./\-]\w{1,9}[\s./\-]\d{2,4}", re.I)
+    r"[ \t]*[:.\-]?[ \t]*\d{1,4}[ \t./\-]\w{1,9}[ \t./\-]\d{2,4}", re.I)
 
 # L'indirizzo di casa: una via riconosciuta dalla sua parola, fino a fine
 # riga. Le parole coprono le nove lingue del prodotto.
@@ -103,8 +110,19 @@ _VIA = re.compile(
 
 # Il CAP con la citta', nelle forme europee piu' comuni.
 _CAP = re.compile(
-    r"\b(?:\d{5}|\d{4}\s?[A-Z]{2}|[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})"
-    r"\s+[A-ZÀ-Ý][\w'’\-]+(?:\s+[A-ZÀ-Ý][\w'’\-]+)?\b")
+    # Il ramo olandese (`1012 AB`) escludeva gli anni: su «2018-2022 HR
+    # Business Partner» leggeva «2022 HR» come CAP e «Business Partner»
+    # come citta', e si portava via meta' della riga di un incarico. Un
+    # CV e' fatto di anni seguiti da sigle in maiuscolo: qui il falso
+    # positivo non e' un caso limite, e' il caso normale.
+    r"\b(?:\d{5}|(?!19\d\d|20\d\d)\d{4}[ \t]?[A-Z]{2}"
+    r"|[A-Z]{1,2}\d{1,2}[A-Z]?[ \t]?\d[A-Z]{2})"
+    r"[ \t]+[A-ZÀ-Ý][\w'’\-]+(?:[ \t]+[A-ZÀ-Ý][\w'’\-]+)?\b")
+
+# Le particelle nobiliari e patronimiche delle nove lingue del prodotto.
+PARTICELLE = {"de", "del", "della", "dello", "dei", "degli", "di", "da",
+              "dal", "dalla", "van", "von", "der", "den", "ter", "te",
+              "du", "des", "le", "la", "y", "dos", "das", "do", "af", "av"}
 
 _PAROLE_NON_NOME = {
     "curriculum", "vitae", "resume", "résumé", "cv", "lebenslauf",
@@ -139,6 +157,11 @@ def _nome_in_testa(testo: str) -> str | None:
     testo: meglio un nome che passa di un pezzo di mestiere cancellato
     perche' somigliava a un nome.
     """
+    # «Jan de Vries», «Ludwig von Meyer», «Maria della Rovere»: la
+    # particella e' minuscola per grammatica, non per distrazione, e
+    # pretendere la maiuscola su OGNI parola lasciava passare il cognome
+    # intero. Restano necessarie almeno due parole maiuscole, altrimenti
+    # «responsabile di reparto» diventerebbe un nome.
     for riga in testo.splitlines()[:12]:
         riga = riga.strip(" \t|·•-–—:")
         if not riga or len(riga) > 60:
@@ -150,7 +173,10 @@ def _nome_in_testa(testo: str) -> str | None:
             continue
         if any(p.lower().strip(".,") in _PAROLE_NON_NOME for p in parole):
             continue
-        if all(re.match(r"^[A-ZÀ-Ý][\w'’\-]*[.,]?$", p) for p in parole):
+        maiuscole = [p for p in parole
+                     if re.match(r"^[A-ZÀ-Ý][\w'’\-]*[.,]?$", p)]
+        altre = [p for p in parole if p not in maiuscole]
+        if len(maiuscole) >= 2 and all(p.lower() in PARTICELLE for p in altre):
             return riga
     return None
 
