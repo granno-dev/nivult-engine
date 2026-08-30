@@ -871,9 +871,28 @@ def create_app() -> FastAPI:
                     "sedi": [],
                     "note": (f"{pr[4]} anni di esperienza" if pr[4] else None),
                 }
+                # `offerta_come_testo` legge l'annuncio con i NOSTRI nomi
+                # di campo — `job['id']`, `job['title']`, in parentesi quadre —
+                # mentre `raw` e' il payload della fonte, che quei nomi non li
+                # ha. Passandogli `raw` la chiamata moriva su KeyError('id'),
+                # l'except la registrava come riga di log e la finestra
+                # restituiva l'analisi vecchia: e' per questo che il dettaglio
+                # non seguiva piu' la lingua del pannello.
+                offerta = {
+                    "id": match_id,
+                    "title": titolo,
+                    "organization": azienda,
+                    "cities": list(citta or []),
+                    **{c: raw.get(c) for c in (
+                        "ai_experience_level", "ai_work_arrangement",
+                        "ai_visa_sponsorship", "ai_key_skills",
+                        "ai_requirements_summary",
+                        "ai_core_responsibilities", "ai_benefits",
+                        "ai_working_hours")},
+                }
                 try:
                     nuova = analizza_allineamento(
-                        GLM(), profilo_come_testo(profilo), raw,
+                        GLM(), profilo_come_testo(profilo), offerta,
                         lingua=(lingua_voluta
                                 or LINGUA_PER_GLM.get(pr[5], "English")))
                     with conn.cursor() as cur:
