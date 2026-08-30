@@ -47,7 +47,18 @@ WHERE jc.cluster_id = %(cluster_id)s
        OR j.ai_job_language = ANY(%(languages)s::text[]))
   AND (cardinality(%(arrangements)s::text[]) = 0 OR j.ai_work_arrangement IS NULL
        OR j.ai_work_arrangement = ANY(%(arrangements)s::text[]))
+  -- `OTHER` non esclude, come NULL: e' un'assenza travestita da valore.
+  -- Misurato sul cluster Risorse umane x Italia: 116 offerte su 281 —
+  -- il gruppo piu' numeroso — portano OTHER, e leggendole sono normali
+  -- posizioni a tempo indeterminato («Addetto/a risorse umane a tempo
+  -- indeterminato», classificata OTHER). Fantastic ci mette dentro cio'
+  -- che non sa classificare, non un tipo di contratto insolito.
+  --
+  -- Escluderle e' lo stesso errore del `false` sul visto e della stringa
+  -- vuota sul settore: chi chiede «solo tempo pieno» perde offerte a
+  -- tempo pieno, per un motivo che non ha scelto.
   AND (cardinality(%(employment_types)s::text[]) = 0 OR j.ai_employment_type IS NULL
+       OR j.ai_employment_type = 'OTHER'
        OR j.ai_employment_type = ANY(%(employment_types)s::text[]))
   -- accepted_employer_kinds non è mai vuoto: il default accetta tutti e tre
   -- i tipi e restringere è una scelta esplicita (vincolo in 0019).
