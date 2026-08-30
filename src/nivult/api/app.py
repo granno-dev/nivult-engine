@@ -785,13 +785,8 @@ def create_app() -> FastAPI:
             righe = cur.fetchall()
             cur.execute("SELECT count(*) FROM matches WHERE user_id = %s", (uid,))
             lette = cur.fetchone()[0]
-            # Il primo gradino dell'imbuto che il pannello racconta: quante
-            # offerte vive ci sono nel corpus, prima di ogni filtro.
-            cur.execute("SELECT count(*) FROM jobs WHERE purged_at IS NULL")
-            corpus = cur.fetchone()[0]
         return {
             "valutate": lette,
-            "corpus": corpus,
             "offerte": [{
                 "punteggio": r[0], "motivo": r[1],
                 "quando": r[2].isoformat() if r[2] else None,
