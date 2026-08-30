@@ -18,6 +18,7 @@ import json
 import re
 
 from nivult.matching.llm import ChatModel
+from nivult.pseudonimizza import benda
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_CARATTERI = 25_000   # il CV intero di rado li supera; tagliare protegge
@@ -98,9 +99,18 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
     rubrica = RUBRICA_ESTRAZIONE.format(
         famiglie=", ".join(famiglie), seniority=", ".join(seniority),
         lingue=", ".join(lingue))
+    # Il CV esce dal SEE: quello che parte e' la versione bendata. Nome,
+    # contatti, indirizzo, data di nascita e codici nazionali non servono
+    # a proporre un profilo professionale, e mandarli sarebbe trasferire
+    # dati personali senza uno scopo. Le AZIENDE restano: `roles[].employer`
+    # e' un campo che questa stessa estrazione deve restituire.
+    #
+    # Misurato su un CV di prova: profilo identico, e una competenza in
+    # piu' trovata. La bendatura non costa qualita'.
+    coperto = benda(testo_cv)
     risposta = modello.chat([
         {"role": "system", "content": rubrica},
-        {"role": "user", "content": "CV\n" + testo_cv}], max_tokens=2500)
+        {"role": "user", "content": "CV\n" + coperto.testo}], max_tokens=2500)
     grezzo = _json(risposta)
 
     def puliti(chiave: str, ammessi: list[str], limite: int) -> list[str]:
