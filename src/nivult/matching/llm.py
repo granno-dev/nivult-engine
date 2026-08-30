@@ -138,7 +138,28 @@ ruolo e il livello sono giusti, quelle competenze sono un VANTAGGIO che il
 candidato porta, non un requisito che l'annuncio ha mancato.
 
 Abbassa il punteggio solo per cio' che l'annuncio DICE e che diverge: un
-mestiere diverso, un livello lontano, una sede o una lingua incompatibili.
+mestiere diverso, un livello lontano, una lingua che il candidato non parla.
+
+IL PAESE E' GIA' SCELTO. Questa offerta viene da una ricerca che il candidato
+ha aperto su un paese preciso: se l'annuncio e' in quel paese, la citta' NON
+conta e non abbassa il punteggio. Il candidato non ha mai dichiarato una
+citta' — dedurla dal CV e penalizzarla significa inventargli un vincolo che
+non ha posto. Abbassa per la sede solo se l'annuncio dice che si lavora in un
+paese DIVERSO da quello della ricerca.
+
+IL RUOLO A CUI PUNTA viene PRIMA della sua storia, quando c'e': dice cosa
+vuole fare adesso, non cosa ha gia' fatto. E se nomina una FAMIGLIA
+professionale intera invece di un ruolo preciso — «Risorse umane»,
+«Ingegneria», «Finanza» — sta dicendo che gli va bene QUALUNQUE ruolo di
+quella famiglia al livello giusto. In quel caso non restringere alla
+specializzazione che leggi nel CV: una ricerca larga e' una scelta, non una
+distrazione.
+
+ANCHE LA PROFESSIONE E' GIA' SCELTA. La ricerca e' su una famiglia
+professionale intera: dentro quella famiglia, una specializzazione diversa da
+quella del CV e' un passaggio laterale credibile — fascia 50-69, non 20-49.
+Un consulente di trasformazione HR che guarda una posizione di recruiting o
+di payroll resta nel suo mestiere: cambia il taglio, non il campo.
 
 Non premiare un'offerta perche' prestigiosa o ben scritta: conta solo
 l'aderenza al profilo.
