@@ -248,6 +248,100 @@ def scarica_francetravail(dsn: str, limite: int = 1000) -> dict:
     return stats
 
 
+
+
+# ── BUNDESAGENTUR FÜR ARBEIT (Germania) ──────────────────────────
+
+def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
+    """Bundesagentur Jobsuche API v6 — 127.732 offerte, gratis.
+
+    La chiave 'jobboerse-jobsuche' è pubblica e documentata nella
+    specifica OpenAPI. Il v6 funziona (il v4 dà 403 a volte).
+    Le offerte hanno URL diretto all'annuncio originale.
+    """
+    stats = {"offerte": 0, "nuove": 0, "aggiornate": 0, "errori": 0}
+    base = "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
+    headers = {"X-API-Key": "jobboerse-jobsuche",
+               "User-Agent": "nivult-ats/0.1"}
+    PER_PAGINA = 100
+
+    with httpx.Client(timeout=30, headers=headers) as c:
+        for offset in range(0, limite, PER_PAGINA):
+            try:
+                # l'API tedesca usa page a partire da 1 (0 dà 400)
+                r = c.get(base, params={
+                    "size": PER_PAGINA,
+                    "page": offset // PER_PAGINA + 1,
+                })
+                if r.status_code != 200:
+                    log.warning("BA %d a offset %d", r.status_code, offset)
+                    break
+                d = r.json()
+                offerte = d.get("ergebnisliste", [])
+                if not offerte:
+                    break
+            except httpx.HTTPError as exc:
+                log.warning("BA errore: %s", exc)
+                stats["errori"] += 1
+                break
+
+            for off in offerte:
+                refnr = off.get("referenznummer") or ""
+                if not refnr:
+                    continue
+                stats["offerte"] += 1
+
+                titolo = off.get("stellenangebotsTitel") or ""
+                firma = off.get("firma") or ""
+                url = off.get("externeURL") or ""
+
+                # luogo
+                locs = off.get("stellenlokationen") or []
+                citta = None
+                if locs and isinstance(locs[0], dict):
+                    addr = locs[0].get("adresse") or {}
+                    citta = addr.get("ort")
+
+                # data di pubblicazione
+                pubbl = off.get("datumErsteVeroeffentlichung")
+                try:
+                    dt = datetime.fromisoformat(f"{pubbl}T00:00:00+00:00") if pubbl else None
+                except ValueError:
+                    dt = None
+
+                # tipo contratto
+                tipo = None
+                if off.get("arbeitszeitVollzeit"):
+                    tipo = "FULL_TIME"
+                elif off.get("arbeitszeitTeilzeitFlexibel"):
+                    tipo = "PART_TIME"
+
+                with psycopg.connect(dsn) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO ats_jobs
+                              (platform_id, slug, external_id, title, url,
+                               location, country, city, posted_at, raw)
+                            VALUES ('bundesanstellung', 'jobboerse', %s, %s, %s,
+                                    %s, 'DE', %s, %s, %s)
+                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                              title = EXCLUDED.title, url = EXCLUDED.url,
+                              location = EXCLUDED.location, city = EXCLUDED.city,
+                              posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                              fetched_at = now()
+                            RETURNING (xmax = 0) AS is_new
+                        """, (refnr, titolo, url, citta, citta, dt,
+                              psycopg.types.json.Json(off)))
+                        r2 = cur.fetchone()
+                        if r2 and r2[0]:
+                            stats["nuove"] += 1
+                        else:
+                            stats["aggiornate"] += 1
+                    conn.commit()
+
+    log.info("Bundesagentur: %s", stats)
+    return stats
+
 # ── STATISTICHE ────────────────────────────────────────────────────
 
 def stats(dsn: str) -> None:
@@ -258,7 +352,7 @@ def stats(dsn: str) -> None:
                     WHERE posted_at > now() - interval '7 days')
                 FROM ats_jobs
                 WHERE platform_id IN ('arbetsformedlingen', 'francetravail',
-                                      'bundesanstellung')
+                                      'bundesanstellung', 'bundesanstellung')
                 GROUP BY 1
             """)
             print("\nServizi pubblici:")
@@ -275,6 +369,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="scarica da Arbetsförmedlingen (Svezia, gratis)")
     ap.add_argument("--francetravail", action="store_true",
                     help="scarica da France Travail (serve OAuth2)")
+    ap.add_argument("--bundesanstellung", action="store_true",
+                    help="scarica da Bundesagentur (Germania, gratis)")
     ap.add_argument("--limite", type=int, default=1000)
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
@@ -285,9 +381,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.francetravail:
         s = scarica_francetravail(ATS_DSN, args.limite)
         print(f"\nFrance Travail: {s}")
+    if args.bundesanstellung:
+        s = scarica_bundesagentur(ATS_DSN, args.limite)
+        print(f"\nBundesagentur: {s}")
     if args.stats:
         stats(ATS_DSN)
-    if not (args.arbetsformedlingen or args.francetravail or args.stats):
+    if not (args.arbetsformedlingen or args.francetravail
+            or args.bundesanstellung or args.stats):
         ap.print_help()
     return 0
 
