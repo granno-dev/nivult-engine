@@ -126,9 +126,9 @@ if [ -n "$FRANCE_TRAVAIL_CLIENT_ID" ]; then
     && echo "   ok" || echo "   FALLITO"
 fi
 
-# ── 6. Classificazione GLM: 1500 nuove offerte per notte ──────────
-echo "── classificatore (1500)"
-"$PY" -m nivult.ats.classificatore --limite 1500 \
+# ── 6. Classificazione veloce: dizionario multilingue, zero AI ───
+echo "── classificatore veloce (5000)"
+"$PY" -m nivult.ats.classificatore_veloce --limite 5000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
