@@ -93,6 +93,56 @@ def deduce_expired(conn: psycopg.Connection, *, grace_hours: int,
     return totali
 
 
+# I segnali nel titolo, per la correzione qui sotto. Volutamente
+# CONSERVATIVI e senza confini di parola sul lato junior: «international»
+# contiene «intern» e viene risparmiata dalla correzione. Il costo delle
+# due direzioni non e' simmetrico — una correzione mancata lascia
+# un'offerta filtrata com'era gia', una correzione sbagliata metterebbe
+# uno stage vero nel giro di valutazione di un senior (dove comunque il
+# punteggio lo boccerebbe: il danno vero e' solo il costo del giudizio).
+_TITOLO_SENIOR = (r"responsabile|direttore|director|manager|specialist"
+                  r"|head of|lead|senior|business partner"
+                  r"|coordinator|coordinatore")
+_TITOLO_JUNIOR = r"junior|stage|intern|trainee|graduate|assistente|apprend|tirocin"
+
+
+def distrust_seniority_tags(conn: psycopg.Connection, *,
+                            dry_run: bool = False) -> int:
+    """L'etichetta «0-2» smentita dal titolo diventa sconosciuta.
+
+    Fantastic marca a livello «0-2» anche offerte con titoli da quadro —
+    misurato il 2026-08-31 sul cluster Risorse umane x Italia: 13 su 167,
+    fra cui un «Responsabile Risorse Umane». Un utente con la fascia
+    mid/senior le perde IN SILENZIO, per un'etichetta che non ha scelto:
+    e' lo stesso vizio del false sul visto e della stringa vuota sul
+    settore — un valore sbagliato che filtra come se fosse vero.
+
+    La cura e' la stessa di allora: il valore inattendibile diventa
+    ASSENZA (NULL), e l'assenza non filtra mai — l'offerta arriva al
+    giudizio, che la pesa contro il CV vero. Non si corregge al valore
+    «giusto»: indovinarlo sarebbe un'altra etichetta inventata.
+
+    Gira ogni notte perche' la re-ingestione riscrive il campo dalla
+    fonte: la correzione e' un contrappeso permanente, non una tantum.
+    """
+    sql = ("UPDATE jobs SET ai_experience_level = NULL "
+           " WHERE status = 'active' AND ai_experience_level = '0-2' "
+           "   AND title ~* %s AND title !~* %s")
+    with conn.cursor() as cur:
+        if dry_run:
+            cur.execute("SELECT count(*) FROM jobs "
+                        " WHERE status = 'active' AND ai_experience_level = '0-2' "
+                        "   AND title ~* %s AND title !~* %s",
+                        (_TITOLO_SENIOR, _TITOLO_JUNIOR))
+            n = cur.fetchone()[0]
+            conn.rollback()
+            return n
+        cur.execute(sql, (_TITOLO_SENIOR, _TITOLO_JUNIOR))
+        n = cur.rowcount
+    conn.commit()
+    return n
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ingestion.sweep", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -120,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
         dedotte = deduce_expired(conn, grace_hours=args.grace_hours) \
             if not args.dry_run else {}
 
+        sfiduciate = distrust_seniority_tags(conn, dry_run=args.dry_run)
+
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT count(*) FILTER (WHERE status='active'), "
@@ -136,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     print("\nscadenze dedotte:")
     for k, v in (dedotte or {"—": 0}).items():
         print(f"  {k:<38} {v}")
+    if sfiduciate:
+        print(f"\netichette seniority smentite dal titolo -> sconosciute: {sfiduciate}")
     print(f"\nstato: {attive} attive, {scadute} scadute, {rimosse} rimosse")
     if cieche:
         print(f"  {cieche} offerte in cluster con fetch troncate: lì la scadenza "

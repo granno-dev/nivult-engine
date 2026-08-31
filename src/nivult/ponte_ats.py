@@ -30,9 +30,15 @@ fonte senza toccare niente a valle.
     sbagliato: il ponte importa ciò di cui è sicuro;
   · con un paese — famiglia × paese È la definizione di cluster, senza
     paese non c'è dove metterla;
-  · con una data — `jobs.date_posted` è NOT NULL, e senza data l'offerta
-    non è nemmeno scrivibile;
-  · fresca — vedi sotto, ed è la parte che protegge il prodotto.
+  · con una data — `jobs.date_posted` è NOT NULL. Quando la pagina
+    carriera non la espone (quasi metà del corpus utile), vale l'ultima
+    volta che lo scraping l'ha vista viva: per una pagina carriera
+    «ancora pubblicata dal datore» è un segnale di vita più forte della
+    data di pubblicazione;
+  · fresca — vedi sotto, ed è la parte che protegge il prodotto. La
+    finestra si applica alla data col ripiego: un'offerta senza data
+    resta dentro finché lo scraping continua a vederla, e muore quando
+    sparisce dal sito.
 
 **La freschezza non è prudenza, è una toppa.** Nel database ATS non è
 mai scaduto niente: `expired_at` è NULL su tutte le righe, la più vecchia
@@ -163,7 +169,8 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
     # `ats_companies.company_name`, ed e' dominio dell'ATS: qui non si tocca.
     cur_ats.execute(
         """
-        SELECT j.id::text, j.title, j.url, j.country, j.city, j.posted_at,
+        SELECT j.id::text, j.title, j.url, j.country, j.city,
+               COALESCE(j.posted_at, j.fetched_at) AS posted_at,
                j.salary_min, j.salary_max, j.salary_currency, j.raw,
                c.family,
                COALESCE(co.company_name,
@@ -177,8 +184,18 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
         LEFT JOIN ats_companies co
                ON co.platform_id = j.platform_id AND co.slug = j.slug
         WHERE j.expired_at IS NULL
-          AND j.posted_at IS NOT NULL
-          AND j.posted_at >= %s
+          -- La data di pubblicazione ha un RIPIEGO: quando la pagina
+          -- carriera non la espone (misurato: 45 offerte HR/Italia su 94,
+          -- quasi meta' del corpus utile), vale l'ultima volta che lo
+          -- scraping l'ha vista viva. `fetched_at` viene rinfrescato ogni
+          -- notte, quindi il suo significato e' «ancora pubblicata sul
+          -- sito del datore» — che per una pagina carriera e' un segnale
+          -- di vita piu' forte della data di pubblicazione: se fosse
+          -- chiusa l'avrebbero tolta, e lo sweep a monte la marchera'
+          -- scaduta quando sparisce. Il requisito secco `posted_at IS NOT
+          -- NULL` buttava meta' del mercato per un campo che il sito non
+          -- scrive.
+          AND COALESCE(j.posted_at, j.fetched_at) >= %s
         """,
         (famiglie, paesi, soglia),
     )
@@ -268,9 +285,12 @@ def _scadi_sparite(cur: psycopg.Cursor, cur_ats: psycopg.Cursor,
 
     soglia = datetime.now(timezone.utc) - timedelta(days=giorni)
     cur_ats.execute(
+        # Stesso ripiego dell'idoneita', o le offerte senza data entrate
+        # col COALESCE verrebbero marcate scadute al giro dopo da questo
+        # stesso sweep: i due criteri devono restare gemelli.
         "SELECT id::text FROM ats_jobs "
         "WHERE id::text = ANY(%s) AND expired_at IS NULL "
-        "  AND posted_at IS NOT NULL AND posted_at >= %s",
+        "  AND COALESCE(posted_at, fetched_at) >= %s",
         ([sid for _, sid in nostre], soglia),
     )
     ancora_valide = {r[0] for r in cur_ats.fetchall()}
