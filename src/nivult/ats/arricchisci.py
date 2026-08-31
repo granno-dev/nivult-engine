@@ -142,31 +142,247 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
     return stats
 
 
-def arricchisci_da_azienda(dsn: str) -> int:
-    """Ripiego: il paese dell'azienda per le offerte senza paese.
+# Il paese scritto NEL TESTO della localita'. Nomi per esteso nelle
+# lingue in cui le piattaforme li scrivono davvero (inglese, lingua
+# locale, italiano), piu' le sigle inequivocabili. NIENTE citta': sapere
+# che «Boston» sta in America e' conoscenza geografica, e la regola di
+# casa vieta di riempire a occhio — qui si legge solo cio' che la fonte
+# ha scritto. «Georgia» manca apposta: e' uno stato USA e un paese.
+PAESE_NEL_TESTO = {
+    "IT": ["italy", "italia", "italien", "italie"],
+    "FR": ["france", "francia", "frankreich", "frankrijk"],
+    "DE": ["germany", "deutschland", "germania", "allemagne", "alemania"],
+    "ES": ["spain", "espana", "españa", "spagna", "espagne", "spanien"],
+    "PT": ["portugal", "portogallo"],
+    "NL": ["netherlands", "nederland", "paesi bassi", "olanda", "the netherlands", "pays-bas"],
+    "BE": ["belgium", "belgique", "belgie", "belgië", "belgio", "belgien"],
+    "AT": ["austria", "osterreich", "österreich", "autriche"],
+    "CH": ["switzerland", "schweiz", "svizzera", "suisse"],
+    "GB": ["united kingdom", "great britain", "england", "scotland", "wales",
+           "regno unito", "inghilterra", "uk"],
+    "IE": ["ireland", "irlanda", "irland"],
+    "SE": ["sweden", "sverige", "svezia", "suede", "suède"],
+    "NO": ["norway", "norge", "norvegia"],
+    "DK": ["denmark", "danmark", "danimarca"],
+    "FI": ["finland", "suomi", "finlandia"],
+    "PL": ["poland", "polska", "polonia", "polen"],
+    "CZ": ["czech republic", "czechia", "cesko", "česko", "repubblica ceca"],
+    "SK": ["slovakia", "slovensko", "slovacchia"],
+    "HU": ["hungary", "magyarorszag", "magyarország", "ungheria"],
+    "RO": ["romania", "românia"],
+    "BG": ["bulgaria"],
+    "GR": ["greece", "grecia", "hellas"],
+    "HR": ["croatia", "hrvatska", "croazia"],
+    "SI": ["slovenia", "slovenija"],
+    "EE": ["estonia", "eesti"],
+    "LV": ["latvia", "latvija", "lettonia"],
+    "LT": ["lithuania", "lietuva", "lituania"],
+    "LU": ["luxembourg", "lussemburgo", "luxemburg"],
+    "US": ["united states", "usa", "u.s.a", "stati uniti", "estados unidos"],
+    "CA": ["canada"],
+    "MX": ["mexico", "méxico", "messico"],
+    "BR": ["brazil", "brasil", "brasile"],
+    "IN": ["india"],
+    "CN": ["china", "cina"],
+    "JP": ["japan", "giappone"],
+    "AU": ["australia"],
+    "TW": ["taiwan"],
+    "SG": ["singapore"],
+    "AE": ["united arab emirates", "uae", "dubai", "emirati arabi"],
+    "TR": ["turkey", "turkiye", "türkiye", "turchia"],
+}
 
-    Per SF e Radancy, dove la pagina di dettaglio non espone il paese:
-    il paese del portale carriere (dal censimento) è il miglior dato
-    disponibile. Multinazionali con offerte fuori sede prenderanno il
-    paese della sede — impreciso ma meglio di niente per il ponte.
+_RX_PAESE = None
+
+
+def _paese_dal_testo(testo: str):
+    """L'ISO2 se il testo nomina UN paese solo; None se zero o piu' d'uno.
+
+    L'ambiguita' non si scioglie, si salta: una riga che nomina due paesi
+    («relocation from France to Germany») non insegna niente di certo.
+    """
+    import re as _re
+    global _RX_PAESE
+    if _RX_PAESE is None:
+        coppie = [(_re.compile(r"(?<![a-z])" + _re.escape(v) + r"(?![a-z])"),
+                   iso) for iso, vv in PAESE_NEL_TESTO.items() for v in vv]
+        _RX_PAESE = coppie
+    trovati = {iso for rx, iso in _RX_PAESE if rx.search(testo)}
+    return trovati.pop() if len(trovati) == 1 else None
+
+
+def arricchisci_da_localita(dsn: str) -> dict:
+    """Il paese letto dal testo di `location`/`city`: riempie e CORREGGE.
+
+    Nasce da un campione che parlava da solo: «Atlanta, GA, United
+    States» con country=ES, «USA, PA, Brier Hill» con country=BE. Erano
+    i regali di `--da-azienda`, che da' alle offerte il paese della sede
+    del portale: giusto come ripiego, sbagliato quando la riga della
+    localita' dichiara il paese per iscritto. Il testo della fonte batte
+    la deduzione dalla sede, sempre — percio' questo passo va PRIMA di
+    `--da-azienda` nel giro notturno, e in piu' corregge cio' che i giri
+    passati hanno gia' sporcato.
+    """
+    riempiti = corretti = 0
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, COALESCE(location,'') || ' ' || COALESCE(city,''),
+                       country
+                  FROM ats_jobs
+                 WHERE expired_at IS NULL
+                   AND (location IS NOT NULL OR city IS NOT NULL)
+            """)
+            righe = cur.fetchall()
+        aggiorna = []
+        for jid, testo, attuale in righe:
+            iso = _paese_dal_testo(testo.lower())
+            if iso and iso != attuale:
+                aggiorna.append((iso, jid))
+                if attuale is None:
+                    riempiti += 1
+                else:
+                    corretti += 1
+        with conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
+        conn.commit()
+    log.info("da_localita: %d riempiti, %d corretti dal testo",
+             riempiti, corretti)
+    return {"riempiti": riempiti, "corretti": corretti}
+
+
+# Le piattaforme il cui raw porta il paese vero: il loro riempimento e'
+# compito di mantenimento.arricchisci, e i loro paesi NON NULL non si
+# toccano qui — potrebbero venire dal raw, che e' evidenza.
+PIATTAFORME_RAW_PAESE = {"lever", "softgarden", "oracle", "cornerstone",
+                         "greenhouse", "jibe"}
+
+
+def _dizionario_citta() -> dict:
+    """citta' -> paese, imparato dal corpus del MOTORE (Fantastic e fonti
+    pubbliche), dove ogni offerta porta citta' e paese verificati.
+
+    Niente conoscenza geografica esterna: la regola di casa dice che i
+    campi mancanti si riempiono a regole dai dati, mai a occhio, e i dati
+    li abbiamo — migliaia di coppie citta'/paese gia' pagate. I guardrail
+    sono il punto: almeno 3 occorrenze, UNANIMI, e almeno 4 caratteri.
+    Senza, il corpus insegnava «rome -> FR» da una riga sporca.
+    """
+    import os
+    dsn = os.environ.get("DATABASE_URL", "")
+    if not dsn:
+        return {}
+    try:
+        with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute("""
+                WITH coppie AS (
+                  SELECT lower(trim(unnest(cities))) AS citta,
+                         (countries)[1] AS paese
+                    FROM jobs
+                   WHERE cities IS NOT NULL AND countries IS NOT NULL
+                     AND cardinality(countries) = 1)
+                SELECT citta, min(paese) FROM coppie
+                 WHERE length(citta) >= 4
+                 GROUP BY citta
+                HAVING count(*) >= 3 AND count(DISTINCT paese) = 1
+            """)
+            return dict(cur.fetchall())
+    except psycopg.Error as exc:
+        log.warning("dizionario citta' non disponibile: %s", exc)
+        return {}
+
+
+def arricchisci_da_azienda(dsn: str) -> dict:
+    """Il paese DOMINANTE dell'azienda, misurato sui suoi annunci — non
+    piu' la sede del portale.
+
+    La versione precedente dava a ogni offerta senza paese il paese della
+    sede, e il risultato era nel cluster Italia di un utente vero: Perth e
+    Brisbane (Australia), Cholet e Tarn (Francia), Queretaro (Messico) —
+    circa trenta offerte estere su quarantaquattro, tutte timbrate IT
+    perche' il portale era censito in Italia. «Impreciso ma meglio di
+    niente» era vero per il ponte di ieri; oggi il ponte consegna a utenti
+    paganti, e un'offerta nel paese sbagliato e' peggio di nessuna.
+
+    La regola nuova si fida solo di cio' che misura:
+
+      1. l'EVIDENZA di un annuncio e' il paese scritto nel testo della sua
+         localita' (`_paese_dal_testo`);
+      2. un'azienda ha un paese DOMINANTE se almeno 3 suoi annunci hanno
+         evidenza e almeno il 90%% concorda;
+      3. gli annunci SENZA evidenza prendono il dominante dell'azienda —
+         o NULL se l'azienda non ne ha uno. Anche quelli gia' timbrati:
+         il timbro della sede non era evidenza, e tenerlo significherebbe
+         non guarire mai i cluster gia' sporcati.
+
+    NULL non e' una sconfitta: il ponte importa solo paesi certi, e
+    un'offerta senza paese resta nell'archivio in attesa di evidenza
+    migliore (una localita' compilata, un raw piu' ricco al rifetch).
     """
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                UPDATE ats_jobs j
-                   SET country = ac.country
-                  FROM ats_companies ac
-                 WHERE j.platform_id = ac.platform_id
-                   AND j.slug = ac.slug
-                   AND j.country IS NULL
-                   AND j.expired_at IS NULL
-                   AND ac.country IS NOT NULL
-                RETURNING j.id
+                SELECT id, platform_id, slug,
+                       COALESCE(location,'') || ' ' || COALESCE(city,''),
+                       country
+                  FROM ats_jobs
+                 WHERE expired_at IS NULL
             """)
-            n = cur.rowcount
+            righe = cur.fetchall()
+
+        citta_nota = _dizionario_citta()
+        evidenze: dict[tuple, dict] = {}
+        con_evidenza: list[tuple] = []   # (id, paese_attuale, evidenza)
+        senza: list[tuple] = []          # (id, azienda, paese_attuale, piattaforma)
+        for jid, pid, slug, testo, paese in righe:
+            chiave = (pid, slug)
+            pulito = testo.strip().lower()
+            # Prima il paese scritto per esteso, poi la citta' che il
+            # nostro corpus conosce: due evidenze, stessa dignita'.
+            ev = _paese_dal_testo(pulito) if pulito else None
+            if not ev and pulito:
+                ev = citta_nota.get(pulito) or next(
+                    (iso for c, iso in ((c, citta_nota.get(c)) for c in
+                     [x.strip() for x in pulito.split(",")]) if iso), None)
+            if ev:
+                conta = evidenze.setdefault(chiave, {})
+                conta[ev] = conta.get(ev, 0) + 1
+                if ev != paese:
+                    con_evidenza.append((jid, paese, ev))
+            else:
+                senza.append((jid, chiave, paese, pid))
+
+        dominante: dict[tuple, str] = {}
+        for chiave, conta in evidenze.items():
+            tot = sum(conta.values())
+            iso, n = max(conta.items(), key=lambda kv: kv[1])
+            if tot >= 3 and n / tot >= 0.9:
+                dominante[chiave] = iso
+
+        aggiorna: list[tuple] = [(ev, jid) for jid, _, ev in con_evidenza]
+        for jid, chiave, paese, pid in senza:
+            voluto = dominante.get(chiave)
+            if paese is not None and pid in PIATTAFORME_RAW_PAESE:
+                # Un paese gia' scritto su queste piattaforme puo' venire
+                # dal raw: e' evidenza, non timbro. Non si tocca.
+                continue
+            if voluto != paese:
+                aggiorna.append((voluto, jid))
+
+        with conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
         conn.commit()
-    log.info("da_azienda: %d offerte con il paese del portale", n)
-    return n
+
+    da_evidenza = len(con_evidenza)
+    riempiti = sum(1 for v, _ in aggiorna if v is not None) - da_evidenza
+    azzerati = sum(1 for v, _ in aggiorna if v is None)
+    log.info("da_azienda: %d da evidenza diretta, %d col dominante "
+             "dell'azienda, %d senza evidenza azzerati (aziende con "
+             "dominante: %d)", da_evidenza, riempiti, azzerati, len(dominante))
+    return {"da_evidenza": da_evidenza, "riempiti": riempiti,
+            "azzerati": azzerati, "aziende_con_dominante": len(dominante)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -176,6 +392,8 @@ def main(argv: list[str] | None = None) -> int:
                                  description=__doc__)
     ap.add_argument("--phenom", action="store_true",
                     help="legge le pagine di dettaglio Phenom (JSON-LD)")
+    ap.add_argument("--da-localita", action="store_true",
+                    help="paese letto dal testo di location/city: riempie e corregge")
     ap.add_argument("--da-azienda", action="store_true",
                     help="paese del portale carriere come ripiego")
     ap.add_argument("--limite", type=int, default=5000)
@@ -185,10 +403,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.phenom:
         s = arricchisci_phenom(ATS_DSN, args.limite, args.thread)
         print(f"\nPhenom: {s}")
+    if args.da_localita:
+        esito = arricchisci_da_localita(ATS_DSN)
+        print(f"Da localita: {esito}")
     if args.da_azienda:
-        n = arricchisci_da_azienda(ATS_DSN)
-        print(f"\nDa azienda: {n}")
-    if not (args.phenom or args.da_azienda):
+        esito_a = arricchisci_da_azienda(ATS_DSN)
+        print(f"\nDa azienda: {esito_a}")
+    if not (args.phenom or args.da_azienda or args.da_localita):
         ap.print_help()
     return 0
 

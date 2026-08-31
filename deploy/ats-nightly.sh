@@ -31,6 +31,13 @@ mkdir -p "$STATE" "$LOG_DIR"
 # ha righe con spazi (SMTP_FROM='Nivult <digest@…>') che rompono source
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export POSTGRES_PASSWORD
+# France Travail: le chiavi ERANO nel .env ma nessuno le leggeva, e con
+# `set -u` il solo nominare la variabile piu' sotto uccideva il giro a
+# meta' — il 2026-08-31 classificatore e wikidata non sono mai partiti
+# per questo. Il :- e' la cintura oltre alle bretelle.
+FRANCE_TRAVAIL_CLIENT_ID=$(grep -E '^FRANCE_TRAVAIL_CLIENT_ID=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+FRANCE_TRAVAIL_CLIENT_SECRET=$(grep -E '^FRANCE_TRAVAIL_CLIENT_SECRET=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+export FRANCE_TRAVAIL_CLIENT_ID FRANCE_TRAVAIL_CLIENT_SECRET
 
 # Il DSN del database ATS: dentro Docker, utente del motore
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
@@ -110,6 +117,9 @@ echo "── arricchisci (phenom 1000)"
 "$PY" -m nivult.ats.arricchisci --phenom --limite 1000 --thread 8 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
+"$PY" -m nivult.ats.arricchisci --da-localita \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
 "$PY" -m nivult.ats.arricchisci --da-azienda \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
@@ -119,7 +129,7 @@ echo "── arbetsformedlingen (Svezia)"
 "$PY" -m nivult.ats.servizi_pubblici --arbetsformedlingen --limite 2000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
-if [ -n "$FRANCE_TRAVAIL_CLIENT_ID" ]; then
+if [ -n "${FRANCE_TRAVAIL_CLIENT_ID:-}" ]; then
   echo "── francetravail (Francia)"
   "$PY" -m nivult.ats.servizi_pubblici --francetravail --limite 2000 \
     >> "$LOG_DIR/ats-nightly.log" 2>&1 \

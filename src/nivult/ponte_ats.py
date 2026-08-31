@@ -276,9 +276,18 @@ def _scadi_sparite(cur: psycopg.Cursor, cur_ats: psycopg.Cursor,
     proporzionale a ciò che abbiamo importato. Un'offerta torna viva da
     sola al giro dopo, se ricompare: `upsert_job` rimette status='active'.
     """
+    # Ogni nostra riga col SUO cluster: la validita' non e' solo «esiste
+    # ancora a monte», e' «appartiene ancora a questo cluster». Quando
+    # l'arricchimento corregge il paese di un'offerta gia' importata —
+    # succede: «HR Business Partner France» era entrata nel cluster
+    # Italia col paese della sede di Fedrigoni — la copia nel cluster
+    # sbagliato deve morire qui, o resterebbe per sempre.
     cur.execute(
-        "SELECT id::text, source_job_id FROM jobs "
-        "WHERE source = %s AND status = 'active'", (SORGENTE,))
+        "SELECT j.id::text, j.source_job_id, c.family, c.country "
+        "FROM jobs j "
+        "JOIN job_clusters jc ON jc.job_id = j.id "
+        "JOIN clusters c ON c.id = jc.cluster_id "
+        "WHERE j.source = %s AND j.status = 'active'", (SORGENTE,))
     nostre = cur.fetchall()
     if not nostre:
         return 0
@@ -287,15 +296,28 @@ def _scadi_sparite(cur: psycopg.Cursor, cur_ats: psycopg.Cursor,
     cur_ats.execute(
         # Stesso ripiego dell'idoneita', o le offerte senza data entrate
         # col COALESCE verrebbero marcate scadute al giro dopo da questo
-        # stesso sweep: i due criteri devono restare gemelli.
-        "SELECT id::text FROM ats_jobs "
-        "WHERE id::text = ANY(%s) AND expired_at IS NULL "
-        "  AND COALESCE(posted_at, fetched_at) >= %s",
-        ([sid for _, sid in nostre], soglia),
+        # stesso sweep: i due criteri devono restare gemelli. E stessa
+        # soglia di confidenza della classificazione, per lo stesso motivo.
+        "SELECT j.id::text, j.country, "
+        "       array_remove(array_agg(c.family), NULL) "
+        "FROM ats_jobs j "
+        "LEFT JOIN job_classifications c ON c.job_id = j.id "
+        "                              AND coalesce(c.confidence, 0) >= 0.5 "
+        "WHERE j.id::text = ANY(%s) AND j.expired_at IS NULL "
+        "  AND COALESCE(j.posted_at, j.fetched_at) >= %s "
+        "GROUP BY 1, 2",
+        (list({sid for _, sid, _, _ in nostre}), soglia),
     )
-    ancora_valide = {r[0] for r in cur_ats.fetchall()}
+    a_monte = {r[0]: (r[1], set(r[2] or [])) for r in cur_ats.fetchall()}
 
-    morte = [jid for jid, sid in nostre if sid not in ancora_valide]
+    # Una riga puo' stare in piu' cluster: vive se ALMENO UNO combacia.
+    vive: set[str] = set()
+    for jid, sid, famiglia, paese in nostre:
+        monte = a_monte.get(sid)
+        if monte and monte[0] == paese and famiglia in monte[1]:
+            vive.add(jid)
+
+    morte = sorted({jid for jid, _, _, _ in nostre} - vive)
     if not morte:
         return 0
     cur.execute(

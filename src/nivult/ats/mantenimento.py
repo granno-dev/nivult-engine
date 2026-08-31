@@ -144,6 +144,16 @@ def normalizza(dsn: str, limite: int = 5000) -> int:
             righe = cur.fetchall()
         for jid, pid, raw in righe:
             smin, smax, valuta, contratto = _estrai_stipendio(raw, pid)
+            # I raw di 62 piattaforme portano forme arbitrarie: quando un
+            # campo che dovrebbe essere piatto arriva come dict, meglio
+            # NULL a database che il giro morto. Successo il 2026-08-31:
+            # un contratto arrivato dict ha ucciso la normalizza con
+            # «cannot adapt type dict», e ogni notte moriva sulla stessa
+            # riga avvelenata senza committare niente.
+            smin = smin if isinstance(smin, (int, float)) else None
+            smax = smax if isinstance(smax, (int, float)) else None
+            valuta = (valuta.strip()[:8] or None) if isinstance(valuta, str) else None
+            contratto = (contratto.strip()[:80] or None) if isinstance(contratto, str) else None
             with conn.cursor() as cur:
                 cur.execute("""
                     UPDATE ats_jobs SET salary_min = %s, salary_max = %s,
