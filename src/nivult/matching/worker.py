@@ -74,6 +74,7 @@ class Utente:
     email: str
     plan: str
     delivery_channels: list[str]
+    display_name: str | None
     delivery_email: str | None
     telegram_chat_id: str | None
     whatsapp_e164: str | None
@@ -155,7 +156,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
         "       u.whatsapp_conversation_id, "
         "       u.frequency, u.send_hour_local, u.send_weekday, u.send_monthday, "
         "       u.timezone, u.next_digest_at, u.last_digest_at, u.locale, "
-        "       u.delivery_failures, "
+        "       u.delivery_failures, u.display_name, "
         "       cv.id::text AS cv_id, cv.families, cv.seniority, cv.skills, "
         "       cv.languages, cv.years_experience, e.label AS seniority_label "
         "FROM users u "
@@ -172,6 +173,7 @@ def utenti_dovuti(cur, adesso: datetime, user_id: str | None = None) -> list[Ute
     return [Utente(
         id=r["id"], email=r["email"], plan=r["plan"],
         delivery_channels=r["delivery_channels"], delivery_email=r["delivery_email"],
+        display_name=r["display_name"],
         telegram_chat_id=r["telegram_chat_id"], whatsapp_e164=r["whatsapp_e164"],
         whatsapp_conversation_id=r["whatsapp_conversation_id"],
         frequency=r["frequency"], send_hour_local=r["send_hour_local"],
@@ -571,11 +573,13 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
                         message_id = mid
                     elif canale == "telegram" and u.telegram_chat_id:
                         mid = telegram_mod.invia(u.telegram_chat_id, items,
-                                                 u.locale)
+                                                 u.locale,
+                                                 nome=u.display_name)
                         message_id = message_id or mid
                     elif canale == "whatsapp" and u.whatsapp_e164:
                         mid, conv = whatsapp_mod.invia(
-                            u.whatsapp_e164, items[:3], u.locale)
+                            u.whatsapp_e164, items[:3], u.locale,
+                            nome=u.display_name)
                         if conv and conv != u.whatsapp_conversation_id:
                             with conn.cursor() as cur:
                                 cur.execute(

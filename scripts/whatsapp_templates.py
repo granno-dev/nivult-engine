@@ -52,39 +52,39 @@ TESTI = {
     "en": (["Your Nivult digest: one role cleared your bar today, from the career pages companies publish on themselves.",
             "Your Nivult digest: two roles cleared your bar today, from the career pages companies publish on themselves.",
             "Your Nivult digest: the top three roles that cleared your bar today, from the career pages companies publish on themselves."],
-           "Apply", "You chose these searches yourself and can change them any time at nivult.com. Reply STOP to stop this digest."),
+           "Apply", "You can manage your searches and preferences at any time on nivult.com. To stop receiving this digest, reply STOP."),
     "it": (["Il tuo digest Nivult: un'offerta ha superato la tua soglia oggi, dalle pagine carriere che le aziende pubblicano in proprio.",
             "Il tuo digest Nivult: due offerte hanno superato la tua soglia oggi, dalle pagine carriere che le aziende pubblicano in proprio.",
             "Il tuo digest Nivult: le tre migliori offerte sopra la tua soglia oggi, dalle pagine carriere che le aziende pubblicano in proprio."],
-           "Candidati", "Le ricerche le hai scelte tu e puoi cambiarle quando vuoi su nivult.com. Rispondi STOP per non ricevere più il digest."),
+           "Candidati", "Puoi gestire le tue ricerche e preferenze in qualsiasi momento su nivult.com. Per non ricevere più questo digest, rispondi STOP."),
     "fr": (["Votre digest Nivult : une offre a dépassé votre seuil aujourd'hui, depuis les pages carrières que les entreprises publient elles-mêmes.",
             "Votre digest Nivult : deux offres ont dépassé votre seuil aujourd'hui, depuis les pages carrières que les entreprises publient elles-mêmes.",
             "Votre digest Nivult : les trois meilleures offres au-dessus de votre seuil aujourd'hui, depuis les pages carrières que les entreprises publient elles-mêmes."],
-           "Postuler", "Vous avez choisi ces recherches vous-même et pouvez les modifier à tout moment sur nivult.com. Répondez STOP pour ne plus recevoir ce digest."),
+           "Postuler", "Vous pouvez gérer vos recherches et préférences à tout moment sur nivult.com. Pour ne plus recevoir ce digest, répondez STOP."),
     "de": (["Dein Nivult-Digest: eine Stelle hat heute deine Schwelle überschritten — von den Karriereseiten, die Unternehmen selbst pflegen.",
             "Dein Nivult-Digest: zwei Stellen haben heute deine Schwelle überschritten — von den Karriereseiten, die Unternehmen selbst pflegen.",
             "Dein Nivult-Digest: die drei besten Stellen über deiner Schwelle heute — von den Karriereseiten, die Unternehmen selbst pflegen."],
-           "Bewerben", "Diese Suchen hast du selbst gewählt und kannst sie jederzeit auf nivult.com ändern. Antworte STOP, um den Digest abzubestellen."),
+           "Bewerben", "Deine Suchen und Einstellungen kannst du jederzeit auf nivult.com verwalten. Um diesen Digest abzubestellen, antworte STOP."),
     "es": (["Tu resumen Nivult: una oferta superó tu umbral hoy, desde las páginas de empleo que las empresas publican por su cuenta.",
             "Tu resumen Nivult: dos ofertas superaron tu umbral hoy, desde las páginas de empleo que las empresas publican por su cuenta.",
             "Tu resumen Nivult: las tres mejores ofertas por encima de tu umbral hoy, desde las páginas de empleo que las empresas publican por su cuenta."],
-           "Candidatura", "Estas búsquedas las elegiste tú y puedes cambiarlas cuando quieras en nivult.com. Responde STOP para dejar de recibir el resumen."),
+           "Candidatura", "Puedes gestionar tus búsquedas y preferencias en cualquier momento en nivult.com. Para dejar de recibir este resumen, responde STOP."),
     "pt": (["O teu resumo Nivult: uma oferta passou o teu limiar hoje, das páginas de carreiras que as empresas publicam por conta própria.",
             "O teu resumo Nivult: duas ofertas passaram o teu limiar hoje, das páginas de carreiras que as empresas publicam por conta própria.",
             "O teu resumo Nivult: as três melhores ofertas acima do teu limiar hoje, das páginas de carreiras que as empresas publicam por conta própria."],
-           "Candidatar", "Estas pesquisas foste tu que as escolheste e podes mudá-las quando quiseres em nivult.com. Responde STOP para deixar de receber o resumo."),
+           "Candidatar", "Podes gerir as tuas pesquisas e preferências a qualquer momento em nivult.com. Para deixares de receber este resumo, responde STOP."),
     "nl": (["Je Nivult-digest: één vacature kwam vandaag boven je lat uit, van de carrièrepagina's die bedrijven zelf publiceren.",
             "Je Nivult-digest: twee vacatures kwamen vandaag boven je lat uit, van de carrièrepagina's die bedrijven zelf publiceren.",
             "Je Nivult-digest: de drie beste vacatures boven je lat vandaag, van de carrièrepagina's die bedrijven zelf publiceren."],
-           "Solliciteer", "Deze zoekopdrachten koos je zelf en je kunt ze altijd wijzigen op nivult.com. Antwoord STOP om deze digest te stoppen."),
+           "Solliciteer", "Je zoekopdrachten en voorkeuren beheer je op elk moment op nivult.com. Wil je deze digest niet meer ontvangen, antwoord dan STOP."),
     "pl": (["Twój digest Nivult: jedna oferta przekroczyła dziś Twój próg — ze stron karier, które firmy publikują same.",
             "Twój digest Nivult: dwie oferty przekroczyły dziś Twój próg — ze stron karier, które firmy publikują same.",
             "Twój digest Nivult: trzy najlepsze oferty powyżej Twojego progu dziś — ze stron karier, które firmy publikują same."],
-           "Aplikuj", "Te wyszukiwania wybrałeś sam i możesz je zmienić w każdej chwili na nivult.com. Odpowiedz STOP, aby przestać otrzymywać digest."),
+           "Aplikuj", "Swoimi wyszukiwaniami i preferencjami możesz zarządzać w każdej chwili na nivult.com. Aby nie otrzymywać więcej tego digestu, odpowiedz STOP."),
     "sv": (["Din Nivult-sammanfattning: en tjänst klarade din ribba i dag, från karriärsidorna som företagen själva publicerar.",
             "Din Nivult-sammanfattning: två tjänster klarade din ribba i dag, från karriärsidorna som företagen själva publicerar.",
             "Din Nivult-sammanfattning: de tre bästa tjänsterna över din ribba i dag, från karriärsidorna som företagen själva publicerar."],
-           "Ansök", "Sökningarna valde du själv och kan ändra när du vill på nivult.com. Svara STOP för att sluta få sammanfattningen."),
+           "Ansök", "Du kan hantera dina sökningar och inställningar när som helst på nivult.com. Svara STOP för att sluta ta emot denna sammanfattning."),
 }
 
 ESEMPI_RIGA = ["Ward Manager, Cardiology — Amsterdam UMC · Utrecht",
@@ -105,18 +105,36 @@ ESEMPI_URL = ["https://jobs.example.com/a1b2c3",
 # una riga vuota fra le offerte, la freccia sulla riga d'azione, il piede
 # in corsivo perche' e' contorno e deve sembrare contorno. La formattazione
 # sta nel CORPO FISSO, mai nei parametri: Meta la vieta la' dentro.
-VERSIONE = "v2"
+VERSIONE = "v3"
 
 
 def corpo(locale: str, n: int) -> tuple[str, list[str]]:
-    intestazioni, applica, piede = TESTI[locale]
-    righe = [intestazioni[n - 1], ""]
-    esempi: list[str] = []
+    """La variante «D» scelta dal proprietario sul confronto visivo:
+    saluto personale, testata col nome in grassetto, niente numeri ne'
+    etichetta sul link (il blu del link basta), separatore centrale fra
+    le offerte, piede in corsivo.
+
+    Il saluto costa UNA variabile in piu': porta il digest_3 a dieci.
+    Meta rifiuta i template dove le variabili soverchiano il testo fisso
+    (14 non passavano su un corpo piu' magro), ma il corpo v3 e' piu'
+    lungo del vecchio: se il 3 venisse respinto, la spia e' il conteggio
+    «rifiutati» di questo script, non un guasto silenzioso.
+    """
+    from nivult.delivery.testi import t as _t
+    intestazioni, _, piede = TESTI[locale]
+    saluto = _t(locale)["saluto"]
+    testa = intestazioni[n - 1]
+    prima, due_punti, resto = testa.partition(":")
+    testata = (f"*{prima.strip()}* — {resto.strip()}" if due_punti else testa)
+    righe = [f"{saluto} {{{{1}}}},", "", testata, ""]
+    esempi: list[str] = ["Giuseppe"]
     for i in range(n):
-        v = 3 * i
-        righe += [f"*{i + 1}. {{{{{v + 1}}}}}*",
+        v = 3 * i + 1
+        if i:
+            righe += ["· · ·", ""]
+        righe += [f"*{{{{{v + 1}}}}}*",
                   f"{{{{{v + 2}}}}}",
-                  f"→ {applica}: {{{{{v + 3}}}}}",
+                  f"{{{{{v + 3}}}}}",
                   ""]
         esempi += [ESEMPI_RIGA[i], ESEMPI_MOTIVO[i], ESEMPI_URL[i]]
     righe.append(f"_{piede}_")

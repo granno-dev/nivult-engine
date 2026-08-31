@@ -85,7 +85,8 @@ def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def compila(items: list[dict], locale: str = "en") -> list[str]:
+def compila(items: list[dict], locale: str = "en",
+            nome: str | None = None) -> list[str]:
     """-> i messaggi da spedire, nella lingua dell'utente.
 
     Una lista e non una stringa: sopra i 4096 caratteri Telegram rifiuta, e
@@ -94,7 +95,11 @@ def compila(items: list[dict], locale: str = "en") -> list[str]:
     """
     x = t(locale)
     oggi = _data(datetime.now(timezone.utc), locale)
-    testa = f"<b>Nivult</b> — {_esc(x['digest_del'].format(data=oggi))}"
+    # Lo stesso vestito del template WhatsApp v3, nel dialetto di Telegram:
+    # saluto col primo nome (o il ripiego della lingua), poi la testata.
+    primo = ((nome or "").strip().split() or [x["saluto_fallback"]])[0]
+    testa = (f"{_esc(x['saluto'])} {_esc(primo)},\n\n"
+             f"<b>Nivult</b> — {_esc(x['digest_del'].format(data=oggi))}")
 
     blocchi: list[str] = []
     for pos, it in enumerate(items, start=1):
@@ -127,13 +132,17 @@ def compila(items: list[dict], locale: str = "en") -> list[str]:
     # viaggia con l'ultimo pezzo, così chiude il digest e non un frammento.
     messaggi: list[str] = []
     corrente = testa
+    # «· · ·» fra un'offerta e l'altra, come nel template WhatsApp: mai
+    # prima della prima ne' quando il blocco apre un messaggio nuovo — un
+    # separatore in testa separerebbe dal nulla.
     for i, b in enumerate(blocchi):
         coda = f"\n\n{piede}" if i == len(blocchi) - 1 else ""
-        if len(corrente) + len(b) + len(coda) + 2 > LIMITE:
+        sep = "\n\n· · ·\n\n" if i else "\n\n"
+        if len(corrente) + len(sep) + len(b) + len(coda) > LIMITE:
             messaggi.append(corrente)
             corrente = b + coda
         else:
-            corrente = f"{corrente}\n\n{b}{coda}"
+            corrente = f"{corrente}{sep}{b}{coda}"
     messaggi.append(corrente)
     return messaggi
 
@@ -152,14 +161,15 @@ def _chiama(metodo: str, payload: dict) -> dict:
     return d["result"]
 
 
-def invia(chat_id: str, items: list[dict], locale: str = "en") -> str:
+def invia(chat_id: str, items: list[dict], locale: str = "en",
+          nome: str | None = None) -> str:
     """Spedisce un digest. Ritorna l'id del PRIMO messaggio.
 
     Il primo e non l'ultimo: è quello che il destinatario vede in cima, ed è
     l'ancora con cui si ritrova la consegna se qualcuno chiede conto.
     """
     ids: list[str] = []
-    for corpo in compila(items, locale):
+    for corpo in compila(items, locale, nome):
         res = _chiama("sendMessage", {
             "chat_id": chat_id,
             "text": corpo,

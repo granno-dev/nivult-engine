@@ -61,6 +61,8 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Open the posting",
         "aderenza": "Match",
+        "saluto": "Dear",  # aggiunto per il saluto personale del digest
+        "saluto_fallback": "candidate",
         "piede": "You receive this digest because you subscribed to Nivult. "
                  "Manage your preferences at nivult.com.",
         "piede_testo": "You receive this digest because you subscribed to Nivult.\n"
@@ -86,6 +88,8 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Apri l'offerta",
         "aderenza": "Aderenza",
+        "saluto": "Gentile",
+        "saluto_fallback": "candidato",
         "piede": "Ricevi questo digest perché sei iscritto a Nivult. "
                  "Le preferenze si gestiscono su nivult.com.",
         "piede_testo": "Ricevi questo digest perché sei iscritto a Nivult.\n"
@@ -111,6 +115,8 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Voir l'offre",
         "aderenza": "Adéquation",
+        "saluto": "Bonjour",
+        "saluto_fallback": "candidat",
         "piede": "Vous recevez ce digest car vous êtes inscrit à Nivult. "
                  "Gérez vos préférences sur nivult.com.",
         "piede_testo": "Vous recevez ce digest car vous êtes inscrit à Nivult.\n"
@@ -136,6 +142,8 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Über {fonte}",
         "apri": "Stelle ansehen",
         "aderenza": "Passung",
+        "saluto": "Guten Tag",
+        "saluto_fallback": "Bewerber",
         "piede": "Du erhältst diesen Digest, weil du Nivult abonniert hast. "
                  "Einstellungen verwaltest du auf nivult.com.",
         "piede_testo": "Du erhältst diesen Digest, weil du Nivult abonniert hast.\n"
@@ -149,6 +157,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/Tag", "unita_settimana": "/Woche",
     },
     "es": {
+        "saluto": "Estimado/a",
+        "saluto_fallback": "candidato",
         "canale_ripiego_oggetto": 'Tu resumen vuelve por correo',
         "canale_ripiego_testo": 'No pudimos entregarlo en Telegram ({motivo}), así que tu resumen vuelve por correo. Puedes reconectar Telegram cuando quieras desde tu panel en nivult.com.',
         "oggetto_uno": "Nivult — 1 oferta para ti ({data})",
@@ -174,6 +184,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/día", "unita_settimana": "/semana",
     },
     "pt": {
+        "saluto": "Olá",
+        "saluto_fallback": "candidato",
         "canale_ripiego_oggetto": 'O teu resumo volta por email',
         "canale_ripiego_testo": 'Não conseguimos entregar no Telegram ({motivo}), por isso o teu resumo volta por email. Podes voltar a ligar o Telegram quando quiseres no teu painel em nivult.com.',
         "oggetto_uno": "Nivult — 1 vaga para si ({data})",
@@ -199,6 +211,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dia", "unita_settimana": "/semana",
     },
     "nl": {
+        "saluto": "Beste",
+        "saluto_fallback": "kandidaat",
         "canale_ripiego_oggetto": 'Je digest komt weer per e-mail',
         "canale_ripiego_testo": 'Bezorgen via Telegram lukte niet ({motivo}), dus je digest gaat weer per e-mail. Je kunt Telegram op elk moment opnieuw koppelen in je paneel op nivult.com.',
         "oggetto_uno": "Nivult — 1 baan voor je ({data})",
@@ -224,6 +238,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dag", "unita_settimana": "/week",
     },
     "pl": {
+        "saluto": "Dzień dobry",
+        "saluto_fallback": "kandydacie",
         "canale_ripiego_oggetto": 'Twój digest wraca na e-mail',
         "canale_ripiego_testo": 'Nie udało się dostarczyć przez Telegram ({motivo}), więc digest wraca na e-mail. Telegram możesz podłączyć ponownie w dowolnej chwili w panelu na nivult.com.',
         "oggetto_uno": "Nivult — 1 oferta dla Ciebie ({data})",
@@ -250,6 +266,8 @@ TESTI: dict[str, dict[str, str]] = {
         "unita_giorno": "/dzień", "unita_settimana": "/tydz.",
     },
     "sv": {
+        "saluto": "Hej",
+        "saluto_fallback": "kandidat",
         "canale_ripiego_oggetto": 'Din sammanfattning kommer via e-post igen',
         "canale_ripiego_testo": 'Vi kunde inte leverera via Telegram ({motivo}), så din sammanfattning går via e-post igen. Du kan koppla Telegram på nytt när du vill från din panel på nivult.com.',
         "oggetto_uno": "Nivult — 1 jobb till dig ({data})",

@@ -236,7 +236,8 @@ def _param(s: str, massimo: int = 300) -> str:
     return re.sub(r"\s+", " ", s or "").strip()[:massimo]
 
 
-def invia(telefono_e164: str, items: list[dict], locale: str = "en") -> tuple[str, str]:
+def invia(telefono_e164: str, items: list[dict], locale: str = "en",
+          nome: str | None = None) -> tuple[str, str]:
     """Spedisce un digest come template. -> (message_id, conversation_id).
 
     Al massimo TRE offerte: i template hanno un numero fisso di caselle, e
@@ -264,20 +265,28 @@ def invia(telefono_e164: str, items: list[dict], locale: str = "en") -> tuple[st
                       _param(f"{it['score']}/100 — {it['reason']}"),
                       _param(it["url"], 500)]
 
-    # Prima la v2 (titoli in grassetto, offerte separate, piede in
-    # corsivo), e finche' Meta non l'ha approvata si ripiega sulla v1: un
-    # digest brutto e' meglio di un digest saltato, e il giorno in cui la
-    # v2 e' approvata il passaggio avviene da solo, senza deploy.
+    # Il saluto della v3: il primo nome della persona, o il ripiego della
+    # lingua per chi un nome non l'ha lasciato — «Gentile candidato» e'
+    # meno bello di «Gentile Giuseppe», ma «Gentile ,» non esiste.
+    primo = ((nome or "").strip().split() or [x["saluto_fallback"]])[0]
+
+    # Prima la v3 (la variante scelta dal proprietario: saluto, testata in
+    # grassetto, separatore fra le offerte, piede in corsivo), e finche'
+    # Meta non l'ha approvata si ripiega sulla v1 — che NON ha la
+    # variabile del saluto, percio' cambia anche la lista dei parametri.
+    # Un digest brutto e' meglio di un digest saltato, e il giorno in cui
+    # la v3 e' approvata il passaggio avviene da solo, senza deploy.
     ultima_ecc: TemplateNonPronto | None = None
-    for nome in (f"nivult_digest_{len(items)}_v2",
-                 f"nivult_digest_{len(items)}"):
+    for nome_tpl, params in ((f"nivult_digest_{len(items)}_v3",
+                              [_param(primo, 60)] + parametri),
+                             (f"nivult_digest_{len(items)}", parametri)):
         try:
             d = _http("POST", "/inbox/conversations", json={
                 "accountId": account,
                 "participantId": telefono_e164,
-                "templateName": nome,
+                "templateName": nome_tpl,
                 "templateLanguage": LINGUA_TEMPLATE.get(locale, "en"),
-                "templateParams": parametri,
+                "templateParams": params,
             })
             return (str(d.get("id") or d.get("messageId") or ""),
                     str(d.get("conversationId") or ""))
