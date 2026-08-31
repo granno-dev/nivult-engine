@@ -342,6 +342,121 @@ def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
     log.info("Bundesagentur: %s", stats)
     return stats
 
+
+# Codici ROME per le nostre 33 famiglie (i più rappresentativi)
+ROME_FAMIGLIE = {
+    "Human Resources": ["M1603", "M1604", "M1605", "M1606"],
+    "Software": ["M1805", "M1806"],
+    "Healthcare": ["J1301", "J1302", "J1501", "J1502", "K1303"],
+    "Social Services": ["K1301", "K1302", "K2105"],
+    "Construction": ["F1701", "F1702", "F1102"],
+    "Transportation": ["N4102", "N4103", "N4101"],
+    "Logistics": ["N1101", "N1102", "N4103"],
+    "Retail": ["D1501", "D1401", "M1705"],
+    "Sales": ["M1703", "M1704", "M1705", "D1401"],
+    "Marketing": ["E1103", "M1705"],
+    "Finance & Accounting": ["M1205", "M1206", "D1401"],
+    "Administrative": ["M1607", "M1601"],
+    "Education": ["K2108", "K2111"],
+    "Engineering": ["H1206", "H1102", "H1103"],
+    "Manufacturing": ["H1502", "H2102"],
+    "Food & Beverage": ["D1101", "D1201", "G1802"],
+    "Hospitality": ["G1802", "G1803"],
+    "Customer Service & Support": ["M1707", "D1401"],
+    "Data & Analytics": ["M1805"],
+    "Trades": ["F1703", "F1601", "I1308"],
+    "Security & Safety": ["K2602"],
+    "Consulting": ["M1801"],
+    "Management & Leadership": ["M1801", "M1802"],
+    "Technology": ["M1810"],
+    "Legal": ["K1904"],
+    "Science & Research": ["K2401"],
+}
+
+def scarica_francetravail_rome(dsn: str, limite_per_rome: int = 3000) -> dict:
+    """Scarica France Travail per codice ROME (famiglia professionale).
+
+    L'API limita a ~3.150 risultati per query senza filtri. Con il
+    codeROME ogni famiglia professionale è una query separata: 25+
+    famiglie × 3.150 = fino a 75.000 offerte francesi.
+    """
+    client_id = os.environ.get("FRANCE_TRAVAIL_CLIENT_ID", "")
+    client_secret = os.environ.get("FRANCE_TRAVAIL_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        log.warning("France Travail: servono le credenziali OAuth2")
+        return {"offerte": 0, "errori": 1}
+
+    token = _ft_token(client_id, client_secret)
+    if not token:
+        return {"offerte": 0, "errori": 1}
+
+    stats = {"offerte": 0, "nuove": 0, "aggiornate": 0, "errori": 0}
+    base = "https://api.francetravail.io"
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with httpx.Client(timeout=30, headers=headers) as c:
+        for famiglia, codici in ROME_FAMIGLIE.items():
+            for rome in codici:
+                offset = 0
+                while offset < limite_per_rome:
+                    try:
+                        r = c.get(f"{base}/partenaire/offresdemploi/v2/offres/search",
+                                  params={"range": f"{offset}-{offset + 149}",
+                                          "codeROME": rome})
+                        if r.status_code not in (206, 200):
+                            break
+                        offres = r.json().get("resultats", [])
+                        if not offres:
+                            break
+                    except httpx.HTTPError:
+                        stats["errori"] += 1
+                        break
+
+                    for off in offres:
+                        oid = str(off.get("id") or "")
+                        if not oid:
+                            continue
+                        stats["offerte"] += 1
+                        loc = (off.get("lieuTravail") or {})
+                        citta = loc.get("libelle") if isinstance(loc, dict) else None
+                        pubbl = off.get("dateCreation")
+                        try:
+                            dt = datetime.fromisoformat(f"{pubbl[:19]}+00:00") if pubbl else None
+                        except ValueError:
+                            dt = None
+
+                        with psycopg.connect(dsn) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO ats_jobs
+                                      (platform_id, slug, external_id, title, url,
+                                       location, country, city, posted_at, raw)
+                                    VALUES ('francetravail', 'pole-emploi', %s, %s, %s,
+                                            %s, 'FR', %s, %s, %s)
+                                    ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                                      title = EXCLUDED.title, url = EXCLUDED.url,
+                                      fetched_at = now()
+                                    RETURNING (xmax = 0) AS is_new
+                                """, (oid,
+                                      off.get("intitule") or "",
+                                      off.get("origineOffre", {}).get("urlOrigine")
+                                      or f"https://candidat.francetravail.fr/offres/recherche/detail/{oid}",
+                                      citta, citta, dt,
+                                      psycopg.types.json.Json(off)))
+                                r2 = cur.fetchone()
+                                if r2 and r2[0]:
+                                    stats["nuove"] += 1
+                                else:
+                                    stats["aggiornate"] += 1
+                            conn.commit()
+
+                    offset += 150
+
+                log.info("  %s/%s: %d offerte", famiglia, rome, stats["offerte"])
+
+    log.info("France Travail ROME: %s", stats)
+    return stats
+
 # ── STATISTICHE ────────────────────────────────────────────────────
 
 def stats(dsn: str) -> None:
@@ -371,6 +486,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="scarica da France Travail (serve OAuth2)")
     ap.add_argument("--bundesanstellung", action="store_true",
                     help="scarica da Bundesagentur (Germania, gratis)")
+    ap.add_argument("--francetravail-rome", action="store_true",
+                    help="scarica FT per codeROME (25+ famiglie, fino a 75k)")
     ap.add_argument("--limite", type=int, default=1000)
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
@@ -381,13 +498,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.francetravail:
         s = scarica_francetravail(ATS_DSN, args.limite)
         print(f"\nFrance Travail: {s}")
+    if args.francetravail_rome:
+        s = scarica_francetravail_rome(ATS_DSN, args.limite)
+        print(f"\nFrance Travail ROME: {s}")
     if args.bundesanstellung:
         s = scarica_bundesagentur(ATS_DSN, args.limite)
         print(f"\nBundesagentur: {s}")
     if args.stats:
         stats(ATS_DSN)
     if not (args.arbetsformedlingen or args.francetravail
-            or args.bundesanstellung or args.stats):
+            or args.bundesanstellung or args.francetravail_rome
+            or args.stats):
         ap.print_help()
     return 0
 
