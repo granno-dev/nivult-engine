@@ -264,12 +264,24 @@ def invia(telefono_e164: str, items: list[dict], locale: str = "en") -> tuple[st
                       _param(f"{it['score']}/100 — {it['reason']}"),
                       _param(it["url"], 500)]
 
-    d = _http("POST", "/inbox/conversations", json={
-        "accountId": account,
-        "participantId": telefono_e164,
-        "templateName": f"nivult_digest_{len(items)}",
-        "templateLanguage": LINGUA_TEMPLATE.get(locale, "en"),
-        "templateParams": parametri,
-    })
-    return (str(d.get("id") or d.get("messageId") or ""),
-            str(d.get("conversationId") or ""))
+    # Prima la v2 (titoli in grassetto, offerte separate, piede in
+    # corsivo), e finche' Meta non l'ha approvata si ripiega sulla v1: un
+    # digest brutto e' meglio di un digest saltato, e il giorno in cui la
+    # v2 e' approvata il passaggio avviene da solo, senza deploy.
+    ultima_ecc: TemplateNonPronto | None = None
+    for nome in (f"nivult_digest_{len(items)}_v2",
+                 f"nivult_digest_{len(items)}"):
+        try:
+            d = _http("POST", "/inbox/conversations", json={
+                "accountId": account,
+                "participantId": telefono_e164,
+                "templateName": nome,
+                "templateLanguage": LINGUA_TEMPLATE.get(locale, "en"),
+                "templateParams": parametri,
+            })
+            return (str(d.get("id") or d.get("messageId") or ""),
+                    str(d.get("conversationId") or ""))
+        except TemplateNonPronto as ecc:
+            ultima_ecc = ecc
+            continue
+    raise ultima_ecc

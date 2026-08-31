@@ -98,17 +98,28 @@ ESEMPI_URL = ["https://jobs.example.com/a1b2c3",
               "https://jobs.example.com/g7h8i9"]
 
 
+# La v2 e' la risposta a un messaggio vero giudicato dal proprietario «un
+# muro di testo»: tutto attaccato, niente gerarchia, i link incollati al
+# motivo. WhatsApp non ha HTML ma ha *grassetto*, _corsivo_ e le righe
+# vuote — e bastano: titolo in grassetto (e' la riga che si scandisce),
+# una riga vuota fra le offerte, la freccia sulla riga d'azione, il piede
+# in corsivo perche' e' contorno e deve sembrare contorno. La formattazione
+# sta nel CORPO FISSO, mai nei parametri: Meta la vieta la' dentro.
+VERSIONE = "v2"
+
+
 def corpo(locale: str, n: int) -> tuple[str, list[str]]:
     intestazioni, applica, piede = TESTI[locale]
-    righe = [intestazioni[n - 1]]
+    righe = [intestazioni[n - 1], ""]
     esempi: list[str] = []
     for i in range(n):
         v = 3 * i
-        righe += [f"{i + 1}. {{{{{v + 1}}}}}",
+        righe += [f"*{i + 1}. {{{{{v + 1}}}}}*",
                   f"{{{{{v + 2}}}}}",
-                  f"{applica}: {{{{{v + 3}}}}}"]
+                  f"→ {applica}: {{{{{v + 3}}}}}",
+                  ""]
         esempi += [ESEMPI_RIGA[i], ESEMPI_MOTIVO[i], ESEMPI_URL[i]]
-    righe.append(piede)
+    righe.append(f"_{piede}_")
     return "\n".join(righe), esempi
 
 
@@ -132,14 +143,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.stato:
         for (nome, lingua), stato in sorted(esistenti.items()):
-            print(f"  {nome:less18} {lingua:6} {stato}"
-                  .replace(":less18", ":<18"))
+            # Il vecchio {nome:less18} esplodeva PRIMA che la .replace
+            # potesse salvarlo: l'f-string valuta subito lo specifier.
+            print(f"  {nome:<22} {lingua:<6} {stato}")
         return 0
 
     creati = respinti = gia = 0
     for locale, lingua_meta in LINGUA_TEMPLATE.items():
         for n in (1, 2, 3):
-            nome = f"nivult_digest_{n}"
+            nome = f"nivult_digest_{n}_{VERSIONE}"
             if (nome, lingua_meta) in esistenti:
                 gia += 1
                 continue
