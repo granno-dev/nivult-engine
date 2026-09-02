@@ -137,6 +137,11 @@ if [ -n "${FRANCE_TRAVAIL_CLIENT_ID:-}" ]; then
 fi
 
 # ── Bundesagentur (Germania) — API pubblica, 100k+ offerte ──────
+echo "── eures (portale UE — copre l'Italia)"
+"$PY" -m nivult.ats.servizi_pubblici --eures --paesi IT --limite 2000 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 echo "── bundesanstellung (Germania)"
 "$PY" -m nivult.ats.servizi_pubblici --bundesanstellung --limite 2000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
@@ -155,6 +160,16 @@ echo "── classificatore a livelli (5000)"
 echo "── wikidata esteso"
 "$PY" -m nivult.ats.detector --wikidata-estesa \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+# ── 7. Il ponte, di nuovo: le offerte scrappate e classificate STANOTTE
+# entrano nel motore adesso, non domattina alle 05:00. Prima di questa
+# corsa ogni novita' interna arrivava al digest con un giorno di ritardo
+# fisso: il giro notturno finisce dopo le 05:00 del ponte a cron, e
+# l'offerta fresca restava a guardare. Il flock dentro ponte-ats.sh
+# protegge dalla sovrapposizione con la corsa a cron.
+echo "── ponte verso il motore"
+/opt/nivult/engine/deploy/ponte-ats.sh >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
 echo "=== ATS nightly completato $(date -Is) ==="

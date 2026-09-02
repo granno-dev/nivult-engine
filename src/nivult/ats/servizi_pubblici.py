@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 import psycopg
@@ -475,6 +475,120 @@ def stats(dsn: str) -> None:
                 print(f"  {pid:22s} {tot:>7d} totali, {recenti:>5d} ultime 7gg")
 
 
+def eures(dsn: str, limite: int = 2000, paesi: str = "IT") -> dict:
+    """EURES: il portale UE che aggrega i centri per l'impiego nazionali.
+
+    E' la fonte che copre l'ITALIA, dove non esiste un'API pubblica
+    nazionale decente: EURES riceve le offerte dei PES italiani (e di
+    tutti gli altri) e le espone da un endpoint JSON pubblico. Non e'
+    un'API garantita — niente SLA, niente rate limit dichiarato — quindi
+    il codice tratta ogni risposta come sospetta e si ferma al primo
+    segnale di forma cambiata, invece di inserire spazzatura.
+
+    L'URL dell'offerta e' la pagina di dettaglio EURES, non il sito del
+    datore: il campo apply non viaggia nella ricerca, e una richiesta di
+    dettaglio per offerta moltiplicherebbe il costo per un link che la
+    pagina EURES comunque contiene. Gli id contengono SPAZI (sono cosi',
+    davvero): l'escape non e' opzionale.
+    """
+    from urllib.parse import quote
+    stats = {"offerte": 0, "nuove": 0, "aggiornate": 0, "errori": 0}
+    base = "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"
+    PER_PAGINA = 50
+
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+            VALUES ('eures', 'EURES (portale UE)', true, 'json',
+                    'endpoint pubblico non garantito: jv-searchengine')
+            ON CONFLICT (id) DO NOTHING""")
+        conn.commit()
+
+    with httpx.Client(timeout=30, headers={"User-Agent": "nivult-ats/0.1"}) as c:
+        for paese in [x.strip().upper() for x in paesi.split(",") if x.strip()]:
+            pagine = max(1, min(limite, 5000) // PER_PAGINA)
+            for pagina in range(1, pagine + 1):
+                try:
+                    r = c.post(base, json={
+                        "resultsPerPage": PER_PAGINA,
+                        "page": pagina,
+                        "sortSearch": "MOST_RECENT",
+                        "locationCodes": [paese.lower()],
+                        "keywords": [],
+                        "requestLanguage": "en",
+                    })
+                    if r.status_code != 200:
+                        log.warning("EURES %d a pagina %d (%s)",
+                                    r.status_code, pagina, paese)
+                        break
+                    jvs = r.json().get("jvs") or []
+                    if not jvs:
+                        break
+                except (httpx.HTTPError, ValueError) as exc:
+                    log.warning("EURES errore: %s", exc)
+                    stats["errori"] += 1
+                    break
+
+                for jv in jvs:
+                    jid = str(jv.get("id") or "").strip()
+                    titolo = (jv.get("title") or "").strip()
+                    if not jid or not titolo:
+                        continue
+                    stats["offerte"] += 1
+
+                    datore = ((jv.get("employer") or {}).get("name") or "").strip()
+                    # I PES scrivono «Non renseigné»/«non disponibile» al
+                    # posto del vuoto: e' un'assenza travestita, e da noi
+                    # le assenze si scrivono NULL.
+                    if datore.lower() in ("non renseigné", "non disponibile",
+                                          "not available", "n/a", ""):
+                        datore = None
+                    mappa = jv.get("locationMap") or {}
+                    citta = None
+                    for valori in mappa.values():
+                        for v in (valori or []):
+                            if v and str(v).strip():
+                                citta = str(v).strip()
+                                break
+                        if citta:
+                            break
+                    ms = jv.get("creationDate")
+                    dt = (datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+                          if isinstance(ms, (int, float)) else None)
+                    url = ("https://europa.eu/eures/portal/jv-se/jv-details/"
+                           + quote(jid, safe="") + "?lang=en")
+                    if datore:
+                        jv = dict(jv)
+                        jv["company"] = {"name": datore}
+
+                    with psycopg.connect(dsn) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO ats_jobs
+                                  (platform_id, slug, external_id, title, url,
+                                   location, country, city, posted_at, raw)
+                                VALUES ('eures', %s, %s, %s, %s,
+                                        %s, %s, %s, %s, %s)
+                                ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                                  title = EXCLUDED.title, url = EXCLUDED.url,
+                                  location = EXCLUDED.location, city = EXCLUDED.city,
+                                  posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                                  fetched_at = now()
+                                RETURNING (xmax = 0) AS is_new
+                            """, (paese.lower(), jid, titolo[:300], url,
+                                  citta, paese, citta, dt,
+                                  psycopg.types.json.Json(jv)))
+                            r2 = cur.fetchone()
+                            if r2 and r2[0]:
+                                stats["nuove"] += 1
+                            else:
+                                stats["aggiornate"] += 1
+                        conn.commit()
+
+    log.info("EURES (%s): %s", paesi, stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO,
                         format="%(levelname)-8s %(message)s")
@@ -488,9 +602,17 @@ def main(argv: list[str] | None = None) -> int:
                     help="scarica da Bundesagentur (Germania, gratis)")
     ap.add_argument("--francetravail-rome", action="store_true",
                     help="scarica FT per codeROME (25+ famiglie, fino a 75k)")
+    ap.add_argument("--eures", action="store_true",
+                    help="EURES, il portale UE: la fonte che copre l'Italia")
+    ap.add_argument("--paesi", default="IT",
+                    help="paesi per --eures, separati da virgola")
     ap.add_argument("--limite", type=int, default=1000)
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
+
+    if args.eures:
+        st = eures(ATS_DSN, args.limite, args.paesi)
+        print(f"EURES: {st}")
 
     if args.arbetsformedlingen:
         s = scarica_arbetsformedlingen(ATS_DSN, args.limite)
@@ -508,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         stats(ATS_DSN)
     if not (args.arbetsformedlingen or args.francetravail
             or args.bundesanstellung or args.francetravail_rome
-            or args.stats):
+            or args.stats or args.eures):
         ap.print_help()
     return 0
 
