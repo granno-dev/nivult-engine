@@ -221,6 +221,164 @@ def scarica_gleif_completo(dsn: str, paesi: str) -> dict:
 
 # ── 2. SCHEMA.ORG UNIVERSALE ──────────────────────────────────────
 
+def raccogli_schema_org(dsn: str, paese: str = "IT",
+                        limite: int = 4000, thread: int = 12) -> dict:
+    """Raccoglie le OFFERTE via schema.org dai domini vivi senza ATS noto.
+
+    La sonda (`leggi_schema_org`) contava chi espone JobPosting; questa
+    li porta a casa. E' il metodo di Google for Jobs rovesciato: non
+    serve riconoscere l'ATS — il JSON-LD JobPosting e' uno standard, e
+    chi vuole comparire su Google lo pubblica gia'. I bersagli sono i
+    domini che il detector ha marcato `no_ats` o `no_careers`: vivi,
+    con un sito, ma con un sistema che non sappiamo leggere — per
+    l'Italia sono migliaia, ed erano tutti buttati.
+
+    Prudenza da scraper educato: un fetch della home/careers e del
+    sitemap per dominio, poi al massimo 30 pagine di offerta per
+    dominio per giro. Niente retry aggressivi: chi non risponde oggi
+    si riprova alla prossima corsa.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"domini": 0, "con_offerte": 0, "offerte": 0, "nuove": 0}
+
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+            VALUES ('schemaorg', 'JSON-LD JobPosting (schema.org)', true,
+                    'jsonld', 'domini senza ATS riconosciuto, standard Google for Jobs')
+            ON CONFLICT (id) DO NOTHING""")
+        conn.commit()
+        cur.execute("""
+            SELECT domain, company_name FROM company_domains
+             WHERE status IN ('no_ats', 'no_careers') AND country = %s
+             ORDER BY domain LIMIT %s""", (paese.upper(), int(limite)))
+        domini = cur.fetchall()
+
+    def _jobposting(doc):
+        """Pesca i JobPosting da un JSON-LD, qualunque forma abbia:
+        oggetto secco, lista, o @graph. Tutto il resto si ignora."""
+        if isinstance(doc, list):
+            for x in doc:
+                yield from _jobposting(x)
+        elif isinstance(doc, dict):
+            if doc.get("@type") == "JobPosting":
+                yield doc
+            for x in doc.get("@graph") or []:
+                yield from _jobposting(x)
+
+    def _estrai(jp, dominio):
+        titolo = str(jp.get("title") or "").strip()
+        if not titolo:
+            return None
+        org = jp.get("hiringOrganization")
+        datore = (org.get("name") if isinstance(org, dict) else
+                  org if isinstance(org, str) else None)
+        loc = jp.get("jobLocation")
+        if isinstance(loc, list):
+            loc = loc[0] if loc else None
+        indirizzo = (loc or {}).get("address") if isinstance(loc, dict) else None
+        citta = pcode = None
+        if isinstance(indirizzo, dict):
+            citta = indirizzo.get("addressLocality")
+            pcode = indirizzo.get("addressCountry")
+            if isinstance(pcode, dict):
+                pcode = pcode.get("name")
+        data = None
+        raw_data = jp.get("datePosted")
+        if isinstance(raw_data, str):
+            try:
+                data = datetime.fromisoformat(raw_data[:19])
+            except ValueError:
+                pass
+        url = str(jp.get("url") or jp.get("directApply") or "").strip()
+        return {"titolo": titolo[:300], "datore": datore,
+                "citta": str(citta)[:120] if citta else None,
+                "paese": (str(pcode).strip().upper()[:2]
+                          if isinstance(pcode, str) and len(str(pcode).strip()) == 2
+                          else None),
+                "data": data, "url": url}
+
+    def _leggi_dominio(riga):
+        dominio, nome = riga
+        raccolte = []
+        with httpx.Client(timeout=12, follow_redirects=True,
+                          headers={"User-Agent": "nivult-ats/0.1"}) as c:
+            pagine = []
+            try:
+                r = c.get(f"https://{dominio}/sitemap.xml")
+                if r.status_code == 200 and "<urlset" in r.text:
+                    for u in re.findall(r"<loc>([^<]+)</loc>", r.text):
+                        if re.search(r"/job|/vacanc|/position|/offert|/stell|/lavora|/carrier|/careers?/", u, re.I):
+                            pagine.append(u)
+            except httpx.HTTPError:
+                pass
+            for path in ("/careers", "/jobs", "/lavora-con-noi", "/"):
+                pagine.append(f"https://{dominio}{path}")
+            visti = set()
+            for u in pagine[:34]:
+                if u in visti:
+                    continue
+                visti.add(u)
+                try:
+                    r = c.get(u)
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                for m in re.finditer(
+                        r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>',
+                        r.text, re.S):
+                    try:
+                        doc = json.loads(m.group(1).strip())
+                    except json.JSONDecodeError:
+                        continue
+                    for jp in _jobposting(doc):
+                        e = _estrai(jp, dominio)
+                        if e:
+                            e["url"] = e["url"] or str(r.url)
+                            e["grezzo"] = jp
+                            raccolte.append(e)
+                if len(raccolte) >= 30:
+                    break
+        return dominio, nome, raccolte
+
+    with ThreadPoolExecutor(max_workers=thread) as pool:
+        for dominio, nome, raccolte in pool.map(_leggi_dominio, domini):
+            stats["domini"] += 1
+            if not raccolte:
+                continue
+            stats["con_offerte"] += 1
+            with psycopg.connect(dsn) as conn:
+                for e in raccolte:
+                    stats["offerte"] += 1
+                    ext = f"{dominio}:{e['url'][-180:]}"
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO ats_jobs
+                              (platform_id, slug, external_id, title, url,
+                               location, country, city, posted_at, raw)
+                            VALUES ('schemaorg', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                              title = EXCLUDED.title, posted_at = EXCLUDED.posted_at,
+                              raw = EXCLUDED.raw, fetched_at = now()
+                            RETURNING (xmax = 0) AS is_new
+                        """, (dominio, ext, e["titolo"], e["url"][:500],
+                              e["citta"], e["paese"] or paese.upper(),
+                              e["citta"], e["data"],
+                              psycopg.types.json.Json({
+                                  "company": {"name": e["datore"] or nome},
+                                  "jsonld": e["grezzo"]})))
+                        r2 = cur.fetchone()
+                        if r2 and r2[0]:
+                            stats["nuove"] += 1
+                conn.commit()
+            if stats["domini"] % 200 == 0:
+                log.info("  schema.org: %s", stats)
+
+    log.info("raccolta schema.org (%s): %s", paese, stats)
+    return stats
+
+
 def leggi_schema_org(dsn: str, limite: int = 100) -> dict:
     """Per le aziende senza ATS: legge JSON-LD e sitemap.
 
@@ -329,6 +487,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--per-paese", type=int, default=2000)
     ap.add_argument("--gleif-completo", action="store_true",
                     help="scarica TUTTE le aziende con query per lettera")
+    ap.add_argument("--raccogli-schema", action="store_true",
+                    help="raccoglie le OFFERTE JSON-LD dai domini vivi senza ATS")
+    ap.add_argument("--paese", default="IT")
     ap.add_argument("--schema-org", action="store_true",
                     help="analizza le aziende senza offerte con JSON-LD/sitemap")
     ap.add_argument("--limite", type=int, default=100)
@@ -341,13 +502,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.gleif_completo:
         s = scarica_gleif_completo(ATS_DSN, args.paesi)
         print(f"\nGLEIF completo: {s}")
+    if args.raccogli_schema:
+        st = raccogli_schema_org(ATS_DSN, args.paese, args.limite)
+        print(f"Raccolta schema.org: {st}")
+
     if args.schema_org:
         s = leggi_schema_org(ATS_DSN, args.limite)
         print(f"\nSchema.org: {s}")
     if args.stats:
         stats(ATS_DSN)
     if not (args.gleif or args.gleif_completo
-            or args.schema_org or args.stats):
+            or args.schema_org or args.stats or args.raccogli_schema):
         ap.print_help()
     return 0
 
