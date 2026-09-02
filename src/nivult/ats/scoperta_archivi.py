@@ -219,6 +219,25 @@ def scopri(dsn: str, piattaforme: list[str] | None, limite_nuove: int,
     return esito
 
 
+def demone(piattaforme: list[str] | None, limite_nuove: int,
+           pagine_max: int) -> None:
+    """Gira senza fermarsi: un giro di fette Wayback dopo l'altro.
+
+    Quando ogni piattaforma è arrivata in fondo al proprio CDX, il
+    lavoro grosso è finito: si dorme 6 ore e si ricontrolla, perché
+    l'archivio cresce piano. Il ritmo verso la Wayback resta lo
+    stesso di sempre — 10s a pagina — solo che non si smette dopo
+    quattro pagine: «continuamente» vuol dire questo, non «più forte».
+    """
+    while True:
+        esito = scopri(ATS_DSN, piattaforme, limite_nuove,
+                       pagine_max, solo_cc=False, solo_wayback=True)
+        log.info("giro completo: %s", esito)
+        seg = _leggi_segnalibri()
+        tutte_finite = seg and all(v.get("finito") for v in seg.values())
+        time.sleep(6 * 3600 if tutte_finite else 120)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(name)s %(message)s")
@@ -231,8 +250,13 @@ def main() -> None:
                     help="pagine Wayback per piattaforma per corsa")
     ap.add_argument("--solo-cc", action="store_true")
     ap.add_argument("--solo-wayback", action="store_true")
+    ap.add_argument("--demone", action="store_true",
+                    help="non esce mai: fette Wayback in continuo")
     args = ap.parse_args()
     piatt = [p.strip() for p in args.piattaforme.split(",") if p.strip()]
+    if args.demone:
+        demone(piatt or None, args.limite_nuove, max(args.pagine_max, 15))
+        return
     esito = scopri(ATS_DSN, piatt or None, args.limite_nuove,
                    args.pagine_max, args.solo_cc, args.solo_wayback)
     print(esito)

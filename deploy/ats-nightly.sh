@@ -55,8 +55,8 @@ echo "── scrape"
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
 # ── 1b. Scoperta tenant dagli archivi (CC + Wayback, a fette) ───────
-echo "── scoperta archivi"
-"$PY" -m nivult.ats.scoperta_archivi --pagine-max 4 \
+echo "── scoperta archivi (solo CC: la Wayback la macina il demone)"
+"$PY" -m nivult.ats.scoperta_archivi --solo-cc \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
@@ -143,6 +143,10 @@ if [ -n "${FRANCE_TRAVAIL_CLIENT_ID:-}" ]; then
 fi
 
 # ── Bundesagentur (Germania) — API pubblica, 100k+ offerte ──────
+echo "── agenzie per il lavoro (sitemap + JSON-LD)"
+"$PY" -m nivult.ats.agenzie >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO (vedi log)"
+
 echo "── eures (portale UE — copre l'Italia)"
 "$PY" -m nivult.ats.servizi_pubblici --eures --paesi IT --limite 4000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
