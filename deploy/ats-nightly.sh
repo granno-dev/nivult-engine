@@ -138,7 +138,7 @@ fi
 
 # ── Bundesagentur (Germania) — API pubblica, 100k+ offerte ──────
 echo "── eures (portale UE — copre l'Italia)"
-"$PY" -m nivult.ats.servizi_pubblici --eures --paesi IT --limite 2000 \
+"$PY" -m nivult.ats.servizi_pubblici --eures --paesi IT --limite 4000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
