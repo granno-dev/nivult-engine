@@ -54,6 +54,12 @@ echo "── scrape"
 "$PY" -m nivult.ats.runner >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
+# ── 1b. Scoperta tenant dagli archivi (CC + Wayback, a fette) ───────
+echo "── scoperta archivi"
+"$PY" -m nivult.ats.scoperta_archivi --pagine-max 4 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO (vedi log)"
+
 # ── 2. Detector statico sui domini in attesa ────────────────────────
 echo "── detector (batch 3000)"
 "$PY" -m nivult.ats.detector --rileva --limite 3000 --thread 20 \
