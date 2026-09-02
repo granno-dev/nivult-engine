@@ -70,6 +70,26 @@ AGENZIE = {
         "sitemaps": ["https://www.manpower.it/sitemap/italy/"
                      "it-manpower/sitemap_job-offer.xml"],
     },
+    # Helplavoro e' un portale dove le agenzie pubblicano direttamente:
+    # 34.482 URL in quattro sitemap, JSON-LD su ogni annuncio. Portera'
+    # doppioni delle agenzie che leggiamo gia' alla fonte — e' il ponte
+    # e il dedup del motore a doverli riconoscere, non questo lettore.
+    "helplavoro": {
+        "nome": "Helplavoro (portale agenzie)",
+        "sitemaps": [f"https://www.helplavoro.it/xmlofferte{i}/sitemap.xml"
+                     for i in (1, 2, 3, 4)],
+    },
+    # Eurointerim non pubblica JSON-LD: si legge l'HTML, che per fortuna
+    # e' statico e ordinato (h1 = titolo, «Luogo di lavoro: Citta' (PR)»).
+    "eurointerim": {
+        "nome": "Eurointerim",
+        "sitemaps": ["https://www.eurointerim.it/job-sitemap.xml",
+                     "https://www.eurointerim.it/job-sitemap2.xml"],
+        "html": {
+            "titolo": r"<h1[^>]*>(.*?)</h1>",
+            "luogo": r"Luogo di lavoro[^:]*:\s*(?:</?\w+>|\s)*([^<]{2,60})",
+        },
+    },
 }
 
 
@@ -135,6 +155,23 @@ def _estrai_ld(html: str):
         if jp:
             return jp
     return None
+
+
+def _estrai_html(html: str, regole: dict):
+    """Un JobPosting minimo cavato dall'HTML, per i siti senza JSON-LD."""
+    m = re.search(regole["titolo"], html, re.S | re.I)
+    if not m:
+        return None
+    titolo = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+    if not titolo:
+        return None
+    jp = {"title": titolo}
+    ml = re.search(regole["luogo"], html, re.S | re.I)
+    if ml:
+        luogo = ml.group(1).strip().strip(":").strip()
+        jp["jobLocation"] = {"address": {"addressLocality": luogo,
+                                         "addressCountry": "IT"}}
+    return jp
 
 
 def _data(jp) -> datetime | None:
@@ -206,7 +243,10 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                     r = client.get(u)
                     if r.status_code != 200:
                         return u, None, f"http {r.status_code}"
-                    return u, _estrai_ld(r.text), None
+                    jp = _estrai_ld(r.text)
+                    if not jp and cfg.get("html"):
+                        jp = _estrai_html(r.text, cfg["html"])
+                    return u, jp, None
                 except httpx.HTTPError as e:
                     return u, None, str(e)
 

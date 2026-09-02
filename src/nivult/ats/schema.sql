@@ -22,6 +22,12 @@ CREATE TABLE IF NOT EXISTS ats_companies (
     -- 'manual', 'discovery'
     discovered_from TEXT NOT NULL DEFAULT 'manual',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Workday: server (wd3, wd103...) e istanza del tenant.
+    wd_server       TEXT,
+    wd_instance     TEXT,
+    -- In-recruiting: la chiave di pubblicazione che annunci.php esige,
+    -- scavata dagli embed archiviati (Wayback) e convalidata dal vivo.
+    pub_key         TEXT,
     UNIQUE(platform_id, slug)
 );
 

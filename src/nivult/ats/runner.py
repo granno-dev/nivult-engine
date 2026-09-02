@@ -96,7 +96,7 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
-                   "       ac.wd_server, ac.wd_instance "
+                   "       ac.wd_server, ac.wd_instance, ac.pub_key "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -117,6 +117,9 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
                     # Workday ha bisogno della configurazione tenant.
                     if az["platform_id"] == "workday":
                         jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
+                    # In-recruiting ha bisogno della chiave di pubblicazione.
+                    elif az["platform_id"] == "inrecruiting":
+                        jobs = adapter.jobs(az["slug"], az["pub_key"])
                     else:
                         jobs = adapter.jobs(az["slug"])
             except Exception as exc:  # noqa: BLE001

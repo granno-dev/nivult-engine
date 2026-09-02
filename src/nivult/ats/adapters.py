@@ -1799,34 +1799,59 @@ ADAPTERS["factorial"] = Factorial
 
 
 class InRecruiting(BaseAdapter):
-    """InRecruiting / Intervieweb (Zucchetti) — portali intervieweb.it.
+    """In-recruiting / Intervieweb (Zucchetti) — l'ATS delle PMI italiane.
 
-    Lo slug è il hostname del portale (zinrec.intervieweb.it); il
-    listing carica via JS. Le offerte sono link con ID.
+    Il portale del tenant è un login: la bacheca pubblica NON esiste
+    sul sottodominio. Le offerte escono da annunci.php, che però vuole
+    la chiave di pubblicazione — quella che le aziende incorporano
+    negli iframe dei propri siti. Le chiavi si scavano dagli archivi
+    (Wayback conserva gli embed) e vivono in ats_companies.pub_key,
+    convalidate una a una prima di entrare.
+
+    Con la chiave, l'endpoint è un'API JSON pulita: titolo, città,
+    regione, contratto, date di pubblicazione e scadenza, e l'URL del
+    dettaglio — che è pubblico. Prima si renderizzava il login con un
+    browser e si raccoglieva zero.
     """
     platform_id = "inrecruiting"
 
-    def jobs(self, slug: str) -> list[AtsJob]:
-        link = _renderizza_estrai(
-            f"https://{slug}/", "a[href*='job'], a[href*='annunci']",
-            attesa=10000)
+    MESI = {"Italia": "IT", "Francia": "FR", "Germania": "DE",
+            "Spagna": "ES", "Svizzera": "CH", "Regno Unito": "GB",
+            "Austria": "AT", "Belgio": "BE", "Paesi Bassi": "NL"}
+
+    def jobs(self, slug: str, chiave: str | None = None) -> list[AtsJob]:
+        if not chiave:
+            return []
+        r = self.client.get(
+            f"https://{slug}.intervieweb.it/annunci.php"
+            f"?lang=it&k={chiave}&format=json_en&utype=0")
+        if r.status_code != 200 or not r.text.lstrip().startswith("["):
+            return []
         out: list[AtsJob] = []
-        visti: set[str] = set()
-        for l in link:
-            m = re.search(r'/(?:job|annuncio|position)[s]?/(\d+)',
-                          l.get("href", ""))
-            if not m or m.group(1) in visti:
+        for a in r.json():
+            aid = str(a.get("id") or "").strip()
+            titolo = (a.get("title") or "").strip()
+            if not aid or not titolo:
                 continue
-            visti.add(m.group(1))
-            titolo = (l.get("text") or "").strip()
-            if len(titolo) < 4:
-                continue
+            # published: "28-07-2026 (15:42)" — data italiana con l'ora
+            # tra parentesi, va presa per quello che è
+            dt = None
+            m = re.match(r"(\d{2})-(\d{2})-(\d{4})",
+                         str(a.get("published") or ""))
+            if m:
+                dt = datetime(int(m.group(3)), int(m.group(2)),
+                              int(m.group(1)), tzinfo=timezone.utc)
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
-                external_id=m.group(1),
-                title=titolo,
-                url=l["href"],
-                raw={}))
+                external_id=aid, title=titolo,
+                url=(a.get("url") or
+                     f"https://{slug}.intervieweb.it/jobs/{aid}/it/"),
+                location=(a.get("city") or a.get("location") or None),
+                city=(a.get("city") or None),
+                country=self.MESI.get((a.get("nation") or "").strip()),
+                posted_at=dt,
+                department=(a.get("function") or None),
+                raw=a))
         return out
 
 
