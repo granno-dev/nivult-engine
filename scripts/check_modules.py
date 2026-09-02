@@ -223,7 +223,7 @@ def seed_digest(conn: psycopg.Connection) -> dict[str, str]:
         # B ha il budget del mese già consumato: il breaker deve dire di no.
         cur.execute(
             "INSERT INTO user_evaluation_budget (user_id, period_month, evaluations_used) "
-            "VALUES (%s, date_trunc('month', current_date)::date, 5000)", (ids["b"],))
+            "VALUES (%s, date_trunc('month', current_date)::date, 4000)", (ids["b"],))
     conn.commit()
     return ids
 
@@ -447,7 +447,8 @@ def main() -> int:
         check("il messaggio dice piano e consumato",
               seen_by_other("SELECT error_message FROM digests WHERE user_id = %s "
                             "  AND status = 'failed'", (dg["b"],)),
-              "budget di valutazione esaurito (5000/5000, piano pro)")
+              # 0061: le quote Creem hanno portato il pro a 4000 valutazioni
+              "budget di valutazione esaurito (4000/4000, piano pro)")
 
         # Regressione: un match rimasto indietro (worker morto prima della
         # consegna) va recuperato dal digest successivo SENZA rivalutarlo.
