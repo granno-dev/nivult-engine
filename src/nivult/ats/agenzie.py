@@ -8,6 +8,8 @@ su ogni pagina di dettaglio. Misurato il 2026-09-03:
     randstad.it      5.000 URL   JSON-LD presente
     gigroup.it       3.361 URL   JSON-LD presente
     umana.it         1.092 URL   JSON-LD presente
+    adecco.com/it    6.320 URL   JSON-LD presente (sitemap per paese)
+    manpower.it      8.000 URL   JSON-LD presente
     openjobmetis.it  1.916 URL   JSON-LD ASSENTE (parse HTML, dopo)
 
 Il giro e' semplice e onesto: si legge la sitemap delle offerte, si
@@ -55,6 +57,18 @@ AGENZIE = {
     "umana": {
         "nome": "Umana",
         "sitemaps": ["https://www.umana.it/jobs-sitemap.xml"],
+    },
+    # Adecco e' migrata sulla piattaforma globale adecco.com: una
+    # sitemap-offerte per paese (60 paesi!). Qui l'Italia; Francia,
+    # Germania e Spagna sono a un rigo di distanza quando serviranno.
+    "adecco": {
+        "nome": "Adecco Italia",
+        "sitemaps": ["https://www.adecco.com/sitemap-jobs-italy-it.xml"],
+    },
+    "manpower": {
+        "nome": "Manpower Italia",
+        "sitemaps": ["https://www.manpower.it/sitemap/italy/"
+                     "it-manpower/sitemap_job-offer.xml"],
     },
 }
 
