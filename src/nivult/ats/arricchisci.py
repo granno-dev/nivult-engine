@@ -256,7 +256,18 @@ def arricchisci_da_localita(dsn: str) -> dict:
 # compito di mantenimento.arricchisci, e i loro paesi NON NULL non si
 # toccano qui — potrebbero venire dal raw, che e' evidenza.
 PIATTAFORME_RAW_PAESE = {"lever", "softgarden", "oracle", "cornerstone",
-                         "greenhouse", "jibe"}
+                         "greenhouse", "jibe",
+                         # Fonti a paese CERTO o affidabile alla sorgente,
+                         # da non azzerare mai: i servizi pubblici sono
+                         # nazionali (il paese lo SA il servizio stesso),
+                         # SmartRecruiters lo porta nel feed, le agenzie
+                         # lo dichiarano, In-recruiting ha il campo nation.
+                         # Senza questi in lista, l'arricchimento da-azienda
+                         # cancellava il loro paese: era la causa di 200k+
+                         # offerte «senza paese» scartate dal ponte.
+                         "francetravail", "bundesanstellung",
+                         "arbetsformedlingen", "eures", "smartrecruiters",
+                         "agenzie", "inrecruiting"}
 
 
 def _dizionario_citta() -> dict:
