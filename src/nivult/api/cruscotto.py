@@ -222,15 +222,53 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     except psycopg.Error:
         d["motore"], d["cluster"], d["iscritti"] = {}, [], []
 
-    # ── andamento: offerte pubblicate per giorno, ultimi 14 ──
-    d["andamento"] = [{"giorno": g, "offerte": n} for g, n in _righe(ats_dsn, """
-        SELECT to_char(d, 'DD/MM'), n FROM (
-          SELECT date_trunc('day', posted_at) AS d, count(*) AS n
+    # ── ATS pending: piattaforme censite ma senza adattatore, quindi
+    # scoperte ma non ancora raccoglibili — vanno «aggiunte» scrivendo
+    # l'adattatore. E' la coda di lavoro delle nuove piattaforme.
+    try:
+        from nivult.ats.adapters import ADAPTERS
+        noti = set(ADAPTERS.keys())
+    except Exception:                                # noqa: BLE001
+        noti = set()
+    pend = _righe(ats_dsn, """
+        SELECT ac.platform_id, count(*),
+               count(*) FILTER (WHERE ac.last_fetch_at IS NULL)
+          FROM ats_companies ac
+          JOIN ats_platforms ap ON ap.id = ac.platform_id
+         WHERE ac.is_active AND ap.is_active
+         GROUP BY ac.platform_id""")
+    d["ats_pending"] = sorted(
+        [{"piattaforma": p, "aziende": tot, "in_attesa": mai}
+         for p, tot, mai in pend if p not in noti],
+        key=lambda r: -r["aziende"])
+    d["salute"]["ats_pending_n"] = len(d["ats_pending"])
+    d["salute"]["ats_pending_aziende"] = sum(
+        r["aziende"] for r in d["ats_pending"])
+
+    # ── andamento: offerte pubblicate per giorno (30 gg), col dettaglio
+    # per fonte dietro ogni numero, per il grafico interattivo ──
+    grezzo = _righe(ats_dsn, """
+        SELECT to_char(date_trunc('day', posted_at), 'YYYY-MM-DD') AS g,
+               platform_id, count(*) AS n
           FROM ats_jobs
-          WHERE expired_at IS NULL
-            AND posted_at > now() - interval '14 days'
-            AND posted_at <= now()
-          GROUP BY 1 ORDER BY 1) x""")]
+         WHERE expired_at IS NULL
+           AND posted_at > now() - interval '30 days'
+           AND posted_at <= now()
+         GROUP BY 1, 2 ORDER BY 1""")
+    per_giorno: dict = {}
+    for g, pid, n in grezzo:
+        v = per_giorno.setdefault(g, {"giorno": g, "offerte": 0, "fonti": {}})
+        v["offerte"] += n
+        v["fonti"][pid] = v["fonti"].get(pid, 0) + n
+    d["andamento"] = []
+    for g in sorted(per_giorno):
+        v = per_giorno[g]
+        fonti = sorted(v["fonti"].items(), key=lambda x: -x[1])[:6]
+        d["andamento"].append({
+            "giorno": g[8:10] + "/" + g[5:7],   # DD/MM
+            "data": g,
+            "offerte": v["offerte"],
+            "dettaglio": [{"fonte": p, "n": n} for p, n in fonti]})
 
     return d
 
@@ -297,6 +335,28 @@ margin:2px 4px 2px 0;background:var(--card2);border:1px solid var(--line);color:
 .ch.telegram{color:#4cc4ff;border-color:rgba(76,196,255,.3)}
 .ch.whatsapp{color:#5fd67a;border-color:rgba(95,214,122,.3)}
 .ch.rc{color:var(--ink)}
+.lcwrap{padding:12px 8px 2px}
+svg.lc{width:100%;height:auto;display:block;overflow:visible}
+svg.lc .grid{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+svg.lc .area{stroke:none}
+svg.lc .ln{fill:none;stroke:var(--acc);stroke-width:2.2;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round}
+svg.lc .pt{fill:var(--card);stroke:var(--acc);stroke-width:2;cursor:pointer;transition:r .12s ease}
+svg.lc .pt:hover{r:6}
+svg.lc .pt.sel{fill:var(--acc);r:6.5}
+svg.lc .xl{fill:var(--dim);font-size:11px;text-anchor:middle}
+svg.lc .yl{fill:var(--dim);font-size:10px;text-anchor:end}
+.det{border-top:1px solid var(--line);margin-top:8px;padding:6px 6px 4px}
+.dethd{font-size:13px;color:var(--ink);padding:8px 10px 6px;font-weight:500}
+.dethd b{font-variant-numeric:tabular-nums;color:var(--acc)}
+.hint{font-size:12px;color:var(--dim);padding:10px;opacity:.8}
+.pend .num{color:var(--warn)}
+.pend{border-color:rgba(224,161,50,.32)}
+.pl{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
+.pl:last-child{border-bottom:none}
+.pl .k{flex:1;font-size:14px;font-weight:600;text-transform:capitalize}
+.pl .badge{font-size:11px;color:var(--warn);background:rgba(224,161,50,.12);
+border:1px solid rgba(224,161,50,.3);border-radius:20px;padding:2px 10px;font-weight:600}
+.pl .v{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:96px;text-align:right}
 </style></head><body>
 <div class="top">
   <div class="brand"><b>Nivult</b><span>Cruscotto del motore</span></div>
@@ -316,10 +376,44 @@ function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style=
  return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${r[k]}</div>`+
   `<div class="track"><i style="width:${Math.round(100*r[vk]/max)}%"></i></div>`+
   `<div class="v">${IT(r[vk])}</div></div>`).join('')+'</div>'}
-function grafico(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:16px">nessun dato di andamento</div>';
- const max=Math.max(...rows.map(r=>r.offerte),1);
- return '<div class="chart">'+rows.map(r=>
-  `<div class="col"><div class="cbar" style="height:${Math.round(100*r.offerte/max)}%" title="${IT(r.offerte)} offerte il ${r.giorno}"></div><div class="cx">${r.giorno}</div></div>`).join('')+'</div>'}
+let _and=[];
+function mostraDettaglio(i){
+ const r=_and[i];if(!r)return;
+ document.querySelectorAll('.pt').forEach(p=>p.classList.remove('sel'));
+ const el=document.getElementById('pt'+i);if(el)el.classList.add('sel');
+ const det=document.getElementById('det');if(!det)return;
+ const dt=r.dettaglio||[];const max=Math.max(...dt.map(x=>x.n),1);
+ det.innerHTML=`<div class="dethd">${r.giorno} — <b>${IT(r.offerte)}</b> offerte pubblicate, per fonte:</div>`
+  +(dt.length?dt.map(x=>`<div class="row"><div class="k">${x.fonte}</div>`
+   +`<div class="track"><i style="width:${Math.round(100*x.n/max)}%"></i></div>`
+   +`<div class="v">${IT(x.n)}</div></div>`).join(''):'<div class="hint">nessun dettaglio</div>')}
+function grafico(rows){
+ if(!rows||!rows.length)return '<div class="hint">nessun dato di andamento</div>';
+ _and=rows;
+ const W=980,H=220,pl=42,pr=14,pt=14,pb=26;
+ const n=rows.length,max=Math.max(...rows.map(r=>r.offerte),1);
+ const X=i=>pl+(W-pl-pr)*(n<=1?0.5:i/(n-1));
+ const Y=v=>H-pb-(H-pt-pb)*(v/max);
+ const P=rows.map((r,i)=>[X(i),Y(r.offerte)]);
+ const line=P.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+ const area=`M${X(0).toFixed(1)} ${(H-pb).toFixed(1)} `+P.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+` L${X(n-1).toFixed(1)} ${(H-pb).toFixed(1)} Z`;
+ let g='';
+ for(let k=0;k<=3;k++){const y=pt+(H-pt-pb)*k/3,val=Math.round(max*(3-k)/3);
+  g+=`<line class="grid" x1="${pl}" y1="${y.toFixed(1)}" x2="${W-pr}" y2="${y.toFixed(1)}"/>`
+   +`<text class="yl" x="${pl-6}" y="${(y+3).toFixed(1)}">${IT(val)}</text>`}
+ const step=Math.max(1,Math.ceil(n/9));
+ let xl='';rows.forEach((r,i)=>{if(i%step===0||i===n-1)xl+=`<text class="xl" x="${X(i).toFixed(1)}" y="${H-8}">${r.giorno}</text>`});
+ let pts='';rows.forEach((r,i)=>{pts+=`<circle id="pt${i}" class="pt" cx="${X(i).toFixed(1)}" cy="${Y(r.offerte).toFixed(1)}" r="4" onclick="mostraDettaglio(${i})"><title>${r.giorno}: ${IT(r.offerte)} offerte</title></circle>`});
+ const svg=`<svg class="lc" viewBox="0 0 ${W} ${H}">`
+  +`<defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">`
+  +`<stop offset="0" stop-color="#4c8dff" stop-opacity=".28"/><stop offset="1" stop-color="#4c8dff" stop-opacity="0"/></linearGradient></defs>`
+  +g+`<path class="area" d="${area}" fill="url(#ag)"/><path class="ln" d="${line}"/>`+pts+xl+`</svg>`;
+ return `<div class="lcwrap">${svg}</div><div id="det" class="det"><div class="hint">clicca un punto del grafico per vedere le fonti dietro quel numero</div></div>`}
+function pending(rows){
+ if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun ATS in attesa: tutte le piattaforme censite hanno un adattatore.</div>';
+ return '<div class="panel">'+rows.map(r=>`<div class="pl"><div class="k">${r.piattaforma}</div>`
+  +`<span class="badge">adattatore da scrivere</span>`
+  +`<div class="v">${IT(r.aziende)} aziende</div></div>`).join('')+'</div>'}
 function iscritti(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:14px">nessun iscritto</div>';
  return '<div class="panel" style="overflow-x:auto;padding:0"><table class="usr">'+
  '<tr><th>Nome</th><th>Email</th><th>Lingua</th><th>Ricezione digest</th><th>Ricerche attive</th><th>Ultimo digest</th></tr>'+
@@ -342,7 +436,7 @@ async function tick(){
  +card(eta(s.ultima_classificazione),'ultima classificazione')
  +card(eta(s.ultimo_ponte),'ultimo travaso ai clienti')
  +'</div>'
- +'<h2>Andamento — offerte pubblicate per giorno (ultimi 14)</h2>'
+ +'<h2>Andamento — offerte pubblicate per giorno (ultimi 30) · clicca un punto</h2>'
  +'<div class="panel">'+grafico(d.andamento)+'</div>'
  +'<h2>Salute della raffineria</h2><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
@@ -351,7 +445,9 @@ async function tick(){
  +card(IT(h.aziende_con_offerte),'aziende con offerte')
  +card(IT(h.aziende_censite),'aziende censite in totale')
  +card(IT(h.aziende_mai_viste),'aziende ancora da visitare')
+ +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">ATS nuovi da aggiungere</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende in attesa di un adattatore</div>`:'<div class="sub">tutte le piattaforme coperte</div>'}</div>`
  +'</div>'
+ +(d.ats_pending&&d.ats_pending.length?'<h2>ATS trovati ma non ancora raccoglibili — serve un adattatore</h2>'+pending(d.ats_pending):'')
  +'<div class="cols"><div><h2>Offerte per fonte</h2>'+lista(d.per_fonte,'fonte','attive')+'</div>'
  +'<div><h2>Offerte per paese</h2>'+lista(d.per_paese,'paese','attive')+'</div></div>'
  +'<div class="cols"><div><h2>Offerte per famiglia professionale</h2>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
