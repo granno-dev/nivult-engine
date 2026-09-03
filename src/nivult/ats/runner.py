@@ -105,7 +105,8 @@ def scrape(dsn: str, piattaforma: str | None = None,
     demone che gira in continuo a piccoli lotti invece di un giro unico
     da ore. La priorita' e' l'ordine qui sotto.
     """
-    stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0}
+    stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0,
+             "fallite": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
@@ -158,6 +159,20 @@ def scrape(dsn: str, piattaforma: str | None = None,
             for fut in as_completed(futuri):
                 az, jobs = fut.result()
                 if jobs is None:
+                    # Fetch fallita (rete, slug morto, piattaforma senza
+                    # adapter). Va segnata comunque come tentata: senza
+                    # questo, un'azienda che fallisce resta last_fetch NULL,
+                    # torna in testa alla coda a ogni lotto e blocca per
+                    # sempre le altre mai-viste dietro di lei — era la causa
+                    # dei lotti «0 aziende» col tesoro fermo. Segnandola, va
+                    # in fondo alla coda e si riprova solo molto piu' tardi.
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE ats_companies SET last_fetch_at = now() "
+                            "WHERE platform_id = %s AND slug = %s",
+                            (az["platform_id"], az["slug"]))
+                    conn.commit()
+                    stats["fallite"] = stats.get("fallite", 0) + 1
                     continue
                 stats["aziende"] += 1
 
@@ -300,7 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.stats:
         s = scrape(dsn, args.piattaforma, thread=args.thread, limite=args.limite)
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "
-              f"({s['nuove']} nuove, {s['aggiornate']} aggiornate)")
+              f"({s['nuove']} nuove, {s['aggiornate']} aggiornate, "
+              f"{s.get('fallite', 0)} fallite)")
 
     if args.arricchisci:
         n = arricchisci(dsn, args.arricchisci)
