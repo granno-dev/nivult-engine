@@ -189,6 +189,24 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
         except SystemExit:
             log.info("GLM non disponibile (manca la chiave) — livello 3 disattivato")
 
+    def _salva(righe: list[tuple]) -> None:
+        """Scrive un blocco e basta: chiamata ogni 5000 cosi' il lavoro
+        e' al sicuro nel database man mano, non tutto in fondo. Prima si
+        accumulava tutto in memoria e si scriveva solo alla fine: se il
+        processo moriva a meta' (o veniva riavviato), le decine di
+        migliaia di classificazioni gia' calcolate erano perse."""
+        if not righe:
+            return
+        with psycopg.connect(dsn) as conn:
+            with conn.cursor() as cur:
+                cur.executemany("""
+                    INSERT INTO job_classifications
+                      (job_id, family, confidence, model)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (job_id) DO NOTHING
+                """, righe)
+            conn.commit()
+
     da_scrivere: list[tuple] = []
     for jid, titolo, pid, raw, slug in offerte:
         stats["viste"] += 1
@@ -227,19 +245,10 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
 
         if stats["viste"] % 5000 == 0:
             log.info("  … %d viste: %s", stats["viste"], stats)
+            _salva(da_scrivere)          # al sicuro nel DB, poi si svuota
+            da_scrivere = []
 
-    # scrittura in batch
-    if da_scrivere:
-        with psycopg.connect(dsn) as conn:
-            with conn.cursor() as cur:
-                cur.executemany("""
-                    INSERT INTO job_classifications
-                      (job_id, family, confidence, model)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (job_id) DO NOTHING
-                """, da_scrivere)
-            conn.commit()
-
+    _salva(da_scrivere)                  # l'ultimo blocco, sotto i 5000
     return stats
 
 
