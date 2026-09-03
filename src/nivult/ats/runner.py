@@ -104,7 +104,14 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
             if piattaforma:
                 sql += " AND ac.platform_id = %s"
                 params.append(piattaforma)
-            cur.execute(sql + " ORDER BY ac.platform_id, ac.slug", params)
+            # Le mai-scrapate (last_fetch_at NULL: le 35mila appena scoperte)
+            # per prime, poi le piu' stantie: cosi' se una notte non si
+            # arriva in fondo, la successiva riprende da chi ne ha piu'
+            # bisogno invece di ripartire sempre dalla «a». Senza questo,
+            # le aziende in coda all'alfabeto non venivano mai raggiunte.
+            cur.execute(
+                sql + " ORDER BY ac.last_fetch_at ASC NULLS FIRST, "
+                      "ac.platform_id, ac.slug", params)
             aziende = cur.fetchall()
 
         for az in aziende:
