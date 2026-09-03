@@ -73,6 +73,17 @@ Si aggiunge solo chi ha **feed pubblico** (JSON/XML/JSON-LD) e **link
 diretto** (la regola di casa). Login-walled (jobteaser) e assessment
 (HireVue) restano fuori.
 
+**Pattern verificato il 04/09 (importante):** gli ATS a **feed aperto**
+(`{slug}.dominio/api`, senza token: Greenhouse, Lever, Personio,
+softgarden, Recruitee, Workable, Teamtailor…) **li abbiamo gia' tutti**.
+I regionali/staffing che restano tendono a **chiudere il feed dietro un
+token/hash per-cliente**: Bullhorn (`cls`+`corpToken`), **Jobylon** (Feed
+API a `/feeds/<hash>/`, hash creato dal loro supporto per cliente — NON
+enumerabile). Non si scoprono via Common Crawl come uno slug. Per questi
+la strada e' o il token per-cliente nel censimento, o l'adapter generico
+JSON-LD (Strategia 1), o comprarli. E' esattamente perche' la coda lunga
+e' cosi': anche jobdataapi si fa pagare $495/mese per questa parte.
+
 ## Framework di priorita'
 
 Per ogni candidato:
