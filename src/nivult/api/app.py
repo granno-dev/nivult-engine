@@ -31,11 +31,12 @@ from psycopg.types.json import Json
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
                      Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
 from nivult import crypto, cv, gdpr, ponte_ats, storage
+from nivult.api import cruscotto as cruscotto_mod
 from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
@@ -400,6 +401,25 @@ def create_app() -> FastAPI:
     def radice():
         # Il controllo che un umano può fare col browser: l'API è viva?
         return {"servizio": "nivult-api", "stato": "ok"}
+
+    # Il cruscotto privato: una pagina sola dietro un token segreto, non
+    # indicizzata, che mostra come gira il motore in tempo reale. Il 404
+    # (non 403) su token errato non rivela nemmeno che esista.
+    _CRUSCOTTO_TOKEN = os.environ.get("CRUSCOTTO_TOKEN", "")
+
+    def _cruscotto_ok(token: str) -> None:
+        if not _CRUSCOTTO_TOKEN or token != _CRUSCOTTO_TOKEN:
+            raise HTTPException(status_code=404)
+
+    @app.get("/cruscotto/{token}", response_class=HTMLResponse)
+    def cruscotto_pagina(token: str):
+        _cruscotto_ok(token)
+        return HTMLResponse(cruscotto_mod.PAGINA)
+
+    @app.get("/cruscotto/{token}/dati")
+    def cruscotto_dati(token: str):
+        _cruscotto_ok(token)
+        return cruscotto_mod.metriche(ats_database_url(), database_url())
 
     @app.post("/auth/magic-link", status_code=202)
     def magic_link(corpo: RichiestaLink, request: Request,
