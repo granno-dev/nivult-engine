@@ -678,16 +678,119 @@ _OCCUPAZIONI_AF = {
 }
 
 
+
+# ── I CODICI OCCUPAZIONE UFFICIALI: la classificazione multilingua vera ──
+# I servizi pubblici europei etichettano ogni offerta con un codice
+# occupazione standard, indipendente dalla lingua. Mapparlo alle nostre
+# famiglie classifica in QUALSIASI lingua UE senza dizionario — e' cosi'
+# che si copre l'Europa, non aggiungendo parole a mano lingua per lingua.
+
+# ISCO-08, sub-major group (le due cifre dopo "C"): lo standard mondiale,
+# usato da EURES per tutti i 27 paesi UE. ~40 gruppi -> le nostre famiglie.
+ISCO_SUBMAJOR = {
+    "11": "Management & Leadership", "12": "Management & Leadership",
+    "13": "Management & Leadership", "14": "Management & Leadership",
+    "21": "Engineering", "22": "Healthcare", "23": "Social Services",
+    "24": "Finance & Accounting", "25": "Software", "26": "Legal",
+    "31": "Engineering", "32": "Healthcare", "33": "Sales",
+    "34": "Social Services", "35": "Technology",
+    "41": "Administrative", "42": "Administrative",
+    "43": "Administrative", "44": "Administrative",
+    "51": "Hospitality", "52": "Sales", "53": "Healthcare",
+    "54": "Security & Safety",
+    "71": "Trades", "72": "Trades", "73": "Trades", "74": "Trades",
+    "75": "Manufacturing",
+    "81": "Manufacturing", "82": "Manufacturing", "83": "Transportation",
+    "93": "Manufacturing", "94": "Food & Beverage", "95": "Sales",
+    "96": "Environmental & Sustainability",
+}
+
+# ROME (France Travail), lettera iniziale = grande dominio.
+ROME_DOMINIO = {
+    "C": "Finance & Accounting", "D": "Sales", "E": "Marketing",
+    "F": "Trades", "G": "Hospitality", "H": "Manufacturing",
+    "I": "Trades", "J": "Healthcare", "K": "Social Services",
+    "M": "Administrative", "N": "Logistics",
+}
+
+# Arbetsförmedlingen: occupation_field, i grandi gruppi svedesi (ESCO).
+AF_FIELD = {
+    "hälso- och sjukvård": "Healthcare",
+    "administration, ekonomi, juridik": "Administrative",
+    "försäljning, inköp, marknadsföring": "Sales",
+    "yrken med social inriktning": "Social Services",
+    "pedagogik": "Social Services", "data/it": "Software",
+    "transport, distribution, lager": "Logistics",
+    "industriell tillverkning": "Manufacturing",
+    "hotell, restaurang, storhushåll": "Hospitality",
+    "bygg och anläggning": "Trades",
+    "chefer och verksamhetsledare": "Management & Leadership",
+    "yrken med teknisk inriktning": "Engineering",
+    "naturvetenskapligt arbete": "Science & Research",
+    "kropps- och skönhetsvård": "Trades",
+    "säkerhetsarbete": "Security & Safety",
+    "militärt arbete": "Security & Safety",
+    "naturbruk": "Environmental & Sustainability",
+}
+
+
+def _isco_da_eures(raw: dict):
+    for code in (raw.get("jobCategoriesCodes") or []):
+        if isinstance(code, str) and "/isco/C" in code:
+            due = code.rsplit("/isco/C", 1)[-1][:2]
+            fam = ISCO_SUBMAJOR.get(due)
+            if fam:
+                return fam
+    return None
+
+
 def classifica_da_raw(raw: dict, piattaforma: str) -> tuple[str | None, float]:
-    """La classificazione che l'API fornisce già, se c'è."""
+    """La classificazione dal codice occupazione ufficiale, in ogni lingua.
+
+    I servizi pubblici portano un codice standard per occupazione: si
+    mappa quello, non il titolo. Cosi' un'offerta polacca, greca o
+    portoghese si classifica bene quanto una inglese, perche' il codice
+    non dipende dalla lingua.
+    """
     if not isinstance(raw, dict):
         return None, 0.0
+
+    if piattaforma == "eures":
+        fam = _isco_da_eures(raw)
+        if fam:
+            return fam, 0.97
+
+    if piattaforma == "francetravail":
+        # prima il libelle' pulito (il dizionario lo riconosce spesso),
+        # poi la lettera del codice ROME come rete
+        lib = raw.get("romeLibelle")
+        if lib:
+            fam, conf = classifica_titolo(lib)
+            if fam:
+                return fam, max(conf, 0.9)
+        code = raw.get("romeCode") or ""
+        fam = ROME_DOMINIO.get(code[:1].upper()) if code else None
+        if fam:
+            return fam, 0.85
+
+    if piattaforma == "bundesanstellung":
+        beruf = raw.get("hauptberuf")
+        if beruf:
+            fam, conf = classifica_titolo(beruf)
+            if fam:
+                return fam, max(conf, 0.9)
+
     if piattaforma == "arbetsformedlingen":
+        campo = (raw.get("occupation_field") or {}).get("label", "").lower()
+        fam = AF_FIELD.get(campo.strip())
+        if fam:
+            return fam, 0.97
         occ = (raw.get("occupation") or {}).get("label", "")
         occ_l = occ.lower()
         for parola, famiglia in _OCCUPAZIONI_AF.items():
             if parola in occ_l:
                 return famiglia, 0.98
+
     return None, 0.0
 
 
