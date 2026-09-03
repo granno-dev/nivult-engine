@@ -37,6 +37,26 @@ MAX_QUOTA_SENZA_PAESE = 0.80      # se >80% e' senza paese, l'arricchimento e' m
 MAX_QUOTA_NON_CLASSIF = 0.85      # idem per il classificatore
 ORE_TOLLERANZA = 30              # il notturno gira ogni 24h: 30h di margine
 
+# I domini che GIA' gestiamo (piattaforme ATS, agenzie, servizi pubblici,
+# portali): il rilevatore di piattaforme nuove li salta. Tutto il resto,
+# se ha molti tenant, e' un ATS emergente da segnalare.
+_HOST_NOTI = (
+    r"(greenhouse|lever|myworkday|workday|ashby|smartrecruiters|recruitee|"
+    r"teamtailor|personio|bamboohr|icims|sapsf|successfactors|softgarden|"
+    r"workable|phenompeople|phenom|csod|cornerstone|oraclecloud|oracle|"
+    r"applytojob|jazzhr|avature|taleo|eightfold|pinpointhq|breezy|"
+    r"zohorecruit|freshteam|jobvite|comeet|werecruit|radancy|jibe|adp|"
+    r"paylocity|ukg|rippling|manatal|join\.com|jobadder|pageuppeople|"
+    r"hirevue|homerun|vidcruiter|beamery|talentsoft|jobteaser|"
+    r"welcometothejungle|intervieweb|"
+    # servizi pubblici e portali
+    r"francetravail|europa\.eu|arbetsformedlingen|arbeitsagentur|"
+    r"bundesagentur|helplavoro|tuolavoro|eurointerim|"
+    # agenzie
+    r"randstad|adecco|manpower|gigroup|umana|synergie|adhr|openjobmetis|"
+    # aggregatori gia' noti come tali
+    r"fantastic|adzuna)")
+
 
 def _uno(dsn: str, sql: str):
     with psycopg.connect(dsn) as c:
@@ -129,6 +149,43 @@ def controlla() -> list[str]:
                     f"{eta.seconds // 3600}h: i digest si stanno svuotando.")
     except psycopg.Error as e:
         problemi.append(f"Database del motore irraggiungibile: {e}")
+
+    # 7. C'e' una PIATTAFORMA ATS nuova che non gestiamo ancora?
+    # Un dominio con molti TENANT diversi (aziende diverse allo stesso
+    # host, contate col primo segmento di path come proxy) e' quasi
+    # certo una piattaforma multi-tenant. Se non e' fra quelle note,
+    # e' un ATS emergente da aggiungere: qui non si scrapa da soli
+    # (ogni ATS ha un'API sua, serve un adattatore), ma il sistema lo
+    # SCOPRE e lo segnala con esempi pronti, cosi' l'aggiunta e' rapida.
+    try:
+        with psycopg.connect(MOTORE_DSN) as conn:
+            righe = conn.execute("""
+                WITH d AS (
+                  SELECT
+                    lower(substring(canonical_url
+                      FROM '^https?://(?:[a-z0-9-]+\\.)*([a-z0-9-]+\\.[a-z]{2,})'))
+                      AS dom,
+                    lower(coalesce(substring(canonical_url
+                        FROM '^https?://([a-z0-9-]+)\\.[a-z0-9-]+\\.[a-z]{2,}'), '')
+                      || '/' || coalesce(substring(canonical_url
+                        FROM '^https?://[^/]+/([^/?#]+)'), '')) AS tenant
+                  FROM jobs WHERE canonical_url IS NOT NULL
+                )
+                SELECT dom, count(*), count(DISTINCT tenant)
+                FROM d
+                WHERE dom IS NOT NULL
+                  AND dom !~ %s
+                GROUP BY dom
+                HAVING count(DISTINCT tenant) >= 15
+                ORDER BY count(DISTINCT tenant) DESC LIMIT 5
+            """, (_HOST_NOTI,)).fetchall()
+        for host, off, tenant in righe:
+            problemi.append(
+                f"Possibile ATS NUOVO da aggiungere: «{host}» ha {tenant} "
+                f"aziende diverse ({off} offerte) e non e' fra le piattaforme "
+                "note. Serve un adattatore per raccoglierlo alla fonte.")
+    except psycopg.Error as e:
+        problemi.append(f"Non riesco a cercare piattaforme nuove: {e}")
 
     return problemi
 
