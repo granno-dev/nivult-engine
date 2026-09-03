@@ -19,6 +19,7 @@ dependencies = [
   "boto3>=1.35",        # Hetzner Object Storage, S3-compatibile
   "pypdf>=5",           # estrai_testo: i CV in PDF
   "python-docx>=1.1",   # estrai_testo: i CV in DOCX
+  "geonamescache>=2.0", # geografia.py: citta' -> paese, offline
 ]
 
 [project.optional-dependencies]

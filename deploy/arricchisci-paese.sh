@@ -22,6 +22,15 @@ for i in $(seq 1 15); do
   echo "$out" | grep -qE "'paesi': 0|0 offerte" && { echo "  niente piu' da fare"; break; }
 done
 
-echo "── da-azienda (paese dominante, per il residuo con evidenza)"
+echo "── france travail (paese dal codice dipartimento)"
+"$PY" -m nivult.ats.arricchisci --francetravail
+
+echo "── da-geonames (la citta' geocodificata, per ogni paese del mondo)"
+"$PY" -m nivult.ats.arricchisci --da-geonames --limite 200000
+
+echo "── workday (la sede dall'URL delle «N Locations»)"
+"$PY" -m nivult.ats.arricchisci --workday --limite 200000
+
+echo "── da-azienda (paese dominante, per il residuo senza localita')"
 "$PY" -m nivult.ats.arricchisci --da-azienda
 echo "=== fine $(date -Is) ==="
