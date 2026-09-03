@@ -45,6 +45,7 @@ UA = {"User-Agent": "Mozilla/5.0 (compatible; nivult-ats/1.0; "
 AGENZIE = {
     "randstad": {
         "nome": "Randstad Italia",
+        "paese": "IT",
         "sitemaps": [
             "https://www.randstad.it/sitemaps/jobs/it/sitemap-jobdetails.xml",
             "https://www.randstad.it/sitemaps/jobs/it/sitemap-jobdetails-2.xml",
@@ -52,10 +53,12 @@ AGENZIE = {
     },
     "gigroup": {
         "nome": "Gi Group",
+        "paese": "IT",
         "sitemaps": ["https://www.gigroup.it/offerte-sitemap.xml"],
     },
     "umana": {
         "nome": "Umana",
+        "paese": "IT",
         "sitemaps": ["https://www.umana.it/jobs-sitemap.xml"],
     },
     # Adecco e' migrata sulla piattaforma globale adecco.com: una
@@ -63,10 +66,12 @@ AGENZIE = {
     # Germania e Spagna sono a un rigo di distanza quando serviranno.
     "adecco": {
         "nome": "Adecco Italia",
+        "paese": "IT",
         "sitemaps": ["https://www.adecco.com/sitemap-jobs-italy-it.xml"],
     },
     "manpower": {
         "nome": "Manpower Italia",
+        "paese": "IT",
         "sitemaps": ["https://www.manpower.it/sitemap/italy/"
                      "it-manpower/sitemap_job-offer.xml"],
     },
@@ -76,6 +81,7 @@ AGENZIE = {
     # e il dedup del motore a doverli riconoscere, non questo lettore.
     "helplavoro": {
         "nome": "Helplavoro (portale agenzie)",
+        "paese": "IT",
         "sitemaps": [f"https://www.helplavoro.it/xmlofferte{i}/sitemap.xml"
                      for i in (1, 2, 3, 4)],
     },
@@ -83,6 +89,7 @@ AGENZIE = {
     # e' statico e ordinato (h1 = titolo, «Luogo di lavoro: Citta' (PR)»).
     "eurointerim": {
         "nome": "Eurointerim",
+        "paese": "IT",
         "sitemaps": ["https://www.eurointerim.it/job-sitemap.xml",
                      "https://www.eurointerim.it/job-sitemap2.xml"],
         "html": {
@@ -169,8 +176,7 @@ def _estrai_html(html: str, regole: dict):
     ml = re.search(regole["luogo"], html, re.S | re.I)
     if ml:
         luogo = ml.group(1).strip().strip(":").strip()
-        jp["jobLocation"] = {"address": {"addressLocality": luogo,
-                                         "addressCountry": "IT"}}
+        jp["jobLocation"] = {"address": {"addressLocality": luogo}}
     return jp
 
 
@@ -266,6 +272,10 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                         stats["senza_ld"] += 1
                         continue
                     citta, paese = _luogo(jp)
+                    # se il dato grezzo tace, si eredita il paese DELLA
+                    # SORGENTE — mai un "IT" cieco: il giorno che Adecco
+                    # Francia entra, le sue offerte non diventano italiane
+                    paese = paese or cfg.get("paese")
                     org = jp.get("hiringOrganization") or {}
                     if isinstance(org, dict) and org.get("name"):
                         jp.setdefault("company", {"name": org["name"]})
@@ -284,7 +294,7 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                           country = COALESCE(EXCLUDED.country, ats_jobs.country),
                           fetched_at = now()
                     """, (slug, u, titolo[:300], u, citta,
-                          paese or "IT", citta, _data(jp),
+                          paese, citta, _data(jp),
                           (str(jp.get("employmentType") or "")[:40] or None),
                           psycopg.types.json.Json(jp)))
                     stats["nuove"] += 1
