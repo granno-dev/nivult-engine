@@ -33,6 +33,7 @@ import httpx
 import psycopg
 
 from .runner import ATS_DSN
+from .adapters import senza_nulli
 
 log = logging.getLogger("nivult.ats.agenzie")
 
@@ -307,7 +308,7 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                     """, (slug, u, titolo[:300], u, citta,
                           paese, citta, _data(jp),
                           (str(jp.get("employmentType") or "")[:40] or None),
-                          psycopg.types.json.Json(jp)))
+                          psycopg.types.json.Json(senza_nulli(jp))))
                     stats["nuove"] += 1
                     if stats["nuove"] % 200 == 0:
                         conn.commit()

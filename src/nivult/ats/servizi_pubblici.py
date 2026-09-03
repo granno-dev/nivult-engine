@@ -29,6 +29,8 @@ from datetime import datetime, timezone
 import httpx
 import psycopg
 
+from .adapters import senza_nulli
+
 log = logging.getLogger("nivult.ats.servizi_pubblici")
 
 ATS_DSN = os.environ.get(
@@ -117,7 +119,7 @@ def scarica_arbetsformedlingen(dsn: str, limite: int = 1000) -> dict:
                               hit.get("headline") or "",
                               hit.get("webpage_url") or "",
                               citta, citta, dt,
-                              psycopg.types.json.Json(hit)))
+                              psycopg.types.json.Json(senza_nulli(hit))))
                         r2 = cur.fetchone()
                         if r2 and r2[0]:
                             stats["nuove"] += 1
@@ -234,7 +236,7 @@ def scarica_francetravail(dsn: str, limite: int = 1000) -> dict:
                               off.get("origineOffre", {}).get("urlOrigine")
                               or f"https://candidat.francetravail.fr/offres/recherche/detail/{oid}",
                               citta, citta, dt,
-                              psycopg.types.json.Json(off)))
+                              psycopg.types.json.Json(senza_nulli(off))))
                         r2 = cur.fetchone()
                         if r2 and r2[0]:
                             stats["nuove"] += 1
@@ -331,7 +333,7 @@ def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (refnr, titolo, url, citta, citta, dt,
-                              psycopg.types.json.Json(off)))
+                              psycopg.types.json.Json(senza_nulli(off))))
                         r2 = cur.fetchone()
                         if r2 and r2[0]:
                             stats["nuove"] += 1
@@ -442,7 +444,7 @@ def scarica_francetravail_rome(dsn: str, limite_per_rome: int = 3000) -> dict:
                                       off.get("origineOffre", {}).get("urlOrigine")
                                       or f"https://candidat.francetravail.fr/offres/recherche/detail/{oid}",
                                       citta, citta, dt,
-                                      psycopg.types.json.Json(off)))
+                                      psycopg.types.json.Json(senza_nulli(off))))
                                 r2 = cur.fetchone()
                                 if r2 and r2[0]:
                                     stats["nuove"] += 1
@@ -578,7 +580,7 @@ def eures(dsn: str, limite: int = 2000, paesi: str = "IT") -> dict:
                                 RETURNING (xmax = 0) AS is_new
                             """, (paese.lower(), jid, titolo[:300], url,
                                   citta, paese, citta, dt,
-                                  psycopg.types.json.Json(jv)))
+                                  psycopg.types.json.Json(senza_nulli(jv))))
                             r2 = cur.fetchone()
                             if r2 and r2[0]:
                                 stats["nuove"] += 1

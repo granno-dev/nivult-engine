@@ -32,6 +32,21 @@ RATE_PER_SECOND = {
 }
 
 
+def senza_nulli(obj):
+    """Via i byte NULL (\\x00): Postgres li rifiuta sia in text che in
+    jsonb, e ogni tanto un'offerta ne porta uno nel testo (copia-incolla
+    sporchi, encoding rotti). Senza questa pulizia un solo carattere
+    guasto fa fallire l'inserimento e blocca lo scrape dell'azienda.
+    Ricorsiva su dict e liste; lascia intatto tutto il resto."""
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, dict):
+        return {k: senza_nulli(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [senza_nulli(v) for v in obj]
+    return obj
+
+
 @dataclass(slots=True)
 class AtsJob:
     """Un'offerta così come viene dall'ATS, prima di ogni arricchimento."""
@@ -50,6 +65,14 @@ class AtsJob:
     def __post_init__(self):
         if self.posted_at is not None:
             self.posted_at = _dt(self.posted_at)
+        # Sanifica i byte NULL prima che l'offerta arrivi al database.
+        self.title = senza_nulli(self.title)
+        self.url = senza_nulli(self.url)
+        self.location = senza_nulli(self.location)
+        self.city = senza_nulli(self.city)
+        self.department = senza_nulli(self.department)
+        self.external_id = senza_nulli(self.external_id)
+        self.raw = senza_nulli(self.raw)
 
 
 def _dt(v) -> datetime | None:

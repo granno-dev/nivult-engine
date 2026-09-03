@@ -29,6 +29,7 @@ import httpx
 import psycopg
 
 from .runner import ATS_DSN
+from .adapters import senza_nulli
 
 log = logging.getLogger("nivult.ats.feed_globale")
 
@@ -137,7 +138,7 @@ def smartrecruiters(dsn: str, paesi: set[str] | None = None,
                         RETURNING (xmax = 0) AS is_new
                     """, (tenant, jid, titolo[:300], url, citta,
                           paese.upper(), citta, dt,
-                          psycopg.types.json.Json(j)))
+                          psycopg.types.json.Json(senza_nulli(j))))
                     riga = res.fetchone()
                     if riga and riga[0]:
                         stats["nuove"] += 1

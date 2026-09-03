@@ -51,7 +51,7 @@ echo "=== ATS nightly $(date -Is) ==="
 
 # ── 1. Scrape: aggiorna tutte le aziende registrate ─────────────────
 echo "── scrape"
-"$PY" -m nivult.ats.runner --thread 16 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+"$PY" -m nivult.ats.runner --thread 16 --limite 5000 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
 # ── 1b. Scoperta tenant dagli archivi (CC + Wayback, a fette) ───────
@@ -175,7 +175,7 @@ echo "── arricchisci paese (da-localita + da-azienda, dopo le raccolte)"
 
 # ── 6. Classificazione a 3 livelli: dizionario + fuzzy + GLM ────
 echo "── classificatore a livelli (5000)"
-"$PY" -m nivult.ats.classificatore_livelli --limite 5000 \
+"$PY" -m nivult.ats.classificatore_livelli --limite 150000 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 

@@ -92,7 +92,7 @@ def semina_aziende(dsn: str, dsn_produzione: str) -> int:
 
 
 def scrape(dsn: str, piattaforma: str | None = None,
-           thread: int = 10) -> dict[str, int]:
+           thread: int = 10, limite: int | None = None) -> dict[str, int]:
     """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
 
     Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
@@ -100,6 +100,10 @@ def scrape(dsn: str, piattaforma: str | None = None,
     interrogano altre. Le scritture nel database restano serializzate
     nel thread principale (una sola connessione), che e' sicuro e
     comunque velocissimo rispetto alla rete.
+
+    Con `limite` scarica solo le prime N aziende per priorita': serve al
+    demone che gira in continuo a piccoli lotti invece di un giro unico
+    da ore. La priorita' e' l'ordine qui sotto.
     """
     stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0}
     with psycopg.connect(dsn) as conn:
@@ -113,14 +117,22 @@ def scrape(dsn: str, piattaforma: str | None = None,
             if piattaforma:
                 sql += " AND ac.platform_id = %s"
                 params.append(piattaforma)
-            # Le mai-scrapate (last_fetch_at NULL: le 35mila appena scoperte)
-            # per prime, poi le piu' stantie: cosi' se una notte non si
-            # arriva in fondo, la successiva riprende da chi ne ha piu'
-            # bisogno invece di ripartire sempre dalla «a». Senza questo,
-            # le aziende in coda all'alfabeto non venivano mai raggiunte.
-            cur.execute(
-                sql + " ORDER BY ac.last_fetch_at ASC NULLS FIRST, "
-                      "ac.platform_id, ac.slug", params)
+            # Priorita' di visita, in tre scaglioni:
+            #  1. le MAI viste (last_fetch NULL): il tesoro non ancora
+            #     scavato — le 47mila appena scoperte;
+            #  2. tra le gia' viste, prima quelle CON offerte (job_count>0)
+            #     e piu' stantie: sono le vive, vanno tenute fresche come
+            #     fa Fantastic col polling frequente;
+            #  3. poi le vuote stantie, che rendono meno.
+            # Cosi' un lotto piccolo prende sempre chi ne ha piu' bisogno.
+            sql += (" ORDER BY (ac.last_fetch_at IS NULL) DESC, "
+                    "(ac.job_count > 0) DESC, "
+                    "ac.last_fetch_at ASC NULLS FIRST, "
+                    "ac.platform_id, ac.slug")
+            if limite:
+                sql += " LIMIT %s"
+                params.append(limite)
+            cur.execute(sql, params)
             aziende = cur.fetchall()
 
         def _fetch(az):
@@ -268,6 +280,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="arricchisci N aziende da Wikidata")
     ap.add_argument("--thread", type=int, default=10,
                     help="aziende interrogate in parallelo (default 10)")
+    ap.add_argument("--limite", type=int, default=None,
+                    help="scarica solo le prime N aziende per priorita' "
+                         "(per il demone a lotti; vuoto = tutte)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
@@ -283,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"seminate {n} aziende dal database di produzione")
 
     if not args.stats:
-        s = scrape(dsn, args.piattaforma, thread=args.thread)
+        s = scrape(dsn, args.piattaforma, thread=args.thread, limite=args.limite)
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "
               f"({s['nuove']} nuove, {s['aggiornate']} aggiornate)")
 
