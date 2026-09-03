@@ -49,6 +49,7 @@ FAMIGLIE = [
 
 DIZIONARIO: dict[str, list[str]] = {
     "Healthcare": [
+        "zahnmedizinische", "medizinische fachangestellte", "pflegehelfer", "pflegefachkraft",
         "behavior analyst", "behavior technician", "bcba", "rbt", "operatore socio sanitario", "service hospitalier",
         # EN
         "nurse", "doctor", "physician", "surgeon", "dentist", "pharmacist",
@@ -174,6 +175,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "inżynier", "ingeniero",
     ],
     "Finance & Accounting": [
+        "buchhalter", "steuerfachangestellte", "bankkaufmann", "finanzbuchhalter", "bilanzbuchhalter",
         "accountant", "comptable", "buchhalter", "contabile",
         "bookkeeper", "financial analyst", "analyste financier",
         "controller", "cfo", "auditor", "revisor", "tax advisor",
@@ -183,6 +185,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "eigentelijke", "finanzas", "contabilidade",
     ],
     "Sales": [
+        "aussendienst", "aussendienstmitarbeiter",
         "agente immobiliare", "agente d affari", "consulente commerciale",
         "sales", "salesperson", "account executive", "account manager",
         "business development", "commercial", "vendite", "vendita",
@@ -230,6 +233,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "payroll specialist", "compensation", "benefits",
     ],
     "Retail": [
+        "verkauf",
         "assistente di negozio", "commerciante al dettaglio", "einzelhandel", "addetto alle vendite", "addetto vendita",
         "retail", "shop assistant", "store manager", "cashier",
         "commesso", "venditore al dettaglio", "verkäufer",
@@ -260,6 +264,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "varuhus",
     ],
     "Logistics": [
+        "logistik", "lagerlogistik", "lagerwirtschaft", "fachkraft lagerlogistik",
         "magazziniere", "carrellista", "mulettista", "addetto al magazzino", "facchino", "cariste",
         "logistics", "supply chain", "warehouse", "magazzino",
         "lager", "lagermitarbeiter", "warehouse operative",
@@ -317,6 +322,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "bricklayer", "maçon", "maurer", "murare",
     ],
     "Trades": [
+        "metallbauer", "schlosser", "metallbearbeitung", "hausmeister", "konstruktionsmechaniker", "industriemechaniker", "gebaudereiniger",
         "elettricista", "chauffagiste", "manutentore", "termoidraulico", "installatore", "macon",
         "electrician", "elektriker", "électricien", "elektricien",
         "plumber", "idraulico", "installateur", "klempner",
@@ -420,6 +426,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "technical support", "supporto tecnico", "technischer support",
     ],
     "Administrative": [
+        "buromanagement", "buroassistent", "verwaltungsfachangestellte", "sachbearbeiter", "burokaufmann",
         "administrative", "admin assistant", "secretary", "sekretär",
         "secretaire", "segretaria", "assistente amministrativo",
         "office manager", "receptionist", "data entry",
@@ -438,6 +445,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "nursery", "asilo", "kita", "förskola",
     ],
     "Legal": [
+        "rechtsanwalt", "rechtsanwaltsfachangestellte",
         "lawyer", "avvocato", "anwalt", "anwältin", "advokat",
         "jurist", "giurista", "juriste", "legal", "legale",
         "notary", "notaio", "notar", "notarie",
@@ -445,6 +453,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "solicitor", "barrister", "counsel",
     ],
     "Security & Safety": [
+        "sicherheitsmitarbeiter", "wachmann",
         "security", "sicurezza", "sicherheit", "säkerhet",
         "security guard", "guardia giurata", "security officer",
         "surveillance", "sorveglianza", "überwachung",
@@ -492,6 +501,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "opiekun osoby starszej",
     ],
     "Manufacturing": [
+        "produktionstechnologe", "maschinen und anlagenfuhrer",
         "operatore cnc", "collaudatore", "conduttore di macchine",
         "manufacturing", "produzione", "produktion", "productie",
         "production", "production worker", "operaio", "arbeiter",
@@ -532,6 +542,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "monteur",
     ],
     "Management & Leadership": [
+        "projektleiter", "projektmanager",
         "manager", "director", "head of", "vp", "chief",
         "leiter", "leitung", "chef", "responsable",
         "responsabile", "manager", "coordinator",
@@ -555,6 +566,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "phd", "postdoc", "chemist", "biologist", "physicist",
     ],
     "Technology": [
+        "fachinformatiker", "systemintegration", "systemadministrator",
         "tecnico informatico", "informatico", "sistemista", "help desk",
         "it specialist", "system administrator", "sysadmin",
         "network engineer", "amministratore di sistema",
@@ -626,7 +638,8 @@ _LOOKUP.sort(key=lambda x: -len(x[0]))
 
 def _pulisci_titolo(titolo: str) -> str:
     """Minuscolo, senza accenti, per il matching."""
-    t = unicodedata.normalize("NFKD", titolo or "")
+    t = (titolo or "").replace("ß", "ss").replace("ẞ", "ss")
+    t = unicodedata.normalize("NFKD", t)
     t = "".join(c for c in t if not unicodedata.combining(c))
     t = t.lower()
     # la punteggiatura che incolla le parole diventa spazio: cosi'
@@ -647,7 +660,8 @@ def classifica_titolo(titolo: str) -> tuple[str | None, float]:
         # Una parola matcha solo se è una parola intera nel titolo.
         # Anche le parole del dizionario vengono pulite (senza accenti)
         # così 'röntgensjuksköterska' matcha 'rontgensjukskoterska'
-        p = "".join(c for c in unicodedata.normalize("NFKD", parola)
+        p = "".join(c for c in unicodedata.normalize(
+                         "NFKD", parola.replace("ß", "ss"))
                      if not unicodedata.combining(c))
         if re.search(r"\b" + re.escape(p) + r"\b", t):
             # confidenza più alta se la parola è lunga (più specifica)
