@@ -200,8 +200,37 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             for f, p, s in _righe(motore_dsn,
                 "SELECT family, country, status FROM clusters "
                 "ORDER BY status, family LIMIT 40")]
+        # ── ogni iscritto con tutta la sua configurazione ──
+        d["iscritti"] = [{
+            "nome": nome or "—", "email": em, "lingua": loc,
+            "canali": list(can or []), "stato": st,
+            "ultimo_digest": str(ld or ""),
+            "ricerche": list(ric or [])}
+            for nome, em, loc, can, st, ld, ric in _righe(motore_dsn, """
+                SELECT u.display_name, u.email, u.locale, u.delivery_channels,
+                       u.status, u.last_digest_at,
+                       array_remove(array_agg(DISTINCT
+                         c.family || ' · ' || c.country)
+                         FILTER (WHERE c.status = 'active'), NULL)
+                FROM users u
+                LEFT JOIN user_clusters uc ON uc.user_id = u.id
+                LEFT JOIN clusters c ON c.id = uc.cluster_id
+                WHERE u.deleted_at IS NULL
+                GROUP BY u.id, u.display_name, u.email, u.locale,
+                         u.delivery_channels, u.status, u.last_digest_at
+                ORDER BY u.email""")]
     except psycopg.Error:
-        d["motore"], d["cluster"] = {}, []
+        d["motore"], d["cluster"], d["iscritti"] = {}, [], []
+
+    # ── andamento: offerte pubblicate per giorno, ultimi 14 ──
+    d["andamento"] = [{"giorno": g, "offerte": n} for g, n in _righe(ats_dsn, """
+        SELECT to_char(d, 'DD/MM'), n FROM (
+          SELECT date_trunc('day', posted_at) AS d, count(*) AS n
+          FROM ats_jobs
+          WHERE expired_at IS NULL
+            AND posted_at > now() - interval '14 days'
+            AND posted_at <= now()
+          GROUP BY 1 ORDER BY 1) x""")]
 
     return d
 
@@ -252,6 +281,22 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 background:var(--card2);color:var(--dim);border:1px solid var(--line);margin:3px 4px 0 0}
 .pill.on{background:rgba(70,196,106,.13);color:var(--ok);border-color:rgba(70,196,106,.3)}
 .foot{margin-top:40px;font-size:12px;color:var(--dim);text-align:center}
+.chart{display:flex;align-items:flex-end;gap:5px;height:150px;padding:14px 8px 0}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.cbar{width:100%;max-width:30px;background:linear-gradient(180deg,var(--acc),#2a5cbf);
+border-radius:4px 4px 0 0;min-height:2px}
+.cx{font-size:10px;color:var(--dim);margin-top:6px;white-space:nowrap}
+.usr{width:100%;border-collapse:collapse;font-size:13px}
+.usr th,.usr td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+.usr th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);font-weight:600}
+.usr tr:last-child td{border-bottom:none}
+.usr .em{color:var(--dim);font-size:12px}
+.ch{display:inline-block;font-size:11px;font-weight:500;padding:2px 9px;border-radius:7px;
+margin:2px 4px 2px 0;background:var(--card2);border:1px solid var(--line);color:var(--dim)}
+.ch.email{color:#82b1ff;border-color:rgba(130,177,255,.3)}
+.ch.telegram{color:#4cc4ff;border-color:rgba(76,196,255,.3)}
+.ch.whatsapp{color:#5fd67a;border-color:rgba(95,214,122,.3)}
+.ch.rc{color:var(--ink)}
 </style></head><body>
 <div class="top">
   <div class="brand"><b>Nivult</b><span>Cruscotto del motore</span></div>
@@ -271,6 +316,17 @@ function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style=
  return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${r[k]}</div>`+
   `<div class="track"><i style="width:${Math.round(100*r[vk]/max)}%"></i></div>`+
   `<div class="v">${IT(r[vk])}</div></div>`).join('')+'</div>'}
+function grafico(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:16px">nessun dato di andamento</div>';
+ const max=Math.max(...rows.map(r=>r.offerte),1);
+ return '<div class="chart">'+rows.map(r=>
+  `<div class="col"><div class="cbar" style="height:${Math.round(100*r.offerte/max)}%" title="${IT(r.offerte)} offerte il ${r.giorno}"></div><div class="cx">${r.giorno}</div></div>`).join('')+'</div>'}
+function iscritti(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:14px">nessun iscritto</div>';
+ return '<div class="panel" style="overflow-x:auto;padding:0"><table class="usr">'+
+ '<tr><th>Nome</th><th>Email</th><th>Lingua</th><th>Ricezione digest</th><th>Ricerche attive</th><th>Ultimo digest</th></tr>'+
+ rows.map(u=>`<tr><td>${u.nome}</td><td class="em">${u.email}</td><td>${(u.lingua||'').toUpperCase()}</td>`+
+  `<td>${(u.canali||[]).map(c=>`<span class="ch ${c}">${c}</span>`).join('')||'—'}</td>`+
+  `<td>${u.ricerche&&u.ricerche.length?u.ricerche.map(r=>`<span class="ch rc">${r}</span>`).join(''):'<span class="sub">nessuna</span>'}</td>`+
+  `<td class="em">${eta(u.ultimo_digest)}</td></tr>`).join('')+'</table></div>'}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';return}
@@ -286,6 +342,8 @@ async function tick(){
  +card(eta(s.ultima_classificazione),'ultima classificazione')
  +card(eta(s.ultimo_ponte),'ultimo travaso ai clienti')
  +'</div>'
+ +'<h2>Andamento — offerte pubblicate per giorno (ultimi 14)</h2>'
+ +'<div class="panel">'+grafico(d.andamento)+'</div>'
  +'<h2>Salute della raffineria</h2><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
  +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte non classificate',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
@@ -306,6 +364,7 @@ async function tick(){
  +'</div>';
  if(d.cluster&&d.cluster.length)H+='<div style="margin-top:14px">'+d.cluster.map(c=>
   `<span class="pill ${c.stato==='active'?'on':''}">${c.famiglia} · ${c.paese}</span>`).join('')+'</div>';
+ H+='<h2>Iscritti — configurazione completa</h2>'+iscritti(d.iscritti);
  document.getElementById('app').innerHTML=H}
 tick();setInterval(tick,30000);
 </script></body></html>"""
