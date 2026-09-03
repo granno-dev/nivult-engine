@@ -72,6 +72,7 @@ AGENZIE = {
     "manpower": {
         "nome": "Manpower Italia",
         "paese": "IT",
+        "thread": 2,   # 429 facile: va preso con calma
         "sitemaps": ["https://www.manpower.it/sitemap/italy/"
                      "it-manpower/sitemap_job-offer.xml"],
     },
@@ -82,6 +83,7 @@ AGENZIE = {
     "helplavoro": {
         "nome": "Helplavoro (portale agenzie)",
         "paese": "IT",
+        "thread": 2,   # 429 facile: va preso con calma
         "sitemaps": [f"https://www.helplavoro.it/xmlofferte{i}/sitemap.xml"
                      for i in (1, 2, 3, 4)],
     },
@@ -247,6 +249,14 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
             def _scarica(u: str):
                 try:
                     r = client.get(u)
+                    # 429: il sito chiede di rallentare. Si aspetta il
+                    # tempo che indica (Retry-After) o 5s, e si ritenta
+                    # una volta sola — poi si lascia perdere questa.
+                    if r.status_code == 429:
+                        pausa = r.headers.get("Retry-After")
+                        time.sleep(min(float(pausa), 15) if pausa
+                                   and pausa.isdigit() else 5)
+                        r = client.get(u)
                     if r.status_code != 200:
                         return u, None, f"http {r.status_code}"
                     jp = _estrai_ld(r.text)
@@ -257,7 +267,8 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                     return u, None, str(e)
 
             with psycopg.connect(dsn) as conn, \
-                    ThreadPoolExecutor(max_workers=thread) as pool:
+                    ThreadPoolExecutor(
+                        max_workers=cfg.get("thread", thread)) as pool:
                 futs = [pool.submit(_scarica, u) for u in nuove]
                 for f in as_completed(futs):
                     u, jp, err = f.result()
