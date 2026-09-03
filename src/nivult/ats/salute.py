@@ -60,7 +60,9 @@ def controlla() -> list[str]:
         problemi.append(f"Non trovo lo script notturno {link}: {e}")
 
     # 2. I demoni systemd sono vivi?
-    for servizio in ("nivult-scoperta", "nivult-api"):
+    for servizio in ("nivult-scoperta", "nivult-api",
+                     "nivult-scrape", "nivult-classifica",
+                     "nivult-arricchisci"):
         try:
             out = subprocess.run(
                 ["systemctl", "is-active", servizio],

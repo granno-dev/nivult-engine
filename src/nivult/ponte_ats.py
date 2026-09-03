@@ -67,6 +67,7 @@ Basta canonicalizzare l'URL con la stessa funzione, ed è ciò che facciamo.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -205,6 +206,37 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
     return [dict(zip(campi, r)) for r in cur_ats.fetchall()]
 
 
+def _deduplica(offerte: list[dict]) -> list[dict]:
+    """Una sola offerta per posizione, anche se piu' fonti la ripubblicano.
+
+    Helplavoro ripete gli annunci delle agenzie, il feed SmartRecruiters
+    si sovrappone allo scrape diretto dei suoi tenant: senza questo, la
+    stessa posizione arriva due volte nel digest. La chiave e'
+    titolo+citta'+paese+famiglia; a parita' si tiene quella col datore
+    noto, e poi la piu' recente. Chiave volutamente senza il nome del
+    datore: e' proprio quando due fonti danno la stessa posizione con
+    etichette-datore diverse (l'agenzia contro «azienda cliente») che
+    vogliamo collassarle.
+    """
+    def norm(s: str | None) -> str:
+        s = re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())
+        return re.sub(r"\s+", " ", s).strip()
+
+    vecchissimo = datetime.min.replace(tzinfo=timezone.utc)
+
+    def punteggio(x: dict) -> tuple:
+        return (x.get("company_name") is not None,
+                x.get("posted_at") or vecchissimo)
+
+    migliori: dict[tuple, dict] = {}
+    for o in offerte:
+        k = (norm(o["title"])[:60], norm(o["city"])[:24],
+             o["country"], o["family"])
+        if k not in migliori or punteggio(o) > punteggio(migliori[k]):
+            migliori[k] = o
+    return list(migliori.values())
+
+
 def _come_rawjob(o: dict) -> RawJob:
     """Traduce una riga ATS nel contratto comune del motore.
 
@@ -335,7 +367,8 @@ def importa(conn: psycopg.Connection, conn_ats: psycopg.Connection, *,
         if not clusters:
             return r
 
-        offerte = _idonee(cur_ats, list(clusters.keys()), giorni)
+        offerte = _deduplica(
+            _idonee(cur_ats, list(clusters.keys()), giorni))
         r.esaminate = len(offerte)
 
         runs: dict[str, str] = {}
