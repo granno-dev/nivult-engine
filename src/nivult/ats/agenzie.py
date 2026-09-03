@@ -279,6 +279,9 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                         ON CONFLICT (platform_id, external_id) DO UPDATE SET
                           title = EXCLUDED.title,
                           city = EXCLUDED.city, raw = EXCLUDED.raw,
+                          -- COALESCE, non assegnazione secca: un paese
+                          -- gia' scritto non va perso se oggi arriva vuoto
+                          country = COALESCE(EXCLUDED.country, ats_jobs.country),
                           fetched_at = now()
                     """, (slug, u, titolo[:300], u, citta,
                           paese or "IT", citta, _data(jp),

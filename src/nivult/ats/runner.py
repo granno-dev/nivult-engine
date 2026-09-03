@@ -135,7 +135,8 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (platform_id, external_id) DO UPDATE SET
                           title = EXCLUDED.title, url = EXCLUDED.url,
-                          location = EXCLUDED.location, country = EXCLUDED.country,
+                          location = EXCLUDED.location,
+                          country = COALESCE(EXCLUDED.country, ats_jobs.country),
                           city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
                           department = EXCLUDED.department, raw = EXCLUDED.raw,
                           fetched_at = now()

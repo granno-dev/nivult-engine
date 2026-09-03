@@ -572,6 +572,7 @@ def eures(dsn: str, limite: int = 2000, paesi: str = "IT") -> dict:
                                 ON CONFLICT (platform_id, external_id) DO UPDATE SET
                                   title = EXCLUDED.title, url = EXCLUDED.url,
                                   location = EXCLUDED.location, city = EXCLUDED.city,
+                                  country = COALESCE(EXCLUDED.country, ats_jobs.country),
                                   posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
                                   fetched_at = now()
                                 RETURNING (xmax = 0) AS is_new
