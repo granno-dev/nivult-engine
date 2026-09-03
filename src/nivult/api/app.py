@@ -402,23 +402,45 @@ def create_app() -> FastAPI:
         # Il controllo che un umano può fare col browser: l'API è viva?
         return {"servizio": "nivult-api", "stato": "ok"}
 
-    # Il cruscotto privato: una pagina sola dietro un token segreto, non
-    # indicizzata, che mostra come gira il motore in tempo reale. Il 404
-    # (non 403) su token errato non rivela nemmeno che esista.
-    _CRUSCOTTO_TOKEN = os.environ.get("CRUSCOTTO_TOKEN", "")
+    # Il cruscotto privato: pagina live del motore, dietro OAuth Microsoft
+    # murato su UNA sola email (CRUSCOTTO_EMAIL). Niente token nell'URL.
+    @app.get("/cruscotto", response_class=HTMLResponse)
+    def cruscotto_home(request: Request):
+        if cruscotto_mod.sessione_valida(request.cookies.get("crus", "")):
+            return HTMLResponse(cruscotto_mod.PAGINA)
+        return RedirectResponse("/cruscotto/entra", status_code=302)
 
-    def _cruscotto_ok(token: str) -> None:
-        if not _CRUSCOTTO_TOKEN or token != _CRUSCOTTO_TOKEN:
+    @app.get("/cruscotto/entra")
+    def cruscotto_entra():
+        # state firmato messo anche in un cookie: al ritorno i due devono
+        # combaciare (difesa CSRF), e nessuno stato vive nel database.
+        state = cruscotto_mod.firma(secrets.token_urlsafe(18))
+        resp = RedirectResponse(cruscotto_mod.url_login(state), status_code=302)
+        resp.set_cookie("crus_state", state, max_age=600, httponly=True,
+                        secure=True, samesite="lax", path="/cruscotto")
+        return resp
+
+    @app.get("/cruscotto/callback")
+    def cruscotto_callback(request: Request, code: str = "", state: str = ""):
+        atteso = request.cookies.get("crus_state", "")
+        if (not state or state != atteso
+                or cruscotto_mod._spacchetta(state) is None):
             raise HTTPException(status_code=404)
+        email = cruscotto_mod.email_da_code(code)
+        if email != cruscotto_mod.OPERATORE:
+            raise HTTPException(status_code=403,
+                                detail="Accesso riservato all'operatore.")
+        resp = RedirectResponse("/cruscotto", status_code=302)
+        resp.set_cookie("crus", cruscotto_mod.cookie_sessione(),
+                        max_age=cruscotto_mod.DURATA, httponly=True,
+                        secure=True, samesite="lax", path="/cruscotto")
+        resp.delete_cookie("crus_state", path="/cruscotto")
+        return resp
 
-    @app.get("/cruscotto/{token}", response_class=HTMLResponse)
-    def cruscotto_pagina(token: str):
-        _cruscotto_ok(token)
-        return HTMLResponse(cruscotto_mod.PAGINA)
-
-    @app.get("/cruscotto/{token}/dati")
-    def cruscotto_dati(token: str):
-        _cruscotto_ok(token)
+    @app.get("/cruscotto/dati")
+    def cruscotto_dati(request: Request):
+        if not cruscotto_mod.sessione_valida(request.cookies.get("crus", "")):
+            raise HTTPException(status_code=404)
         return cruscotto_mod.metriche(ats_database_url(), database_url())
 
     @app.post("/auth/magic-link", status_code=202)
