@@ -151,6 +151,15 @@ echo "── bundesanstellung (Germania)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── feed globale: le offerte attive di tutti i tenant SmartRecruiters,
+#    dal loro elenco unico. Puntiamo alle offerte, non alle aziende a
+#    caso: zero visite a vuoto, e i tenant nuovi si scoprono col lavoro
+#    gia' in mano. Incrementale: si ferma quando non c'e' piu' novita'.
+echo "── feed globale smartrecruiters"
+"$PY" -m nivult.ats.feed_globale --smartrecruiters --pagine-max 300 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── 5d. Arricchimento paese DOPO tutte le raccolte: ogni offerta
 #        nuova (agenzie, eures, bundes...) passa dalla catena citta'->
 #        paese e azienda-dominante PRIMA del ponte. Girava al 5b, ma li'
