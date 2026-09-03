@@ -858,6 +858,53 @@ class ZohoRecruit(BaseAdapter):
 ADAPTERS["zohorecruit"] = ZohoRecruit
 
 
+class HireHive(BaseAdapter):
+    """{slug}.hirehive.com/api/v1/jobs — JSON pubblico, link diretto.
+
+    Feed aperto: ogni offerta porta titolo, localita', paese (oggetto
+    con `code` ISO2), data e `hostedUrl` (il link diretto all'annuncio).
+    """
+    platform_id = "hirehive"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            r = self.client.get(f"https://{slug}.hirehive.com/api/v1/jobs")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        try:
+            d = r.json()
+        except ValueError:
+            return []
+        jobs = (d.get("jobs") if isinstance(d, dict)
+                else d if isinstance(d, list) else []) or []
+        out = []
+        for j in jobs:
+            jid = str(j.get("id") or "").strip()
+            if not jid:
+                continue
+            paese = j.get("country") or {}
+            cc = paese.get("code") if isinstance(paese, dict) else None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=jid,
+                title=j.get("title") or "",
+                url=j.get("hostedUrl") or f"https://{slug}.hirehive.com/",
+                location=j.get("location"),
+                city=j.get("location"),
+                country=_iso(cc),
+                posted_at=j.get("publishedDate") or j.get("createdDate"),
+                department=j.get("category"),
+                raw={k: j.get(k) for k in
+                     ("id", "location", "stateCode", "type", "category",
+                      "experience", "language")}))
+        return out
+
+
+ADAPTERS["hirehive"] = HireHive
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
