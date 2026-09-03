@@ -590,6 +590,274 @@ class Workable(BaseAdapter):
 ADAPTERS["workable"] = Workable
 
 
+class Personio(BaseAdapter):
+    """{slug}.jobs.personio.com/xml — feed XML pubblico, gratis.
+
+    Personio e' fra gli ATS piu' diffusi in area tedesca: ogni azienda
+    espone un feed XML con tutte le posizioni aperte (id, ufficio,
+    reparto, titolo, data). L'ufficio e' una citta' («Hamburg»,
+    «Berlin»): il paese lo scioglie poi il geocoder. Il feed vive su
+    .com o .de a seconda dell'azienda; si prova .com e si ripiega .de.
+    """
+    platform_id = "personio"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import xml.etree.ElementTree as ET
+        contenuto = None
+        for tld in ("com", "de"):
+            try:
+                r = self.client.get(f"https://{slug}.jobs.personio.{tld}/xml")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and b"<position>" in r.content:
+                contenuto = r.content
+                break
+        if contenuto is None:
+            return []
+        try:
+            root = ET.fromstring(contenuto)
+        except ET.ParseError:
+            return []
+        out = []
+        for pos in root.iter("position"):
+            pid = (pos.findtext("id") or "").strip()
+            if not pid:
+                continue
+            uffici = [o.text.strip() for o in pos.iter("office")
+                      if o.text and o.text.strip()]
+            ufficio = uffici[0] if uffici else None
+            dept = (pos.findtext("department") or "").strip() or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=pid,
+                title=(pos.findtext("name") or "").strip(),
+                url=f"https://{slug}.jobs.personio.com/job/{pid}",
+                location=ufficio, city=ufficio,
+                posted_at=pos.findtext("createdAt"),
+                department=dept,
+                raw={"id": pid, "office": ufficio, "offices": uffici,
+                     "department": dept, "employmentType":
+                     pos.findtext("employmentType"),
+                     "recruitingCategory": pos.findtext("recruitingCategory"),
+                     "createdAt": pos.findtext("createdAt")}))
+        return out
+
+
+ADAPTERS["personio"] = Personio
+
+
+class Recruiterbox(BaseAdapter):
+    """{slug}.hire.trakstar.com/jobfeeds/{slug} — RSS di sindacazione.
+
+    Recruiterbox e' diventato Trakstar Hire: la pagina carriere e' una
+    SPA che carica le offerte via Firebase (irreplicabile con una
+    semplice richiesta), ma il feed RSS pensato per i job board resta
+    pubblico e stabile — e porta citta', stato e paese gia' separati nel
+    namespace `job:`. Gli account migrati altrove rispondono con un feed
+    senza `<item>`: si ritorna vuoto.
+    """
+    platform_id = "recruiterbox"
+    _NS = {"job": "https://recruiterbox.com/rss/job/"}
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import xml.etree.ElementTree as ET
+        from email.utils import parsedate_to_datetime
+        try:
+            r = self.client.get(
+                f"https://{slug}.hire.trakstar.com/jobfeeds/{slug}")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200 or b"<item>" not in r.content:
+            return []
+        try:
+            root = ET.fromstring(r.content)
+        except ET.ParseError:
+            return []
+        out = []
+        for it in root.iter("item"):
+            link = (it.findtext("link") or "").strip()
+            guid = (it.findtext("guid") or link).strip()
+            ext = guid.rstrip("/").rsplit("/", 1)[-1] or guid
+            if not ext:
+                continue
+            city = (it.findtext("job:locationCity", namespaces=self._NS)
+                    or "").strip() or None
+            state = (it.findtext("job:locationState", namespaces=self._NS)
+                     or "").strip() or None
+            paese = (it.findtext("job:locationCountry", namespaces=self._NS)
+                     or "").strip() or None
+            loc = ", ".join(p for p in (city, state, paese) if p) or None
+            posted = it.findtext("pubDate")
+            try:
+                dt = parsedate_to_datetime(posted) if posted else None
+            except (TypeError, ValueError):
+                dt = None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=ext,
+                title=(it.findtext("title") or "").strip(),
+                url=link, location=loc, city=city, country=_iso(paese),
+                posted_at=dt,
+                department=(it.findtext("job:team", namespaces=self._NS)
+                            or "").strip() or None,
+                raw={"positionType": it.findtext(
+                    "job:positionType", namespaces=self._NS),
+                    "state": state, "country": paese}))
+        return out
+
+
+ADAPTERS["recruiterbox"] = Recruiterbox
+
+
+class Icims(BaseAdapter):
+    """{slug}.icims.com — la vista MOBILE della ricerca e' server-rendered.
+
+    Il portale desktop iCIMS carica le offerte via iframe/JS annidati,
+    illeggibile con una richiesta sola. La stessa ricerca con
+    `mobile=true` invece stampa le offerte nell'HTML: una lista di
+    `iCIMS_JobCardItem` con titolo, URL (che contiene l'id) e, quando il
+    portale li mostra, i campi di intestazione (requisition, sede). Si
+    pagina con `pr` finche' non arrivano piu' card nuove.
+    """
+    platform_id = "icims"
+    _CARD = re.compile(r'<li class="iCIMS_JobCardItem">(.*?)</li>', re.S)
+    _LINK = re.compile(
+        r'href="(https://[^"]+/jobs/(\d+)/[^"]+/job)"[^>]*?title="([^"]*)"',
+        re.S)
+    _H3 = re.compile(r"<h3[^>]*>(.*?)</h3>", re.S)
+    _FIELD = re.compile(
+        r'iCIMS_JobHeaderField"[^>]*>(?:<[^>]+>)?\s*([^<]+?)\s*</dt>\s*'
+        r'<dd[^>]*>(?:<[^>]*>)*\s*([^<]+)', re.S)
+    # i portali che server-rendono mostrano la sede nella card, come
+    # «field-label">Job Locations</span><span>US-KS-Wichita</span>»
+    _LOC = re.compile(
+        r'field-label">Job Locations?</span>\s*<span[^>]*>\s*'
+        r'([^<]+?)\s*</span>', re.S)
+    _UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+           "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for page in range(0, 40):
+            url = (f"https://{slug}.icims.com/jobs/search?pr={page}"
+                   "&mobile=true&needsRedirect=false")
+            try:
+                r = self.client.get(url, headers={"User-Agent": self._UA})
+            except httpx.HTTPError:
+                break
+            if r.status_code != 200:
+                break
+            cards = self._CARD.findall(r.text)
+            if not cards:
+                break
+            nuovi = 0
+            for card in cards:
+                lm = self._LINK.search(card)
+                if not lm:
+                    continue
+                jurl, jid, titleattr = lm.group(1), lm.group(2), lm.group(3)
+                if jid in visti:
+                    continue
+                visti.add(jid)
+                nuovi += 1
+                import html as _html
+                hm = self._H3.search(card)
+                titolo = (re.sub(r"<[^>]+>", " ", hm.group(1)).strip()
+                          if hm else "")
+                if not titolo:
+                    # il title dell'anchor e' «REQ - Titolo»: tieni il dopo
+                    titolo = titleattr.split(" - ", 1)[-1].strip()
+                titolo = _html.unescape(re.sub(r"\s+", " ", titolo)).strip()
+                campi = {f.strip(): d.strip()
+                         for f, d in self._FIELD.findall(card)}
+                lm2 = self._LOC.search(card)
+                loc = (lm2.group(1).strip() if lm2 else
+                       next((v for k, v in campi.items()
+                             if "location" in k.lower()), None))
+                # la sede e' spesso «CC-Stato-Citta» (US-KS-Wichita,
+                # IN-Remote): il primo pezzo e' il codice paese, l'ultimo
+                # la citta'
+                citta = paese = None
+                if loc:
+                    m3 = re.match(r"^([A-Z]{2})-(.+)$", loc)
+                    if m3:
+                        paese = _iso(m3.group(1))
+                        citta = m3.group(2).split("-")[-1].strip() or None
+                    else:
+                        citta = loc
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=jid, title=titolo, url=jurl,
+                    location=loc, city=citta, country=paese, raw=campi))
+            if nuovi == 0:
+                break
+        return out
+
+
+ADAPTERS["icims"] = Icims
+
+
+class ZohoRecruit(BaseAdapter):
+    """{slug}.zohorecruit.{dc}/jobs/Careers — le offerte sono nel blob.
+
+    La pagina carriere di Zoho e' renderizzata dal framework Lyte, ma le
+    offerte NON arrivano da una chiamata separata: stanno gia' dentro
+    l'HTML, in un attributo `value` (con le virgolette HTML-escaped)
+    dell'elemento `id="jobs"` — un array JSON con titolo, citta', paese,
+    tipo. L'account vive in un data center preciso (eu/com/in): si prova
+    finche' la pagina non contiene l'elemento `id="jobs"`.
+    """
+    platform_id = "zohorecruit"
+    _DC = ("eu", "com", "in")
+    _BLOB = re.compile(r'value="([^"]*Posting_Title[^"]*)"', re.S)
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import html as _html
+        pagina = dc = None
+        for tld in self._DC:
+            try:
+                r = self.client.get(
+                    f"https://{slug}.zohorecruit.{tld}/jobs/Careers")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and 'id="jobs"' in r.text:
+                pagina, dc = r.text, tld
+                break
+        if pagina is None:
+            return []
+        m = self._BLOB.search(pagina)
+        if not m:
+            return []          # data center giusto ma nessuna offerta
+        try:
+            data = json.loads(_html.unescape(m.group(1)))
+        except ValueError:
+            return []
+        out = []
+        for j in data:
+            if j.get("Publish") is False:
+                continue
+            jid = str(j.get("id") or "").strip()
+            if not jid:
+                continue
+            citta = (j.get("City") or "").strip() or None
+            paese = (j.get("Country") or "").strip() or None
+            loc = ", ".join(p for p in (citta, paese) if p) or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=jid,
+                title=(j.get("Posting_Title")
+                       or j.get("Job_Opening_Name") or "").strip(),
+                url=f"https://{slug}.zohorecruit.{dc}/jobs/Careers/{jid}",
+                location=loc, city=citta, country=_iso(paese),
+                department=(j.get("Department_Name") or "").strip() or None,
+                raw=j))
+        return out
+
+
+ADAPTERS["zohorecruit"] = ZohoRecruit
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
@@ -694,29 +962,33 @@ class JazzHR(BaseAdapter):
     Il titolo vero è il testo dell'ancora, non l'URL.
     """
     platform_id = "jazzhr"
+    # Ogni offerta e' una riga di tabella: titolo (con link e codice),
+    # reparto, sede. Prima si prendeva solo il titolo e si buttava la
+    # colonna `resumator-job-location-column` — 37k offerte senza paese.
+    _RIGA = re.compile(
+        r'href="(https?://[^"]*\.applytojob\.com/apply/([A-Za-z0-9]+)/[^"]+)"'
+        r'[^>]*class="resumator-job-title-link">(.*?)</a>'
+        r'(?:(?!resumator-job-title-link).)*?'
+        r'resumator-job-location-column">\s*([^<]*?)\s*</td>', re.S)
 
     def jobs(self, slug: str) -> list[AtsJob]:
         r = self.client.get(f"https://{slug}.applytojob.com/")
         if r.status_code != 200:
             return []
-        found = re.findall(
-            r'<a[^>]*href="(https?://[^"]*\.applytojob\.com/apply/([A-Za-z0-9]+)/[^"]+)"[^>]*>(.*?)</a>',
-            r.text, re.S)
         out: list[AtsJob] = []
         visti: set[str] = set()
-        for url, code, txt in found:
+        for url, code, txt, loc in self._RIGA.findall(r.text):
             if code in visti:
                 continue
             visti.add(code)
-            titolo = re.sub(r'<[^>]+>', '', txt)
-            titolo = re.sub(r'\s+', ' ', titolo).strip()
+            titolo = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", txt)).strip()
             if not titolo:
                 continue
+            sede = re.sub(r"\s+", " ", loc).strip() or None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
-                external_id=code,
-                title=titolo,
-                url=url,
+                external_id=code, title=titolo, url=url,
+                location=sede, city=sede,
                 raw={"code": code}))
         return out
 
@@ -941,6 +1213,13 @@ class SuccessFactors(BaseAdapter):
     platform_id = "successfactors"
     MAX_PAGINE = 30
     MAX_BACHECHE = 3
+    # ogni offerta: il link /job/.../id/ seguito, nel blocco telefono, da
+    # reparto (jobFacility) e sede (jobLocation, «Citta, CC, CAP»)
+    _RIGA = re.compile(
+        r'href="(/job/[^"]+/(\d+)/)"[^>]*>.*?</a>\s*</span>'
+        r'(?:\s*<span class="jobFacility[^"]*"[^>]*>(.*?)</span>)?'
+        r'\s*<span class="jobLocation[^"]*"[^>]*>\s*<span[^>]*>\s*'
+        r'(.*?)\s*</span>', re.S)
 
     def jobs(self, slug: str) -> list[AtsJob]:
         import html as html_mod
@@ -973,19 +1252,37 @@ class SuccessFactors(BaseAdapter):
                 if rp.status_code != 200:
                     break
                 nuove = 0
-                for href in re.findall(r'href="(/job/[^"]+/(\d+)/)"', rp.text):
-                    path, id_offerta = href
+                for m in self._RIGA.finditer(rp.text):
+                    path, id_offerta = m.group(1), m.group(2)
                     if id_offerta in visti:
                         continue
                     visti.add(id_offerta)
                     nuove += 1
+                    reparto = re.sub(r"<[^>]+>", "",
+                                     m.group(3) or "").strip() or None
+                    if reparto and "no-department" in (m.group(3) or ""):
+                        reparto = None
+                    # via l'eventuale coda HTML «<small>+1 meer…</small>»
+                    sede = re.sub(r"<[^>]+>.*$", "", m.group(4) or "")
+                    sede = re.sub(r"\s+", " ", sede).strip() or None
+                    # la sede e' «Citta, CC, CAP»: il codice a due lettere
+                    # e' il paese
+                    paese = None
+                    if sede:
+                        cc = next((p.strip() for p in sede.split(",")
+                                   if re.fullmatch(r"[A-Z]{2}", p.strip())),
+                                  None)
+                        paese = _iso(cc)
                     titolo_slug = path.rstrip("/").split("/")[-2]
                     out.append(AtsJob(
                         platform_id=self.platform_id, slug=slug,
                         external_id=id_offerta,
                         title=unquote(titolo_slug).replace("-", " ").strip(),
                         url=urljoin(base, path),
-                        raw={"path": path}))
+                        location=sede, city=(sede.split(",")[0].strip()
+                                             if sede else None),
+                        country=paese, department=reparto,
+                        raw={"path": path, "location": sede}))
                 if nuove == 0:
                     break
         return out
@@ -1169,11 +1466,21 @@ class Softgarden(BaseAdapter):
                     if item.get("datePosted") else None
             except ValueError:
                 dt = None
+            luogo = item.get("jobLocation") or {}
+            if isinstance(luogo, list):
+                luogo = luogo[0] if luogo else {}
+            addr = (luogo.get("address") if isinstance(luogo, dict)
+                    else None) or {}
+            citta = (addr.get("addressLocality") or "").strip() or None
+            paese = (addr.get("addressCountry") or "").strip() or None
+            regione = (addr.get("addressRegion") or "").strip() or None
+            locstr = ", ".join(p for p in (citta, regione, paese) if p) or None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=str(ident["value"]),
                 title=item.get("title") or "",
                 url=item["url"],
+                location=locstr, city=citta, country=_iso(paese),
                 posted_at=dt,
                 raw=item))
         return out
