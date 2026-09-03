@@ -123,12 +123,6 @@ echo "── arricchisci (phenom 1000)"
 "$PY" -m nivult.ats.arricchisci --phenom --limite 1000 --thread 8 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
-"$PY" -m nivult.ats.arricchisci --da-localita \
-  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
-  && echo "   ok" || echo "   FALLITO"
-"$PY" -m nivult.ats.arricchisci --da-azienda \
-  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
-  && echo "   ok" || echo "   FALLITO"
 
 # ── 5c. Servizi pubblici europei: API dirette ─────────────────────
 echo "── arbetsformedlingen (Svezia)"
@@ -154,6 +148,19 @@ echo "── eures (portale UE — copre l'Italia)"
 
 echo "── bundesanstellung (Germania)"
 "$PY" -m nivult.ats.servizi_pubblici --bundesanstellung --limite 2000 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+# ── 5d. Arricchimento paese DOPO tutte le raccolte: ogni offerta
+#        nuova (agenzie, eures, bundes...) passa dalla catena citta'->
+#        paese e azienda-dominante PRIMA del ponte. Girava al 5b, ma li'
+#        le raccolte tardive non erano ancora scese: le loro offerte
+#        arrivavano al ponte senza il paese ricavabile dalla localita'.
+echo "── arricchisci paese (da-localita + da-azienda, dopo le raccolte)"
+"$PY" -m nivult.ats.arricchisci --da-localita \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+"$PY" -m nivult.ats.arricchisci --da-azienda \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
