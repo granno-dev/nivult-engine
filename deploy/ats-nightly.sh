@@ -51,7 +51,7 @@ echo "=== ATS nightly $(date -Is) ==="
 
 # ── 1. Scrape: aggiorna tutte le aziende registrate ─────────────────
 echo "── scrape"
-"$PY" -m nivult.ats.runner >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+"$PY" -m nivult.ats.runner --thread 16 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
 # ── 1b. Scoperta tenant dagli archivi (CC + Wayback, a fette) ───────

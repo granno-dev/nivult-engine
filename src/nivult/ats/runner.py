@@ -14,6 +14,7 @@ import argparse
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import psycopg
@@ -90,8 +91,16 @@ def semina_aziende(dsn: str, dsn_produzione: str) -> int:
     return len(estratti)
 
 
-def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
-    """Scarica le offerte di tutte le aziende attive (o di una piattaforma)."""
+def scrape(dsn: str, piattaforma: str | None = None,
+           thread: int = 10) -> dict[str, int]:
+    """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
+
+    Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
+    scrape e' attesa di rete, e mentre si aspetta una azienda se ne
+    interrogano altre. Le scritture nel database restano serializzate
+    nel thread principale (una sola connessione), che e' sicuro e
+    comunque velocissimo rispetto alla rete.
+    """
     stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -114,58 +123,65 @@ def scrape(dsn: str, piattaforma: str | None = None) -> dict[str, int]:
                       "ac.platform_id, ac.slug", params)
             aziende = cur.fetchall()
 
-        for az in aziende:
+        def _fetch(az):
+            """Solo rete: nessun tocco al DB, cosi' gira in parallelo."""
             adapter_cls = ADAPTERS.get(az["platform_id"])
             if not adapter_cls:
-                continue
-            stats["aziende"] += 1
+                return az, None
             try:
                 with adapter_cls() as adapter:
-                    # Workday ha bisogno della configurazione tenant.
                     if az["platform_id"] == "workday":
-                        jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
-                    # In-recruiting ha bisogno della chiave di pubblicazione.
-                    elif az["platform_id"] == "inrecruiting":
-                        jobs = adapter.jobs(az["slug"], az["pub_key"])
-                    else:
-                        jobs = adapter.jobs(az["slug"])
+                        return az, adapter.jobs(
+                            az["slug"], az["wd_server"], az["wd_instance"])
+                    if az["platform_id"] == "inrecruiting":
+                        return az, adapter.jobs(az["slug"], az["pub_key"])
+                    return az, adapter.jobs(az["slug"])
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s/%s: fetch fallita: %s",
                             az["platform_id"], az["slug"], exc)
-                continue
+                return az, None
 
-            for j in jobs:
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            futuri = [pool.submit(_fetch, az) for az in aziende]
+            for fut in as_completed(futuri):
+                az, jobs = fut.result()
+                if jobs is None:
+                    continue
+                stats["aziende"] += 1
+
+                for j in jobs:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO ats_jobs (platform_id, slug, external_id, title,
+                              url, location, country, city, posted_at, department, raw)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                              title = EXCLUDED.title, url = EXCLUDED.url,
+                              location = EXCLUDED.location,
+                              country = COALESCE(EXCLUDED.country, ats_jobs.country),
+                              city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
+                              department = EXCLUDED.department, raw = EXCLUDED.raw,
+                              fetched_at = now()
+                            RETURNING (xmax = 0) AS is_new
+                        """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
+                              j.location, j.country, j.city, j.posted_at,
+                              j.department, psycopg.types.json.Json(j.raw)))
+                        r = cur.fetchone()
+                        if r and r[0]:
+                            stats["nuove"] += 1
+                        else:
+                            stats["aggiornate"] += 1
+                    stats["offerte"] += 1
+
                 with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO ats_jobs (platform_id, slug, external_id, title,
-                          url, location, country, city, posted_at, department, raw)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
-                          title = EXCLUDED.title, url = EXCLUDED.url,
-                          location = EXCLUDED.location,
-                          country = COALESCE(EXCLUDED.country, ats_jobs.country),
-                          city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
-                          department = EXCLUDED.department, raw = EXCLUDED.raw,
-                          fetched_at = now()
-                        RETURNING (xmax = 0) AS is_new
-                    """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
-                          j.location, j.country, j.city, j.posted_at,
-                          j.department, psycopg.types.json.Json(j.raw)))
-                    r = cur.fetchone()
-                    if r and r[0]:
-                        stats["nuove"] += 1
-                    else:
-                        stats["aggiornate"] += 1
-                stats["offerte"] += 1
-
-            # Aggiorna lo stato dell'azienda
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE ats_companies SET last_fetch_at = now(), job_count = %s "
-                    "WHERE platform_id = %s AND slug = %s",
-                    (len(jobs), az["platform_id"], az["slug"]))
-            conn.commit()
-            log.info("  %s/%s: %d offerte", az["platform_id"], az["slug"], len(jobs))
+                    cur.execute(
+                        "UPDATE ats_companies SET last_fetch_at = now(), "
+                        "job_count = %s WHERE platform_id = %s AND slug = %s",
+                        (len(jobs), az["platform_id"], az["slug"]))
+                conn.commit()
+                if len(jobs):
+                    log.info("  %s/%s: %d offerte",
+                             az["platform_id"], az["slug"], len(jobs))
 
     return stats
 
@@ -250,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="estrai aziende dal database di produzione (sola lettura)")
     ap.add_argument("--arricchisci", type=int, default=0, metavar="N",
                     help="arricchisci N aziende da Wikidata")
+    ap.add_argument("--thread", type=int, default=10,
+                    help="aziende interrogate in parallelo (default 10)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
@@ -265,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"seminate {n} aziende dal database di produzione")
 
     if not args.stats:
-        s = scrape(dsn, args.piattaforma)
+        s = scrape(dsn, args.piattaforma, thread=args.thread)
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "
               f"({s['nuove']} nuove, {s['aggiornate']} aggiornate)")
 
