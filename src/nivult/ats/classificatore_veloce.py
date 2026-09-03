@@ -49,6 +49,7 @@ FAMIGLIE = [
 
 DIZIONARIO: dict[str, list[str]] = {
     "Healthcare": [
+        "behavior analyst", "behavior technician", "bcba", "rbt", "operatore socio sanitario", "service hospitalier",
         # EN
         "nurse", "doctor", "physician", "surgeon", "dentist", "pharmacist",
         "midwife", "therapist", "psychologist", "paramedic", "caregiver",
@@ -182,6 +183,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "eigentelijke", "finanzas", "contabilidade",
     ],
     "Sales": [
+        "agente immobiliare", "agente d affari", "consulente commerciale",
         "sales", "salesperson", "account executive", "account manager",
         "business development", "commercial", "vendite", "vendita",
         "verkäufer", "vertrieb", "säljare", "försäljning",
@@ -228,6 +230,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "payroll specialist", "compensation", "benefits",
     ],
     "Retail": [
+        "assistente di negozio", "commerciante al dettaglio", "einzelhandel", "addetto alle vendite", "addetto vendita",
         "retail", "shop assistant", "store manager", "cashier",
         "commesso", "venditore al dettaglio", "verkäufer",
         "butikssäljare", "butiksmedarbetare", "winkelmedewerker",
@@ -257,6 +260,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "varuhus",
     ],
     "Logistics": [
+        "magazziniere", "carrellista", "mulettista", "addetto al magazzino", "facchino", "cariste",
         "logistics", "supply chain", "warehouse", "magazzino",
         "lager", "lagermitarbeiter", "warehouse operative",
         "spedition", "freight", "spedizioniere", "logistiek",
@@ -313,6 +317,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "bricklayer", "maçon", "maurer", "murare",
     ],
     "Trades": [
+        "elettricista", "chauffagiste", "manutentore", "termoidraulico", "installatore", "macon",
         "electrician", "elektriker", "électricien", "elektricien",
         "plumber", "idraulico", "installateur", "klempner",
         "mechanic", "meccanico", "mechaniker", "mekaniker",
@@ -360,6 +365,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "grundläggare",
     ],
     "Food & Beverage": [
+        "lavapiatti", "plongeur", "aiuto cuoco", "pizzaiolo",
         "chef", "cook", "cuoco", "koch", "kock", "kok",
         "waiter", "waitress", "cameriere", "cameriera", "kellner",
         "servitör", "servitrice", "ober", "kelner", "kelnerka",
@@ -445,6 +451,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "bodyguard", "vigilant", "beveiliging",
     ],
     "Social Services": [
+        "babysitting", "baby sitter", "garde d enfant", "assistente all infanzia", "educatore",
         "social worker", "assistente sociale", "sozialarbeiter", "auxiliaire de crèche", "auxiliaire de creche",
         "socionom", "maatschappelijk werker",
         "youth worker", "educatore professionale",
@@ -485,6 +492,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "opiekun osoby starszej",
     ],
     "Manufacturing": [
+        "operatore cnc", "collaudatore", "conduttore di macchine",
         "manufacturing", "produzione", "produktion", "productie",
         "production", "production worker", "operaio", "arbeiter",
         "production operator", "machine operator", "operatore macchina",
@@ -539,6 +547,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "business consultant", "consultancy",
     ],
     "Science & Research": [
+        "geologo", "geologa", "biologo", "chimico",
         "scientist", "researcher", "ricercatore", "forscher",
         "forskare", "wetenschapper", "naukowiec",
         "laboratory", "laboratorio", "labor", "laboratorium",
@@ -546,6 +555,7 @@ DIZIONARIO: dict[str, list[str]] = {
         "phd", "postdoc", "chemist", "biologist", "physicist",
     ],
     "Technology": [
+        "tecnico informatico", "informatico", "sistemista", "help desk",
         "it specialist", "system administrator", "sysadmin",
         "network engineer", "amministratore di sistema",
         "systemadministrator", "it support", "it tecnico",
@@ -618,7 +628,12 @@ def _pulisci_titolo(titolo: str) -> str:
     """Minuscolo, senza accenti, per il matching."""
     t = unicodedata.normalize("NFKD", titolo or "")
     t = "".join(c for c in t if not unicodedata.combining(c))
-    return t.lower()
+    t = t.lower()
+    # la punteggiatura che incolla le parole diventa spazio: cosi'
+    # "operaio/a", "garde d'enfant", "impiegato-contabile" si spezzano
+    # e le parole del dizionario le ritrovano
+    t = re.sub(r"[/'’‘\-.,;:()\[\]]", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
 
 
 def classifica_titolo(titolo: str) -> tuple[str | None, float]:
