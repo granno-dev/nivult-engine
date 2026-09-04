@@ -1318,6 +1318,63 @@ class Niceboard(BaseAdapter):
 ADAPTERS["niceboard"] = Niceboard
 
 
+class Traffit(BaseAdapter):
+    """{slug}.traffit.com — ATS polacco, SPA con API JSON pubblica.
+
+    La career page (Vue) legge le offerte da `/public/an/list/`
+    (limit/offset, con `count` per paginare). Ogni offerta porta
+    `job_location` strutturata (country + `iso` ISO2 + locality),
+    l'epoch di pubblicazione e l'`url` col link diretto all'annuncio.
+    """
+    platform_id = "traffit"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        offset, count = 0, None
+        while offset < (count if count is not None else 1) and offset < 4000:
+            try:
+                d = self.client.get(
+                    f"https://{slug}.traffit.com/public/an/list/"
+                    f"?limit=50&offset={offset}",
+                    headers={"User-Agent": self._UA,
+                             "Accept": "application/json"}).json()
+            except (httpx.HTTPError, ValueError):
+                break
+            if not isinstance(d, dict):
+                break
+            count = d.get("count") if count is None else count
+            items = d.get("items") or []
+            if not items:
+                break
+            for j in items:
+                jid = str(j.get("advertPublishId") or j.get("advertId") or "").strip()
+                url = j.get("url")
+                if not jid or jid in visti or not url:
+                    continue
+                visti.add(jid)
+                loc = j.get("job_location") or {}
+                citta = (loc.get("locality") or "").strip() or None
+                reg = (loc.get("region1") or "").strip() or None
+                paese = (loc.get("country") or "").strip() or None
+                iso = (loc.get("iso") or "").strip() or None
+                locstr = ", ".join(x for x in (citta, reg, paese) if x) or None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug, external_id=jid,
+                    title=(j.get("title") or j.get("name") or "").strip(),
+                    url=url,
+                    location=locstr, city=citta, country=_iso(iso),
+                    posted_at=j.get("validStart") or j.get("createdAt"),
+                    raw={"remote": j.get("remote"), "nrRef": j.get("nrRef"),
+                         "iso": iso, "locality": citta}))
+            offset += 50
+        return out
+
+
+ADAPTERS["traffit"] = Traffit
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
