@@ -151,6 +151,29 @@ echo "── mantenimento (expira/normalizza/dedup)"
 "$PY" -m nivult.ats.mantenimento --dedup >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── 5a-bis. Potatura slug morti: disattiva i tenant 404 (account chiusi)
+# tra i visitati-vuoti. Tiene il censimento pulito e l'attivazione vera,
+# e libera capacita' per i vivi. Rotazione: 3 piattaforme per notte.
+echo "── potatura slug morti (rotazione)"
+"$PY" - "$STATE" <<'PYEOF' >> "$LOG_DIR/ats-nightly.log" 2>&1
+import os, sys
+sys.path.insert(0, "/opt/nivult/engine")
+from nivult.ats.potatura import pota, _VIVO
+ATS = os.environ["ATS_DATABASE_URL"]
+plats = list(_VIVO)
+sf = os.path.join(sys.argv[1], "potatura-rotazione.txt")
+try: pos = int(open(sf).read().strip())
+except Exception: pos = 0
+for i in range(3):
+    pid = plats[(pos + i) % len(plats)]
+    for _ in range(20):
+        r = pota(ATS, pid, 1000)
+        print("potatura", r)
+        if r.get("esaminati", 0) == 0: break
+open(sf, "w").write(str((pos + 3) % len(plats)))
+PYEOF
+echo "   ok"
+
 # ── 5b. Arricchimento: paese/data dalle pagine di dettaglio ──────
 echo "── arricchisci (phenom 1000)"
 "$PY" -m nivult.ats.arricchisci --phenom --limite 1000 --thread 8 \
