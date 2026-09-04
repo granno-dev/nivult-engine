@@ -1558,6 +1558,128 @@ class Jobsoid(BaseAdapter):
 ADAPTERS["jobsoid"] = Jobsoid
 
 
+def _jsonld_jobposting(html_txt: str) -> dict | None:
+    """Estrae il primo blocco schema.org/JobPosting da un HTML.
+
+    E' il markup standard di Google for Jobs: titolo, sede, data in
+    forma identica ovunque. Ritorna l'oggetto JobPosting o None.
+    """
+    for m in re.findall(
+            r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            html_txt, re.S):
+        try:
+            d = json.loads(m.strip())
+        except (ValueError, TypeError):
+            continue
+        cand = d if isinstance(d, list) else \
+            (d.get("@graph", [d]) if isinstance(d, dict) else [d])
+        for o in cand:
+            if isinstance(o, dict) and "JobPosting" in str(o.get("@type", "")):
+                return o
+    return None
+
+
+def _loc_da_jsonld(o: dict):
+    """Da un JobPosting ritorna (locstr, city, country_iso)."""
+    jl = o.get("jobLocation")
+    if isinstance(jl, list):
+        jl = jl[0] if jl else None
+    addr = jl.get("address") if isinstance(jl, dict) else None
+    if not isinstance(addr, dict):
+        return None, None, None
+    city = (addr.get("addressLocality") or "").strip() or None
+    reg = (addr.get("addressRegion") or "").strip() or None
+    paese = addr.get("addressCountry")
+    if isinstance(paese, dict):
+        paese = paese.get("name") or paese.get("identifier")
+    paese = (paese or "").strip() or None
+    locstr = ", ".join(x for x in (city, reg, paese) if x) or None
+    return locstr, city, _iso(paese)
+
+
+class Eploy(BaseAdapter):
+    """{slug}.eploy.net — ATS UK, offerte via sitemap + JSON-LD.
+
+    La career page e' ASP.NET (impaginata a postback, non leggibile),
+    ma ogni tenant pubblica `sitemap.xml` che indicizza `live-jobs.xml`
+    con TUTTE le URL delle offerte, e ogni pagina di dettaglio emette
+    schema.org/JobPosting (titolo, sede, data). Alcuni tenant servono le
+    offerte da un dominio proprio (careers.azienda.com): il sitemap lo
+    dichiara, noi lo seguiamo.
+    """
+    platform_id = "eploy"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    MAX_OFFERTE = 600
+
+    def _urls_offerte(self, slug: str) -> list[str]:
+        try:
+            idx = self.client.get(f"https://{slug}.eploy.net/sitemap.xml",
+                                  headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return []
+        if idx.status_code != 200:
+            return []
+        subs = re.findall(r"<loc>\s*([^<]+?)\s*</loc>", idx.text)
+        vac = [u for u in subs if re.search(r"live-jobs|vacanc|job", u, re.I)] or subs
+        urls: list[str] = []
+        for sm in vac[:4]:
+            try:
+                r = self.client.get(sm, headers={"User-Agent": self._UA})
+            except httpx.HTTPError:
+                continue
+            urls += [u for u in re.findall(r"<loc>\s*([^<]+?)\s*</loc>", r.text)
+                     if re.search(r"/vacanc|/job", u, re.I)]
+            if len(urls) >= self.MAX_OFFERTE:
+                break
+        # dedup mantenendo l'ordine
+        visti, out = set(), []
+        for u in urls:
+            if u not in visti:
+                visti.add(u); out.append(u)
+        return out[:self.MAX_OFFERTE]
+
+    def _una(self, slug: str, url: str):
+        try:
+            r = self.client.get(url, headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return None
+        if r.status_code != 200:
+            return None
+        o = _jsonld_jobposting(r.text)
+        if not o:
+            return None
+        titolo = (o.get("title") or "").strip()
+        if not titolo:
+            return None
+        m = re.search(r"/vacanc\w*/(\d+)", url)
+        jid = m.group(1) if m else url.rstrip("/").split("/")[-1]
+        locstr, citta, paese = _loc_da_jsonld(o)
+        org = o.get("hiringOrganization")
+        return AtsJob(
+            platform_id=self.platform_id, slug=slug, external_id=str(jid),
+            title=titolo, url=(o.get("url") or url),
+            location=locstr, city=citta, country=paese,
+            posted_at=o.get("datePosted"),
+            department=(o.get("industry") or None),
+            raw={"employmentType": o.get("employmentType"),
+                 "hiringOrganization": org.get("name") if isinstance(org, dict) else None})
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        from concurrent.futures import ThreadPoolExecutor
+        urls = self._urls_offerte(slug)
+        if not urls:
+            return []
+        out: list[AtsJob] = []
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            for aj in ex.map(lambda u: self._una(slug, u), urls):
+                if aj is not None:
+                    out.append(aj)
+        return out
+
+
+ADAPTERS["eploy"] = Eploy
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
