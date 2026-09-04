@@ -12,6 +12,8 @@ export GLM_API_KEY
 # solo se davvero presente nel .env, altrimenti vale il default del codice.
 GLM_BASE_URL=$(grep -E '^GLM_BASE_URL=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 [ -n "$GLM_BASE_URL" ] && export GLM_BASE_URL
+BRANDFETCH_CLIENT_ID=$(grep -E '^BRANDFETCH_CLIENT_ID=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+[ -n "$BRANDFETCH_CLIENT_ID" ] && export BRANDFETCH_CLIENT_ID
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
@@ -39,5 +41,10 @@ while true; do
   # salari: estrae min/max/valuta/periodo dal raw (nuove offerte)
   "$PY" -m nivult.ats.salari --limite 30000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true
+  # brandfetch a fettine: le aziende NUOVE in bacheca (l'ordine parte da
+  # chi pubblica adesso) hanno il logo in minuti, non alla prossima notte
+  if [ -n "${BRANDFETCH_CLIENT_ID:-}" ]; then
+    "$PY" -m nivult.ats.loghi --da-brandfetch --limite 120 2>&1 | tail -1 || true
+  fi
   sleep 300
 done
