@@ -259,7 +259,13 @@ def _come_rawjob(o: dict) -> RawJob:
             "onsite": "On-site"}
     salario = None
     if o["salary_min"] is not None or o["salary_max"] is not None:
-        salario = {"min_value": o["salary_min"], "max_value": o["salary_max"],
+        # Le colonne numeric arrivano come Decimal, che Json non serializza:
+        # senza il float() il ponte INTERO moriva a ogni giro (visto il
+        # 04/09 appena i salari si sono popolati).
+        salario = {"min_value": float(o["salary_min"])
+                   if o["salary_min"] is not None else None,
+                   "max_value": float(o["salary_max"])
+                   if o["salary_max"] is not None else None,
                    "currency": o["salary_currency"]}
     return RawJob(
         source=SORGENTE,
