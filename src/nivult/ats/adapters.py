@@ -1204,6 +1204,55 @@ class Taleez(BaseAdapter):
 ADAPTERS["taleez"] = Taleez
 
 
+class HeavenHR(BaseAdapter):
+    """heavenhr.com — SPA, ma l'API pubblica e' aperta (2 passi).
+
+    Il JS risolve il sottodominio in un companyId
+    (`/positions/public/subdomain/{slug}`), poi legge le offerte
+    (`/positions/public/vacancies/?companyId=...`). Campi puliti:
+    jobTitle, location, department, data.
+    """
+    platform_id = "heavenhr"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _API = "https://api.heavenhr.com/api/v1/positions/public"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            cids = self.client.get(
+                f"{self._API}/subdomain/{slug}",
+                headers={"User-Agent": self._UA}).json().get("data") or []
+        except (httpx.HTTPError, ValueError):
+            return []
+        if not cids:
+            return []
+        try:
+            d = self.client.get(
+                f"{self._API}/vacancies/?companyId={cids[0]}"
+                "&pageSize=3000&page=0",
+                headers={"User-Agent": self._UA}).json()
+        except (httpx.HTTPError, ValueError):
+            return []
+        out = []
+        for j in (d.get("data") if isinstance(d, dict) else None) or []:
+            jid = str(j.get("id") or "").strip()
+            if not jid or j.get("status") == "ARCHIVED":
+                continue
+            loc = (j.get("location") or "").strip() or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=j.get("jobTitle") or "",
+                url=f"https://{slug}.heavenhr.com/jobs/{jid}",
+                location=loc, city=loc,
+                posted_at=j.get("publicationDate"),
+                department=(j.get("department") or "").strip() or None,
+                raw={"employmentTypes": j.get("employmentTypes"),
+                     "location": loc, "seniority": j.get("seniority")}))
+        return out
+
+
+ADAPTERS["heavenhr"] = HeavenHR
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
