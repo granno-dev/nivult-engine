@@ -83,6 +83,14 @@ def parse_stringa(s: str):
     return mn, mx, valuta, periodo
 
 
+def _sano(v) -> float | None:
+    """Un importo credibile, dentro i limiti della colonna numeric(12,2)."""
+    if not isinstance(v, (int, float)):
+        return None
+    v = float(v)
+    return v if 0 < v < 10_000_000 else None
+
+
 def estrai(raw: dict):
     """Dal raw di un'offerta ritorna (min, max, valuta, periodo) o None."""
     if not isinstance(raw, dict):
@@ -98,8 +106,7 @@ def estrai(raw: dict):
                    "yearly": "year", "hourly": "hour", "annual": "year",
                    "monthly": "month"}.get(per, per if per in
                    ("hour", "day", "month", "year") else None)
-            mn = float(mn) if isinstance(mn, (int, float)) else None
-            mx = float(mx) if isinstance(mx, (int, float)) else None
+            mn, mx = _sano(mn), _sano(mx)
             if cur and (mn or mx):
                 return (mn or mx), (mx or mn), cur, per
     # 2) salary come oggetto {min,max,currency}
@@ -108,9 +115,8 @@ def estrai(raw: dict):
         mn, mx = sal.get("min"), sal.get("max")
         if isinstance(mn, (int, float)) or isinstance(mx, (int, float)):
             cur = (sal.get("currency") or "").upper() or None
-            if cur:
-                mn = float(mn) if isinstance(mn, (int, float)) else None
-                mx = float(mx) if isinstance(mx, (int, float)) else None
+            mn, mx = _sano(mn), _sano(mx)
+            if cur and (mn or mx):
                 return (mn or mx), (mx or mn), cur, None
     # 3) salary come stringa (breezy: «$20 – $22 / hour»)
     if isinstance(sal, str):
