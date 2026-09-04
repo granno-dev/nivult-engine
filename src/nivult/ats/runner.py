@@ -118,15 +118,20 @@ def scrape(dsn: str, piattaforma: str | None = None,
             if piattaforma:
                 sql += " AND ac.platform_id = %s"
                 params.append(piattaforma)
-            # Priorita' di visita, in tre scaglioni:
+            # Priorita' di visita, in quattro scaglioni:
             #  1. le MAI viste (last_fetch NULL): il tesoro non ancora
-            #     scavato — le 47mila appena scoperte;
-            #  2. tra le gia' viste, prima quelle CON offerte (job_count>0)
-            #     e piu' stantie: sono le vive, vanno tenute fresche come
-            #     fa Fantastic col polling frequente;
-            #  3. poi le vuote stantie, che rendono meno.
-            # Cosi' un lotto piccolo prende sempre chi ne ha piu' bisogno.
+            #     scavato — le aziende appena scoperte;
+            #  2. lo SPAZZINO del codone: chiunque non sia visto da oltre
+            #     SOGLIA_STANTIO, attivo o vuoto. Senza questo scaglione i
+            #     118mila tenant vuoti restavano affamati dietro i 30mila
+            #     attivi, e le posizioni aperte su un tenant prima vuoto si
+            #     perdevano per giorni. Cosi' l'intero codone e' rivisitato
+            #     entro la soglia: non si perde nulla.
+            #  3. tra i visti di recente, prima i vivi (job_count>0) e piu'
+            #     stantii: la capacita' avanzata li tiene extra-freschi;
+            #  4. poi i vuoti recenti, che rendono meno.
             sql += (" ORDER BY (ac.last_fetch_at IS NULL) DESC, "
+                    "(ac.last_fetch_at < now() - interval '12 hours') DESC, "
                     "(ac.job_count > 0) DESC, "
                     "ac.last_fetch_at ASC NULLS FIRST, "
                     "ac.platform_id, ac.slug")
