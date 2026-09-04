@@ -34,7 +34,40 @@ from nivult.ats.riscoperta import _radice
 log = logging.getLogger("nivult.ats.grafo_cc")
 
 BASE = "https://data.commoncrawl.org/"
-RILASCIO = "projects/hyperlinkgraph/cc-main-2026-jun-jul-aug/host/"
+# ripiego se la scoperta automatica del rilascio fallisce
+_RILASCIO_NOTO = "cc-main-2026-jun-jul-aug"
+_MESI = {m: i for i, m in enumerate(
+    "jan feb mar apr may jun jul aug sep oct nov dec".split())}
+
+
+def _ultimo_rilascio(cli: httpx.Client) -> str:
+    """Il nome del rilascio piu' recente dalla pagina ufficiale.
+
+    L'ordine ALFABETICO inganna (may-jun-jul > jun-jul-aug): si ordina
+    per (anno, primo mese). Se la pagina cambia faccia o non risponde,
+    si torna all'ultimo rilascio noto: meglio rimacinare il vecchio che
+    fermarsi.
+    """
+    import re as _re
+    try:
+        r = cli.get("https://commoncrawl.org/web-graphs")
+        nomi = set(_re.findall(r"cc-main-(\d{4})-([a-z]+)-[a-z]+-[a-z]+",
+                               r.text))
+        if nomi:
+            anno, mese = max(nomi, key=lambda x: (x[0], _MESI.get(x[1], -1)))
+            nome = next(n for n in _re.findall(
+                r"cc-main-\d{4}-[a-z-]+", r.text)
+                if n.startswith(f"cc-main-{anno}-{mese}"))
+            # il rilascio esiste davvero? (la pagina a volte annuncia
+            # prima che i file siano su S3)
+            probe = cli.head(BASE + f"projects/hyperlinkgraph/{nome}/host/"
+                             f"{nome}-host-vertices.paths.gz")
+            if probe.status_code == 200:
+                return nome
+    except (httpx.HTTPError, StopIteration):
+        pass
+    log.warning("scoperta rilascio fallita: uso %s", _RILASCIO_NOTO)
+    return _RILASCIO_NOTO
 
 # bersagli in notazione ROVESCIATA: esatti e prefissi-tenant
 _ESATTI = {
@@ -58,8 +91,8 @@ def _bersaglio(rev: bytes) -> bool:
     return rev in _ESATTI or rev.startswith(_PREFISSI)
 
 
-def _parti(cli: httpx.Client, nome: str) -> list[str]:
-    r = cli.get(BASE + RILASCIO + nome)
+def _parti(cli: httpx.Client, percorso: str) -> list[str]:
+    r = cli.get(BASE + percorso)
     r.raise_for_status()
     return gzip.decompress(r.content).decode().split()
 
@@ -84,8 +117,11 @@ def raccogli(dsn: str) -> dict:
     cli = httpx.Client(timeout=120, headers={"User-Agent": "nivult-ats/1.0"})
     t0 = time.time()
 
-    vert = _parti(cli, "cc-main-2026-jun-jul-aug-host-vertices.paths.gz")
-    archi = _parti(cli, "cc-main-2026-jun-jul-aug-host-edges.paths.gz")
+    nome = _ultimo_rilascio(cli)
+    log.info("rilascio: %s", nome)
+    prefisso = f"projects/hyperlinkgraph/{nome}/host/"
+    vert = _parti(cli, prefisso + f"{nome}-host-vertices.paths.gz")
+    archi = _parti(cli, prefisso + f"{nome}-host-edges.paths.gz")
 
     # ── A: gli ID dei bersagli ──
     bersagli: set[bytes] = set()
