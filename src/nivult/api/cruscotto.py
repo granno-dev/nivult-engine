@@ -364,7 +364,11 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
          ORDER BY posted_at DESC LIMIT 30"""):
         azienda = None
         if isinstance(raw, dict):
-            azienda = raw.get("company") or raw.get("hiringOrganization")
+            co = raw.get("company") or raw.get("hiringOrganization")
+            if isinstance(co, dict):
+                azienda = co.get("name") or co.get("title")
+            elif isinstance(co, str):
+                azienda = co
         d["live"].append({
             "titolo": t, "azienda": azienda or slug, "fonte": p,
             "luogo": loc or city, "paese": cty, "url": u,
@@ -624,7 +628,8 @@ const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;
 function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessuna offerta con data recente</div>';
  return '<div class="feed">'+rows.map(r=>{
   const s=(Date.now()-new Date(r.posted))/1000,old=s>86400;
-  const loc=[r.luogo,r.paese].filter(Boolean).join(' · ');
+  const lg=r.luogo||'',pa=r.paese||'';
+  const loc=(lg&&pa&&!lg.toUpperCase().includes(pa.toUpperCase()))?lg+' · '+pa:(lg||pa);
   return `<div class="fr"><div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
    +`<div class="fm">${esc(r.azienda)}${loc?' · '+esc(loc):''}</div></div>`
    +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
