@@ -34,12 +34,20 @@ _TECNOLOGIE = (
     "iCIMS", "Pinpoint", "Zoho Recruit", "Workday",
 )
 
+# BigQuery pretende un filtro LETTERALE sulla partizione `date` (niente
+# sottoquery): prima si chiede l'ultima data disponibile, poi la si
+# passa come parametro. La prima query tocca solo la colonna date:
+# centesimi di GB.
+_SQL_DATA = """
+SELECT MAX(date) AS d FROM `httparchive.crawl.pages`
+ WHERE date >= DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY)
+"""
+
 _SQL = """
 SELECT DISTINCT page
   FROM `httparchive.crawl.pages`,
        UNNEST(technologies) AS t
- WHERE date = (SELECT MAX(date) FROM `httparchive.crawl.pages`
-                WHERE client = 'mobile')
+ WHERE date = @data
    AND client = 'mobile'
    AND is_root_page
    AND t.technology IN UNNEST(@tecnologie)
@@ -58,7 +66,10 @@ def raccogli(dsn: str) -> dict:
 
     from nivult.ats.riscoperta import _radice
     cli = bigquery.Client()
+    data = list(cli.query(_SQL_DATA).result())[0].d
+    log.info("http_archive: uso la scansione del %s", data)
     cfg = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("data", "DATE", data),
         bigquery.ArrayQueryParameter("tecnologie", "STRING",
                                      list(_TECNOLOGIE))])
     stats = {"pagine": 0, "domini_nuovi": 0}
