@@ -15,5 +15,5 @@ while true; do
     | grep "scrape:" || true
   # una pausa breve tra i lotti: gentilezza verso le piattaforme
   # condivise (greenhouse, lever...) per non farsi limitare
-  sleep 20
+  sleep 12
 done
