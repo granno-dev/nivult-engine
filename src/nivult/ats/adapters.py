@@ -28,7 +28,9 @@ RATE_PER_SECOND = {
     "smartrecruiters": 1.5,
     "lever": 2.0,
     "recruitee": 2.0,
-    "ashby": 1.0,
+    # ashby: 1.0 era prudenza del primo giorno; settimane a 0 fallite
+    # (e 6k tenant attivi da tenere freschi) giustificano 2.0.
+    "ashby": 2.0,
 }
 
 

@@ -134,6 +134,7 @@ def arricchisci_salari(dsn: str, limite: int = 50000) -> dict:
         righe = c.execute("""
             SELECT id, raw FROM ats_jobs
              WHERE salary_min IS NULL AND expired_at IS NULL
+               AND salary_checked_at IS NULL
                AND (raw ? 'salary' OR raw ? 'salaryRange'
                     OR raw ? 'salary_range' OR raw ? 'compensation')
              LIMIT %s""", (limite,)).fetchall()
@@ -141,10 +142,15 @@ def arricchisci_salari(dsn: str, limite: int = 50000) -> dict:
             stats["esaminate"] += 1
             r = estrai(raw)
             if not r:
+                # imparsabile («competitive salary»): si MARCA comunque,
+                # o ogni ciclo lo ri-esaminava per niente (spreco noto).
+                c.execute("UPDATE ats_jobs SET salary_checked_at=now() "
+                          "WHERE id=%s", (jid,))
                 continue
             mn, mx, cur, per = r
             c.execute("""UPDATE ats_jobs SET salary_min=%s, salary_max=%s,
-                         salary_currency=%s, salary_period=%s WHERE id=%s""",
+                         salary_currency=%s, salary_period=%s,
+                         salary_checked_at=now() WHERE id=%s""",
                       (mn, mx, cur, per, jid))
             stats["riempite"] += 1
     return stats
