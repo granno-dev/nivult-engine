@@ -150,16 +150,22 @@ def _glm_flash():
 
 
 def col_flash(modello, titolo, luogo, descr):
+    """Ritorna (seniority, remote, ok). ok=False = la CHIAMATA e' fallita
+    (429/credito/rete): il chiamante deve poter distinguere il modello
+    che non sa rispondere dal modello che non risponde affatto."""
     try:
         r = modello.chat([{"role": "user", "content": _PROMPT.format(
             t=(titolo or "")[:100], l=(luogo or "")[:60],
             d=(descr or "")[:350])}], max_tokens=60)
+    except Exception:                                # noqa: BLE001
+        return None, None, False
+    try:
         j = json.loads(re.search(r"\{.*\}", r, re.S).group(0))
         sen = j.get("seniority") if j.get("seniority") in _VAL_SEN else None
         rem = j.get("remote") if j.get("remote") in _VAL_REM else None
-        return sen, rem
+        return sen, rem, True
     except Exception:                                # noqa: BLE001
-        return None, None
+        return None, None, True
 
 
 def arricchisci_profilo(dsn: str, limite: int = 50000,
@@ -167,8 +173,9 @@ def arricchisci_profilo(dsn: str, limite: int = 50000,
     """Strati 1-2 su tutto il lotto; strato 3 (GLM) su al piu' glm_max
     offerte del residuo CON descrizione."""
     stats = {"viste": 0, "seniority": 0, "remote": 0, "con_skill": 0,
-             "glm": 0, "glm_riempiti": 0}
+             "glm": 0, "glm_riempiti": 0, "glm_errori": 0}
     modello = None
+    glm_ko_di_fila = 0   # 3 di fila (429/credito) = spento per il lotto
     with psycopg.connect(dsn, autocommit=True) as c:
         righe = c.execute("""
             SELECT id, title, coalesce(location, city, ''), raw
@@ -181,11 +188,19 @@ def arricchisci_profilo(dsn: str, limite: int = 50000,
             sen, rem, skills = deterministico(titolo, luogo, raw)
             descr = _descrizione(raw)
             if (sen is None and rem is None and descr
-                    and stats["glm"] < glm_max):
+                    and stats["glm"] < glm_max and glm_ko_di_fila < 3):
                 if modello is None:
                     modello = _glm_flash()
                 stats["glm"] += 1
-                g_sen, g_rem = col_flash(modello, titolo, luogo, descr)
+                g_sen, g_rem, ok = col_flash(modello, titolo, luogo, descr)
+                if not ok:
+                    stats["glm_errori"] += 1
+                    glm_ko_di_fila += 1
+                    if glm_ko_di_fila >= 3:
+                        log.warning("GLM giu' (429/credito?): spento "
+                                    "per il resto del lotto")
+                else:
+                    glm_ko_di_fila = 0
                 if g_sen or g_rem:
                     stats["glm_riempiti"] += 1
                 sen, rem = sen or g_sen, rem or g_rem
@@ -217,8 +232,9 @@ def paese_glm(dsn: str, limite: int = 300) -> dict:
     (gratuito) su titolo+luogo+testo. Accuratezza misurata prima di
     attivarlo; XX/incerto NON si salva — meglio nessun paese che uno
     sbagliato (finirebbe nel digest del cluster sbagliato)."""
-    stats = {"esaminate": 0, "riempite": 0, "incerte": 0}
+    stats = {"esaminate": 0, "riempite": 0, "incerte": 0, "errori": 0}
     modello = _glm_flash()
+    ko_di_fila = 0
     with psycopg.connect(dsn, autocommit=True) as c:
         righe = c.execute("""
             SELECT id, title, coalesce(location, city, ''), raw
@@ -237,6 +253,17 @@ def paese_glm(dsn: str, limite: int = 300) -> dict:
                                    "content": _PROMPT_PAESE.format(
                     t=(titolo or "")[:80], l=(luogo or "")[:80],
                     d=_descrizione(raw)[:250])}], max_tokens=30)
+            except Exception:                        # noqa: BLE001
+                # Chiamata fallita (429/credito/rete): la riga NON si
+                # marca — bruciarla significherebbe non riprovarla mai.
+                stats["errori"] += 1
+                ko_di_fila += 1
+                if ko_di_fila >= 3:
+                    log.warning("GLM giu' (429/credito?): lotto interrotto")
+                    break
+                continue
+            ko_di_fila = 0
+            try:
                 g = json.loads(re.search(r"\{.*\}", r, re.S)
                                .group(0)).get("country", "XX").upper()
                 if _ISO2.match(g) and g != "XX":

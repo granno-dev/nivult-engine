@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import time
 from urllib.parse import urlencode
 
@@ -122,9 +123,285 @@ def _uno(dsn: str, sql: str):
     return r[0][0] if r and r[0] else None
 
 
+
+# ── lo stato dei giri: demoni, allarmi, ponte, notturno ─────────────
+
+_DEMONI = ("scrape", "scrape-veloce", "profonda", "scoperta",
+           "classifica", "arricchisci", "volano", "api")
+
+
+def _giri() -> dict:
+    """Come stanno i giri — con gli errori, non solo i verdi: demoni
+    systemd, allarmi aperti della sentinella, esito dell'ultima corsa
+    del ponte e del giro notturno (contando i passi FALLITO)."""
+    import json as _json
+    import subprocess
+    g: dict = {"demoni": [], "allarmi": [], "sentinella": False,
+               "ponte": {}, "notturno": {}}
+    for dm in _DEMONI:
+        try:
+            r = subprocess.run(["systemctl", "is-active", "nivult-" + dm],
+                               capture_output=True, text=True, timeout=5)
+            g["demoni"].append({"nome": dm,
+                                "ok": r.stdout.strip() == "active"})
+        except Exception:                            # noqa: BLE001
+            g["demoni"].append({"nome": dm, "ok": False})
+    try:
+        st = _json.load(open("/opt/nivult/sentinella-stato.json"))
+        g["allarmi"] = sorted(st.get("attivi", {}).keys())
+        g["sentinella"] = True
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        percorso = "/var/log/nivult-ponte-ats.log"
+        g["ponte"]["eta_min"] = int(
+            (time.time() - os.path.getmtime(percorso)) // 60)
+        coda = open(percorso, errors="replace").read()[-6000:]
+        g["ponte"]["errore"] = "ERRORE" in coda.rsplit("=== fine ===", 1)[-1]
+    except OSError:
+        g["ponte"] = {"eta_min": None, "errore": None}
+    try:
+        log = open("/opt/nivult/engine/logs/ats-cron.log",
+                   errors="replace").read()[-40000:]
+        avvii = re.findall(r"=== ATS nightly (20\S+) ===", log)
+        blocco = log.rsplit("=== ATS nightly 20", 1)[-1]
+        g["notturno"] = {"quando": avvii[-1] if avvii else None,
+                         "falliti": blocco.count("FALLITO"),
+                         "completato": "completato" in blocco}
+    except OSError:
+        pass
+    return g
+
+
+# ── copertura degli arricchimenti (query pesanti: cache 10 minuti) ──
+
+_CACHE_ARR: dict = {"t": 0.0, "v": []}
+
+
+def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
+    if time.time() - _CACHE_ARR["t"] < 600 and _CACHE_ARR["v"]:
+        return _CACHE_ARR["v"]
+    r = _righe(ats_dsn, """
+        SELECT count(country), count(salary_min), count(seniority),
+               count(remote),
+               count(*) FILTER (WHERE skills IS NOT NULL
+                                  AND array_length(skills, 1) > 0),
+               count(*) FILTER (WHERE raw ?| array['description',
+                   'descriptionHtml','jobDescription','job_description',
+                   'content','descriptionPlain'])
+          FROM ats_jobs WHERE expired_at IS NULL""")[0]
+    logo = _righe(ats_dsn, """
+        SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
+                                   OR logo_domain IS NOT NULL), count(*)
+          FROM ats_companies WHERE is_active AND job_count > 0""")[0]
+    campi = [("paese", r[0]), ("descrizione", r[5]), ("seniority", r[2]),
+             ("lavoro remoto", r[3]), ("skill", r[4]), ("salario", r[1])]
+    v = [{"campo": k, "n": n,
+          "pct": round(100 * n / attive, 1) if attive else 0}
+         for k, n in campi]
+    v.append({"campo": "logo — aziende vive", "n": logo[0],
+              "pct": round(100 * logo[0] / logo[1], 1) if logo[1] else 0})
+    _CACHE_ARR.update(t=time.time(), v=v)
+    return v
+
+
+# ── la parte pesante: distribuzioni e censimento, cache 4 minuti ────
+# Le query che scansionano tutta ats_jobs non hanno bisogno di girare a
+# ogni tick da 30s: il censimento non cambia in 4 minuti. La parte viva
+# (feed, battiti, demoni) resta fresca a ogni chiamata.
+
+_CACHE_PES: dict = {"t": 0.0, "v": None, "in_corso": False}
+
+
+def _pesanti(ats_dsn: str, attive: int) -> dict:
+    """Cache con ricalcolo in sfondo: il tick non aspetta mai. Se la
+    cache e' scaduta si serve comunque la versione vecchia e un thread
+    la rinfresca; solo la primissima chiamata (cache vuota) blocca."""
+    import threading
+    if _CACHE_PES["v"] is not None:
+        if time.time() - _CACHE_PES["t"] >= 240 and not _CACHE_PES["in_corso"]:
+            _CACHE_PES["in_corso"] = True
+            threading.Thread(target=_ricalcola_pesanti,
+                             args=(ats_dsn, attive), daemon=True).start()
+        return _CACHE_PES["v"]
+    if _CACHE_PES["in_corso"]:
+        # un altro tick sta gia' calcolando: si aspetta il suo risultato
+        for _ in range(240):
+            time.sleep(0.5)
+            if _CACHE_PES["v"] is not None:
+                return _CACHE_PES["v"]
+    _CACHE_PES["in_corso"] = True
+    return _ricalcola_pesanti(ats_dsn, attive)
+
+
+def _ricalcola_pesanti(ats_dsn: str, attive: int) -> dict:
+    try:
+        d = _calcola_pesanti(ats_dsn, attive)
+        _CACHE_PES.update(t=time.time(), v=d)
+        return d
+    finally:
+        _CACHE_PES["in_corso"] = False
+
+
+def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
+    d: dict = {}
+
+    senza_paese = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "AND country IS NULL") or 0
+    non_class = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
+        "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL") or 0
+    d["salute"] = {
+        "senza_paese": senza_paese,
+        "senza_paese_pct": round(100 * senza_paese / attive, 1) if attive else 0,
+        "non_classificate": non_class,
+        "non_classificate_pct": round(100 * non_class / attive, 1) if attive else 0,
+        "aziende_censite": _uno(ats_dsn, "SELECT count(*) FROM ats_companies"),
+        "aziende_mai_viste": _uno(ats_dsn,
+            "SELECT count(*) FROM ats_companies WHERE last_fetch_at IS NULL"),
+        "aziende_con_offerte": _uno(ats_dsn,
+            "SELECT count(DISTINCT (platform_id,slug)) FROM ats_jobs "
+            "WHERE expired_at IS NULL"),
+        "piattaforme": _uno(ats_dsn,
+            "SELECT count(DISTINCT platform_id) FROM ats_jobs "
+            "WHERE expired_at IS NULL"),
+        "scadute": _uno(ats_dsn,
+            "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL") or 0,
+        "paesi": _uno(ats_dsn,
+            "SELECT count(DISTINCT country) FROM ats_jobs "
+            "WHERE expired_at IS NULL AND country IS NOT NULL") or 0,
+    }
+
+    # ── freschezza del codone: ogni tenant va rivisitato entro la soglia
+    # (spazzino a 12h in runner.py); se le fasce lontane si gonfiano, lo
+    # scraping si sta affamando.
+    _fresh = _righe(ats_dsn, """
+        SELECT
+          count(*),
+          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '12 hours'
+                              OR ac.last_fetch_at IS NULL),
+          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '12 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '24 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at IS NULL),
+          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '1 hour'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '1 hour'
+                              AND ac.last_fetch_at >= now()-interval '6 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '6 hours'
+                              AND ac.last_fetch_at >= now()-interval '12 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '12 hours'
+                              AND ac.last_fetch_at >= now()-interval '24 hours')
+          FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
+         WHERE ac.is_active AND ap.is_active""")
+    _tot, _fre, _o12, _o24, b0, b1, b2, b3, b4 = \
+        _fresh[0] if _fresh else (0,) * 9
+    d["salute"]["codone_totale"] = _tot
+    d["salute"]["codone_oltre_12h"] = _o12
+    d["salute"]["codone_oltre_24h"] = _o24
+    d["salute"]["codone_freschi_pct"] = \
+        round(100 * _fre / _tot, 1) if _tot else 100.0
+    _fasce = ["mai", "< 1h", "1–6h", "6–12h", "12–24h", "> 24h"]
+    _val = [b0, b1, b2, b3, b4, _o24]
+    d["freschezza"] = [{"fascia": _fasce[i], "n": _val[i], "caldo": i >= 4}
+                       for i in range(6)]
+
+    d["per_fonte"] = [{"fonte": p, "attive": n} for p, n in _righe(ats_dsn,
+        "SELECT platform_id, count(*) FROM ats_jobs "
+        "WHERE expired_at IS NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
+    d["per_paese"] = [{"paese": p or "—", "attive": n} for p, n in _righe(ats_dsn,
+        "SELECT country, count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "GROUP BY 1 ORDER BY 2 DESC LIMIT 20")]
+    d["per_famiglia"] = [{"famiglia": f, "attive": n} for f, n in _righe(ats_dsn,
+        "SELECT c.family, count(*) FROM ats_jobs j "
+        "JOIN job_classifications c ON c.job_id=j.id "
+        "WHERE j.expired_at IS NULL AND c.confidence>=0.5 "
+        "GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
+    d["agenzie"] = [{"agenzia": a, "attive": n} for a, n in _righe(ats_dsn,
+        "SELECT slug, count(*) FROM ats_jobs "
+        "WHERE platform_id='agenzie' AND expired_at IS NULL "
+        "GROUP BY 1 ORDER BY 2 DESC")]
+
+    # ── ATS censiti ma senza adattatore: la coda di lavoro delle nuove
+    # piattaforme.
+    try:
+        from nivult.ats.adapters import ADAPTERS
+        noti = set(ADAPTERS.keys())
+    except Exception:                                # noqa: BLE001
+        noti = set()
+    pend = _righe(ats_dsn, """
+        SELECT ac.platform_id, count(*),
+               count(*) FILTER (WHERE ac.last_fetch_at IS NULL)
+          FROM ats_companies ac
+          JOIN ats_platforms ap ON ap.id = ac.platform_id
+         WHERE ac.is_active AND ap.is_active
+         GROUP BY ac.platform_id""")
+    d["ats_pending"] = sorted(
+        [{"piattaforma": p, "aziende": tot, "in_attesa": mai}
+         for p, tot, mai in pend if p not in noti],
+        key=lambda r: -r["aziende"])
+    d["salute"]["ats_pending_n"] = len(d["ats_pending"])
+    d["salute"]["ats_pending_aziende"] = sum(
+        r["aziende"] for r in d["ats_pending"])
+
+    # ── andamento: pubblicate per giorno (30 gg), col dettaglio per fonte
+    grezzo = _righe(ats_dsn, """
+        SELECT to_char(date_trunc('day', posted_at), 'YYYY-MM-DD') AS g,
+               platform_id, count(*) AS n
+          FROM ats_jobs
+         WHERE expired_at IS NULL
+           AND posted_at > now() - interval '30 days'
+           AND posted_at <= now()
+         GROUP BY 1, 2 ORDER BY 1""")
+    per_giorno: dict = {}
+    for g, pid, n in grezzo:
+        v = per_giorno.setdefault(g, {"giorno": g, "offerte": 0, "fonti": {}})
+        v["offerte"] += n
+        v["fonti"][pid] = v["fonti"].get(pid, 0) + n
+    d["andamento"] = []
+    for g in sorted(per_giorno):
+        v = per_giorno[g]
+        fonti = sorted(v["fonti"].items(), key=lambda x: -x[1])[:6]
+        d["andamento"].append({
+            "giorno": g[8:10] + "/" + g[5:7],
+            "data": g,
+            "offerte": v["offerte"],
+            "dettaglio": [{"fonte": p, "n": n} for p, n in fonti]})
+
+    d["per_scoperta"] = [{"fonte": f or "—", "n": n} for f, n in _righe(ats_dsn,
+        "SELECT discovered_from, count(*) FROM ats_companies "
+        "GROUP BY 1 ORDER BY 2 DESC LIMIT 10")]
+
+    # ── attivazione: SOLO il censimento vivo su piattaforme raccolte. I
+    # tenant potati (slug morti) non fanno testo, altrimenti il numero
+    # mente al ribasso.
+    d["attivazione"] = [{"piattaforma": p, "censiti": v, "attivi": a,
+                         "potati": m}
+        for p, v, a, m in _righe(ats_dsn, """
+            SELECT ac.platform_id,
+                   count(*) FILTER (WHERE ac.is_active),
+                   count(*) FILTER (WHERE ac.is_active AND ac.job_count>0),
+                   count(*) FILTER (WHERE NOT ac.is_active)
+              FROM ats_companies ac
+              JOIN ats_platforms ap ON ap.id = ac.platform_id
+             WHERE ap.is_active
+             GROUP BY 1 ORDER BY 2 DESC LIMIT 14""")]
+
+    d["nuove_aziende"] = [{"giorno": g[8:10] + "/" + g[5:7], "n": n}
+        for g, n in _righe(ats_dsn,
+            "SELECT to_char(date_trunc('day', created_at),'YYYY-MM-DD'), "
+            "count(*) FROM ats_companies "
+            "WHERE created_at > now()-interval '30 days' "
+            "GROUP BY 1 ORDER BY 1")]
+
+    d["arricchimento"] = _arricchimento(ats_dsn, attive)
+
+    return d
+
+
 def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     d: dict = {}
 
+    # ── parte viva: fresca a ogni tick ──
     d["stato"] = {
         "ultimo_scrape": str(_uno(ats_dsn,
             "SELECT max(fetched_at) FROM ats_jobs") or ""),
@@ -142,66 +419,47 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
 
     attive = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL") or 0
-    senza_paese = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND country IS NULL") or 0
-    non_class = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
-        "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL") or 0
-    d["salute"] = {
-        "offerte_attive": attive,
-        "senza_paese": senza_paese,
-        "senza_paese_pct": round(100 * senza_paese / attive, 1) if attive else 0,
-        "non_classificate": non_class,
-        "non_classificate_pct": round(100 * non_class / attive, 1) if attive else 0,
-        "aziende_censite": _uno(ats_dsn, "SELECT count(*) FROM ats_companies"),
-        "aziende_mai_viste": _uno(ats_dsn,
-            "SELECT count(*) FROM ats_companies WHERE last_fetch_at IS NULL"),
-        "aziende_con_offerte": _uno(ats_dsn,
-            "SELECT count(DISTINCT (platform_id,slug)) FROM ats_jobs "
-            "WHERE expired_at IS NULL"),
-        "piattaforme": _uno(ats_dsn,
-            "SELECT count(DISTINCT platform_id) FROM ats_jobs "
-            "WHERE expired_at IS NULL"),
-    }
 
-    # ── freschezza del codone: ogni tenant va rivisitato entro la soglia
-    # (spazzino a 12h in runner.py), altrimenti le posizioni appena aperte
-    # su un tenant prima vuoto si perdono. Qui misuriamo quanti tenant
-    # scrapabili sono oltre soglia: se cresce, il codone si sta affamando.
-    _fresh = _righe(ats_dsn, """
-        SELECT
-          count(*),
-          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '12 hours'
-                              OR ac.last_fetch_at IS NULL),
-          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '12 hours'),
-          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '24 hours')
-          FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
-         WHERE ac.is_active AND ap.is_active""")
-    _tot, _fre, _o12, _o24 = _fresh[0] if _fresh else (0, 0, 0, 0)
-    d["salute"]["codone_totale"] = _tot
-    d["salute"]["codone_oltre_12h"] = _o12
-    d["salute"]["codone_oltre_24h"] = _o24
-    d["salute"]["codone_freschi_pct"] = round(100 * _fre / _tot, 1) if _tot else 100.0
+    # ── board live: le offerte piu' recenti per data di pubblicazione,
+    # col tempo relativo, come il flusso continuo di Fantastic.
+    d["live"] = []
+    for t, slug, p, loc, city, cty, u, pa, raw, logo_az, dom in _righe(ats_dsn, """
+        SELECT j.title, j.slug, j.platform_id, j.location, j.city, j.country,
+               j.url, j.posted_at, j.raw, ac.logo_url, ac.logo_domain
+          FROM ats_jobs j
+          LEFT JOIN ats_companies ac
+                 ON ac.platform_id = j.platform_id AND ac.slug = j.slug
+         WHERE j.expired_at IS NULL AND j.posted_at IS NOT NULL
+           AND j.posted_at <= now()
+         ORDER BY j.posted_at DESC LIMIT 30"""):
+        azienda = None
+        logo = logo_az   # logo a livello azienda (og:image / consolidato)
+        favicon = (f"https://www.google.com/s2/favicons?sz=64&domain={dom}"
+                   if dom else None)
+        if isinstance(raw, dict):
+            co = raw.get("company") or raw.get("hiringOrganization")
+            if isinstance(co, dict):
+                azienda = co.get("name") or co.get("title")
+            elif isinstance(co, str):
+                azienda = co
+            if not logo:
+                ho = raw.get("hiringOrganization")
+                for cand in (raw.get("company_logo"), raw.get("logo"),
+                             raw.get("Company_LogoUrl"), raw.get("logo_url"),
+                             (co.get("logo_url") or co.get("logo")
+                              if isinstance(co, dict) else None),
+                             (ho.get("logo") if isinstance(ho, dict) else None),
+                             raw.get("sharing_image")):
+                    if isinstance(cand, str) and cand.startswith("http"):
+                        logo = cand
+                        break
+        d["live"].append({
+            "titolo": t, "azienda": azienda or slug, "fonte": p,
+            "luogo": loc or city, "paese": cty, "url": u,
+            "logo": logo, "favicon": favicon,
+            "posted": str(pa) if pa else None})
 
-    d["per_fonte"] = [{"fonte": p, "attive": n} for p, n in _righe(ats_dsn,
-        "SELECT platform_id, count(*) FROM ats_jobs "
-        "WHERE expired_at IS NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
-
-    d["per_paese"] = [{"paese": p or "—", "attive": n} for p, n in _righe(ats_dsn,
-        "SELECT country, count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "GROUP BY 1 ORDER BY 2 DESC LIMIT 20")]
-
-    d["per_famiglia"] = [{"famiglia": f, "attive": n} for f, n in _righe(ats_dsn,
-        "SELECT c.family, count(*) FROM ats_jobs j "
-        "JOIN job_classifications c ON c.job_id=j.id "
-        "WHERE j.expired_at IS NULL AND c.confidence>=0.5 "
-        "GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
-
-    d["agenzie"] = [{"agenzia": s, "attive": n} for s, n in _righe(ats_dsn,
-        "SELECT slug, count(*) FROM ats_jobs "
-        "WHERE platform_id='agenzie' AND expired_at IS NULL "
-        "GROUP BY 1 ORDER BY 2 DESC")]
+    d["giri"] = _giri()
 
     try:
         d["motore"] = {
@@ -215,11 +473,10 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "utenti": _uno(motore_dsn,
                 "SELECT count(*) FROM users WHERE deleted_at IS NULL"),
         }
-        d["cluster"] = [{"famiglia": f, "paese": p, "stato": s}
-            for f, p, s in _righe(motore_dsn,
+        d["cluster"] = [{"famiglia": f, "paese": p, "stato": st}
+            for f, p, st in _righe(motore_dsn,
                 "SELECT family, country, status FROM clusters "
                 "ORDER BY status, family LIMIT 40")]
-        # ── ogni iscritto con tutta la sua configurazione ──
         d["iscritti"] = [{
             "nome": nome or "—", "email": em, "lingua": loc,
             "canali": list(can or []), "stato": st,
@@ -241,56 +498,23 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     except psycopg.Error:
         d["motore"], d["cluster"], d["iscritti"] = {}, [], []
 
-    # ── ATS pending: piattaforme censite ma senza adattatore, quindi
-    # scoperte ma non ancora raccoglibili — vanno «aggiunte» scrivendo
-    # l'adattatore. E' la coda di lavoro delle nuove piattaforme.
-    try:
-        from nivult.ats.adapters import ADAPTERS
-        noti = set(ADAPTERS.keys())
-    except Exception:                                # noqa: BLE001
-        noti = set()
-    pend = _righe(ats_dsn, """
-        SELECT ac.platform_id, count(*),
-               count(*) FILTER (WHERE ac.last_fetch_at IS NULL)
-          FROM ats_companies ac
-          JOIN ats_platforms ap ON ap.id = ac.platform_id
-         WHERE ac.is_active AND ap.is_active
-         GROUP BY ac.platform_id""")
-    d["ats_pending"] = sorted(
-        [{"piattaforma": p, "aziende": tot, "in_attesa": mai}
-         for p, tot, mai in pend if p not in noti],
-        key=lambda r: -r["aziende"])
-    d["salute"]["ats_pending_n"] = len(d["ats_pending"])
-    d["salute"]["ats_pending_aziende"] = sum(
-        r["aziende"] for r in d["ats_pending"])
+    # ── parte pesante (cache 4 minuti) ──
+    pes = _pesanti(ats_dsn, attive)
+    for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
+              "andamento", "freschezza", "per_scoperta", "attivazione",
+              "nuove_aziende", "ats_pending", "arricchimento"):
+        d[k] = pes[k]
+    d["salute"] = dict(pes["salute"])
+    d["salute"]["offerte_attive"] = attive
 
-    # ── andamento: offerte pubblicate per giorno (30 gg), col dettaglio
-    # per fonte dietro ogni numero, per il grafico interattivo ──
-    grezzo = _righe(ats_dsn, """
-        SELECT to_char(date_trunc('day', posted_at), 'YYYY-MM-DD') AS g,
-               platform_id, count(*) AS n
-          FROM ats_jobs
-         WHERE expired_at IS NULL
-           AND posted_at > now() - interval '30 days'
-           AND posted_at <= now()
-         GROUP BY 1, 2 ORDER BY 1""")
-    per_giorno: dict = {}
-    for g, pid, n in grezzo:
-        v = per_giorno.setdefault(g, {"giorno": g, "offerte": 0, "fonti": {}})
-        v["offerte"] += n
-        v["fonti"][pid] = v["fonti"].get(pid, 0) + n
-    d["andamento"] = []
-    for g in sorted(per_giorno):
-        v = per_giorno[g]
-        fonti = sorted(v["fonti"].items(), key=lambda x: -x[1])[:6]
-        d["andamento"].append({
-            "giorno": g[8:10] + "/" + g[5:7],   # DD/MM
-            "data": g,
-            "offerte": v["offerte"],
-            "dettaglio": [{"fonte": p, "n": n} for p, n in fonti]})
+    d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "AND posted_at > now()-interval '1 hour' AND posted_at <= now()") or 0
+    d["salute"]["pubblicate_24h"] = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "AND posted_at > now()-interval '24 hours' AND posted_at <= now()") or 0
 
-    # ── funnel della raffineria: da azienda censita a offerta consegnata.
-    # Ogni gradino perde qualcosa; il salto piu' stretto e' dove lavorare.
+    # ── funnel: da azienda censita a offerta consegnata ──
     cens = d["salute"]["aziende_censite"] or 0
     maiv = d["salute"]["aziende_mai_viste"] or 0
     conoff = d["salute"]["aziende_con_offerte"] or 0
@@ -302,108 +526,6 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
         {"fase": "Offerte attive", "n": attive},
         {"fase": "Portate nel motore", "n": motore_ats},
     ]
-
-    # ── istogramma della freschezza: quanti tenant per fascia di ultima
-    # visita. Se le fasce lontane si gonfiano, lo spazzino non ce la fa.
-    _b = _righe(ats_dsn, """
-        SELECT
-          count(*) FILTER (WHERE ac.last_fetch_at IS NULL),
-          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '1 hour'),
-          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '1 hour'
-                              AND ac.last_fetch_at >= now()-interval '6 hours'),
-          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '6 hours'
-                              AND ac.last_fetch_at >= now()-interval '12 hours'),
-          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '12 hours'
-                              AND ac.last_fetch_at >= now()-interval '24 hours'),
-          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '24 hours')
-          FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
-         WHERE ac.is_active AND ap.is_active""")
-    b = _b[0] if _b else (0, 0, 0, 0, 0, 0)
-    _fasce = ["mai", "< 1h", "1–6h", "6–12h", "12–24h", "> 24h"]
-    d["freschezza"] = [{"fascia": _fasce[i], "n": b[i], "caldo": i >= 4}
-                       for i in range(6)]
-
-    # ── da dove viene l'ampiezza: la fonte di scoperta dei tenant ──
-    d["per_scoperta"] = [{"fonte": s or "—", "n": n} for s, n in _righe(ats_dsn,
-        "SELECT discovered_from, count(*) FROM ats_companies "
-        "GROUP BY 1 ORDER BY 2 DESC LIMIT 10")]
-
-    # ── attivazione per piattaforma: censiti vs con offerte. Rivela i
-    # pozzi dormienti (lever) e gli ATS caldi (bamboohr, ashby) ──
-    d["attivazione"] = [{"piattaforma": p, "censiti": t, "attivi": a}
-        for p, t, a in _righe(ats_dsn,
-            "SELECT platform_id, count(*), "
-            "count(*) FILTER (WHERE job_count>0) "
-            "FROM ats_companies GROUP BY 1 ORDER BY 2 DESC LIMIT 12")]
-
-    # ── nuove aziende scoperte per giorno (30 gg): l'ampiezza che cresce
-    d["nuove_aziende"] = [{"giorno": g[8:10] + "/" + g[5:7], "n": n}
-        for g, n in _righe(ats_dsn,
-            "SELECT to_char(date_trunc('day', created_at),'YYYY-MM-DD'), "
-            "count(*) FROM ats_companies "
-            "WHERE created_at > now()-interval '30 days' "
-            "GROUP BY 1 ORDER BY 1")]
-
-    # ── throughput: offerte toccate per ora nelle ultime 24h ──
-    d["raccolta_oraria"] = [{"ora": o[11:16], "n": n}
-        for o, n in _righe(ats_dsn,
-            "SELECT to_char(date_trunc('hour', fetched_at),'YYYY-MM-DD HH24:MI'),"
-            " count(*) FROM ats_jobs "
-            "WHERE fetched_at > now()-interval '24 hours' "
-            "GROUP BY 1 ORDER BY 1")]
-
-    # ── board live: le offerte piu' recenti per data di pubblicazione,
-    # col tempo relativo ("2 min fa"), come il flusso continuo di Fantastic.
-    d["live"] = []
-    for t, slug, p, loc, city, cty, u, pa, raw, logo_az, dom in _righe(ats_dsn, """
-        SELECT j.title, j.slug, j.platform_id, j.location, j.city, j.country,
-               j.url, j.posted_at, j.raw, ac.logo_url, ac.logo_domain
-          FROM ats_jobs j
-          LEFT JOIN ats_companies ac
-                 ON ac.platform_id = j.platform_id AND ac.slug = j.slug
-         WHERE j.expired_at IS NULL AND j.posted_at IS NOT NULL
-           AND j.posted_at <= now()
-         ORDER BY j.posted_at DESC LIMIT 30"""):
-        azienda = None
-        logo = logo_az   # logo a livello azienda (og:image / consolidato)
-        favicon = (f"https://www.google.com/s2/favicons?sz=64&domain={dom}"
-                   if dom else None)
-        if isinstance(raw, dict):
-            co = raw.get("company") or raw.get("hiringOrganization")
-            if isinstance(co, dict):
-                azienda = co.get("name") or co.get("title")
-            elif isinstance(co, str):
-                azienda = co
-            # logo per-offerta (ripiego se manca quello a livello azienda)
-            if not logo:
-                ho = raw.get("hiringOrganization")
-                for cand in (raw.get("company_logo"), raw.get("logo"),
-                             raw.get("Company_LogoUrl"), raw.get("logo_url"),
-                             (co.get("logo_url") or co.get("logo")
-                              if isinstance(co, dict) else None),
-                             (ho.get("logo") if isinstance(ho, dict) else None),
-                             raw.get("sharing_image")):
-                    if isinstance(cand, str) and cand.startswith("http"):
-                        logo = cand
-                        break
-        d["live"].append({
-            "titolo": t, "azienda": azienda or slug, "fonte": p,
-            "luogo": loc or city, "paese": cty, "url": u,
-            "logo": logo, "favicon": favicon,
-            "posted": str(pa) if pa else None})
-    # offerte pubblicate nell'ultima ora / 24h: il polso del flusso
-    d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND posted_at > now()-interval '1 hour'") or 0
-    d["salute"]["pubblicate_24h"] = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND posted_at > now()-interval '24 hours'") or 0
-
-    d["salute"]["scadute"] = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL") or 0
-    d["salute"]["paesi"] = _uno(ats_dsn,
-        "SELECT count(DISTINCT country) FROM ats_jobs "
-        "WHERE expired_at IS NULL AND country IS NOT NULL") or 0
 
     return d
 
@@ -419,24 +541,38 @@ PAGINA = """<!doctype html><html lang="it"><head>
 :root{--bg:#0b0f14;--card:#141a22;--card2:#1a212b;--line:#242c37;--ink:#e8eef5;
 --dim:#8a97a6;--acc:#4c8dff;--ok:#46c46a;--warn:#e0a132;--bad:#ff5d54}
 *{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--ink);
 font:15px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-padding:32px 24px 64px;max-width:1180px;margin:0 auto;-webkit-font-smoothing:antialiased}
-.top{display:flex;justify-content:space-between;align-items:center;
-padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:8px}
+padding:0 24px 64px;max-width:1180px;margin:0 auto;-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;
+align-items:center;gap:14px;padding:16px 0 14px;border-bottom:1px solid var(--line);
+margin-bottom:20px;background:rgba(11,15,20,.93);backdrop-filter:blur(8px)}
 .brand{display:flex;align-items:baseline;gap:10px}
-.brand b{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.brand b{font-size:20px;font-weight:700;letter-spacing:-.02em}
 .brand span{font-size:13px;color:var(--dim);font-weight:500}
+.nav{display:flex;gap:2px}
+.nav a{font-size:12.5px;color:var(--dim);text-decoration:none;padding:6px 11px;
+border-radius:8px;font-weight:500}
+.nav a:hover{color:var(--ink);background:var(--card2)}
+@media(max-width:760px){.nav{display:none}}
 .live{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);
 box-shadow:0 0 0 0 rgba(70,196,106,.5);animation:pulse 2.2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(70,196,106,.45)}70%{box-shadow:0 0 0 7px rgba(70,196,106,0)}100%{box-shadow:0 0 0 0 rgba(70,196,106,0)}}
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
 h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);
-margin:34px 0 14px;font-weight:600}
+margin:0;font-weight:600}
+.sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:26px 0 12px}
+.sect .note{font-size:12px;color:var(--dim);font-weight:500;text-align:right}
+.gband{display:flex;align-items:baseline;gap:14px;margin:48px 0 4px;scroll-margin-top:74px}
+.gband .gt{font-size:15px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.gband .gr{flex:1;height:1px;background:var(--line);align-self:center}
+.gband .gn{font-size:12px;color:var(--dim)}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(172px,1fr))}
 .card{background:linear-gradient(180deg,var(--card2),var(--card));
 border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px}
-.num{font-size:28px;font-weight:700;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.1}
+.num{font-size:26px;font-weight:700;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.1}
 .lbl{font-size:13px;color:var(--dim);margin-top:5px;font-weight:500}
 .sub{font-size:12px;color:var(--dim);margin-top:7px;opacity:.85}
 .cols{display:grid;gap:22px;grid-template-columns:1fr 1fr}
@@ -454,11 +590,6 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 background:var(--card2);color:var(--dim);border:1px solid var(--line);margin:3px 4px 0 0}
 .pill.on{background:rgba(70,196,106,.13);color:var(--ok);border-color:rgba(70,196,106,.3)}
 .foot{margin-top:40px;font-size:12px;color:var(--dim);text-align:center}
-.chart{display:flex;align-items:flex-end;gap:5px;height:150px;padding:14px 8px 0}
-.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
-.cbar{width:100%;max-width:30px;background:linear-gradient(180deg,var(--acc),#2a5cbf);
-border-radius:4px 4px 0 0;min-height:2px}
-.cx{font-size:10px;color:var(--dim);margin-top:6px;white-space:nowrap}
 .usr{width:100%;border-collapse:collapse;font-size:13px}
 .usr th,.usr td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
 .usr th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);font-weight:600}
@@ -492,7 +623,6 @@ svg.lc .yl{fill:var(--dim);font-size:10px;text-anchor:end}
 .pl .badge{font-size:11px;color:var(--warn);background:rgba(224,161,50,.12);
 border:1px solid rgba(224,161,50,.3);border-radius:20px;padding:2px 10px;font-weight:600}
 .pl .v{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:96px;text-align:right}
-/* ── KPI hero ── */
 .kpis{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:6px}
 .kpi{background:linear-gradient(155deg,var(--card2),var(--card));border:1px solid var(--line);
 border-radius:16px;padding:20px 20px 18px;position:relative;overflow:hidden}
@@ -500,19 +630,23 @@ border-radius:16px;padding:20px 20px 18px;position:relative;overflow:hidden}
 .kpi.g:before{background:var(--ok)}.kpi.o:before{background:var(--warn)}.kpi.p:before{background:#9a7bff}
 .kpi .n{font-size:34px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05}
 .kpi .l{font-size:12.5px;color:var(--dim);margin-top:6px;font-weight:500}
-.sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:34px 0 14px}
-.sect h2{margin:0}
-.sect .note{font-size:12px;color:var(--dim);font-weight:500}
-/* ── barre verticali (bar chart) ── */
+.chiprow{display:flex;flex-wrap:wrap;gap:8px}
+.chipd{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;
+padding:6px 12px;border-radius:20px;background:var(--card2);border:1px solid var(--line);color:var(--ink)}
+.chipd i{width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.chipd.down{color:var(--bad);border-color:rgba(255,93,84,.4);background:rgba(255,93,84,.08)}
+.chipd.down i{background:var(--bad)}
+.alarms{border-color:rgba(255,93,84,.4);margin-top:14px}
+.alarms .k{text-transform:none}
+.adot{width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0}
+.dim2{color:var(--dim);font-weight:400}
 .bars{display:flex;align-items:flex-end;gap:6px;height:140px;padding:16px 10px 0}
 .bcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
 .bbar{width:100%;max-width:26px;background:linear-gradient(180deg,var(--acc),#2a5cbf);
 border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .bbar.hot{background:linear-gradient(180deg,var(--warn),#b97c1e)}
-.bbar.dim{background:linear-gradient(180deg,#33507f,#22344f)}
 .bcol .bx{font-size:10px;color:var(--dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .bcol .bv{font-size:10px;color:var(--dim);margin-bottom:4px;font-variant-numeric:tabular-nums}
-/* ── funnel / pipeline stages ── */
 .stage{padding:9px 14px}
 .stage .sh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
 .stage .sh .sk{font-weight:500}
@@ -520,20 +654,17 @@ border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .stbar{height:9px;background:#0c1117;border-radius:5px;overflow:hidden}
 .stbar>i{display:block;height:100%;background:linear-gradient(90deg,#3a6fd8,var(--acc));border-radius:5px}
 .stage.drop .sh .sv{color:var(--warn)}
-/* ── barre doppie (attivazione) ── */
 .db{padding:8px 14px}
-.db .dh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
-.db .dh .dk{font-weight:500;text-transform:capitalize}
-.db .dh .dv{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.db .dh{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:5px}
+.db .dh .dk{font-weight:500;text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.db .dh .dv{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+.db .dh .dv b{color:var(--ink);font-weight:600}
 .db .dt{height:8px;background:#0c1117;border-radius:5px;position:relative;overflow:hidden}
 .db .dt .cen{position:absolute;left:0;top:0;height:100%;background:#2c3a52;border-radius:5px}
 .db .dt .att{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#3a6fd8,var(--acc));border-radius:5px}
 .spark{width:100%;height:auto;display:block}
 .spark .sa{fill:url(#sag);stroke:none}
 .spark .sl{fill:none;stroke:var(--ok);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
-.cols3{display:grid;gap:22px;grid-template-columns:1fr 1fr 1fr}
-@media(max-width:900px){.cols3{grid-template-columns:1fr}}
-/* ── board live delle offerte ── */
 .feed{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
 .fr{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line)}
 .fr:last-child{border-bottom:none}
@@ -552,10 +683,15 @@ color:#fff;text-transform:uppercase;overflow:hidden;letter-spacing:0}
 .fr .fa.old{color:var(--dim)}
 .fr .fa .fd{width:6px;height:6px;border-radius:50%;background:var(--ok)}
 .fr .fa.old .fd{background:var(--dim)}
+a:focus-visible,.pt:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 </style></head><body>
 <div class="top">
-  <div class="brand"><b>Nivult</b><span>Cruscotto del motore</span></div>
-  <div class="live"><span class="dot"></span><span id="ts">connessione…</span></div>
+  <div class="brand"><b>Nivult</b><span>Cruscotto</span></div>
+  <nav class="nav">
+    <a href="#operazioni">Operazioni</a><a href="#flusso">Flusso</a>
+    <a href="#raccolta">Raccolta</a><a href="#dati">Dati</a><a href="#iscritti">Iscritti</a>
+  </nav>
+  <div class="live"><span class="dot" id="dotv"></span><span id="ts">primo caricamento — dopo un riavvio serve fino a un minuto…</span></div>
 </div>
 <div id="app"></div>
 <div class="foot">Aggiornamento automatico ogni 30 secondi · accesso riservato</div>
@@ -565,7 +701,9 @@ function eta(iso){if(!iso)return '—';const s=(Date.now()-new Date(iso))/1000;
  if(s<0)return 'ora';if(s<90)return Math.round(s)+' sec fa';
  if(s<5400)return Math.round(s/60)+' min fa';
  if(s<86400)return Math.round(s/3600)+' ore fa';return Math.round(s/86400)+' giorni fa'}
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const card=(v,l,sub)=>`<div class="card"><div class="num">${v}</div><div class="lbl">${l}</div>${sub!==undefined?`<div class="sub">${sub}</div>`:''}</div>`;
+const gband=(id,t,n)=>`<div class="gband" id="${id}"><span class="gt">${t}</span><span class="gr"></span>${n?`<span class="gn">${n}</span>`:''}</div>`;
 function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
  const max=Math.max(...rows.map(r=>r[vk]),1);
  return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${r[k]}</div>`+
@@ -605,16 +743,16 @@ function grafico(rows){
   +g+`<path class="area" d="${area}" fill="url(#ag)"/><path class="ln" d="${line}"/>`+pts+xl+`</svg>`;
  return `<div class="lcwrap">${svg}</div><div id="det" class="det"><div class="hint">clicca un punto del grafico per vedere le fonti dietro quel numero</div></div>`}
 function pending(rows){
- if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun ATS in attesa: tutte le piattaforme censite hanno un adattatore.</div>';
+ if(!rows||!rows.length)return '';
  return '<div class="panel">'+rows.map(r=>`<div class="pl"><div class="k">${r.piattaforma}</div>`
   +`<span class="badge">adattatore da scrivere</span>`
   +`<div class="v">${IT(r.aziende)} aziende</div></div>`).join('')+'</div>'}
 function iscritti(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:14px">nessun iscritto</div>';
  return '<div class="panel" style="overflow-x:auto;padding:0"><table class="usr">'+
  '<tr><th>Nome</th><th>Email</th><th>Lingua</th><th>Ricezione digest</th><th>Ricerche attive</th><th>Ultimo digest</th></tr>'+
- rows.map(u=>`<tr><td>${u.nome}</td><td class="em">${u.email}</td><td>${(u.lingua||'').toUpperCase()}</td>`+
+ rows.map(u=>`<tr><td>${esc(u.nome)}</td><td class="em">${esc(u.email)}</td><td>${(u.lingua||'').toUpperCase()}</td>`+
   `<td>${(u.canali||[]).map(c=>`<span class="ch ${c}">${c}</span>`).join('')||'—'}</td>`+
-  `<td>${u.ricerche&&u.ricerche.length?u.ricerche.map(r=>`<span class="ch rc">${r}</span>`).join(''):'<span class="sub">nessuna</span>'}</td>`+
+  `<td>${u.ricerche&&u.ricerche.length?u.ricerche.map(r=>`<span class="ch rc">${esc(r)}</span>`).join(''):'<span class="sub">nessuna</span>'}</td>`+
   `<td class="em">${eta(u.ultimo_digest)}</td></tr>`).join('')+'</table></div>'}
 function barre(rows,kk,vk,opt){opt=opt||{};
  if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun dato</div>';
@@ -622,7 +760,7 @@ function barre(rows,kk,vk,opt){opt=opt||{};
  return '<div class="panel"><div class="bars">'+rows.map((r,i)=>{
   const hh=Math.max(2,Math.round(100*r[vk]/max));
   const lbl=(n<=12||i%step===0||i===n-1)?r[kk]:'';
-  const cls=r.caldo?'hot':(opt.dim?'dim':'');
+  const cls=r.caldo?'hot':'';
   const val=(opt.val!==false&&n<=12)?`<div class="bv">${IT(r[vk])}</div>`:'';
   return `<div class="bcol">${val}<div class="bbar ${cls}" style="height:${hh}%"><title>${r[kk]}: ${IT(r[vk])}</title></div><div class="bx">${lbl}</div></div>`;
  }).join('')+'</div></div>'}
@@ -636,8 +774,20 @@ function attivazione(rows){if(!rows||!rows.length)return '<div class="hint" styl
  const max=Math.max(...rows.map(r=>r.censiti),1);
  return '<div class="panel">'+rows.map(r=>{
   const pc=100*r.censiti/max,pa=100*r.attivi/max,rate=r.censiti?Math.round(100*r.attivi/r.censiti):0;
-  return `<div class="db"><div class="dh"><span class="dk">${r.piattaforma}</span><span class="dv">${IT(r.attivi)} / ${IT(r.censiti)} · ${rate}%</span></div><div class="dt"><span class="cen" style="width:${pc}%"></span><span class="att" style="width:${pa}%"></span></div></div>`;
+  const pot=r.potati?` · <span class="dim2">${IT(r.potati)} potati</span>`:'';
+  return `<div class="db"><div class="dh"><span class="dk">${r.piattaforma}</span><span class="dv"><b>${rate}%</b> · ${IT(r.attivi)} / ${IT(r.censiti)} vivi${pot}</span></div><div class="dt"><span class="cen" style="width:${pc}%"></span><span class="att" style="width:${pa}%"></span></div></div>`;
  }).join('')+'</div>'}
+function copertura(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">in calcolo…</div>';
+ return '<div class="panel">'+rows.map(r=>
+  `<div class="db"><div class="dh"><span class="dk">${r.campo}</span><span class="dv"><b>${r.pct}%</b> · ${IT(r.n)}</span></div><div class="dt"><span class="att" style="width:${Math.max(0.5,r.pct)}%"></span></div></div>`
+ ).join('')+'</div>'}
+function demoni(g){
+ if(!g||!g.demoni||!g.demoni.length)return '<div class="hint" style="padding:14px">stato dei demoni non disponibile</div>';
+ return '<div class="panel" style="padding:13px 15px"><div class="chiprow">'+g.demoni.map(x=>
+  `<span class="chipd ${x.ok?'':'down'}"><i></i>${x.nome}</span>`).join('')+'</div></div>'}
+function allarmi(g){if(!g||!g.allarmi||!g.allarmi.length)return '';
+ return '<div class="panel alarms">'+g.allarmi.map(a=>
+  `<div class="row"><span class="adot"></span><div class="k">${esc(a)}</div></div>`).join('')+'</div>'}
 function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" style="padding:14px">dati insufficienti</div>';
  const W=980,H=88,pt=8,pb=8,n=rows.length,max=Math.max(...rows.map(r=>r[vk]),1);
  const X=i=>W*(i/(n-1)),Y=v=>H-pb-(H-pt-pb)*(v/max);
@@ -646,13 +796,11 @@ function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" st
  const ar=`M0 ${H-pb} `+P.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+` L${W} ${H-pb} Z`;
  const last=rows[n-1];
  return `<div class="lcwrap"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:88px"><defs><linearGradient id="sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46c46a" stop-opacity=".3"/><stop offset="1" stop-color="#46c46a" stop-opacity="0"/></linearGradient></defs><path class="sa" d="${ar}"/><path class="sl" d="${ln}"/></svg></div><div class="hint">picco ${IT(max)}/ora · ultima ora ${IT(last.n)} (${last.ora})</div>`}
-const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hashS=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h};
 function badge(azienda,logo,favicon){
  const nome=(azienda||'?').trim();
  const ini=esc(nome.charAt(0).toUpperCase()||'?');
  const col='hsl('+(hashS(nome)%360)+',42%,40%)';
- // catena: logo vero -> favicon del dominio -> monogramma (sotto)
  const src=logo||favicon;
  const alt=(logo&&favicon)?favicon:'';
  const img=src?`<img class="flogo" src="${esc(src)}" data-alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`:'';
@@ -667,10 +815,32 @@ function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padd
    +`<div class="fm">${esc(r.azienda)}${loc?' · '+esc(loc):''}</div></div>`
    +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
  }).join('')+'</div>'}
+function cardPonte(po){
+ let v='—',c='',sub='log non letto';
+ if(po&&po.errore===true){v='ERRORE';c='bad';sub='ultima corsa fallita — vedi log'}
+ else if(po&&po.errore===false){v='OK';c='ok';sub='ultima corsa pulita'}
+ if(po&&po.eta_min!=null)sub+=' · '+po.eta_min+' min fa';
+ return card(`<span class="${c}">${v}</span>`,'ponte ATS → motore',sub)}
+function cardNotturno(nt){
+ nt=nt||{};let v='—',c='',sub='log non letto';
+ if(nt.quando){
+  sub='avvio '+nt.quando.slice(0,16).replace('T',' ');
+  if(nt.completato&&!nt.falliti){v='OK';c='ok'}
+  else if(nt.completato){v=nt.falliti+' FALLITI';c='warn';sub+=' · passi falliti nel log'}
+  else{v='in corso';c='warn';sub+=' · non ancora completato'}}
+ return card(`<span class="${c}">${v}</span>`,'giro notturno',sub)}
+function cardSentinella(g){
+ let v,c,sub;
+ if(!g.sentinella){v='—';c='warn';sub='stato non leggibile'}
+ else if(g.allarmi.length){v=g.allarmi.length+' allarmi';c='bad';sub='elenco qui sotto — mail già partita'}
+ else{v='attiva';c='ok';sub='controlla ogni 5 min · nessun allarme aperto'}
+ return card(`<span class="${c}">${v}</span>`,'sentinella',sub)}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
- catch(e){document.getElementById('ts').textContent='non raggiungibile';return}
- const s=d.stato,h=d.salute,m=d.motore||{};
+ catch(e){document.getElementById('ts').textContent='non raggiungibile';
+  document.getElementById('dotv').style.background='var(--bad)';return}
+ document.getElementById('dotv').style.background='';
+ const s=d.stato,h=d.salute,m=d.motore||{},g=d.giri||{};
  document.getElementById('ts').textContent='aggiornato alle '+new Date().toLocaleTimeString('it-IT');
  const clP=h.senza_paese_pct>60?'bad':h.senza_paese_pct>30?'warn':'ok';
  const clC=h.non_classificate_pct>40?'bad':h.non_classificate_pct>20?'warn':'ok';
@@ -681,43 +851,57 @@ async function tick(){
  +`<div class="kpi o"><div class="n">${IT(h.piattaforme)}</div><div class="l">piattaforme ATS attive</div></div>`
  +`<div class="kpi p"><div class="n">${IT(m.utenti)}</div><div class="l">iscritti · ${IT(m.cluster_attivi)} ricerche attive</div></div>`
  +'</div>'
- +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} pubblicate nell\\'ultima ora · ${IT(h.pubblicate_24h)} nelle 24h</span></div>`
- +feed(d.live)
- +'<div class="sect"><h2>In tempo reale</h2><span class="note">aggiornamento ogni 30s</span></div><div class="grid">'
- +card(IT(s.offerte_viste_24h),'raccolte o aggiornate · 24h')
- +card(IT(s.aziende_scrapate_1h),'aziende visitate · ultima ora')
+
+ +gband('operazioni','Operazioni','se qui è tutto verde, il motore gira da solo')
+ +'<div class="sect"><h2>Demoni</h2><span class="note">systemd, in tempo reale</span></div>'
+ +demoni(g)
+ +allarmi(g)
+ +'<div class="sect"><h2>Ultime corse ed errori</h2></div><div class="grid">'
+ +cardSentinella(g)
+ +cardPonte(g.ponte)
+ +cardNotturno(g.notturno)
  +card(eta(s.ultimo_scrape),'ultima raccolta')
  +card(eta(s.ultima_classificazione),'ultima classificazione')
  +card(eta(s.ultimo_ponte),'ultimo travaso al motore')
  +'</div>'
- +'<div class="sect"><h2>Throughput — offerte toccate per ora (24h)</h2></div>'
- +'<div class="panel">'+sparkline(d.raccolta_oraria,'n')+'</div>'
- +'<div class="sect"><h2>Andamento — offerte pubblicate per giorno (30gg)</h2><span class="note">clicca un punto per le fonti</span></div>'
- +'<div class="panel">'+grafico(d.andamento)+'</div>'
- +'<div class="sect"><h2>Nuove aziende scoperte per giorno</h2><span class="note">l\\'ampiezza che cresce</span></div>'
- +barre(d.nuove_aziende,'giorno','n',{val:false})
- +'<div class="cols">'
- +'<div><div class="sect"><h2>La pipeline della raffineria</h2></div>'+pipeline(d.funnel)+'</div>'
- +`<div><div class="sect"><h2>Freschezza del codone</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
- +'</div>'
- +'<div class="sect"><h2>Salute della raffineria</h2></div><div class="grid">'
+ +'<div class="sect"><h2>Salute del dato</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte non classificate',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'codone fresco (entro 12h)',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
- +card(IT(h.aziende_censite),'aziende censite')
- +card(IT(h.aziende_mai_viste),'ancora da visitare')
- +card(IT(h.scadute),'offerte scadute (storico)')
+ +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'non classificate',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'codone fresco (12h)',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
  +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">ATS da aggiungere</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende senza adattatore</div>`:'<div class="sub">tutte le piattaforme coperte</div>'}</div>`
  +'</div>'
- +'<div class="sect"><h2>Attivazione per piattaforma</h2><span class="note">attivi / censiti — pozzi dormienti e ATS caldi</span></div>'
+
+ +gband('flusso','Flusso','le offerte mentre arrivano')
+ +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} nell’ultima ora · ${IT(h.pubblicate_24h)} nelle 24h</span></div>`
+ +feed(d.live)
+ +`<div class="sect"><h2>Offerte toccate per ora — 24h</h2><span class="note">${IT(s.offerte_viste_24h)} raccolte o aggiornate · ${IT(s.aziende_scrapate_1h)} aziende visitate nell’ultima ora</span></div>`
+ +'<div class="panel">'+sparkline(d.raccolta_oraria,'n')+'</div>'
+ +'<div class="sect"><h2>Pubblicate per giorno — 30 giorni</h2><span class="note">clicca un punto per le fonti</span></div>'
+ +'<div class="panel">'+grafico(d.andamento)+'</div>'
+
+ +gband('raccolta','Raccolta','censimento, freschezza, ampiezza')
+ +'<div class="cols">'
+ +`<div><div class="sect"><h2>Dalla scoperta alla consegna</h2><span class="note">${IT(h.scadute)} scadute in archivio</span></div>`+pipeline(d.funnel)+'</div>'
+ +`<div><div class="sect"><h2>Freschezza del codone</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
+ +'</div>'
+ +'<div class="sect"><h2>Attivazione per piattaforma</h2><span class="note">con offerte / censiti vivi — il tetto naturale è 60–70%: molte aziende vive oggi non assumono</span></div>'
  +attivazione(d.attivazione)
- +'<div class="cols"><div><div class="sect"><h2>Offerte per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
- +'<div><div class="sect"><h2>Offerte per paese</h2></div>'+lista(d.per_paese,'paese','attive')+'</div></div>'
- +'<div class="cols"><div><div class="sect"><h2>Offerte per famiglia professionale</h2></div>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
- +'<div><div class="sect"><h2>Come scopriamo i tenant</h2></div>'+lista(d.per_scoperta,'fonte','n')+'</div></div>'
- +(d.agenzie&&d.agenzie.length?'<div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive'):'')
- +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>ATS trovati ma non ancora raccoglibili</h2></div>'+pending(d.ats_pending):'')
- +'<div class="sect"><h2>Motore e ricerche degli iscritti</h2></div><div class="grid">'
+ +'<div class="cols">'
+ +'<div><div class="sect"><h2>Nuove aziende per giorno</h2></div>'+barre(d.nuove_aziende,'giorno','n',{val:false})+'</div>'
+ +'<div><div class="sect"><h2>Come scopriamo i tenant</h2></div>'+lista(d.per_scoperta,'fonte','n')+'</div>'
+ +'</div>'
+ +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>ATS trovati, adattatore da scrivere</h2></div>'+pending(d.ats_pending):'')
+
+ +gband('dati','Dati','cosa sappiamo di ogni offerta')
+ +'<div class="sect"><h2>Copertura degli arricchimenti</h2><span class="note">sulle offerte attive · ricalcolo ogni 10 min</span></div>'
+ +copertura(d.arricchimento)
+ +'<div class="cols"><div><div class="sect"><h2>Per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
+ +'<div><div class="sect"><h2>Per paese</h2></div>'+lista(d.per_paese,'paese','attive')+'</div></div>'
+ +'<div class="cols"><div><div class="sect"><h2>Per famiglia professionale</h2></div>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
+ +'<div>'+(d.agenzie&&d.agenzie.length?'<div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive'):'')+'</div></div>'
+
+ +gband('iscritti','Iscritti','il motore visto dai clienti')
+ +'<div class="grid" style="margin-top:14px">'
  +card(IT(m.offerte_nel_motore),'offerte nel motore')
  +card(IT(m.da_ats),'dai nostri ATS diretti')
  +card(IT(m.cluster_attivi),'ricerche attive')
@@ -725,7 +909,7 @@ async function tick(){
  +'</div>';
  if(d.cluster&&d.cluster.length)H+='<div style="margin-top:14px">'+d.cluster.map(c=>
   `<span class="pill ${c.stato==='active'?'on':''}">${c.famiglia} · ${c.paese}</span>`).join('')+'</div>';
- H+='<div class="sect"><h2>Iscritti — configurazione completa</h2></div>'+iscritti(d.iscritti);
+ H+='<div class="sect"><h2>Configurazione completa</h2></div>'+iscritti(d.iscritti);
  document.getElementById('app').innerHTML=H}
 tick();setInterval(tick,30000);
 </script></body></html>"""

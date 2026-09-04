@@ -120,7 +120,26 @@ def _controlli() -> list[str]:
     except OSError:
         problemi.append("ponte: log non trovato")
 
-    # 4. disco
+    # 4. credito GLM: a zero si fermano digest e CV, in silenzio. La
+    # sonda da 1 token costa nulla; a credito zero l'API risponde 429
+    # con codice 1113 senza addebitare.
+    chiave = _env().get("GLM_API_KEY")
+    if chiave:
+        try:
+            import httpx
+            r = httpx.post(
+                "https://api.z.ai/api/paas/v4/chat/completions",
+                headers={"Authorization": f"Bearer {chiave}"},
+                json={"model": "glm-5.2", "max_tokens": 1,
+                      "messages": [{"role": "user", "content": "ok"}]},
+                timeout=20)
+            if r.status_code == 429 and "1113" in r.text:
+                problemi.append("credito GLM a ZERO: digest e CV fermi "
+                                "- ricaricare su z.ai")
+        except Exception:                             # noqa: BLE001
+            pass                    # rete/timeout: non e' un allarme
+
+    # 5. disco
     d = shutil.disk_usage("/")
     if d.free / d.total < 0.10:
         problemi.append(f"disco quasi pieno: {d.free // 2**30}GB liberi")

@@ -38,6 +38,8 @@ _VIVO = {
     "jobsoid":         ("GET",  "https://{s}.jobsoid.com/api/v1/jobs"),
     "recruiterbox":    ("GET",  "https://{s}.hire.trakstar.com/jobfeeds/{s}"),
     "niceboard":       ("GET",  "https://{s}.niceboard.co/api/jobs?limit=1"),
+    "jazzhr":          ("GET",  "https://{s}.applytojob.com/"),
+    "teamtailor":      ("GET",  "https://{s}.teamtailor.com/jobs.json"),
 }
 
 
