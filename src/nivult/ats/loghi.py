@@ -114,22 +114,109 @@ def da_board(dsn: str, limite: int = 400) -> dict:
     return stats
 
 
+def _norm(s: str) -> str:
+    """Riduce un nome al suo nocciolo alfanumerico minuscolo."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _pulisci_nome(nome: str) -> str:
+    """Toglie le parole di rumore (careers, gmbh, inc...) dal nome tenant."""
+    n = re.sub(r"[-_]+", " ", nome or "")
+    n = re.sub(r"\b(careers?|jobs?|hiring|the|gmbh|inc|ltd|llc|group|"
+               r"holding|srl|spa|bv|ag|co|corp|company)\b", " ", n, flags=re.I)
+    return re.sub(r"\s+", " ", n).strip()
+
+
+def _affidabile(nome: str, brand: dict) -> bool:
+    """Accetta il logo solo se il nome corrisponde DAVVERO al brand trovato:
+    il nocciolo del nome deve comparire nel dominio o nel nome del brand.
+    Cosi' 'Careers Affordablecare' non prende il logo di 'Bespoke Careers'."""
+    core = _norm(_pulisci_nome(nome))
+    if len(core) < 4:
+        return False
+    dom = _norm((brand.get("domain") or "").split(".")[0])
+    bn = _norm(brand.get("name") or "")
+    return core in dom or dom in core or core in bn or bn in core
+
+
+def da_brandfetch(dsn: str, limite: int = 200,
+                  client_id: str | None = None) -> dict:
+    """Logo dal nome azienda via Brandfetch (per gli ATS senza logo proprio).
+
+    La Search API (`api.brandfetch.io/v2/search/{nome}`) ritorna il brand col
+    dominio e l'icona-logo. Applichiamo un filtro di affidabilita' per non
+    mostrare il logo dell'azienda sbagliata. Con un client_id (env
+    BRANDFETCH_CLIENT_ID) si usa il CDN proprio, come vuole la licenza in
+    produzione; senza, la Search pubblica (basso volume).
+    """
+    client_id = client_id or os.environ.get("BRANDFETCH_CLIENT_ID")
+    cli = httpx.Client(timeout=12, follow_redirects=True,
+                       headers={"User-Agent": _UA})
+    stats = {"esaminati": 0, "trovati": 0, "scartati_incerti": 0}
+    # gli ATS che NON danno un logo proprio: qui serve Brandfetch.
+    senza = ("personio", "teamtailor", "bamboohr", "workday", "icims",
+             "cornerstone", "oracle", "phenom", "jazzhr", "zohorecruit",
+             "recruiterbox", "join", "pinpoint", "catsone", "successfactors")
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT platform_id, slug, coalesce(company_name, slug)
+              FROM ats_companies
+             WHERE platform_id = ANY(%s) AND job_count > 0 AND logo_url IS NULL
+               AND (logo_checked_at IS NULL
+                    OR logo_checked_at < now() - interval '30 days')
+             ORDER BY logo_checked_at ASC NULLS FIRST
+             LIMIT %s""", (list(senza), limite)).fetchall()
+        for pid, slug, nome in righe:
+            stats["esaminati"] += 1
+            logo = None
+            try:
+                q = _pulisci_nome(nome) or nome
+                r = cli.get(f"https://api.brandfetch.io/v2/search/{q}")
+                brands = r.json() if r.status_code == 200 else []
+            except (httpx.HTTPError, ValueError):
+                brands = []
+            if brands and isinstance(brands, list):
+                b = brands[0]
+                if _affidabile(nome, b) and b.get("icon"):
+                    if client_id:
+                        dom = b.get("domain")
+                        logo = (f"https://cdn.brandfetch.io/{dom}/w/128/h/128"
+                                f"?c={client_id}") if dom else b.get("icon")
+                    else:
+                        logo = b.get("icon")
+                elif brands:
+                    stats["scartati_incerti"] += 1
+            c.execute(
+                "UPDATE ats_companies SET logo_url=%s, logo_checked_at=now() "
+                "WHERE platform_id=%s AND slug=%s", (logo, pid, slug))
+            if logo:
+                stats["trovati"] += 1
+    cli.close()
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="nivult.ats.loghi")
     ap.add_argument("--da-offerte", action="store_true")
     ap.add_argument("--da-board", action="store_true")
+    ap.add_argument("--da-brandfetch", action="store_true")
     ap.add_argument("--limite", type=int, default=400)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
-    if args.da_offerte or not (args.da_offerte or args.da_board):
-        n = da_offerte(dsn)
-        log.info("loghi da offerte: %d aziende aggiornate", n)
+    fatto = False
+    if args.da_offerte:
+        log.info("loghi da offerte: %d aziende", da_offerte(dsn)); fatto = True
     if args.da_board:
-        log.info("loghi da board: %s", da_board(dsn, args.limite))
+        log.info("loghi da board: %s", da_board(dsn, args.limite)); fatto = True
+    if args.da_brandfetch:
+        log.info("loghi da brandfetch: %s",
+                 da_brandfetch(dsn, args.limite)); fatto = True
+    if not fatto:
+        log.info("loghi da offerte: %d aziende", da_offerte(dsn))
     return 0
 
 
