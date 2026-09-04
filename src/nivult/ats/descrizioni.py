@@ -176,6 +176,93 @@ def da_pagina(dsn: str, limite: int = 3000, thread: int = 10) -> dict:
     return stats
 
 
+# Piattaforme dove la pagina NON offre il JSON-LD ma il testo c'e'
+# comunque: nell'HTML servito dal server (icims col trucco mobile=true,
+# catsone) o in un JSON incorporato negli script (werecruit, zoho).
+# Cornerstone resta fuori: guscio JS puro con API a token, cantiere a parte.
+_TESTO_PIATTAFORME = ("icims", "catsone", "werecruit", "zohorecruit")
+
+# "description":"..." dentro gli script: almeno 200 caratteri, con gli
+# escape JSON gestiti dal decoder vero (niente unescape a mano)
+_JSON_DESCR = re.compile(
+    r'"(?:job_?[Dd]escription|description)"\s*:\s*'
+    r'("(?:\\.|[^"\\]){200,}?")')
+
+
+def _paragrafi(html: str) -> str | None:
+    """I paragrafi densi della pagina: i nodi di testo lunghi sono la
+    descrizione, quelli corti sono menu e briciole. Rozzezza voluta:
+    regge il redesign delle piattaforme meglio di qualsiasi selettore."""
+    import html as _h
+    pulito = re.sub(r"(?s)<(script|style)[^>]*>.*?</\1>", " ", html)
+    nodi = (_h.unescape(t).strip() for t in re.findall(r">([^<>]+)<", pulito))
+    buoni = [n for n in nodi if len(n) >= 80]
+    return "\n\n".join(buoni)[:30000] or None
+
+
+def _estrai_testo(pid: str, html: str) -> str:
+    jp = _jobposting(html)
+    if jp and jp.get("description"):
+        return str(jp["description"])[:30000]
+    m = _JSON_DESCR.search(html)
+    if m:
+        try:
+            return str(json.loads(m.group(1)))[:30000]
+        except ValueError:
+            pass
+    return _paragrafi(html) or ""
+
+
+def da_testo(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
+    """Descrizioni per le piattaforme senza JSON-LD: si legge la pagina
+    e si prende il testo dove sta. Errori di rete non marcano; una
+    pagina 200 senza testo si' (niente riesami eterni)."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, platform_id, url FROM ats_jobs
+             WHERE platform_id = ANY(%s) AND expired_at IS NULL
+               AND NOT (raw ? 'description') AND url IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (list(_TESTO_PIATTAFORME), limite)).fetchall()
+
+        def leggi(riga):
+            jid, pid, url = riga
+            if pid == "icims":
+                # la versione dentro-iframe e' quella renderizzata dal
+                # server col testo completo (mobile=true spesso no)
+                url = url + ("&" if "?" in url else "?") + "in_iframe=1"
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA}) as cli:
+                    r = cli.get(url)
+            except httpx.HTTPError:
+                return jid, None
+            if r.status_code != 200:
+                return jid, None
+            return jid, _estrai_testo(pid, r.text)
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … da_testo %s", stats)
+    log.info("descrizioni da_testo: %s", stats)
+    return stats
+
+
 def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     from concurrent.futures import ThreadPoolExecutor
     stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
@@ -237,6 +324,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--smartrecruiters", action="store_true")
     ap.add_argument("--workday", action="store_true")
     ap.add_argument("--da-pagina", action="store_true")
+    ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
@@ -246,7 +334,10 @@ def main(argv: list[str] | None = None) -> int:
         print(workday(dsn, args.limite))
     if args.da_pagina:
         print(da_pagina(dsn, args.limite))
-    if args.smartrecruiters or not (args.workday or args.da_pagina):
+    if args.da_testo:
+        print(da_testo(dsn, args.limite))
+    if args.smartrecruiters or not (args.workday or args.da_pagina
+                                    or args.da_testo):
         print(smartrecruiters(dsn, args.limite))
     return 0
 
