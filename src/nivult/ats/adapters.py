@@ -1253,6 +1253,71 @@ class HeavenHR(BaseAdapter):
 ADAPTERS["heavenhr"] = HeavenHR
 
 
+class Niceboard(BaseAdapter):
+    """{slug}.niceboard.co — job board SaaS (Vue), API JSON pubblica.
+
+    La SPA chiama `/api/jobs` con l'intero set di filtri vuoti
+    (senza, risponde «validation»). Ogni offerta porta titolo,
+    `location_name` completa (Città, Stato, Paese), `published_at`
+    e l'id per il link diretto `/job/{id}-{slug}` (redirige al
+    canonico). Il paese resta NULL: lo estrae l'arricchimento dalla
+    località separata da virgole.
+    """
+    platform_id = "niceboard"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _Q = ("?company=all&jobtype=[]&category=[]&secondary_category=[]"
+          "&tags=[]&city=[]&state=[]&country=[]&remote_ok=false"
+          "&remote_only=false&salary_min=&salary_max=&keyword="
+          "&custom_fields={}&sortby=newest&limit=200")
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, 21):  # tetto di sicurezza: 4000 offerte
+            url = f"https://{slug}.niceboard.co/api/jobs{self._Q}&page={pagina}"
+            try:
+                r = self.client.get(url, headers={
+                    "User-Agent": self._UA, "Accept": "application/json"})
+                d = r.json()
+            except (httpx.HTTPError, ValueError):
+                break
+            if not isinstance(d, dict):
+                break
+            jobs = d.get("jobs") or []
+            if not jobs:
+                break
+            for j in jobs:
+                jid = str(j.get("id") or "").strip()
+                if not jid or jid in visti:
+                    continue
+                if not j.get("is_published") or j.get("is_draft") \
+                        or j.get("is_filled") or j.get("is_sample"):
+                    continue
+                visti.add(jid)
+                jslug = j.get("slug") or jid
+                loc = (j.get("location_name") or "").strip() or None
+                cat = j.get("category")
+                dep = cat.get("name") if isinstance(cat, dict) else None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug, external_id=jid,
+                    title=j.get("title") or "",
+                    url=f"https://{slug}.niceboard.co/job/{jid}-{jslug}",
+                    location=loc,
+                    city=(loc.split(",")[0].strip() if loc else None),
+                    posted_at=j.get("published_at"),
+                    department=(dep or None),
+                    raw={"company": j.get("company_name"),
+                         "is_remote": j.get("is_remote"),
+                         "apply_url": j.get("apply_url"),
+                         "location_name": loc}))
+            if len(jobs) < 200:
+                break
+        return out
+
+
+ADAPTERS["niceboard"] = Niceboard
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
