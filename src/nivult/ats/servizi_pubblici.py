@@ -295,7 +295,14 @@ def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
 
                 titolo = off.get("stellenangebotsTitel") or ""
                 firma = off.get("firma") or ""
-                url = off.get("externeURL") or ""
+                # Link diretto: se l'offerta non ha una URL esterna propria
+                # (la maggioranza vive solo sul portale), si costruisce la
+                # pagina di dettaglio su arbeitsagentur.de dal refnr —
+                # altrimenti l'offerta resta senza link e non e' consegnabile.
+                from urllib.parse import quote as _quote
+                url = off.get("externeURL") or (
+                    "https://www.arbeitsagentur.de/jobsuche/jobdetail/"
+                    + _quote(refnr, safe=""))
 
                 # luogo
                 locs = off.get("stellenlokationen") or []
