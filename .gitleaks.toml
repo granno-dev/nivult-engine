@@ -5,7 +5,11 @@ useDefault = true
 [[rules]]
 id = "nivult-postgres-url"
 description = "URL Postgres con password in chiaro"
-regex = '''postgres(ql)?://[^:/@\s]+:[^@\s]+@'''
+# (?:...) e non (...): con un gruppo che cattura, gitleaks considera
+# «segreto» SOLO il contenuto del gruppo — qui la stringa «ql» — e su
+# quella nessuna allowlist puo' mai scattare. Il segreto deve essere
+# l'intera URL, cosi' i segnaposto ${VAR} e {pw} vengono riconosciuti.
+regex = '''postgres(?:ql)?://[^:/@\s]+:[^@\s]+@'''
 tags = ["database", "credentials"]
 
 [allowlist]
@@ -23,4 +27,9 @@ regexes = [
   '''os\.environ''',
   '''getenv''',
   '''process\.env''',
+  # segnaposto f-string Python (postgresql://user:{pw}@host): non e'
+  # una password, e' un buco da riempire a runtime
+  ''':\{[a-z_]+\}@''',
+  # segnaposto documentali: postgresql://utente:<password>@host
+  ''':<[a-z_]+>@''',
 ]

@@ -85,10 +85,12 @@ def _controlli() -> list[str]:
     # 2. battiti nel dato
     try:
         import psycopg
-        pw = _env().get("POSTGRES_PASSWORD", "")
+        # a parametri, non a URL: una password dentro una f-string e'
+        # indistinguibile da una in chiaro per chi scansiona i segreti
         with psycopg.connect(
-                f"postgresql://nivult:{pw}@127.0.0.1:5432/nivult_ats",
-                connect_timeout=10) as c:
+                host="127.0.0.1", port=5432, user="nivult",
+                password=_env().get("POSTGRES_PASSWORD", ""),
+                dbname="nivult_ats", connect_timeout=10) as c:
             eta = c.execute("SELECT extract(epoch FROM now()-max(fetched_at))"
                             " FROM ats_jobs").fetchone()[0]
             if eta is None or eta > 1800:
