@@ -206,6 +206,19 @@ echo "── arricchisci paese (da-localita + da-azienda, dopo le raccolte)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── 5e. Loghi via Brandfetch (logo vero dal nome), SOLO col client id:
+# senza, non tocchiamo il loro endpoint — cosi' rispettiamo la licenza e
+# il rollout parte quando c'e' la chiave gratuita in .env. I loghi dagli
+# ATS propri (og:image/board) li fa gia' il demone arricchisci.
+BRANDFETCH_CLIENT_ID=$(grep -E '^BRANDFETCH_CLIENT_ID=' /opt/nivult/.env \
+  | head -1 | cut -d= -f2-)
+export BRANDFETCH_CLIENT_ID
+if [ -n "${BRANDFETCH_CLIENT_ID:-}" ]; then
+  echo "── loghi da brandfetch (client id presente)"
+  "$PY" -m nivult.ats.loghi --da-brandfetch --limite 1500 \
+    >> "$LOG_DIR/ats-nightly.log" 2>&1 && echo "   ok" || echo "   FALLITO"
+fi
+
 # ── 6. Classificazione a 3 livelli: dizionario + fuzzy + GLM ────
 echo "── classificatore a livelli (5000)"
 "$PY" -m nivult.ats.classificatore_livelli --limite 150000 \
