@@ -119,6 +119,28 @@ for pid in selezioni:
 PYEOF
 echo "   ok"
 
+# ── 4c. Scoperta profonda: drena i colossi sotto-censiti da Wayback.
+# Greenhouse ogni notte (ha decine di migliaia di board, 286 pagine da
+# smaltire) + una a rotazione fra gli altri token-ATS. Verificata: solo
+# board vivi con offerte entrano, il segnalibro riprende dove ha lasciato.
+echo "── scoperta profonda (greenhouse + rotazione)"
+"$PY" -m nivult.ats.scoperta_profonda --piattaforma greenhouse --pagine 12 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 && echo "   ok gh" || echo "   FALLITO"
+"$PY" - "$STATE" <<'PYEOF' >> "$LOG_DIR/ats-nightly.log" 2>&1
+import os, sys
+sys.path.insert(0, "/opt/nivult/engine")
+from nivult.ats.scoperta_profonda import scava, _FONTI
+ATS = os.environ["ATS_DATABASE_URL"]
+altre = [p for p in _FONTI if p != "greenhouse"]
+sf = os.path.join(sys.argv[1], "profonda-rotazione.txt")
+try: pos = int(open(sf).read().strip())
+except Exception: pos = 0
+pid = altre[pos % len(altre)]
+open(sf, "w").write(str((pos + 1) % len(altre)))
+print("profonda rotazione:", pid, scava(ATS, pid, pagine=8))
+PYEOF
+echo "   ok rotazione"
+
 # ── 5. Mantenimento: expira, normalizza i nuovi, dedup ────────────
 echo "── mantenimento (expira/normalizza/dedup)"
 "$PY" -m nivult.ats.mantenimento --expira >> "$LOG_DIR/ats-nightly.log" 2>&1 \
