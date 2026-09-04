@@ -204,6 +204,55 @@ def arricchisci_profilo(dsn: str, limite: int = 50000,
     return stats
 
 
+_PROMPT_PAESE = """In quale paese si trova questa offerta di lavoro? Rispondi SOLO con JSON: {{"country":"codice ISO2 maiuscolo oppure XX se incerto"}}
+TITOLO: {t}
+LUOGO: {l}
+TESTO: {d}"""
+
+_ISO2 = re.compile(r"^[A-Z]{2}$")
+
+
+def paese_glm(dsn: str, limite: int = 300) -> dict:
+    """Il paese per il residuo che il geocoder non scioglie: GLM Flash
+    (gratuito) su titolo+luogo+testo. Accuratezza misurata prima di
+    attivarlo; XX/incerto NON si salva — meglio nessun paese che uno
+    sbagliato (finirebbe nel digest del cluster sbagliato)."""
+    stats = {"esaminate": 0, "riempite": 0, "incerte": 0}
+    modello = _glm_flash()
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, title, coalesce(location, city, ''), raw
+              FROM ats_jobs
+             WHERE expired_at IS NULL AND country IS NULL
+               AND country_glm_at IS NULL
+               AND (location IS NOT NULL OR city IS NOT NULL
+                    OR raw ? 'description')
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+        for jid, titolo, luogo, raw in righe:
+            stats["esaminate"] += 1
+            paese = None
+            try:
+                r = modello.chat([{"role": "user",
+                                   "content": _PROMPT_PAESE.format(
+                    t=(titolo or "")[:80], l=(luogo or "")[:80],
+                    d=_descrizione(raw)[:250])}], max_tokens=30)
+                g = json.loads(re.search(r"\{.*\}", r, re.S)
+                               .group(0)).get("country", "XX").upper()
+                if _ISO2.match(g) and g != "XX":
+                    paese = g
+            except Exception:                        # noqa: BLE001
+                pass
+            c.execute("UPDATE ats_jobs SET country = coalesce(country, %s), "
+                      "country_glm_at = now() WHERE id = %s", (paese, jid))
+            if paese:
+                stats["riempite"] += 1
+            else:
+                stats["incerte"] += 1
+    log.info("paese_glm: %s", stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -211,10 +260,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limite", type=int, default=50000)
     ap.add_argument("--glm-max", type=int, default=0,
                     help="quante offerte del residuo mandare a GLM Flash")
+    ap.add_argument("--paese-glm", type=int, default=0, metavar="N",
+                    help="paese via GLM Flash per N offerte senza paese")
     args = ap.parse_args(argv)
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+    if args.paese_glm:
+        print(paese_glm(dsn, args.paese_glm))
+        return 0
     print(arricchisci_profilo(dsn, args.limite, args.glm_max))
     return 0
 
