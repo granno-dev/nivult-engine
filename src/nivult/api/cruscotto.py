@@ -239,7 +239,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                                    OR logo_domain IS NOT NULL), count(*)
           FROM ats_companies WHERE is_active AND job_count > 0""")[0]
     campi = [("paese", r[0]), ("descrizione", r[5]), ("seniority", r[2]),
-             ("lavoro remoto", r[3]), ("skill", r[4]), ("salario", r[1])]
+             ("lavoro remoto", r[3]), ("competenze", r[4]), ("salario", r[1])]
     v = [{"campo": k, "n": n,
           "pct": round(100 * n / attive, 1) if attive else 0}
          for k, n in campi]
@@ -411,9 +411,35 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
             "offerte": v["offerte"],
             "dettaglio": [{"fonte": p, "n": n} for p, n in fonti]})
 
-    d["per_scoperta"] = [{"fonte": f or "—", "n": n} for f, n in _righe(ats_dsn,
-        "SELECT discovered_from, count(*) FROM ats_companies "
-        "GROUP BY 1 ORDER BY 2 DESC LIMIT 10")]
+    # I codici interni delle fonti, tradotti per chi legge: la pagina
+    # deve essere chiara anche a chi non sa cosa sia un "detector".
+    _FONTI_UMANE = {
+        "archivio": "archivi del web (Wayback/CC)",
+        "detector": "rilevatore sui domini",
+        "profonda": "scoperta profonda",
+        "common_crawl": "Common Crawl diretto",
+        "existing_db": "censimento iniziale",
+        "production_url": "dagli URL delle offerte",
+        "production_full": "dagli URL delle offerte",
+        "production": "dagli URL delle offerte",
+        "dns_enumeration": "enumerazione DNS",
+        "reverse": "riscoperta dalle offerte",
+        "vanity": "risolutore domini propri",
+        "certificati": "radar certificati",
+        "grafo_cc": "grafo dei link",
+        "http_archive": "censimento tecnologico",
+        "wikidata": "Wikidata",
+        "wikidata_big": "Wikidata (grandi aziende)",
+        "gleif": "anagrafe GLEIF",
+        "research": "ricerca manuale",
+        "igiene": "igiene del censimento",
+        "feed": "feed dedicati",
+    }
+    d["per_scoperta"] = [
+        {"fonte": _FONTI_UMANE.get(f, f or "—"), "n": n}
+        for f, n in _righe(ats_dsn,
+            "SELECT discovered_from, count(*) FROM ats_companies "
+            "GROUP BY 1 ORDER BY 2 DESC LIMIT 10")]
 
     # ── attivazione: SOLO il censimento vivo su piattaforme raccolte. I
     # tenant potati (slug morti) non fanno testo, altrimenti il numero
@@ -1036,7 +1062,7 @@ async function tick(){
  +'<div class="sect"><h2>I servizi del motore</h2><span class="note">girano giorno e notte — verde = acceso · passa il mouse per la spiegazione</span></div>'
  +demoni(g)
  +allarmi(g)
- +'<div class="sect"><h2>Ultime corse ed eventuali errori</h2></div><div class="grid">'
+ +'<div class="sect"><h2>Ultime corse ed errori</h2></div><div class="grid">'
  +cardSentinella(g)
  +cardPonte(g.ponte)
  +cardNotturno(g.notturno)
@@ -1052,7 +1078,7 @@ async function tick(){
  +'</div>'
 
  +gband('flusso','Flusso','le offerte mentre arrivano')
- +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} nell’ultima ora · ${IT(h.pubblicate_24h)} nelle 24h</span></div>`
+ +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} pubblicate nell’ultima ora · ${IT(h.pubblicate_24h)} nelle 24 ore</span></div>`
  +feed(d.live)
  +`<div class="sect"><h2>Offerte raccolte o aggiornate, ora per ora — ultime 24 ore</h2><span class="note">${IT(s.offerte_viste_24h)} raccolte o aggiornate · ${IT(s.aziende_scrapate_1h)} aziende visitate nell’ultima ora</span></div>`
  +'<div class="panel">'+sparkline(d.raccolta_oraria,'n')+'</div>'
