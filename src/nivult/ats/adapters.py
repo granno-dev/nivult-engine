@@ -1498,6 +1498,57 @@ class DigitalRecruiters(BaseAdapter):
 ADAPTERS["digitalrecruiters"] = DigitalRecruiters
 
 
+class Jobsoid(BaseAdapter):
+    """{slug}.jobsoid.com — ATS con feed JSON pubblico e link diretto.
+
+    `/api/v1/jobs` restituisce la lista completa: ogni offerta porta
+    `location` strutturata (city/state/country), `postedDate` ISO,
+    department/function e `hostedUrl` col link diretto all'annuncio.
+    """
+    platform_id = "jobsoid"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            d = self.client.get(
+                f"https://{slug}.jobsoid.com/api/v1/jobs",
+                headers={"User-Agent": self._UA,
+                         "Accept": "application/json"}).json()
+        except (httpx.HTTPError, ValueError):
+            return []
+        if not isinstance(d, list):
+            return []
+        out = []
+        for j in d:
+            jid = str(j.get("id") or "").strip()
+            url = j.get("hostedUrl") or j.get("applyUrl")
+            if not jid or not url:
+                continue
+            loc = j.get("location") or {}
+            if isinstance(loc, dict):
+                citta = (loc.get("city") or "").strip() or None
+                stato = (loc.get("state") or "").strip() or None
+                paese = (loc.get("country") or "").strip() or None
+                locstr = ", ".join(x for x in (citta, stato, paese) if x) \
+                    or (loc.get("title") or None)
+            else:
+                citta = paese = None
+                locstr = str(loc).strip() or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=(j.get("title") or "").strip(),
+                url=url,
+                location=locstr, city=citta, country=_iso(paese),
+                posted_at=j.get("postedDate"),
+                department=((j.get("department") or j.get("function") or "") or "").strip() or None,
+                raw={"type": j.get("type"), "company": j.get("company"),
+                     "country": paese}))
+        return out
+
+
+ADAPTERS["jobsoid"] = Jobsoid
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
