@@ -41,7 +41,10 @@ ATS_DSN = os.environ.get(
 # Quanti giorni senza essere rivista prima di considerarla scaduta.
 # Gli scraper girano ogni notte: 21 giorni = tre settimane di
 # assenze consecutive.
-GIORNI_SCADENZA = 21
+# Con lo sweep a 12h (ATS) e i servizi pubblici a 24h, un'offerta ancora
+# in bacheca ha sempre fetched_at fresco: 3 giorni bastano con margine
+# 3-6x. Era 21: un'offerta rimossa restava «attiva» tre settimane.
+GIORNI_SCADENZA = 3
 
 
 # ── 1. EXPIRA ─────────────────────────────────────────────────────

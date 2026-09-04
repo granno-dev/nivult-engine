@@ -225,6 +225,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
                               country = COALESCE(EXCLUDED.country, ats_jobs.country),
                               city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
                               department = EXCLUDED.department, raw = EXCLUDED.raw,
+                              expired_at = NULL,   -- rivista = di nuovo viva
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
