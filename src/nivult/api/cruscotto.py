@@ -355,9 +355,9 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     # ── board live: le offerte piu' recenti per data di pubblicazione,
     # col tempo relativo ("2 min fa"), come il flusso continuo di Fantastic.
     d["live"] = []
-    for t, slug, p, loc, city, cty, u, pa, raw, logo_az in _righe(ats_dsn, """
+    for t, slug, p, loc, city, cty, u, pa, raw, logo_az, dom in _righe(ats_dsn, """
         SELECT j.title, j.slug, j.platform_id, j.location, j.city, j.country,
-               j.url, j.posted_at, j.raw, ac.logo_url
+               j.url, j.posted_at, j.raw, ac.logo_url, ac.logo_domain
           FROM ats_jobs j
           LEFT JOIN ats_companies ac
                  ON ac.platform_id = j.platform_id AND ac.slug = j.slug
@@ -366,6 +366,8 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
          ORDER BY j.posted_at DESC LIMIT 30"""):
         azienda = None
         logo = logo_az   # logo a livello azienda (og:image / consolidato)
+        favicon = (f"https://www.google.com/s2/favicons?sz=64&domain={dom}"
+                   if dom else None)
         if isinstance(raw, dict):
             co = raw.get("company") or raw.get("hiringOrganization")
             if isinstance(co, dict):
@@ -386,7 +388,8 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
                         break
         d["live"].append({
             "titolo": t, "azienda": azienda or slug, "fonte": p,
-            "luogo": loc or city, "paese": cty, "url": u, "logo": logo,
+            "luogo": loc or city, "paese": cty, "url": u,
+            "logo": logo, "favicon": favicon,
             "posted": str(pa) if pa else None})
     # offerte pubblicate nell'ultima ora / 24h: il polso del flusso
     d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
@@ -645,11 +648,14 @@ function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" st
  return `<div class="lcwrap"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:88px"><defs><linearGradient id="sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46c46a" stop-opacity=".3"/><stop offset="1" stop-color="#46c46a" stop-opacity="0"/></linearGradient></defs><path class="sa" d="${ar}"/><path class="sl" d="${ln}"/></svg></div><div class="hint">picco ${IT(max)}/ora · ultima ora ${IT(last.n)} (${last.ora})</div>`}
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hashS=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h};
-function badge(azienda,logo){
+function badge(azienda,logo,favicon){
  const nome=(azienda||'?').trim();
  const ini=esc(nome.charAt(0).toUpperCase()||'?');
  const col='hsl('+(hashS(nome)%360)+',42%,40%)';
- const img=logo?`<img class="flogo" src="${esc(logo)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:'';
+ // catena: logo vero -> favicon del dominio -> monogramma (sotto)
+ const src=logo||favicon;
+ const alt=(logo&&favicon)?favicon:'';
+ const img=src?`<img class="flogo" src="${esc(src)}" data-alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer" onerror="if(this.dataset.alt){this.src=this.dataset.alt;this.dataset.alt='';}else{this.remove();}">`:'';
  return `<div class="fbadge" style="background:${col}">${ini}${img}</div>`;
 }
 function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessuna offerta con data recente</div>';
@@ -657,7 +663,7 @@ function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padd
   const s=(Date.now()-new Date(r.posted))/1000,old=s>86400;
   const lg=r.luogo||'',pa=r.paese||'';
   const loc=(lg&&pa&&!lg.toUpperCase().includes(pa.toUpperCase()))?lg+' · '+pa:(lg||pa);
-  return `<div class="fr">${badge(r.azienda,r.logo)}<div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
+  return `<div class="fr">${badge(r.azienda,r.logo,r.favicon)}<div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
    +`<div class="fm">${esc(r.azienda)}${loc?' · '+esc(loc):''}</div></div>`
    +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
  }).join('')+'</div>'}

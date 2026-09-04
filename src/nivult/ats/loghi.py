@@ -169,6 +169,7 @@ def da_brandfetch(dsn: str, limite: int = 200,
         for pid, slug, nome in righe:
             stats["esaminati"] += 1
             logo = None
+            dominio = None
             try:
                 q = _pulisci_nome(nome) or nome
                 r = cli.get(f"https://api.brandfetch.io/v2/search/{q}")
@@ -177,18 +178,20 @@ def da_brandfetch(dsn: str, limite: int = 200,
                 brands = []
             if brands and isinstance(brands, list):
                 b = brands[0]
-                if _affidabile(nome, b) and b.get("icon"):
-                    if client_id:
-                        dom = b.get("domain")
-                        logo = (f"https://cdn.brandfetch.io/{dom}/w/128/h/128"
-                                f"?c={client_id}") if dom else b.get("icon")
-                    else:
-                        logo = b.get("icon")
-                elif brands:
+                if _affidabile(nome, b):
+                    dominio = b.get("domain")   # per il ripiego favicon
+                    if b.get("icon"):
+                        if client_id and dominio:
+                            logo = (f"https://cdn.brandfetch.io/{dominio}"
+                                    f"/w/128/h/128?c={client_id}")
+                        else:
+                            logo = b.get("icon")
+                else:
                     stats["scartati_incerti"] += 1
             c.execute(
-                "UPDATE ats_companies SET logo_url=%s, logo_checked_at=now() "
-                "WHERE platform_id=%s AND slug=%s", (logo, pid, slug))
+                "UPDATE ats_companies SET logo_url=%s, logo_domain=%s, "
+                "logo_checked_at=now() WHERE platform_id=%s AND slug=%s",
+                (logo, dominio, pid, slug))
             if logo:
                 stats["trovati"] += 1
     cli.close()
