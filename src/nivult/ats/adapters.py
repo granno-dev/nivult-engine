@@ -1534,15 +1534,24 @@ class Jobsoid(BaseAdapter):
             else:
                 citta = paese = None
                 locstr = str(loc).strip() or None
+            dep = j.get("department") or j.get("function")
+            if isinstance(dep, dict):
+                dep = dep.get("title") or dep.get("name")
+            dep = dep.strip() if isinstance(dep, str) else None
+            tp = j.get("type")
+            if isinstance(tp, dict):
+                tp = tp.get("title") or tp.get("name")
+            comp = j.get("company")
+            if isinstance(comp, dict):
+                comp = comp.get("title") or comp.get("name")
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug, external_id=jid,
                 title=(j.get("title") or "").strip(),
                 url=url,
                 location=locstr, city=citta, country=_iso(paese),
                 posted_at=j.get("postedDate"),
-                department=((j.get("department") or j.get("function") or "") or "").strip() or None,
-                raw={"type": j.get("type"), "company": j.get("company"),
-                     "country": paese}))
+                department=dep or None,
+                raw={"type": tp, "company": comp, "country": paese}))
         return out
 
 
@@ -3027,36 +3036,6 @@ class Workbuster(BaseAdapter):
 
 
 ADAPTERS["workbuster"] = Workbuster
-
-
-class Jobsoid(BaseAdapter):
-    """Jobsoid — portali con offerte /j/{id}/{titolo-slug} renderizzate.
-
-    Lo slug è il hostname del portale (jobs.azienda.com).
-    """
-    platform_id = "jobsoid"
-
-    def jobs(self, slug: str) -> list[AtsJob]:
-        link = _renderizza_estrai(
-            f"https://{slug}/", "a[href*='/j/']", attesa=10000)
-        out: list[AtsJob] = []
-        visti: set[str] = set()
-        for l in link:
-            m = re.search(r'/j/(\d+)/([a-z0-9-]+)$',
-                          l.get("href", "").rstrip("/"))
-            if not m or m.group(1) in visti:
-                continue
-            visti.add(m.group(1))
-            out.append(AtsJob(
-                platform_id=self.platform_id, slug=slug,
-                external_id=m.group(1),
-                title=m.group(2).replace("-", " ").strip(),
-                url=l["href"],
-                raw={}))
-        return out
-
-
-ADAPTERS["jobsoid"] = Jobsoid
 
 
 class WelcomeKit(BaseAdapter):
