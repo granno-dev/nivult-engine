@@ -1163,6 +1163,47 @@ class ApplicantStack(BaseAdapter):
 ADAPTERS["applicantstack"] = ApplicantStack
 
 
+class Taleez(BaseAdapter):
+    """{slug}.taleez.com/api/careez — JSON pubblico (ATS francese).
+
+    La SPA chiama `/api/careez`, che restituisce l'azienda e la lista
+    `jobs`, ognuna con label, `location` strutturata (city/region/country
+    ISO2), data e slug per il link diretto.
+    """
+    platform_id = "taleez"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            d = self.client.get(f"https://{slug}.taleez.com/api/careez",
+                                headers={"User-Agent": self._UA}).json()
+        except (httpx.HTTPError, ValueError):
+            return []
+        out = []
+        for j in (d.get("jobs") if isinstance(d, dict) else None) or []:
+            jid = str(j.get("id") or "").strip()
+            if not jid:
+                continue
+            loc = j.get("location") or {}
+            citta = loc.get("city") if isinstance(loc, dict) else None
+            paese = loc.get("country") if isinstance(loc, dict) else None
+            reg = loc.get("region") if isinstance(loc, dict) else None
+            locstr = ", ".join(p for p in (citta, reg, paese) if p) or None
+            jslug = j.get("slug") or jid
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=j.get("label") or "",
+                url=f"https://{slug}.taleez.com/o/{jslug}",
+                location=locstr, city=citta, country=_iso(paese),
+                posted_at=j.get("publishDate"),
+                raw={"contract": j.get("contract"), "remote": j.get("remote"),
+                     "city": citta, "country": paese}))
+        return out
+
+
+ADAPTERS["taleez"] = Taleez
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
