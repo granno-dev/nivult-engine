@@ -60,6 +60,13 @@ echo "── scoperta archivi (solo CC: la Wayback la macina il demone)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
+# ── 1c. Riscoperta: i domini dei datori dalle offerte che gia' abbiamo
+# (hiringOrganization.url + host vanity). Resa 43% verso un ATS: la
+# fonte-semi migliore che esista. Poi il detector li lavora.
+echo "── riscoperta domini dalle offerte"
+"$PY" -m nivult.ats.riscoperta >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── 2. Detector statico sui domini in attesa ────────────────────────
 echo "── detector (batch 3000)"
 "$PY" -m nivult.ats.detector --rileva --limite 3000 --thread 20 \
