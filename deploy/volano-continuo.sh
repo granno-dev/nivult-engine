@@ -26,7 +26,7 @@ while true; do
   if [ $((i % 6)) -eq 0 ]; then
     "$PY" -m nivult.ats.riscoperta 2>&1 | tail -1 || true
   fi
-  "$PY" -m nivult.ats.detector --rileva --limite 400 --thread 20 2>&1 \
+  "$PY" -m nivult.ats.detector --rileva --limite 800 --thread 20 2>&1 \
     | tail -1 || true
   "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
