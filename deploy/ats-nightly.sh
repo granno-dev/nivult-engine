@@ -72,6 +72,17 @@ echo "── render detector (60 grandi)"
   --thread 2 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── 3b. Risolutore vanity: careers.azienda.com -> tenant ATS reale ─
+# Dopo il detector (che rileva la PIATTAFORMA sui domini aziendali),
+# apre le career page e ne estrae lo SLUG del tenant, verificato contro
+# l'adapter: onboarda i datori che ospitano l'ATS su dominio proprio,
+# invisibili alla scoperta a slug di Common Crawl. Solo tenant con
+# offerte vere entrano.
+echo "── risolutore vanity (batch 800)"
+"$PY" -m nivult.ats.risolutore_vanity --limite 800 \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── 4. Common Crawl: 3 piattaforme a rotazione ─────────────────────
 echo "── common crawl (rotazione)"
 "$PY" - "$STATE" <<'PYEOF' >> "$LOG_DIR/ats-nightly.log" 2>&1
