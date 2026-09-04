@@ -1003,6 +1003,70 @@ class CatsOne(BaseAdapter):
 ADAPTERS["catsone"] = CatsOne
 
 
+class Crelate(BaseAdapter):
+    """jobs.crelate.com/portal/{slug} — SPA, ma l'API pubblica e' aperta.
+
+    Il portale (staffing) e' una SPA che chiama
+    `/api/candidateportal/GetAllJobs?requestEnvelope={OrganizationId:...}`.
+    L'OrganizationId (un GUID) sta nel guscio HTML del portale: lo si
+    estrae e si chiama l'API. Risposta ricca: City/State/Country, Url,
+    data.
+    """
+    platform_id = "crelate"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _GUID = re.compile(
+        r'OrganizationId["\s:]+([0-9a-f-]{36})|'
+        r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})',
+        re.I)
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import json as _json
+        from urllib.parse import quote
+        try:
+            shell = self.client.get(f"https://jobs.crelate.com/portal/{slug}",
+                                    headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return []
+        m = self._GUID.search(shell.text)
+        if not m:
+            return []
+        guid = m.group(1) or m.group(2)
+        env = quote(_json.dumps({"Locations": None, "OrganizationId": guid,
+                                 "SearchText": None, "Tags": None}))
+        try:
+            r = self.client.get(
+                "https://jobs.crelate.com/api/candidateportal/GetAllJobs"
+                f"?requestEnvelope={env}", headers={"User-Agent": self._UA})
+            d = r.json()
+        except (httpx.HTTPError, ValueError):
+            return []
+        out = []
+        for j in d.get("Jobs") or []:
+            jid = str(j.get("Id") or "").strip()
+            if not jid:
+                continue
+            city = (j.get("City") or "").strip() or None
+            state = (j.get("State") or "").strip() or None
+            paese = (j.get("Country") or "").strip() or None
+            loc = ", ".join(p for p in (city, state, paese) if p) or None
+            url = j.get("Url") or ""
+            if url and not url.startswith("http"):
+                url = f"https://jobs.crelate.com/portal/{slug}/job/{jid}"
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=j.get("Title") or "",
+                url=url or f"https://jobs.crelate.com/portal/{slug}/job/{jid}",
+                location=loc, city=city, country=_iso(paese),
+                posted_at=j.get("LastPostedOnDate") or j.get("LastPostedOn"),
+                raw={k: j.get(k) for k in
+                     ("Id", "JobCode", "City", "State", "Country",
+                      "PostalCode")}))
+        return out
+
+
+ADAPTERS["crelate"] = Crelate
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
