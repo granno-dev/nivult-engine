@@ -30,6 +30,11 @@ _BOARD = {
     "workable":        "https://apply.workable.com/{s}/",
     "smartrecruiters": "https://careers.smartrecruiters.com/{s}",
     "greenhouse":      "https://job-boards.greenhouse.io/{s}",
+    # og:image col logo verificato a campione (3/3 ciascuna):
+    "teamtailor":      "https://{s}.teamtailor.com",
+    "breezy":          "https://{s}.breezy.hr",
+    "recruitee":       "https://{s}.recruitee.com",
+    "pinpoint":        "https://{s}.pinpointhq.com",
 }
 # per alcuni ATS il logo NON e' nell'og:image ma in un <img> dedicato:
 # regex per-piattaforma che pesca l'URL del logo dall'HTML della board.
@@ -74,12 +79,17 @@ def da_board(dsn: str, limite: int = 400) -> dict:
     stats = {"esaminati": 0, "trovati": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
         righe = c.execute("""
-            SELECT platform_id, slug FROM ats_companies
-             WHERE platform_id = ANY(%s) AND job_count > 0
-               AND logo_url IS NULL
-               AND (logo_checked_at IS NULL
-                    OR logo_checked_at < now() - interval '30 days')
-             ORDER BY logo_checked_at ASC NULLS FIRST
+            SELECT ac.platform_id, ac.slug FROM ats_companies ac
+             WHERE ac.platform_id = ANY(%s) AND ac.job_count > 0
+               AND ac.logo_url IS NULL
+               AND (ac.logo_checked_at IS NULL
+                    OR ac.logo_checked_at < now() - interval '30 days')
+             -- prima chi ha pubblicato di recente: sono le aziende che
+             -- compaiono nella board live, il logo serve a loro subito
+             ORDER BY (SELECT max(j.posted_at) FROM ats_jobs j
+                        WHERE j.platform_id = ac.platform_id
+                          AND j.slug = ac.slug
+                          AND j.expired_at IS NULL) DESC NULLS LAST
              LIMIT %s""", (list(_BOARD), limite)).fetchall()
 
         def _uno(row):
