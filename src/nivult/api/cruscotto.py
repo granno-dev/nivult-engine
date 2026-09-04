@@ -1001,8 +1001,9 @@ function cardNotturno(nt){
  if(nt.quando){
   const ore=Math.max(0,Math.round((Date.now()-new Date(nt.quando))/36e5));
   const pf=nt.passi_falliti||[];
-  if(nt.completato&&!nt.falliti){v='OK';c='ok';sub='ultima corsa completa, nessun passo fallito'}
-  else if(nt.completato){v=nt.falliti+(nt.falliti===1?' passo fallito':' passi falliti');c='warn';sub='falliti: '+pf.map(esc).join(', ')+' — dettaglio nei log'}
+  const quandoTxt='corsa del '+nt.quando.slice(8,10)+'/'+nt.quando.slice(5,7)+' alle '+nt.quando.slice(11,16);
+  if(nt.completato&&!nt.falliti){v='OK';c='ok';sub=quandoTxt+' · completa, nessun passo fallito'}
+  else if(nt.completato){v=nt.falliti+(nt.falliti===1?' passo fallito':' passi falliti');c='warn';sub=quandoTxt+' · falliti: '+pf.map(esc).join(', ')+' — la prossima riprova'}
   else if(ore>14){v='mai finita';c='bad';sub='partita '+ore+' ore fa e mai completata: probabilmente un passo si è bloccato — dettaglio nei log'}
   else{v='in corso';c='warn';sub='partita alle '+nt.quando.slice(11,16)+', dura qualche ora; la raccolta continua gira comunque'+(pf.length?' · falliti finora: '+pf.map(esc).join(', '):'')}}
  return card(`<span class="${c}">${v}</span>`,'manutenzione (parte alle 02:30)',sub)}
