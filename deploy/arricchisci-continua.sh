@@ -6,6 +6,9 @@
 # cluster. Nessuno di questi passi azzera: riempiono solo cio' che manca.
 set -uo pipefail
 BASE=/opt/nivult/engine; PY="$BASE/.venv/bin/python"
+GLM_API_KEY=$(grep -E '^GLM_API_KEY=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+GLM_BASE_URL=$(grep -E '^GLM_BASE_URL=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+export GLM_API_KEY GLM_BASE_URL
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
@@ -20,6 +23,9 @@ while true; do
   "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
   # descrizioni smartrecruiters: dettaglio per le nuove senza testo
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
+  # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
+  # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.
+  "$PY" -m nivult.ats.profilo --limite 40000 --glm-max 400 2>&1 | tail -1 || true
   # salari: estrae min/max/valuta/periodo dal raw (nuove offerte)
   "$PY" -m nivult.ats.salari --limite 30000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true
