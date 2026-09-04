@@ -173,7 +173,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
         SELECT j.id::text, j.title, j.url, j.country, j.city,
                COALESCE(j.posted_at, j.fetched_at) AS posted_at,
                j.salary_min, j.salary_max, j.salary_currency, j.raw,
-               j.seniority, j.remote, j.skills,
+               j.seniority, j.remote, j.skills, j.lang,
                c.family,
                COALESCE(co.company_name,
                         j.raw->'company'->>'name',
@@ -203,7 +203,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
     )
     campi = ["id", "title", "url", "country", "city", "posted_at",
              "salary_min", "salary_max", "salary_currency", "raw",
-             "seniority", "remote", "skills",
+             "seniority", "remote", "skills", "lang",
              "family", "company_name"]
     return [dict(zip(campi, r)) for r in cur_ats.fetchall()]
 
@@ -287,6 +287,10 @@ def _come_rawjob(o: dict) -> RawJob:
         # il funnel legge per sapere di quale scaffale fa parte.
         ai_taxonomies_a=[o["family"]],
         ai_experience_level=_SEN.get(o.get("seniority") or ""),
+        # La lingua dell'annuncio E' il requisito linguistico che nessun
+        # campo strutturato porta: il funnel esclude le lingue che
+        # l'utente non parla, e il vuoto non esclude nessuno.
+        ai_job_language=o.get("lang"),
         ai_work_arrangement=_REM.get(o.get("remote") or ""),
         ai_key_skills=list(o.get("skills") or []),
         salary=salario,
