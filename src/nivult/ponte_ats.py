@@ -173,6 +173,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
         SELECT j.id::text, j.title, j.url, j.country, j.city,
                COALESCE(j.posted_at, j.fetched_at) AS posted_at,
                j.salary_min, j.salary_max, j.salary_currency, j.raw,
+               j.seniority, j.remote, j.skills,
                c.family,
                COALESCE(co.company_name,
                         j.raw->'company'->>'name',
@@ -202,6 +203,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
     )
     campi = ["id", "title", "url", "country", "city", "posted_at",
              "salary_min", "salary_max", "salary_currency", "raw",
+             "seniority", "remote", "skills",
              "family", "company_name"]
     return [dict(zip(campi, r)) for r in cur_ats.fetchall()]
 
@@ -248,6 +250,13 @@ def _come_rawjob(o: dict) -> RawJob:
     contrario: meglio un campo vuoto. Il funnel non esclude mai per un
     campo assente.
     """
+    # I vocabolari del motore vengono da Fantastic; i nostri campi
+    # (profilo.py, qualita' misurata) si TRADUCONO, non si copiano:
+    # un valore fuori vocabolario sarebbe invisibile ai filtri.
+    _SEN = {"intern": "0-2", "junior": "0-2", "mid": "2-5",
+            "senior": "5-10", "lead": "5-10", "head": "10+"}
+    _REM = {"remote": "Remote Solely", "hybrid": "Hybrid",
+            "onsite": "On-site"}
     salario = None
     if o["salary_min"] is not None or o["salary_max"] is not None:
         salario = {"min_value": o["salary_min"], "max_value": o["salary_max"],
@@ -271,6 +280,9 @@ def _come_rawjob(o: dict) -> RawJob:
         # La famiglia viaggia con l'offerta, come su Fantastic: è ciò che
         # il funnel legge per sapere di quale scaffale fa parte.
         ai_taxonomies_a=[o["family"]],
+        ai_experience_level=_SEN.get(o.get("seniority") or ""),
+        ai_work_arrangement=_REM.get(o.get("remote") or ""),
+        ai_key_skills=list(o.get("skills") or []),
         salary=salario,
     )
 
