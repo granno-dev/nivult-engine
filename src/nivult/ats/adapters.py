@@ -1067,6 +1067,102 @@ class Crelate(BaseAdapter):
 ADAPTERS["crelate"] = Crelate
 
 
+class HiringThing(BaseAdapter):
+    """{slug}.hiringthing.com — pagina server-rendered, link diretto.
+
+    Ogni offerta: `<a href="/job/{id}/{titolo}"><h2>Titolo</h2></a>` con la
+    sede in `<div class="job-location">`. Tutto nell'HTML.
+    """
+    platform_id = "hiringthing"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _JOB = re.compile(
+        r'href="(/job/(\d+)/[^"]+)"[^>]*>\s*<h2>(.*?)</h2>'
+        r'(?:(?!href="/job/).)*?job-location">\s*(.*?)\s*</div>', re.S)
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import html as _html
+        try:
+            r = self.client.get(f"https://{slug}.hiringthing.com/",
+                                 headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        out, visti = [], set()
+        for path, jid, titolo, loc in self._JOB.findall(r.text):
+            if jid in visti:
+                continue
+            visti.add(jid)
+            titolo = _html.unescape(re.sub(r"<[^>]+>", " ", titolo)).strip()
+            sede = _html.unescape(re.sub(r"<[^>]+>", " ", loc)).strip() or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=titolo, url=f"https://{slug}.hiringthing.com{path}",
+                location=sede, city=sede, raw={"path": path}))
+        return out
+
+
+ADAPTERS["hiringthing"] = HiringThing
+
+
+class ApplicantStack(BaseAdapter):
+    """{slug}.applicantstack.com/x/openings — tabella server-rendered.
+
+    Righe: `<a href="/x/detail/{id}">Titolo</a></td><td>Sede</td>
+    <td>Reparto</td><td>Salario</td>`. Link diretto.
+    """
+    platform_id = "applicantstack"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+
+    @staticmethod
+    def _testo(x: str) -> str:
+        import html as _html
+        return _html.unescape(re.sub(r"<[^>]+>", " ", x)).strip()
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            r = self.client.get(
+                f"https://{slug}.applicantstack.com/x/openings",
+                headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        # le colonne cambiano per portale: si trova l'indice di «Location»
+        # (e «Department») dall'intestazione della tabella
+        thead = re.search(r'<tr[^>]*>(?:\s*<th.*?</th>\s*)+</tr>', r.text, re.S)
+        etich = ([self._testo(t) for t in
+                  re.findall(r'<th[^>]*>(.*?)</th>', thead.group(0), re.S)]
+                 if thead else [])
+        i_loc = next((i for i, e in enumerate(etich)
+                      if "location" in e.lower()), None)
+        i_dep = next((i for i, e in enumerate(etich)
+                      if "department" in e.lower()), None)
+        out, visti = [], set()
+        for row in re.findall(r"<tr[^>]*>.*?</tr>", r.text, re.S):
+            m = re.search(r'/x/detail/([a-z0-9]+)"[^>]*>(.*?)</a>', row, re.S)
+            if not m:
+                continue
+            jid, titolo = m.group(1), self._testo(m.group(2))
+            if not titolo or jid in visti:
+                continue
+            visti.add(jid)
+            celle = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+            sede = (self._testo(celle[i_loc]) if i_loc is not None
+                    and i_loc < len(celle) else None) or None
+            dep = (self._testo(celle[i_dep]) if i_dep is not None
+                   and i_dep < len(celle) else None) or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=titolo,
+                url=f"https://{slug}.applicantstack.com/x/detail/{jid}",
+                location=sede, city=sede, department=dep, raw={"id": jid}))
+        return out
+
+
+ADAPTERS["applicantstack"] = ApplicantStack
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
