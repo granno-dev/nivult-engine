@@ -377,6 +377,14 @@ def create_app() -> FastAPI:
         """
         risposta = await call_next(request)
         risposta.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if request.url.path.startswith("/cruscotto"):
+            # dati confidenziali: mai dentro un iframe altrui (niente
+            # clickjacking), niente referrer in giro, niente cache
+            risposta.headers.setdefault("X-Frame-Options", "DENY")
+            risposta.headers.setdefault(
+                "Content-Security-Policy", "frame-ancestors 'none'")
+            risposta.headers.setdefault("Referrer-Policy", "no-referrer")
+            risposta.headers.setdefault("Cache-Control", "no-store")
         risposta.headers.setdefault(
             "Strict-Transport-Security",
             "max-age=63072000; includeSubDomains")

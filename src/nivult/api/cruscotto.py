@@ -39,8 +39,14 @@ def _redirect_uri() -> str:
 
 
 def _chiave() -> bytes:
-    # riusa il segreto gia' presente per firmare cookie e state
-    return os.environ.get("CRUSCOTTO_TOKEN", "nivult-fallback").encode()
+    """Il segreto che firma cookie e state. SENZA, niente: un ripiego
+    scritto nel codice (e il codice e' su GitHub) equivale a nessuna
+    firma — chiunque potrebbe fabbricarsi la sessione a tavolino."""
+    segreto = os.environ.get("CRUSCOTTO_TOKEN", "")
+    if len(segreto) < 32:
+        raise RuntimeError("CRUSCOTTO_TOKEN assente o troppo corto: "
+                           "il cruscotto resta chiuso.")
+    return segreto.encode()
 
 
 def firma(payload: str) -> str:
@@ -92,7 +98,18 @@ def email_da_code(code: str) -> str | None:
         claim = _oauth._decodifica_payload(id_token)
     except Exception:                                # noqa: BLE001
         return None
-    email, _ = _oauth._email_attendibile("microsoft", claim)
+    # Il token deve essere emesso per NOI: un id_token di un'altra app,
+    # comunque ottenuto, non apre questa porta.
+    if claim.get("aud") != cid:
+        return None
+    # nOAuth: sugli account aziendali il claim email lo DECIDE
+    # l'amministratore del tenant — chiunque crei un tenant gratuito
+    # puo' scriversi l'email dell'operatore. La fiducia (tenant
+    # consumer, dove l'email e' l'identita') non e' facoltativa qui:
+    # scartarla significava lasciare la porta aperta.
+    email, fidata = _oauth._email_attendibile("microsoft", claim)
+    if not fidata:
+        return None
     return (email or "").lower() or None
 
 
@@ -583,7 +600,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
 LOGIN_PAGINA = """<!doctype html><html lang="it"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
-<title>Nivult · Accesso</title>
+<title>Nivult</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -603,9 +620,8 @@ border:1px solid var(--line);border-radius:20px;padding:44px 38px 36px;text-alig
 box-shadow:0 24px 70px rgba(0,0,0,.45)}
 .brand{font-size:30px;font-weight:700;letter-spacing:-.03em}
 .brand i{font-style:normal;color:var(--acc)}
-.sotto{font-size:13.5px;color:var(--dim);margin-top:6px;font-weight:500}
 .vivo{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);
-margin-top:22px;padding:5px 13px;border:1px solid var(--line);border-radius:20px;background:var(--bg)}
+margin-top:18px;padding:5px 13px;border:1px solid var(--line);border-radius:20px;background:var(--bg)}
 .vivo .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);
 box-shadow:0 0 0 0 rgba(70,196,106,.5);animation:pulse 2.2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(70,196,106,.45)}70%{box-shadow:0 0 0 7px rgba(70,196,106,0)}100%{box-shadow:0 0 0 0 rgba(70,196,106,0)}}
@@ -626,8 +642,7 @@ font-size:11.5px;color:var(--dim);opacity:.7}
 </style></head><body>
 <div class="card">
   <div class="brand">Nivult<i>.</i></div>
-  <div class="sotto">Cruscotto del motore</div>
-  <div class="vivo"><span class="dot"></span>il motore sta raccogliendo, giorno e notte</div>
+  <div class="vivo"><span class="dot"></span>portale operativo</div>
   <a class="entra" href="/cruscotto/entra">
     <svg width="17" height="17" viewBox="0 0 21 21" aria-hidden="true">
       <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
@@ -637,11 +652,9 @@ font-size:11.5px;color:var(--dim);opacity:.7}
     </svg>
     Entra con Microsoft
   </a>
-  <div id="negato" class="negato">Questo account non è autorizzato: il
-  cruscotto apre per un solo operatore.</div>
+  <div id="negato" class="negato">Questo account non è autorizzato.</div>
   <div class="nota">Accesso riservato · nessuna registrazione</div>
 </div>
-<div class="piede">Nivult — il motore delle offerte</div>
 <script>
 if(new URLSearchParams(location.search).has('negato'))
   document.getElementById('negato').classList.add('si');
@@ -841,7 +854,7 @@ const card=(v,l,sub)=>`<div class="card"><div class="num">${v}</div><div class="
 const gband=(id,t,n)=>`<div class="gband" id="${id}"><span class="gt">${t}</span><span class="gr"></span>${n?`<span class="gn">${n}</span>`:''}</div>`;
 function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
  const max=Math.max(...rows.map(r=>r[vk]),1);
- return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${r[k]}</div>`+
+ return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${esc(r[k])}</div>`+
   `<div class="track"><i style="width:${Math.round(100*r[vk]/max)}%"></i></div>`+
   `<div class="v">${IT(r[vk])}</div></div>`).join('')+'</div>'}
 let _and=[];
