@@ -463,6 +463,15 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
             "WHERE created_at > now()-interval '30 days' "
             "GROUP BY 1 ORDER BY 1")]
 
+    # perso nella divisione leggere/pesanti e ripescato: senza, il
+    # grafico orario mostrava "dati insufficienti" con la nota piena
+    d["raccolta_oraria"] = [{"ora": o[11:16], "n": n}
+        for o, n in _righe(ats_dsn,
+            "SELECT to_char(date_trunc('hour', fetched_at),"
+            "'YYYY-MM-DD HH24:MI'), count(*) FROM ats_jobs "
+            "WHERE fetched_at > now()-interval '24 hours' "
+            "GROUP BY 1 ORDER BY 1")]
+
     d["arricchimento"] = _arricchimento(ats_dsn, attive)
 
     # ── completezza delle NUOVE (created_at esiste dal 04/09/26 sera:
@@ -592,7 +601,8 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     pes = _pesanti(ats_dsn, attive)
     for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
               "andamento", "freschezza", "per_scoperta", "attivazione",
-              "nuove_aziende", "ats_pending", "arricchimento", "nuove24"):
+              "nuove_aziende", "ats_pending", "arricchimento", "nuove24",
+              "raccolta_oraria"):
         d[k] = pes[k]
     d["salute"] = dict(pes["salute"])
     d["salute"]["offerte_attive"] = attive
