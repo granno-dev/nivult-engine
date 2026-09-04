@@ -2405,21 +2405,37 @@ class Cornerstone(BaseAdapter):
                 "/unternehmen/karriere", "/en/careers")
 
     def jobs(self, slug: str) -> list[AtsJob]:
-        base = f"https://{slug}"
         portal = None
-        for path in self.PERCORSI:
-            try:
-                r = self.client.get(f"{base}{path}")
-            except httpx.HTTPError:
-                continue
-            if r.status_code != 200:
-                continue
-            m = re.search(
-                r'https://([a-z0-9-]+)\.csod\.com/ux/ats/careersite/(\d+)/',
-                r.text)
-            if m:
-                portal = m.group(1), int(m.group(2))
-                break
+        if "." not in slug:
+            # Slug = tenant csod NUDO (dal censimento archivio): l'adapter
+            # provava https://{slug}/ come fosse un hostname -> DNS morto,
+            # e 3.279 tenant risultavano «vuoti». Si va dritti al portale
+            # csod sondando i careersite id piu' comuni.
+            for sid in (1, 2, 3, 4, 5):
+                try:
+                    r0 = self.client.get(
+                        f"https://{slug}.csod.com/ux/ats/careersite/{sid}/"
+                        f"home?c={slug}")
+                except httpx.HTTPError:
+                    break
+                if r0.status_code == 200 and '"token"' in r0.text:
+                    portal = slug, sid
+                    break
+        else:
+            base = f"https://{slug}"
+            for path in self.PERCORSI:
+                try:
+                    r = self.client.get(f"{base}{path}")
+                except httpx.HTTPError:
+                    continue
+                if r.status_code != 200:
+                    continue
+                m = re.search(
+                    r'https://([a-z0-9-]+)\.csod\.com/ux/ats/careersite/(\d+)/',
+                    r.text)
+                if m:
+                    portal = m.group(1), int(m.group(2))
+                    break
         if not portal:
             return []
         tenant, site_id = portal
