@@ -7,8 +7,11 @@
 set -uo pipefail
 BASE=/opt/nivult/engine; PY="$BASE/.venv/bin/python"
 GLM_API_KEY=$(grep -E '^GLM_API_KEY=' /opt/nivult/.env | head -1 | cut -d= -f2-)
+export GLM_API_KEY
+# GLM_BASE_URL: esportarla VUOTA rompe il client (URL senza protocollo);
+# solo se davvero presente nel .env, altrimenti vale il default del codice.
 GLM_BASE_URL=$(grep -E '^GLM_BASE_URL=' /opt/nivult/.env | head -1 | cut -d= -f2-)
-export GLM_API_KEY GLM_BASE_URL
+[ -n "$GLM_BASE_URL" ] && export GLM_BASE_URL
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
