@@ -165,6 +165,25 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "WHERE expired_at IS NULL"),
     }
 
+    # ── freschezza del codone: ogni tenant va rivisitato entro la soglia
+    # (spazzino a 12h in runner.py), altrimenti le posizioni appena aperte
+    # su un tenant prima vuoto si perdono. Qui misuriamo quanti tenant
+    # scrapabili sono oltre soglia: se cresce, il codone si sta affamando.
+    _fresh = _righe(ats_dsn, """
+        SELECT
+          count(*),
+          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '12 hours'
+                              OR ac.last_fetch_at IS NULL),
+          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '12 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '24 hours')
+          FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
+         WHERE ac.is_active AND ap.is_active""")
+    _tot, _fre, _o12, _o24 = _fresh[0] if _fresh else (0, 0, 0, 0)
+    d["salute"]["codone_totale"] = _tot
+    d["salute"]["codone_oltre_12h"] = _o12
+    d["salute"]["codone_oltre_24h"] = _o24
+    d["salute"]["codone_freschi_pct"] = round(100 * _fre / _tot, 1) if _tot else 100.0
+
     d["per_fonte"] = [{"fonte": p, "attive": n} for p, n in _righe(ats_dsn,
         "SELECT platform_id, count(*) FROM ats_jobs "
         "WHERE expired_at IS NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
@@ -270,6 +289,75 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "offerte": v["offerte"],
             "dettaglio": [{"fonte": p, "n": n} for p, n in fonti]})
 
+    # ── funnel della raffineria: da azienda censita a offerta consegnata.
+    # Ogni gradino perde qualcosa; il salto piu' stretto e' dove lavorare.
+    cens = d["salute"]["aziende_censite"] or 0
+    maiv = d["salute"]["aziende_mai_viste"] or 0
+    conoff = d["salute"]["aziende_con_offerte"] or 0
+    motore_ats = (d.get("motore") or {}).get("da_ats") or 0
+    d["funnel"] = [
+        {"fase": "Aziende censite", "n": cens},
+        {"fase": "Almeno una volta viste", "n": cens - maiv},
+        {"fase": "Con offerte vive", "n": conoff},
+        {"fase": "Offerte attive", "n": attive},
+        {"fase": "Portate nel motore", "n": motore_ats},
+    ]
+
+    # ── istogramma della freschezza: quanti tenant per fascia di ultima
+    # visita. Se le fasce lontane si gonfiano, lo spazzino non ce la fa.
+    _b = _righe(ats_dsn, """
+        SELECT
+          count(*) FILTER (WHERE ac.last_fetch_at IS NULL),
+          count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '1 hour'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '1 hour'
+                              AND ac.last_fetch_at >= now()-interval '6 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '6 hours'
+                              AND ac.last_fetch_at >= now()-interval '12 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '12 hours'
+                              AND ac.last_fetch_at >= now()-interval '24 hours'),
+          count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '24 hours')
+          FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
+         WHERE ac.is_active AND ap.is_active""")
+    b = _b[0] if _b else (0, 0, 0, 0, 0, 0)
+    _fasce = ["mai", "< 1h", "1–6h", "6–12h", "12–24h", "> 24h"]
+    d["freschezza"] = [{"fascia": _fasce[i], "n": b[i], "caldo": i >= 4}
+                       for i in range(6)]
+
+    # ── da dove viene l'ampiezza: la fonte di scoperta dei tenant ──
+    d["per_scoperta"] = [{"fonte": s or "—", "n": n} for s, n in _righe(ats_dsn,
+        "SELECT discovered_from, count(*) FROM ats_companies "
+        "GROUP BY 1 ORDER BY 2 DESC LIMIT 10")]
+
+    # ── attivazione per piattaforma: censiti vs con offerte. Rivela i
+    # pozzi dormienti (lever) e gli ATS caldi (bamboohr, ashby) ──
+    d["attivazione"] = [{"piattaforma": p, "censiti": t, "attivi": a}
+        for p, t, a in _righe(ats_dsn,
+            "SELECT platform_id, count(*), "
+            "count(*) FILTER (WHERE job_count>0) "
+            "FROM ats_companies GROUP BY 1 ORDER BY 2 DESC LIMIT 12")]
+
+    # ── nuove aziende scoperte per giorno (30 gg): l'ampiezza che cresce
+    d["nuove_aziende"] = [{"giorno": g[8:10] + "/" + g[5:7], "n": n}
+        for g, n in _righe(ats_dsn,
+            "SELECT to_char(date_trunc('day', created_at),'YYYY-MM-DD'), "
+            "count(*) FROM ats_companies "
+            "WHERE created_at > now()-interval '30 days' "
+            "GROUP BY 1 ORDER BY 1")]
+
+    # ── throughput: offerte toccate per ora nelle ultime 24h ──
+    d["raccolta_oraria"] = [{"ora": o[11:16], "n": n}
+        for o, n in _righe(ats_dsn,
+            "SELECT to_char(date_trunc('hour', fetched_at),'YYYY-MM-DD HH24:MI'),"
+            " count(*) FROM ats_jobs "
+            "WHERE fetched_at > now()-interval '24 hours' "
+            "GROUP BY 1 ORDER BY 1")]
+
+    d["salute"]["scadute"] = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL") or 0
+    d["salute"]["paesi"] = _uno(ats_dsn,
+        "SELECT count(DISTINCT country) FROM ats_jobs "
+        "WHERE expired_at IS NULL AND country IS NOT NULL") or 0
+
     return d
 
 
@@ -357,6 +445,47 @@ svg.lc .yl{fill:var(--dim);font-size:10px;text-anchor:end}
 .pl .badge{font-size:11px;color:var(--warn);background:rgba(224,161,50,.12);
 border:1px solid rgba(224,161,50,.3);border-radius:20px;padding:2px 10px;font-weight:600}
 .pl .v{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:96px;text-align:right}
+/* ── KPI hero ── */
+.kpis{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:6px}
+.kpi{background:linear-gradient(155deg,var(--card2),var(--card));border:1px solid var(--line);
+border-radius:16px;padding:20px 20px 18px;position:relative;overflow:hidden}
+.kpi:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--acc)}
+.kpi.g:before{background:var(--ok)}.kpi.o:before{background:var(--warn)}.kpi.p:before{background:#9a7bff}
+.kpi .n{font-size:34px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.05}
+.kpi .l{font-size:12.5px;color:var(--dim);margin-top:6px;font-weight:500}
+.sect{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:34px 0 14px}
+.sect h2{margin:0}
+.sect .note{font-size:12px;color:var(--dim);font-weight:500}
+/* ── barre verticali (bar chart) ── */
+.bars{display:flex;align-items:flex-end;gap:6px;height:140px;padding:16px 10px 0}
+.bcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.bbar{width:100%;max-width:26px;background:linear-gradient(180deg,var(--acc),#2a5cbf);
+border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
+.bbar.hot{background:linear-gradient(180deg,var(--warn),#b97c1e)}
+.bbar.dim{background:linear-gradient(180deg,#33507f,#22344f)}
+.bcol .bx{font-size:10px;color:var(--dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bcol .bv{font-size:10px;color:var(--dim);margin-bottom:4px;font-variant-numeric:tabular-nums}
+/* ── funnel / pipeline stages ── */
+.stage{padding:9px 14px}
+.stage .sh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.stage .sh .sk{font-weight:500}
+.stage .sh .sv{font-weight:600;font-variant-numeric:tabular-nums}
+.stbar{height:9px;background:#0c1117;border-radius:5px;overflow:hidden}
+.stbar>i{display:block;height:100%;background:linear-gradient(90deg,#3a6fd8,var(--acc));border-radius:5px}
+.stage.drop .sh .sv{color:var(--warn)}
+/* ── barre doppie (attivazione) ── */
+.db{padding:8px 14px}
+.db .dh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+.db .dh .dk{font-weight:500;text-transform:capitalize}
+.db .dh .dv{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums}
+.db .dt{height:8px;background:#0c1117;border-radius:5px;position:relative;overflow:hidden}
+.db .dt .cen{position:absolute;left:0;top:0;height:100%;background:#2c3a52;border-radius:5px}
+.db .dt .att{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#3a6fd8,var(--acc));border-radius:5px}
+.spark{width:100%;height:auto;display:block}
+.spark .sa{fill:url(#sag);stroke:none}
+.spark .sl{fill:none;stroke:var(--ok);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.cols3{display:grid;gap:22px;grid-template-columns:1fr 1fr 1fr}
+@media(max-width:900px){.cols3{grid-template-columns:1fr}}
 </style></head><body>
 <div class="top">
   <div class="brand"><b>Nivult</b><span>Cruscotto del motore</span></div>
@@ -421,6 +550,36 @@ function iscritti(rows){if(!rows||!rows.length)return '<div class="sub" style="p
   `<td>${(u.canali||[]).map(c=>`<span class="ch ${c}">${c}</span>`).join('')||'—'}</td>`+
   `<td>${u.ricerche&&u.ricerche.length?u.ricerche.map(r=>`<span class="ch rc">${r}</span>`).join(''):'<span class="sub">nessuna</span>'}</td>`+
   `<td class="em">${eta(u.ultimo_digest)}</td></tr>`).join('')+'</table></div>'}
+function barre(rows,kk,vk,opt){opt=opt||{};
+ if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun dato</div>';
+ const max=Math.max(...rows.map(r=>r[vk]),1),n=rows.length,step=Math.max(1,Math.ceil(n/10));
+ return '<div class="panel"><div class="bars">'+rows.map((r,i)=>{
+  const hh=Math.max(2,Math.round(100*r[vk]/max));
+  const lbl=(n<=12||i%step===0||i===n-1)?r[kk]:'';
+  const cls=r.caldo?'hot':(opt.dim?'dim':'');
+  const val=(opt.val!==false&&n<=12)?`<div class="bv">${IT(r[vk])}</div>`:'';
+  return `<div class="bcol">${val}<div class="bbar ${cls}" style="height:${hh}%"><title>${r[kk]}: ${IT(r[vk])}</title></div><div class="bx">${lbl}</div></div>`;
+ }).join('')+'</div></div>'}
+function pipeline(rows){if(!rows||!rows.length)return '';
+ const max=Math.max(...rows.map(r=>r.n),1);
+ return '<div class="panel">'+rows.map((r,i)=>{
+  const w=Math.max(1.5,100*r.n/max),drop=i>0&&r.n<rows[i-1].n;
+  return `<div class="stage ${drop?'drop':''}"><div class="sh"><span class="sk">${r.fase}</span><span class="sv">${IT(r.n)}</span></div><div class="stbar"><i style="width:${w}%"></i></div></div>`;
+ }).join('')+'</div>'}
+function attivazione(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun dato</div>';
+ const max=Math.max(...rows.map(r=>r.censiti),1);
+ return '<div class="panel">'+rows.map(r=>{
+  const pc=100*r.censiti/max,pa=100*r.attivi/max,rate=r.censiti?Math.round(100*r.attivi/r.censiti):0;
+  return `<div class="db"><div class="dh"><span class="dk">${r.piattaforma}</span><span class="dv">${IT(r.attivi)} / ${IT(r.censiti)} · ${rate}%</span></div><div class="dt"><span class="cen" style="width:${pc}%"></span><span class="att" style="width:${pa}%"></span></div></div>`;
+ }).join('')+'</div>'}
+function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" style="padding:14px">dati insufficienti</div>';
+ const W=980,H=88,pt=8,pb=8,n=rows.length,max=Math.max(...rows.map(r=>r[vk]),1);
+ const X=i=>W*(i/(n-1)),Y=v=>H-pb-(H-pt-pb)*(v/max);
+ const P=rows.map((r,i)=>[X(i),Y(r[vk])]);
+ const ln=P.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+ const ar=`M0 ${H-pb} `+P.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+` L${W} ${H-pb} Z`;
+ const last=rows[n-1];
+ return `<div class="lcwrap"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:88px"><defs><linearGradient id="sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46c46a" stop-opacity=".3"/><stop offset="1" stop-color="#46c46a" stop-opacity="0"/></linearGradient></defs><path class="sa" d="${ar}"/><path class="sl" d="${ln}"/></svg></div><div class="hint">picco ${IT(max)}/ora · ultima ora ${IT(last.n)} (${last.ora})</div>`}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';return}
@@ -428,31 +587,48 @@ async function tick(){
  document.getElementById('ts').textContent='aggiornato alle '+new Date().toLocaleTimeString('it-IT');
  const clP=h.senza_paese_pct>60?'bad':h.senza_paese_pct>30?'warn':'ok';
  const clC=h.non_classificate_pct>40?'bad':h.non_classificate_pct>20?'warn':'ok';
- let H='<h2>In tempo reale</h2><div class="grid">'
- +card(IT(h.offerte_attive),'offerte attive')
- +card(IT(s.offerte_viste_24h),'raccolte o aggiornate nelle 24 ore')
- +card(IT(s.aziende_scrapate_1h),'aziende visitate nell\\'ultima ora')
+ const clF=h.codone_freschi_pct<85?'bad':h.codone_freschi_pct<95?'warn':'ok';
+ let H='<div class="kpis">'
+ +`<div class="kpi"><div class="n">${IT(h.offerte_attive)}</div><div class="l">offerte attive · ${IT(h.paesi)} paesi</div></div>`
+ +`<div class="kpi g"><div class="n">${IT(h.aziende_con_offerte)}</div><div class="l">aziende con offerte vive</div></div>`
+ +`<div class="kpi o"><div class="n">${IT(h.piattaforme)}</div><div class="l">piattaforme ATS attive</div></div>`
+ +`<div class="kpi p"><div class="n">${IT(m.utenti)}</div><div class="l">iscritti · ${IT(m.cluster_attivi)} ricerche attive</div></div>`
+ +'</div>'
+ +'<div class="sect"><h2>In tempo reale</h2><span class="note">aggiornamento ogni 30s</span></div><div class="grid">'
+ +card(IT(s.offerte_viste_24h),'raccolte o aggiornate · 24h')
+ +card(IT(s.aziende_scrapate_1h),'aziende visitate · ultima ora')
  +card(eta(s.ultimo_scrape),'ultima raccolta')
  +card(eta(s.ultima_classificazione),'ultima classificazione')
- +card(eta(s.ultimo_ponte),'ultimo travaso ai clienti')
+ +card(eta(s.ultimo_ponte),'ultimo travaso al motore')
  +'</div>'
- +'<h2>Andamento — offerte pubblicate per giorno (ultimi 30) · clicca un punto</h2>'
+ +'<div class="sect"><h2>Throughput — offerte toccate per ora (24h)</h2></div>'
+ +'<div class="panel">'+sparkline(d.raccolta_oraria,'n')+'</div>'
+ +'<div class="sect"><h2>Andamento — offerte pubblicate per giorno (30gg)</h2><span class="note">clicca un punto per le fonti</span></div>'
  +'<div class="panel">'+grafico(d.andamento)+'</div>'
- +'<h2>Salute della raffineria</h2><div class="grid">'
+ +'<div class="sect"><h2>Nuove aziende scoperte per giorno</h2><span class="note">l\\'ampiezza che cresce</span></div>'
+ +barre(d.nuove_aziende,'giorno','n',{val:false})
+ +'<div class="cols">'
+ +'<div><div class="sect"><h2>La pipeline della raffineria</h2></div>'+pipeline(d.funnel)+'</div>'
+ +`<div><div class="sect"><h2>Freschezza del codone</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
+ +'</div>'
+ +'<div class="sect"><h2>Salute della raffineria</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
  +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte non classificate',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(IT(h.piattaforme),'piattaforme ATS attive')
- +card(IT(h.aziende_con_offerte),'aziende con offerte')
- +card(IT(h.aziende_censite),'aziende censite in totale')
- +card(IT(h.aziende_mai_viste),'aziende ancora da visitare')
- +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">ATS nuovi da aggiungere</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende in attesa di un adattatore</div>`:'<div class="sub">tutte le piattaforme coperte</div>'}</div>`
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'codone fresco (entro 12h)',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
+ +card(IT(h.aziende_censite),'aziende censite')
+ +card(IT(h.aziende_mai_viste),'ancora da visitare')
+ +card(IT(h.scadute),'offerte scadute (storico)')
+ +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">ATS da aggiungere</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende senza adattatore</div>`:'<div class="sub">tutte le piattaforme coperte</div>'}</div>`
  +'</div>'
- +(d.ats_pending&&d.ats_pending.length?'<h2>ATS trovati ma non ancora raccoglibili — serve un adattatore</h2>'+pending(d.ats_pending):'')
- +'<div class="cols"><div><h2>Offerte per fonte</h2>'+lista(d.per_fonte,'fonte','attive')+'</div>'
- +'<div><h2>Offerte per paese</h2>'+lista(d.per_paese,'paese','attive')+'</div></div>'
- +'<div class="cols"><div><h2>Offerte per famiglia professionale</h2>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
- +'<div><h2>Agenzie per il lavoro</h2>'+lista(d.agenzie,'agenzia','attive')+'</div></div>'
- +'<h2>Motore e ricerche degli iscritti</h2><div class="grid">'
+ +'<div class="sect"><h2>Attivazione per piattaforma</h2><span class="note">attivi / censiti — pozzi dormienti e ATS caldi</span></div>'
+ +attivazione(d.attivazione)
+ +'<div class="cols"><div><div class="sect"><h2>Offerte per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
+ +'<div><div class="sect"><h2>Offerte per paese</h2></div>'+lista(d.per_paese,'paese','attive')+'</div></div>'
+ +'<div class="cols"><div><div class="sect"><h2>Offerte per famiglia professionale</h2></div>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
+ +'<div><div class="sect"><h2>Come scopriamo i tenant</h2></div>'+lista(d.per_scoperta,'fonte','n')+'</div></div>'
+ +(d.agenzie&&d.agenzie.length?'<div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive'):'')
+ +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>ATS trovati ma non ancora raccoglibili</h2></div>'+pending(d.ats_pending):'')
+ +'<div class="sect"><h2>Motore e ricerche degli iscritti</h2></div><div class="grid">'
  +card(IT(m.offerte_nel_motore),'offerte nel motore')
  +card(IT(m.da_ats),'dai nostri ATS diretti')
  +card(IT(m.cluster_attivi),'ricerche attive')
@@ -460,7 +636,7 @@ async function tick(){
  +'</div>';
  if(d.cluster&&d.cluster.length)H+='<div style="margin-top:14px">'+d.cluster.map(c=>
   `<span class="pill ${c.stato==='active'?'on':''}">${c.famiglia} · ${c.paese}</span>`).join('')+'</div>';
- H+='<h2>Iscritti — configurazione completa</h2>'+iscritti(d.iscritti);
+ H+='<div class="sect"><h2>Iscritti — configurazione completa</h2></div>'+iscritti(d.iscritti);
  document.getElementById('app').innerHTML=H}
 tick();setInterval(tick,30000);
 </script></body></html>"""
