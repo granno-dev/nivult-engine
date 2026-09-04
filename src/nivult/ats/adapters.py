@@ -641,6 +641,11 @@ class Personio(BaseAdapter):
                      "department": dept, "employmentType":
                      pos.findtext("employmentType"),
                      "recruitingCategory": pos.findtext("recruitingCategory"),
+                     # la descrizione era GIA' nel feed e la buttavamo:
+                     # serve al digest e all'arricchimento AI.
+                     "description": " ".join(
+                         (d.findtext("value") or "").strip()
+                         for d in pos.iter("jobDescription"))[:20000] or None,
                      "createdAt": pos.findtext("createdAt")}))
         return out
 

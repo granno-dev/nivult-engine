@@ -18,6 +18,8 @@ while true; do
   # loghi azienda per la board: consolida i logo per-offerta + og:image
   # della board (ashby/lever/workable/smartrecruiters/greenhouse), a lotti.
   "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
+  # descrizioni smartrecruiters: dettaglio per le nuove senza testo
+  "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
   # salari: estrae min/max/valuta/periodo dal raw (nuove offerte)
   "$PY" -m nivult.ats.salari --limite 30000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true
