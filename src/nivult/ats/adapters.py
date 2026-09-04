@@ -1441,6 +1441,63 @@ class Vincere(BaseAdapter):
 ADAPTERS["vincere"] = Vincere
 
 
+class DigitalRecruiters(BaseAdapter):
+    """{slug}.digitalrecruiters.com — ATS francese (Nuxt), API pubblica.
+
+    La SPA legge le offerte da
+    `api.digitalrecruiters.com/public/v1/careers-site/job-ads`
+    (POST, `domainName` = host, limit/page, `count` per paginare).
+    Campi puliti: title, location (città), job (categoria) e uno slug
+    per il link diretto `/annonce/{slug}`. Si scartano gli annunci
+    `is_aggregated`/`is_external` (rimbalzi verso altre fonti).
+    """
+    platform_id = "digitalrecruiters"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _API = "https://api.digitalrecruiters.com/public/v1/careers-site/job-ads"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        host = f"{slug}.digitalrecruiters.com"
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        page, count = 1, None
+        while (count is None or (page - 1) * 50 < count) and page <= 60:
+            try:
+                d = self.client.post(
+                    f"{self._API}?domainName={host}&limit=50&page={page}",
+                    headers={"User-Agent": self._UA,
+                             "Accept": "application/json"}).json()
+            except (httpx.HTTPError, ValueError):
+                break
+            if not isinstance(d, dict):
+                break
+            count = d.get("count") if count is None else count
+            items = d.get("items") or []
+            if not items:
+                break
+            for j in items:
+                if j.get("is_aggregated") or j.get("is_external"):
+                    continue
+                jid = str(j.get("job_ad_id") or j.get("id") or "").strip()
+                jslug = j.get("url")
+                if not jid or jid in visti or not jslug:
+                    continue
+                visti.add(jid)
+                loc = (j.get("location") or "").strip() or None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug, external_id=jid,
+                    title=(j.get("title") or "").strip(),
+                    url=f"https://{host}/annonce/{jslug}",
+                    location=loc, city=loc,
+                    posted_at=None,
+                    department=(j.get("job") or "").strip() or None,
+                    raw={"contract": j.get("contract"), "location": loc}))
+            page += 1
+        return out
+
+
+ADAPTERS["digitalrecruiters"] = DigitalRecruiters
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
