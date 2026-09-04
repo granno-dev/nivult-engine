@@ -3659,3 +3659,68 @@ class Jibe(BaseAdapter):
 
 
 ADAPTERS["jibe"] = Jibe
+
+
+class Rippling(BaseAdapter):
+    """Rippling ATS: board pubblica server-rendered su ats.rippling.com.
+
+    Niente API separata: la pagina /{slug}/jobs incapsula i dati in
+    __NEXT_DATA__ (dehydratedState -> query "job-posts", paginata con
+    ?page=N da 20). Le voci portano sede strutturata con countryCode,
+    workplaceType (REMOTE/…) e perfino language: tutto cio' che
+    l'arricchimento di solito deve ricostruire, qui e' gia' scritto.
+    """
+    platform_id = "rippling"
+    _NEXT = re.compile(
+        r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
+
+    def _pagina(self, slug: str, pagina: int) -> dict | None:
+        r = self.client.get(f"https://ats.rippling.com/{slug}/jobs",
+                            params={"page": pagina} if pagina else None)
+        if r.status_code != 200:
+            return None
+        m = self._NEXT.search(r.text)
+        if not m:
+            return None
+        try:
+            d = json.loads(m.group(1))
+            for q in (d["props"]["pageProps"]["dehydratedState"]
+                      ["queries"]):
+                chiave = q.get("queryKey") or []
+                if len(chiave) > 2 and chiave[2] == "job-posts":
+                    return q["state"]["data"]
+        except (KeyError, ValueError, TypeError):
+            return None
+        return None
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        pagina = 0
+        while True:
+            dati = self._pagina(slug, pagina)
+            if not dati:
+                break
+            for v in dati.get("items") or []:
+                if not v.get("id") or not v.get("name"):
+                    continue
+                sedi = v.get("locations") or []
+                prima = sedi[0] if sedi else {}
+                pezzi = [x for x in (prima.get("city"), prima.get("state"),
+                                     prima.get("country")) if x]
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=str(v["id"]), title=str(v["name"]),
+                    url=v.get("url")
+                        or f"https://ats.rippling.com/{slug}/jobs/{v['id']}",
+                    location=", ".join(pezzi) or prima.get("name"),
+                    country=(prima.get("countryCode") or None),
+                    city=prima.get("city"),
+                    department=(v.get("department") or {}).get("name"),
+                    raw=v))
+            if pagina + 1 >= (dati.get("totalPages") or 0):
+                break
+            pagina += 1
+        return out
+
+
+ADAPTERS["rippling"] = Rippling

@@ -40,6 +40,7 @@ _VIVO = {
     "niceboard":       ("GET",  "https://{s}.niceboard.co/api/jobs?limit=1"),
     "jazzhr":          ("GET",  "https://{s}.applytojob.com/"),
     "teamtailor":      ("GET",  "https://{s}.teamtailor.com/jobs.json"),
+    "rippling":        ("GET",  "https://ats.rippling.com/{s}/jobs"),
 }
 
 # Piattaforme dove lo slug morto NON risponde 404 ma REINDIRIZZA al sito
