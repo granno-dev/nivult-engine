@@ -14,16 +14,41 @@ import argparse
 import logging
 import os
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
 
-from nivult.ats.adapters import ADAPTERS
+from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND
 from nivult.ats.enrichment import cerca_wikidata
 
 log = logging.getLogger("nivult.ats.runner")
+
+# ── Rate-limiter per-piattaforma, solo per gli ATS a ENDPOINT CONDIVISO
+# (greenhouse, lever, smartrecruiters, ashby, recruitee: tutti i tenant
+# passano dallo stesso host API). Gli altri ATS hanno un host per-tenant
+# ({slug}.dominio) — server diversi — e non vanno limitati: i thread li
+# parallelizzano liberi. Cosi' si puo' alzare la concorrenza senza rischiare
+# il ban sui pochi condivisi. Il gate serializza al ritmo di RATE_PER_SECOND.
+_rate_lock = threading.Lock()
+_rate_next: dict[str, float] = {}
+
+
+def _rate_gate(platform_id: str) -> None:
+    rate = RATE_PER_SECOND.get(platform_id)
+    if not rate:
+        return
+    intervallo = 1.0 / rate
+    with _rate_lock:
+        ora = time.monotonic()
+        prossimo = _rate_next.get(platform_id, 0.0)
+        attesa = prossimo - ora if prossimo > ora else 0.0
+        _rate_next[platform_id] = (prossimo if prossimo > ora else ora) + intervallo
+    if attesa > 0:
+        time.sleep(attesa)
 
 ATS_DSN = os.environ.get(
     "ATS_DATABASE_URL",
@@ -92,7 +117,8 @@ def semina_aziende(dsn: str, dsn_produzione: str) -> int:
 
 
 def scrape(dsn: str, piattaforma: str | None = None,
-           thread: int = 10, limite: int | None = None) -> dict[str, int]:
+           thread: int = 10, limite: int | None = None,
+           solo_attivi: bool = False) -> dict[str, int]:
     """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
 
     Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
@@ -118,6 +144,11 @@ def scrape(dsn: str, piattaforma: str | None = None,
             if piattaforma:
                 sql += " AND ac.platform_id = %s"
                 params.append(piattaforma)
+            if solo_attivi:
+                # corsia veloce: solo i tenant che HANNO offerte, rivisitati
+                # di continuo dal piu' stantio — cosi' le posizioni appena
+                # pubblicate compaiono in minuti, non in ore.
+                sql += " AND ac.job_count > 0"
             # Priorita' di visita, in quattro scaglioni:
             #  1. le MAI viste (last_fetch NULL): il tesoro non ancora
             #     scavato — le aziende appena scoperte;
@@ -146,6 +177,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
             adapter_cls = ADAPTERS.get(az["platform_id"])
             if not adapter_cls:
                 return az, None
+            _rate_gate(az["platform_id"])   # gate solo per gli endpoint condivisi
             try:
                 with adapter_cls() as adapter:
                     if az["platform_id"] == "workday":
@@ -300,6 +332,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="arricchisci N aziende da Wikidata")
     ap.add_argument("--thread", type=int, default=10,
                     help="aziende interrogate in parallelo (default 10)")
+    ap.add_argument("--solo-attivi", action="store_true",
+                    help="corsia veloce: rivisita solo i tenant con offerte")
+    ap.add_argument("--continuo", action="store_true",
+                    help="cicla in continuo (per la corsia veloce)")
     ap.add_argument("--limite", type=int, default=None,
                     help="scarica solo le prime N aziende per priorita' "
                          "(per il demone a lotti; vuoto = tutte)")
@@ -318,7 +354,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"seminate {n} aziende dal database di produzione")
 
     if not args.stats:
-        s = scrape(dsn, args.piattaforma, thread=args.thread, limite=args.limite)
+        if args.continuo:
+            import time as _t
+            while True:
+                s = scrape(dsn, args.piattaforma, thread=args.thread,
+                           limite=args.limite, solo_attivi=args.solo_attivi)
+                print("scrape:", s, flush=True)
+                _t.sleep(5)
+        s = scrape(dsn, args.piattaforma, thread=args.thread,
+                   limite=args.limite, solo_attivi=args.solo_attivi)
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "
               f"({s['nuove']} nuove, {s['aggiornate']} aggiornate, "
               f"{s.get('fallite', 0)} fallite)")
