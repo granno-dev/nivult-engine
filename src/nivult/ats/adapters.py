@@ -1375,6 +1375,72 @@ class Traffit(BaseAdapter):
 ADAPTERS["traffit"] = Traffit
 
 
+class Vincere(BaseAdapter):
+    """{slug}.vincere.io/careers — CRM di staffing, career page server-rendered.
+
+    Ogni offerta è un `<article class="job">` con link diretto
+    `/careers/job/{id}/{slug}/{luogo}`, la località in `job__location`,
+    il tipo di contratto e la data di pubblicazione (GG-MM-AAAA). La
+    lista pagina con `?page=N`.
+    """
+    platform_id = "vincere"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _LINK = re.compile(
+        r'<a href="(https://[^"]*/careers/job/(\d+)/[^"]*)"[^>]*>(.*?)</a>', re.S)
+    _LOC = re.compile(r'job__location[^"]*">\s*(.*?)\s*</div>', re.S)
+    _TYPE = re.compile(r'job__type">\s*(.*?)\s*</div>', re.S)
+    _DATE = re.compile(r'Published date:.*?col-md-10">\s*(\d{2})-(\d{2})-(\d{4})', re.S)
+
+    def _txt(self, x):
+        import html as _html
+        return _html.unescape(re.sub(r'<[^>]+>', '', x or '')).strip() or None
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for pagina in range(1, 31):  # tetto 300 offerte
+            url = f"https://{slug}.vincere.io/careers/?page={pagina}"
+            try:
+                r = self.client.get(url, headers={"User-Agent": self._UA})
+            except httpx.HTTPError:
+                break
+            if r.status_code != 200:
+                break
+            blocchi = r.text.split('<article class="job">')[1:]
+            if not blocchi:
+                break
+            nuovi = 0
+            for b in blocchi:
+                m = self._LINK.search(b)
+                if not m:
+                    continue
+                jid = m.group(2)
+                if jid in visti:
+                    continue
+                visti.add(jid)
+                nuovi += 1
+                loc = self._LOC.search(b)
+                loc = self._txt(loc.group(1)) if loc else None
+                tp = self._TYPE.search(b)
+                dm = self._DATE.search(b)
+                posted = f"{dm.group(3)}-{dm.group(2)}-{dm.group(1)}" if dm else None
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug, external_id=jid,
+                    title=self._txt(m.group(3)) or "",
+                    url=m.group(1),
+                    location=loc,
+                    city=(loc.split(",")[0].strip() if loc else None),
+                    posted_at=posted,
+                    raw={"type": self._txt(tp.group(1)) if tp else None,
+                         "location": loc}))
+            if nuovi == 0:
+                break
+        return out
+
+
+ADAPTERS["vincere"] = Vincere
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
