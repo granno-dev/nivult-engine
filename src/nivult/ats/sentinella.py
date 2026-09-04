@@ -184,6 +184,15 @@ def main() -> int:
     attivi: dict = stato.get("attivi", {})
     adesso = time.time()
 
+    # Un demone visto giu' UNA volta e' quasi sempre un riavvio (deploy,
+    # systemctl restart): si tiene in sospeso e fa allarme solo se e'
+    # giu' anche al giro dopo. Gli altri problemi non aspettano.
+    sospetti_prima = set(stato.get("sospetti", []))
+    sospetti_ora = [p for p in problemi
+                    if p.startswith("demone ") and p not in sospetti_prima
+                    and p not in attivi]
+    problemi = [p for p in problemi if p not in sospetti_ora]
+
     nuovi = [p for p in problemi if p not in attivi]
     persistenti = [p for p in problemi
                    if p in attivi
@@ -206,7 +215,7 @@ def main() -> int:
         attivi.pop(p, None)
 
     with open(STATO + ".tmp", "w") as f:
-        json.dump({"attivi": attivi}, f)
+        json.dump({"attivi": attivi, "sospetti": sospetti_ora}, f)
     os.replace(STATO + ".tmp", STATO)
     if problemi:
         print("PROBLEMI:", "; ".join(problemi))

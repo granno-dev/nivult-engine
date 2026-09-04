@@ -674,7 +674,10 @@ margin-bottom:20px;background:rgba(11,15,20,.93);backdrop-filter:blur(8px)}
 border-radius:8px;font-weight:500}
 .nav a:hover{color:var(--ink);background:var(--card2)}
 @media(max-width:760px){.nav{display:none}}
-.live{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px}
+.live{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:10px}
+.esci{font-size:12px;font-weight:500;color:var(--dim);text-decoration:none;
+padding:5px 12px;border:1px solid var(--line);border-radius:8px;white-space:nowrap}
+.esci:hover{color:var(--ink);border-color:var(--bad)}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);
 box-shadow:0 0 0 0 rgba(70,196,106,.5);animation:pulse 2.2s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(70,196,106,.45)}70%{box-shadow:0 0 0 7px rgba(70,196,106,0)}100%{box-shadow:0 0 0 0 rgba(70,196,106,0)}}
@@ -822,7 +825,8 @@ a:focus-visible,.pt:focus-visible{outline:2px solid var(--acc);outline-offset:2p
     <a href="#operazioni">Operazioni</a><a href="#flusso">Flusso</a>
     <a href="#raccolta">Raccolta</a><a href="#dati">Dati</a><a href="#iscritti">Iscritti</a>
   </nav>
-  <div class="live"><span class="dot" id="dotv"></span><span id="ts">primo caricamento — dopo un riavvio serve fino a un minuto…</span></div>
+  <div class="live"><span class="dot" id="dotv"></span><span id="ts">primo caricamento — dopo un riavvio serve fino a un minuto…</span>
+    <a class="esci" href="/cruscotto/esci" title="chiude la sessione del cruscotto">Esci</a></div>
 </div>
 <div id="app"></div>
 <div class="foot">Aggiornamento automatico ogni 30 secondi · accesso riservato</div>

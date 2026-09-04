@@ -408,12 +408,16 @@ def create_app() -> FastAPI:
     def cruscotto_home(request: Request):
         # ?anteprima: la porta d'ingresso anche da loggati (e' comunque
         # cio' che ogni non-loggato vede: niente da nascondere)
+        # no-store: la pagina evolve a ogni deploy, e un browser che
+        # serve la copia vecchia dalla cache e' un'ora persa a cercare
+        # bug gia' corretti (successo davvero, due volte in una sera)
+        intest = {"Cache-Control": "no-store"}
         if "anteprima" in request.query_params:
-            return HTMLResponse(cruscotto_mod.LOGIN_PAGINA)
+            return HTMLResponse(cruscotto_mod.LOGIN_PAGINA, headers=intest)
         if cruscotto_mod.sessione_valida(request.cookies.get("crus", "")):
-            return HTMLResponse(cruscotto_mod.PAGINA)
+            return HTMLResponse(cruscotto_mod.PAGINA, headers=intest)
         # non loggato: la porta d'ingresso di casa, non un redirect brusco
-        return HTMLResponse(cruscotto_mod.LOGIN_PAGINA)
+        return HTMLResponse(cruscotto_mod.LOGIN_PAGINA, headers=intest)
 
     @app.get("/cruscotto/entra")
     def cruscotto_entra():
@@ -441,6 +445,13 @@ def create_app() -> FastAPI:
                         max_age=cruscotto_mod.DURATA, httponly=True,
                         secure=True, samesite="lax", path="/cruscotto")
         resp.delete_cookie("crus_state", path="/cruscotto")
+        return resp
+
+    @app.get("/cruscotto/esci")
+    def cruscotto_esci():
+        # via il cookie di sessione, si torna alla porta d'ingresso
+        resp = RedirectResponse("/cruscotto", status_code=302)
+        resp.delete_cookie("crus", path="/cruscotto")
         return resp
 
     @app.get("/cruscotto/dati")
