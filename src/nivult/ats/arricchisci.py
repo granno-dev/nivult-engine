@@ -72,8 +72,13 @@ def _estrai_jsonld(html: str) -> dict:
                     dt = datetime.fromisoformat(data) if data else None
                 except ValueError:
                     dt = None
-                if paese or citta or dt:
-                    return {"country": paese, "city": citta, "posted_at": dt}
+                # la descrizione viaggia nello stesso JSON-LD: buttarla
+                # e' stata la differenza fra 0% e 90% su phenom
+                descr = d.get("description")
+                descr = str(descr)[:30000] if descr else None
+                if paese or citta or dt or descr:
+                    return {"country": paese, "city": citta,
+                            "posted_at": dt, "description": descr}
         except (json.JSONDecodeError, KeyError):
             continue
     return {}
@@ -86,8 +91,8 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, url FROM ats_jobs
-                 WHERE platform_id = 'phenom'
-                   AND country IS NULL AND expired_at IS NULL
+                 WHERE platform_id = 'phenom' AND expired_at IS NULL
+                   AND (country IS NULL OR NOT (raw ? 'description'))
                  ORDER BY id
                  LIMIT %s
             """, (limite,))
@@ -120,6 +125,8 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                     stats["paesi"] += 1 if dati.get("country") else 0
                     stats["citta"] += 1 if dati.get("city") else 0
                     stats["date"] += 1 if dati.get("posted_at") else 0
+                    stats["descrizioni"] = stats.get("descrizioni", 0) + (
+                        1 if dati.get("description") else 0)
                     risultati.append((jid, dati))
             except Exception:
                 stats["errori"] += 1
@@ -134,10 +141,14 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                        SET country = COALESCE(country, %s),
                            city = COALESCE(city, %s),
                            location = COALESCE(location, %s),
-                           posted_at = COALESCE(posted_at, %s)
+                           posted_at = COALESCE(posted_at, %s),
+                           raw = CASE WHEN raw ? 'description' THEN raw
+                                 ELSE jsonb_set(raw, '{description}',
+                                      to_jsonb(%s::text), true) END
                      WHERE id = %s
                 """, (dati.get("country"), dati.get("city"),
-                      dati.get("city"), dati.get("posted_at"), jid))
+                      dati.get("city"), dati.get("posted_at"),
+                      dati.get("description") or "", jid))
         conn.commit()
     return stats
 
