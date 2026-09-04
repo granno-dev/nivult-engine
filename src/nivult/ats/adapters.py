@@ -955,6 +955,54 @@ class JobScore(BaseAdapter):
 ADAPTERS["jobscore"] = JobScore
 
 
+class CatsOne(BaseAdapter):
+    """{slug}.catsone.com/careers/ — pagina server-rendered, link diretto.
+
+    La bacheca e' una tabella: ogni riga e' un `<a class="table-row">` con
+    l'URL (`/careers/{cid}/jobs/{jid}-{titolo}`), il titolo, la categoria
+    e la sede in celle `data-label`. Tutto nell'HTML, nessuna API.
+    """
+    platform_id = "catsone"
+    _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
+    _ROW = re.compile(
+        r'<a class="table-row" href="(/careers/\d+/jobs/(\d+)-[^"]+)".*?</a>',
+        re.S)
+    _TITLE = re.compile(r'title-cell">([^<]*)</div>')
+    _LOC = re.compile(r'data-label="Location">([^<]*)</div>')
+    _CAT = re.compile(r'data-label="Category">([^<]*)</div>')
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        import html as _html
+        try:
+            r = self.client.get(f"https://{slug}.catsone.com/careers/",
+                                 headers={"User-Agent": self._UA})
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        out: list[AtsJob] = []
+        visti: set[str] = set()
+        for m in self._ROW.finditer(r.text):
+            blocco, path, jid = m.group(0), m.group(1), m.group(2)
+            if jid in visti:
+                continue
+            visti.add(jid)
+            tm, lm, cm = (self._TITLE.search(blocco), self._LOC.search(blocco),
+                          self._CAT.search(blocco))
+            loc = (lm.group(1).strip() if lm else "") or None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug, external_id=jid,
+                title=_html.unescape(tm.group(1).strip() if tm else ""),
+                url=f"https://{slug}.catsone.com{path}",
+                location=loc, city=loc,
+                department=(cm.group(1).strip() if cm else None) or None,
+                raw={"path": path}))
+        return out
+
+
+ADAPTERS["catsone"] = CatsOne
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
