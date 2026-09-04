@@ -144,17 +144,54 @@ def scava(dsn: str, platform_id: str, pagine: int = 8,
     return stats
 
 
+def demone(dsn: str, pagine: int = 4, pausa: int = 25) -> None:
+    """Gira senza sosta, ruotando su TUTTE le piattaforme a token.
+
+    Ogni giro fa qualche pagina di Wayback per una piattaforma e passa
+    alla successiva, con una pausa breve per non maltrattare l'archivio.
+    Quando una piattaforma esaurisce le pagine (nessun candidato nuovo),
+    il suo segnalibro riparte da zero: cosi' ri-scandisce dall'inizio e
+    intercetta le aziende appena comparse. Il censimento di tutti gli ATS
+    cresce di continuo, non solo di notte.
+    """
+    piattaforme = list(_FONTI.keys())
+    i = 0
+    log.info("scoperta profonda: demone avviato su %d piattaforme", len(piattaforme))
+    while True:
+        pid = piattaforme[i % len(piattaforme)]
+        i += 1
+        try:
+            r = scava(dsn, pid, pagine=pagine, verifica_max=400)
+            # se non ha trovato candidati nuovi, la piattaforma e' drenata:
+            # riparti dall'inizio per intercettare i tenant nuovi.
+            if r.get("nuovi_candidati", 0) == 0:
+                _salva_segnalibro(pid, 0)
+            log.info("profonda %s: +%d vivi (%d offerte), pag da %d",
+                     pid, r.get("vivi", 0), r.get("offerte", 0),
+                     r.get("da_pagina", 0))
+        except Exception as exc:                     # noqa: BLE001
+            log.warning("profonda %s errore: %s", pid, exc)
+        time.sleep(pausa)
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="nivult.ats.scoperta_profonda")
-    ap.add_argument("--piattaforma", required=True)
+    ap.add_argument("--piattaforma")
+    ap.add_argument("--demone", action="store_true",
+                    help="gira in continuo su tutte le piattaforme a token")
     ap.add_argument("--pagine", type=int, default=8)
     ap.add_argument("--verifica-max", type=int, default=800)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+    if args.demone:
+        demone(dsn, pagine=max(3, args.pagine // 2))
+        return 0
+    if not args.piattaforma:
+        ap.error("serve --piattaforma oppure --demone")
     print(scava(dsn, args.piattaforma, args.pagine, args.verifica_max))
     return 0
 
