@@ -126,8 +126,25 @@ def _uno(dsn: str, sql: str):
 
 # ── lo stato dei giri: demoni, allarmi, ponte, notturno ─────────────
 
-_DEMONI = ("scrape", "scrape-veloce", "profonda", "scoperta",
-           "classifica", "arricchisci", "volano", "api")
+# (unita' systemd, nome umano, spiegazione per chi non conosce Nivult)
+_DEMONI = (
+    ("scrape", "raccolta completa",
+     "rivisita tutte le aziende censite e scarica le loro offerte"),
+    ("scrape-veloce", "raccolta rapida",
+     "ripassa spesso le aziende che hanno offerte attive"),
+    ("profonda", "scoperta profonda",
+     "setaccia gli archivi del web piattaforma per piattaforma"),
+    ("scoperta", "scoperta archivi",
+     "trova aziende nuove negli archivi storici del web"),
+    ("classifica", "classificatore",
+     "assegna a ogni offerta la famiglia professionale"),
+    ("arricchisci", "arricchimento",
+     "aggiunge salari, descrizioni, profilo AI, paesi e loghi"),
+    ("volano", "scoperta continua",
+     "rileva nuovi ATS, verifica i domini, elimina gli account morti"),
+    ("api", "sito e cruscotto",
+     "risponde al sito, a questa pagina e ai webhook"),
+)
 
 
 def _giri() -> dict:
@@ -138,17 +155,19 @@ def _giri() -> dict:
     import subprocess
     g: dict = {"demoni": [], "allarmi": [], "sentinella": False,
                "ponte": {}, "notturno": {}}
-    for dm in _DEMONI:
+    for dm, etichetta, spiega in _DEMONI:
         try:
             r = subprocess.run(["systemctl", "is-active", "nivult-" + dm],
                                capture_output=True, text=True, timeout=5)
-            g["demoni"].append({"nome": dm,
-                                "ok": r.stdout.strip() == "active"})
+            attivo = r.stdout.strip() == "active"
         except Exception:                            # noqa: BLE001
-            g["demoni"].append({"nome": dm, "ok": False})
+            attivo = False
+        g["demoni"].append({"nome": dm, "etichetta": etichetta,
+                            "spiega": spiega, "ok": attivo})
     try:
         st = _json.load(open("/opt/nivult/sentinella-stato.json"))
-        g["allarmi"] = sorted(st.get("attivi", {}).keys())
+        g["allarmi"] = [{"testo": k, "da": v} for k, v
+                        in sorted(st.get("attivi", {}).items())]
         g["sentinella"] = True
     except Exception:                                # noqa: BLE001
         pass
@@ -165,8 +184,12 @@ def _giri() -> dict:
                    errors="replace").read()[-40000:]
         avvii = re.findall(r"=== ATS nightly (20\S+) ===", log)
         blocco = log.rsplit("=== ATS nightly 20", 1)[-1]
+        passi = re.findall(r"── ([^\n]+)\n\s+(ok|FALLITO)", blocco)
+        falliti = [n.split("(")[0].strip() for n, esito in passi
+                   if esito == "FALLITO"]
         g["notturno"] = {"quando": avvii[-1] if avvii else None,
-                         "falliti": blocco.count("FALLITO"),
+                         "falliti": len(falliti),
+                         "passi_falliti": falliti[:6],
                          "completato": "completato" in blocco}
     except OSError:
         pass
@@ -745,7 +768,7 @@ function grafico(rows){
 function pending(rows){
  if(!rows||!rows.length)return '';
  return '<div class="panel">'+rows.map(r=>`<div class="pl"><div class="k">${r.piattaforma}</div>`
-  +`<span class="badge">adattatore da scrivere</span>`
+  +`<span class="badge">in coda di collegamento</span>`
   +`<div class="v">${IT(r.aziende)} aziende</div></div>`).join('')+'</div>'}
 function iscritti(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:14px">nessun iscritto</div>';
  return '<div class="panel" style="overflow-x:auto;padding:0"><table class="usr">'+
@@ -782,12 +805,15 @@ function copertura(rows){if(!rows||!rows.length)return '<div class="hint" style=
   `<div class="db"><div class="dh"><span class="dk">${r.campo}</span><span class="dv"><b>${r.pct}%</b> · ${IT(r.n)}</span></div><div class="dt"><span class="att" style="width:${Math.max(0.5,r.pct)}%"></span></div></div>`
  ).join('')+'</div>'}
 function demoni(g){
- if(!g||!g.demoni||!g.demoni.length)return '<div class="hint" style="padding:14px">stato dei demoni non disponibile</div>';
+ if(!g||!g.demoni||!g.demoni.length)return '<div class="hint" style="padding:14px">stato dei servizi non disponibile</div>';
+ const giu=g.demoni.filter(x=>!x.ok);
  return '<div class="panel" style="padding:13px 15px"><div class="chiprow">'+g.demoni.map(x=>
-  `<span class="chipd ${x.ok?'':'down'}"><i></i>${x.nome}</span>`).join('')+'</div></div>'}
+  `<span class="chipd ${x.ok?'':'down'}" title="${esc(x.spiega)}${x.ok?'':' — SPENTO: va riavviato'}"><i></i>${esc(x.etichetta||x.nome)}</span>`).join('')
+  +'</div>'+(giu.length?`<div class="hint" style="padding:10px 2px 0">${giu.length===1?'Un servizio è spento':giu.length+' servizi sono spenti'}: il lavoro che copre è fermo finché non riparte (la sentinella ti ha scritto via email).</div>`:'')+'</div>'}
 function allarmi(g){if(!g||!g.allarmi||!g.allarmi.length)return '';
- return '<div class="panel alarms">'+g.allarmi.map(a=>
-  `<div class="row"><span class="adot"></span><div class="k">${esc(a)}</div></div>`).join('')+'</div>'}
+ const n=g.allarmi.length;
+ return `<div class="panel alarms"><div class="dethd" style="color:var(--bad)">${n===1?'C’è un problema in corso':'Ci sono '+n+' problemi in corso'} — il controllo automatico ti ha già avvisato via email:</div>`
+  +g.allarmi.map(a=>`<div class="row"><span class="adot"></span><div class="k" style="white-space:normal">${esc(a.testo)}</div><div class="v" style="color:var(--dim);font-weight:400">${a.da?'da '+eta(new Date(a.da*1000).toISOString()).replace(' fa',''):''}</div></div>`).join('')+'</div>'}
 function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" style="padding:14px">dati insufficienti</div>';
  const W=980,H=88,pt=8,pb=8,n=rows.length,max=Math.max(...rows.map(r=>r[vk]),1);
  const X=i=>W*(i/(n-1)),Y=v=>H-pb-(H-pt-pb)*(v/max);
@@ -816,25 +842,27 @@ function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padd
    +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
  }).join('')+'</div>'}
 function cardPonte(po){
- let v='—',c='',sub='log non letto';
- if(po&&po.errore===true){v='ERRORE';c='bad';sub='ultima corsa fallita — vedi log'}
- else if(po&&po.errore===false){v='OK';c='ok';sub='ultima corsa pulita'}
+ let v='—',c='',sub='stato non leggibile';
+ if(po&&po.errore===true){v='ERRORE';c='bad';sub='l’ultimo passaggio è fallito: le offerte nuove non arrivano agli iscritti'}
+ else if(po&&po.errore===false){v='OK';c='ok';sub='ultimo passaggio pulito'}
  if(po&&po.eta_min!=null)sub+=' · '+po.eta_min+' min fa';
- return card(`<span class="${c}">${v}</span>`,'ponte ATS → motore',sub)}
+ return card(`<span class="${c}">${v}</span>`,'passaggio offerte agli iscritti',sub)}
 function cardNotturno(nt){
- nt=nt||{};let v='—',c='',sub='log non letto';
+ nt=nt||{};let v='—',c='',sub='stato non leggibile';
  if(nt.quando){
-  sub='avvio '+nt.quando.slice(0,16).replace('T',' ');
-  if(nt.completato&&!nt.falliti){v='OK';c='ok'}
-  else if(nt.completato){v=nt.falliti+' FALLITI';c='warn';sub+=' · passi falliti nel log'}
-  else{v='in corso';c='warn';sub+=' · non ancora completato'}}
- return card(`<span class="${c}">${v}</span>`,'giro notturno',sub)}
+  const ore=Math.max(0,Math.round((Date.now()-new Date(nt.quando))/36e5));
+  const pf=nt.passi_falliti||[];
+  if(nt.completato&&!nt.falliti){v='OK';c='ok';sub='ultima corsa completa, nessun passo fallito'}
+  else if(nt.completato){v=nt.falliti+(nt.falliti===1?' passo fallito':' passi falliti');c='warn';sub='falliti: '+pf.map(esc).join(', ')+' — dettaglio nei log'}
+  else if(ore>14){v='mai finita';c='bad';sub='partita '+ore+' ore fa e mai completata: probabilmente un passo si è bloccato — dettaglio nei log'}
+  else{v='in corso';c='warn';sub='partita alle '+nt.quando.slice(11,16)+', dura qualche ora; la raccolta continua gira comunque'+(pf.length?' · falliti finora: '+pf.map(esc).join(', '):'')}}
+ return card(`<span class="${c}">${v}</span>`,'manutenzione (parte alle 02:30)',sub)}
 function cardSentinella(g){
- let v,c,sub;
+ let v,c,sub;const n=(g.allarmi||[]).length;
  if(!g.sentinella){v='—';c='warn';sub='stato non leggibile'}
- else if(g.allarmi.length){v=g.allarmi.length+' allarmi';c='bad';sub='elenco qui sotto — mail già partita'}
- else{v='attiva';c='ok';sub='controlla ogni 5 min · nessun allarme aperto'}
- return card(`<span class="${c}">${v}</span>`,'sentinella',sub)}
+ else if(n){v=n===1?'1 problema':n+' problemi';c='bad';sub='il dettaglio è nel riquadro rosso qui sopra'}
+ else{v='tutto ok';c='ok';sub='ogni 5 minuti controlla servizi, dati, disco e credito AI'}
+ return card(`<span class="${c}">${v}</span>`,'controllo automatico',sub)}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';
@@ -852,48 +880,48 @@ async function tick(){
  +`<div class="kpi p"><div class="n">${IT(m.utenti)}</div><div class="l">iscritti · ${IT(m.cluster_attivi)} ricerche attive</div></div>`
  +'</div>'
 
- +gband('operazioni','Operazioni','se qui è tutto verde, il motore gira da solo')
- +'<div class="sect"><h2>Demoni</h2><span class="note">systemd, in tempo reale</span></div>'
+ +gband('operazioni','Operazioni','se è tutto verde il motore gira da solo — il rosso spiega cosa si è rotto')
+ +'<div class="sect"><h2>I servizi del motore</h2><span class="note">girano giorno e notte — verde = acceso · passa il mouse per la spiegazione</span></div>'
  +demoni(g)
  +allarmi(g)
- +'<div class="sect"><h2>Ultime corse ed errori</h2></div><div class="grid">'
+ +'<div class="sect"><h2>Ultime corse ed eventuali errori</h2></div><div class="grid">'
  +cardSentinella(g)
  +cardPonte(g.ponte)
  +cardNotturno(g.notturno)
- +card(eta(s.ultimo_scrape),'ultima raccolta')
- +card(eta(s.ultima_classificazione),'ultima classificazione')
- +card(eta(s.ultimo_ponte),'ultimo travaso al motore')
+ +card(eta(s.ultimo_scrape),'ultima offerta raccolta')
+ +card(eta(s.ultima_classificazione),'ultima offerta classificata')
+ +card(eta(s.ultimo_ponte),'ultima offerta passata agli iscritti')
  +'</div>'
  +'<div class="sect"><h2>Salute del dato</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'non classificate',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'codone fresco (12h)',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
- +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">ATS da aggiungere</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende senza adattatore</div>`:'<div class="sub">tutte le piattaforme coperte</div>'}</div>`
+ +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte senza categoria',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende riviste entro 12 ore',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
+ +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">piattaforme da collegare</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende trovate ma non ancora leggibili</div>`:'<div class="sub">leggiamo tutte le piattaforme trovate</div>'}</div>`
  +'</div>'
 
  +gband('flusso','Flusso','le offerte mentre arrivano')
  +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} nell’ultima ora · ${IT(h.pubblicate_24h)} nelle 24h</span></div>`
  +feed(d.live)
- +`<div class="sect"><h2>Offerte toccate per ora — 24h</h2><span class="note">${IT(s.offerte_viste_24h)} raccolte o aggiornate · ${IT(s.aziende_scrapate_1h)} aziende visitate nell’ultima ora</span></div>`
+ +`<div class="sect"><h2>Offerte raccolte o aggiornate, ora per ora — ultime 24 ore</h2><span class="note">${IT(s.offerte_viste_24h)} raccolte o aggiornate · ${IT(s.aziende_scrapate_1h)} aziende visitate nell’ultima ora</span></div>`
  +'<div class="panel">'+sparkline(d.raccolta_oraria,'n')+'</div>'
- +'<div class="sect"><h2>Pubblicate per giorno — 30 giorni</h2><span class="note">clicca un punto per le fonti</span></div>'
+ +'<div class="sect"><h2>Offerte pubblicate per giorno — ultimi 30 giorni</h2><span class="note">clicca un punto per le fonti</span></div>'
  +'<div class="panel">'+grafico(d.andamento)+'</div>'
 
  +gband('raccolta','Raccolta','censimento, freschezza, ampiezza')
  +'<div class="cols">'
- +`<div><div class="sect"><h2>Dalla scoperta alla consegna</h2><span class="note">${IT(h.scadute)} scadute in archivio</span></div>`+pipeline(d.funnel)+'</div>'
- +`<div><div class="sect"><h2>Freschezza del codone</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
+ +`<div><div class="sect"><h2>Dall’azienda scoperta all’offerta consegnata</h2><span class="note">${IT(h.scadute)} scadute in archivio</span></div>`+pipeline(d.funnel)+'</div>'
+ +`<div><div class="sect"><h2>Da quanto non rivediamo le aziende</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
  +'</div>'
- +'<div class="sect"><h2>Attivazione per piattaforma</h2><span class="note">con offerte / censiti vivi — il tetto naturale è 60–70%: molte aziende vive oggi non assumono</span></div>'
+ +'<div class="sect"><h2>Aziende con offerte aperte, per piattaforma</h2><span class="note">il 100% non esiste: molte aziende vive oggi non assumono, il tetto reale è 60–70% · «potati» = account morti, esclusi dal conto</span></div>'
  +attivazione(d.attivazione)
  +'<div class="cols">'
  +'<div><div class="sect"><h2>Nuove aziende per giorno</h2></div>'+barre(d.nuove_aziende,'giorno','n',{val:false})+'</div>'
- +'<div><div class="sect"><h2>Come scopriamo i tenant</h2></div>'+lista(d.per_scoperta,'fonte','n')+'</div>'
+ +'<div><div class="sect"><h2>Da dove arrivano le aziende</h2></div>'+lista(d.per_scoperta,'fonte','n')+'</div>'
  +'</div>'
- +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>ATS trovati, adattatore da scrivere</h2></div>'+pending(d.ats_pending):'')
+ +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>Piattaforme trovate ma non ancora leggibili</h2></div>'+pending(d.ats_pending):'')
 
  +gband('dati','Dati','cosa sappiamo di ogni offerta')
- +'<div class="sect"><h2>Copertura degli arricchimenti</h2><span class="note">sulle offerte attive · ricalcolo ogni 10 min</span></div>'
+ +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'
  +copertura(d.arricchimento)
  +'<div class="cols"><div><div class="sect"><h2>Per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
  +'<div><div class="sect"><h2>Per paese</h2></div>'+lista(d.per_paese,'paese','attive')+'</div></div>'

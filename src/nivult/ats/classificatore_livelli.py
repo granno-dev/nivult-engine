@@ -134,14 +134,20 @@ def _estrai_json(testo: str) -> dict:
 
 
 def _classifica_glm(titolo: str, azienda: str, luogo: str,
-                    modello) -> tuple[str | None, float]:
-    """Una chiamata GLM per il titolo che i livelli 1-2 non matchano."""
+                    modello) -> tuple[str | None, float, bool]:
+    """Una chiamata GLM per il titolo che i livelli 1-2 non matchano.
+    Il terzo valore e' False se la CHIAMATA e' fallita (429/credito):
+    senza distinguerla dalla risposta scarsa, una notte a credito zero
+    martella l'API per ore riprovando titolo per titolo."""
     prompt = PROMPT_GLM.format(
         famiglie=", ".join(FAMIGLIE),
         titolo=titolo[:120], azienda=azienda[:40], luogo=luogo[:40])
     try:
-        risposta = _estrai_json(modello.chat(
-            [{"role": "user", "content": prompt}]))
+        grezzo = modello.chat([{"role": "user", "content": prompt}])
+    except Exception:
+        return None, 0.0, False
+    try:
+        risposta = _estrai_json(grezzo)
         famiglia = risposta.get("famiglia", "")
         sicurezza = float(risposta.get("sicurezza", 0.5))
         if famiglia not in FAMIGLIE:
@@ -150,10 +156,10 @@ def _classifica_glm(titolo: str, azienda: str, luogo: str,
                     famiglia = f
                     break
             else:
-                return None, 0.0
-        return famiglia, sicurezza
+                return None, 0.0, True
+        return famiglia, sicurezza, True
     except Exception:
-        return None, 0.0
+        return None, 0.0, True
 
 
 # ── IL CLASSIFICATORE COMPLETO A TRE LIVELLI ──────────────────────
@@ -208,6 +214,7 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
             conn.commit()
 
     da_scrivere: list[tuple] = []
+    glm_ko_di_fila = 0   # 3 di fila = GLM spento per il resto del lotto
     for jid, titolo, pid, raw, slug in offerte:
         stats["viste"] += 1
         famiglia = None
@@ -231,8 +238,16 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
 
         # LIVELLO 3: GLM (solo se i primi due hanno fallito)
         if not famiglia and modello:
-            famiglia, conf = _classifica_glm(
+            famiglia, conf, ok = _classifica_glm(
                 titolo, slug or "", "", modello)
+            if not ok:
+                glm_ko_di_fila += 1
+                if glm_ko_di_fila >= 3:
+                    log.warning("GLM giu' (429/credito?): livello 3 "
+                                "spento per il resto del lotto")
+                    modello = None
+            else:
+                glm_ko_di_fila = 0
             if famiglia:
                 livello = 3
 
