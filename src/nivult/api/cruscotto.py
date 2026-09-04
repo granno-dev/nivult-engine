@@ -142,6 +142,8 @@ _DEMONI = (
      "aggiunge salari, descrizioni, profilo AI, paesi e loghi"),
     ("volano", "scoperta continua",
      "rileva nuovi ATS, verifica i domini, elimina gli account morti"),
+    ("certificati", "radar certificati",
+     "ascolta i certificati HTTPS del mondo e coglie i career site nuovi"),
     ("api", "sito e cruscotto",
      "risponde al sito, a questa pagina e ai webhook"),
 )
@@ -428,8 +430,9 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
                count(*) FILTER (WHERE EXISTS (SELECT 1
                    FROM job_classifications x WHERE x.job_id = j.id))
           FROM ats_jobs j
-         WHERE j.created_at > greatest(now() - interval '24 hours',
+         WHERE j.created_at > greatest(now() - interval '30 hours',
                '2026-09-04T20:30:00+00:00'::timestamptz)
+           AND j.created_at < now() - interval '6 hours'
            AND j.expired_at IS NULL""")[0]
     tot = r[0] or 0
     d["nuove24"] = {"totale": tot} | {
@@ -942,7 +945,7 @@ async function tick(){
  +gband('dati','Dati','cosa sappiamo di ogni offerta')
  +(function(nv){if(!nv||!nv.totale)return '';
    const cl=p=>p>=70?'ok':p>=40?'warn':'bad';
-   return '<div class="sect"><h2>Le nuove delle ultime 24 ore arrivano complete?</h2><span class="note">la garanzia: se descrizione o paese crollano, la sentinella ti scrive</span></div><div class="grid">'
+   return '<div class="sect"><h2>Le offerte nuove arrivano complete?</h2><span class="note">nate da 6–30 ore: l’arricchimento ha avuto il suo tempo — se descrizione o paese crollano, la sentinella ti scrive</span></div><div class="grid">'
    +card(IT(nv.totale),'offerte nuove nelle 24h')
    +card(`<span class="${cl(nv.descrizione)}">${nv.descrizione}%</span>`,'con descrizione')
    +card(`<span class="${cl(nv.paese)}">${nv.paese}%</span>`,'con paese')

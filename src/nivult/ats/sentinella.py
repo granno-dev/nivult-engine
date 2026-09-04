@@ -32,7 +32,7 @@ RIALLARME_ORE = 6
 
 DEMONI = ["nivult-scrape", "nivult-scrape-veloce", "nivult-profonda",
           "nivult-scoperta", "nivult-classifica", "nivult-arricchisci",
-          "nivult-volano", "nivult-api"]
+          "nivult-volano", "nivult-certificati", "nivult-api"]
 
 
 def _env() -> dict:
@@ -104,17 +104,22 @@ def _controlli() -> list[str]:
             if o24 > 20000:
                 problemi.append(f"codone affamato: {o24} tenant oltre 24h")
             # completezza delle offerte NUOVE: il prodotto e' il match
-            # sul testo — se le nuove arrivano spoglie, e' un guasto,
-            # non un dettaglio. created_at esiste dal 04/09/2026 sera:
-            # lo spartiacque tiene fuori il backfill del default.
+            # sul testo — se le nuove arrivano spoglie, e' un guasto.
+            # Si giudicano solo quelle con ALMENO 6 ORE di vita: la
+            # catena di arricchimento ha il diritto di lavorare prima
+            # che suoni l'allarme (il primo giro, senza maturita',
+            # sparava sull'appena-nato non ancora arricchito).
+            # created_at esiste dal 04/09/2026 sera: lo spartiacque
+            # tiene fuori il backfill del default.
             tot, con_d, con_p = c.execute("""SELECT count(*),
                 count(*) FILTER (WHERE raw ?| array['description',
                     'descriptionHtml','descriptionPlain','jobDescription',
                     'job_description','content']),
                 count(country)
                 FROM ats_jobs
-               WHERE created_at > greatest(now() - interval '24 hours',
-                     '2026-09-04T20:30:00+00:00'::timestamptz)""").fetchone()
+               WHERE created_at > greatest(now() - interval '30 hours',
+                     '2026-09-04T20:30:00+00:00'::timestamptz)
+                 AND created_at < now() - interval '6 hours'""").fetchone()
             if tot and tot >= 2000:
                 if con_d * 100 < tot * 40:
                     problemi.append(
@@ -198,7 +203,9 @@ def main() -> int:
     for p in rientrati:
         attivi.pop(p, None)
 
-    json.dump({"attivi": attivi}, open(STATO, "w"))
+    with open(STATO + ".tmp", "w") as f:
+        json.dump({"attivi": attivi}, f)
+    os.replace(STATO + ".tmp", STATO)
     if problemi:
         print("PROBLEMI:", "; ".join(problemi))
     return 0
