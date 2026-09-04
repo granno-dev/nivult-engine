@@ -355,32 +355,35 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     # ── board live: le offerte piu' recenti per data di pubblicazione,
     # col tempo relativo ("2 min fa"), come il flusso continuo di Fantastic.
     d["live"] = []
-    for t, slug, p, loc, city, cty, u, pa, raw in _righe(ats_dsn, """
-        SELECT title, slug, platform_id, location, city, country, url,
-               posted_at, raw
-          FROM ats_jobs
-         WHERE expired_at IS NULL AND posted_at IS NOT NULL
-           AND posted_at <= now()
-         ORDER BY posted_at DESC LIMIT 30"""):
+    for t, slug, p, loc, city, cty, u, pa, raw, logo_az in _righe(ats_dsn, """
+        SELECT j.title, j.slug, j.platform_id, j.location, j.city, j.country,
+               j.url, j.posted_at, j.raw, ac.logo_url
+          FROM ats_jobs j
+          LEFT JOIN ats_companies ac
+                 ON ac.platform_id = j.platform_id AND ac.slug = j.slug
+         WHERE j.expired_at IS NULL AND j.posted_at IS NOT NULL
+           AND j.posted_at <= now()
+         ORDER BY j.posted_at DESC LIMIT 30"""):
         azienda = None
-        logo = None
+        logo = logo_az   # logo a livello azienda (og:image / consolidato)
         if isinstance(raw, dict):
             co = raw.get("company") or raw.get("hiringOrganization")
             if isinstance(co, dict):
                 azienda = co.get("name") or co.get("title")
             elif isinstance(co, str):
                 azienda = co
-            # logo, dai campi noti dei vari ATS (dove l'adapter lo salva)
-            ho = raw.get("hiringOrganization")
-            for cand in (raw.get("company_logo"), raw.get("logo"),
-                         raw.get("Company_LogoUrl"), raw.get("logo_url"),
-                         (co.get("logo_url") or co.get("logo")
-                          if isinstance(co, dict) else None),
-                         (ho.get("logo") if isinstance(ho, dict) else None),
-                         raw.get("sharing_image")):
-                if isinstance(cand, str) and cand.startswith("http"):
-                    logo = cand
-                    break
+            # logo per-offerta (ripiego se manca quello a livello azienda)
+            if not logo:
+                ho = raw.get("hiringOrganization")
+                for cand in (raw.get("company_logo"), raw.get("logo"),
+                             raw.get("Company_LogoUrl"), raw.get("logo_url"),
+                             (co.get("logo_url") or co.get("logo")
+                              if isinstance(co, dict) else None),
+                             (ho.get("logo") if isinstance(ho, dict) else None),
+                             raw.get("sharing_image")):
+                    if isinstance(cand, str) and cand.startswith("http"):
+                        logo = cand
+                        break
         d["live"].append({
             "titolo": t, "azienda": azienda or slug, "fonte": p,
             "luogo": loc or city, "paese": cty, "url": u, "logo": logo,

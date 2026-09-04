@@ -15,5 +15,9 @@ while true; do
   "$PY" -m nivult.ats.arricchisci --da-geonames --limite 200000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.arricchisci --workday --limite 200000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.arricchisci --phenom --limite 3000 --thread 10 2>&1 | tail -1 || true
+  # loghi azienda per la board: consolida i logo per-offerta + og:image
+  # della board (ashby/lever/workable/smartrecruiters/greenhouse), a lotti.
+  "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true
   sleep 300
 done
