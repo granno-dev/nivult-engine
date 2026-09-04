@@ -363,15 +363,27 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
            AND posted_at <= now()
          ORDER BY posted_at DESC LIMIT 30"""):
         azienda = None
+        logo = None
         if isinstance(raw, dict):
             co = raw.get("company") or raw.get("hiringOrganization")
             if isinstance(co, dict):
                 azienda = co.get("name") or co.get("title")
             elif isinstance(co, str):
                 azienda = co
+            # logo, dai campi noti dei vari ATS (dove l'adapter lo salva)
+            ho = raw.get("hiringOrganization")
+            for cand in (raw.get("company_logo"), raw.get("logo"),
+                         raw.get("Company_LogoUrl"), raw.get("logo_url"),
+                         (co.get("logo_url") or co.get("logo")
+                          if isinstance(co, dict) else None),
+                         (ho.get("logo") if isinstance(ho, dict) else None),
+                         raw.get("sharing_image")):
+                if isinstance(cand, str) and cand.startswith("http"):
+                    logo = cand
+                    break
         d["live"].append({
             "titolo": t, "azienda": azienda or slug, "fonte": p,
-            "luogo": loc or city, "paese": cty, "url": u,
+            "luogo": loc or city, "paese": cty, "url": u, "logo": logo,
             "posted": str(pa) if pa else None})
     # offerte pubblicate nell'ultima ora / 24h: il polso del flusso
     d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
@@ -520,6 +532,10 @@ border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .fr{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line)}
 .fr:last-child{border-bottom:none}
 .fr:first-child{background:rgba(76,141,255,.05)}
+.fr .fbadge{position:relative;width:34px;height:34px;border-radius:8px;flex-shrink:0;
+display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;
+color:#fff;text-transform:uppercase;overflow:hidden;letter-spacing:0}
+.fr .fbadge .flogo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff}
 .fr .ft{flex:1;min-width:0}
 .fr .ftt{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fr .ftt a{color:var(--ink);text-decoration:none}
@@ -625,12 +641,20 @@ function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" st
  const last=rows[n-1];
  return `<div class="lcwrap"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:88px"><defs><linearGradient id="sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46c46a" stop-opacity=".3"/><stop offset="1" stop-color="#46c46a" stop-opacity="0"/></linearGradient></defs><path class="sa" d="${ar}"/><path class="sl" d="${ln}"/></svg></div><div class="hint">picco ${IT(max)}/ora · ultima ora ${IT(last.n)} (${last.ora})</div>`}
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hashS=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h};
+function badge(azienda,logo){
+ const nome=(azienda||'?').trim();
+ const ini=esc(nome.charAt(0).toUpperCase()||'?');
+ const col='hsl('+(hashS(nome)%360)+',42%,40%)';
+ const img=logo?`<img class="flogo" src="${esc(logo)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:'';
+ return `<div class="fbadge" style="background:${col}">${ini}${img}</div>`;
+}
 function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessuna offerta con data recente</div>';
  return '<div class="feed">'+rows.map(r=>{
   const s=(Date.now()-new Date(r.posted))/1000,old=s>86400;
   const lg=r.luogo||'',pa=r.paese||'';
   const loc=(lg&&pa&&!lg.toUpperCase().includes(pa.toUpperCase()))?lg+' · '+pa:(lg||pa);
-  return `<div class="fr"><div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
+  return `<div class="fr">${badge(r.azienda,r.logo)}<div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
    +`<div class="fm">${esc(r.azienda)}${loc?' · '+esc(loc):''}</div></div>`
    +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
  }).join('')+'</div>'}
