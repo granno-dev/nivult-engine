@@ -116,7 +116,7 @@ def _controlli() -> list[str]:
             tot, con_d, con_p = c.execute("""SELECT count(*),
                 count(*) FILTER (WHERE raw ?| array['description',
                     'descriptionHtml','descriptionPlain','jobDescription',
-                    'job_description','content']),
+                    'job_description','content','externalDescription']),
                 count(country)
                 FROM ats_jobs
                WHERE created_at > greatest(now() - interval '30 hours',

@@ -232,7 +232,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                                   AND array_length(skills, 1) > 0),
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','jobDescription','job_description',
-                   'content','descriptionPlain'])
+                   'content','externalDescription','descriptionPlain'])
           FROM ats_jobs WHERE expired_at IS NULL""")[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
@@ -480,7 +480,7 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
         SELECT count(*), count(country), count(lang),
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','descriptionPlain','jobDescription',
-                   'job_description','content']),
+                   'job_description','content','externalDescription']),
                count(*) FILTER (WHERE EXISTS (SELECT 1
                    FROM job_classifications x WHERE x.job_id = j.id))
           FROM ats_jobs j

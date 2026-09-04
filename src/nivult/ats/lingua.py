@@ -114,7 +114,8 @@ def estrai(titolo: str, descrizione: str) -> str | None:
     return lingua
 
 
-_DESCR_SQL = """COALESCE(raw->>'description', raw->>'descriptionHtml',
+_DESCR_SQL = """COALESCE(raw->>'description', raw->>'externalDescription',
+                raw->>'descriptionHtml',
                 raw->>'jobDescription', raw->>'job_description',
                 raw->>'content', raw->>'descriptionPlain', '')"""
 

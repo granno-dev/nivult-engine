@@ -82,7 +82,8 @@ _SKILL_RX = [(s, re.compile(r"(?<![a-z0-9])" + re.escape(s).replace(r"\ ", r"\s+
 def _descrizione(raw: dict) -> str:
     if not isinstance(raw, dict):
         return ""
-    for k in ("description", "descriptionHtml", "descriptionPlain",
+    for k in ("description", "externalDescription",
+              "descriptionHtml", "descriptionPlain",
               "description_html", "content", "descriptionBody"):
         v = raw.get(k)
         if isinstance(v, str) and v:
@@ -242,7 +243,7 @@ def paese_glm(dsn: str, limite: int = 300) -> dict:
              WHERE expired_at IS NULL AND country IS NULL
                AND country_glm_at IS NULL
                AND (location IS NOT NULL OR city IS NOT NULL
-                    OR raw ? 'description')
+                    OR raw ?| array['description','externalDescription'])
              ORDER BY posted_at DESC NULLS LAST
              LIMIT %s""", (limite,)).fetchall()
         for jid, titolo, luogo, raw in righe:
