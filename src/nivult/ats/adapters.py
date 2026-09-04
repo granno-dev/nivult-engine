@@ -905,6 +905,56 @@ class HireHive(BaseAdapter):
 ADAPTERS["hirehive"] = HireHive
 
 
+class JobScore(BaseAdapter):
+    """careers.jobscore.com/careers/{slug}/feed — JSON pubblico, link diretto.
+
+    Feed ricco: titolo, citta'/stato/paese separati, `detail_url` diretto
+    all'annuncio, data, tipo, salario. Lo slug e' il codice azienda.
+    """
+    platform_id = "jobscore"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        try:
+            r = self.client.get(
+                f"https://careers.jobscore.com/careers/{slug}/feed")
+        except httpx.HTTPError:
+            return []
+        if r.status_code != 200:
+            return []
+        try:
+            d = r.json()
+        except ValueError:
+            return []
+        jobs = d if isinstance(d, list) else (d.get("jobs") or [])
+        out = []
+        for j in jobs:
+            jid = str(j.get("id") or "").strip()
+            if not jid:
+                continue
+            citta = (j.get("city") or "").strip() or None
+            paese = (j.get("country") or "").strip() or None
+            loc = ((j.get("location") or "").strip()
+                   or ", ".join(p for p in (citta, j.get("state"), paese)
+                                if p) or None)
+            url = (j.get("detail_url") or j.get("share_url")
+                   or j.get("apply_url") or "")
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=jid,
+                title=j.get("title") or "",
+                url=url.split("?")[0] if url else "",
+                location=loc, city=citta, country=_iso(paese),
+                posted_at=j.get("opened_date") or j.get("created_on"),
+                department=j.get("department"),
+                raw={k: j.get(k) for k in
+                     ("id", "location", "city", "state", "country",
+                      "job_type", "remote", "experience_level")}))
+        return out
+
+
+ADAPTERS["jobscore"] = JobScore
+
+
 class Pinpoint(BaseAdapter):
     """pinpointhq.com — feed JSON pubblico per azienda.
 
