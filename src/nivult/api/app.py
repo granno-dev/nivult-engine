@@ -406,9 +406,14 @@ def create_app() -> FastAPI:
     # murato su UNA sola email (CRUSCOTTO_EMAIL). Niente token nell'URL.
     @app.get("/cruscotto", response_class=HTMLResponse)
     def cruscotto_home(request: Request):
+        # ?anteprima: la porta d'ingresso anche da loggati (e' comunque
+        # cio' che ogni non-loggato vede: niente da nascondere)
+        if "anteprima" in request.query_params:
+            return HTMLResponse(cruscotto_mod.LOGIN_PAGINA)
         if cruscotto_mod.sessione_valida(request.cookies.get("crus", "")):
             return HTMLResponse(cruscotto_mod.PAGINA)
-        return RedirectResponse("/cruscotto/entra", status_code=302)
+        # non loggato: la porta d'ingresso di casa, non un redirect brusco
+        return HTMLResponse(cruscotto_mod.LOGIN_PAGINA)
 
     @app.get("/cruscotto/entra")
     def cruscotto_entra():
@@ -428,8 +433,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404)
         email = cruscotto_mod.email_da_code(code)
         if email != cruscotto_mod.OPERATORE:
-            raise HTTPException(status_code=403,
-                                detail="Accesso riservato all'operatore.")
+            # account Microsoft valido ma non autorizzato: rifiuto
+            # cortese sulla porta d'ingresso, non un 403 crudo
+            return RedirectResponse("/cruscotto?negato=1", status_code=302)
         resp = RedirectResponse("/cruscotto", status_code=302)
         resp.set_cookie("crus", cruscotto_mod.cookie_sessione(),
                         max_age=cruscotto_mod.DURATA, httponly=True,

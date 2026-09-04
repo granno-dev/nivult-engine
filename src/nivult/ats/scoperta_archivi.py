@@ -28,6 +28,7 @@ import os
 import re
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 
 import psycopg
@@ -91,9 +92,19 @@ def _scrivi_segnalibri(seg: dict) -> None:
 
 
 def _http(url: str, timeout: int = 90) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+    """Con tre tentativi: gli indici di Common Crawl inciampano spesso
+    di notte, e un singolo timeout non deve uccidere l'intero passo
+    (e' successo: FALLITO in manutenzione per un urlopen andato a vuoto)."""
+    ultimo = None
+    for tentativo in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            ultimo = exc
+            time.sleep(15 * (tentativo + 1))
+    raise ultimo
 
 
 def _crawl_recenti(quanti: int = 3) -> list[str]:

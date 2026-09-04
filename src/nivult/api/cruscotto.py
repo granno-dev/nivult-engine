@@ -575,6 +575,79 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     return d
 
 
+# ── la porta d'ingresso: una pagina, un bottone, una sola email ─────
+# L'estetica e' della casa; la serratura resta l'OAuth Microsoft murato
+# su CRUSCOTTO_EMAIL. Questa pagina non sa niente e non mostra niente:
+# puo' vederla chiunque, apre solo per l'operatore.
+
+LOGIN_PAGINA = """<!doctype html><html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Nivult · Accesso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0f14;--card:#141a22;--card2:#1a212b;--line:#242c37;--ink:#e8eef5;
+--dim:#8a97a6;--acc:#4c8dff;--ok:#46c46a;--bad:#ff5d54}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);min-height:100vh;display:flex;
+align-items:center;justify-content:center;padding:24px;
+font:15px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+-webkit-font-smoothing:antialiased;position:relative;overflow:hidden}
+body:before{content:"";position:absolute;width:720px;height:720px;left:50%;top:-320px;
+transform:translateX(-50%);border-radius:50%;pointer-events:none;
+background:radial-gradient(circle,rgba(76,141,255,.14),transparent 62%)}
+.card{position:relative;width:100%;max-width:400px;background:linear-gradient(165deg,var(--card2),var(--card));
+border:1px solid var(--line);border-radius:20px;padding:44px 38px 36px;text-align:center;
+box-shadow:0 24px 70px rgba(0,0,0,.45)}
+.brand{font-size:30px;font-weight:700;letter-spacing:-.03em}
+.brand i{font-style:normal;color:var(--acc)}
+.sotto{font-size:13.5px;color:var(--dim);margin-top:6px;font-weight:500}
+.vivo{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);
+margin-top:22px;padding:5px 13px;border:1px solid var(--line);border-radius:20px;background:var(--bg)}
+.vivo .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);
+box-shadow:0 0 0 0 rgba(70,196,106,.5);animation:pulse 2.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(70,196,106,.45)}70%{box-shadow:0 0 0 7px rgba(70,196,106,0)}100%{box-shadow:0 0 0 0 rgba(70,196,106,0)}}
+@media(prefers-reduced-motion:reduce){.vivo .dot{animation:none}}
+.entra{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;
+margin-top:28px;padding:13px 18px;border-radius:12px;border:1px solid var(--line);
+background:var(--bg);color:var(--ink);font:600 14.5px Inter,sans-serif;cursor:pointer;
+text-decoration:none;transition:border-color .15s,background .15s}
+.entra:hover{border-color:var(--acc);background:#0e1520}
+.entra:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.entra svg{flex-shrink:0}
+.nota{font-size:12px;color:var(--dim);margin-top:18px}
+.negato{margin-top:20px;font-size:13px;color:var(--bad);background:rgba(255,93,84,.08);
+border:1px solid rgba(255,93,84,.35);border-radius:10px;padding:10px 14px;display:none}
+.negato.si{display:block}
+.piede{position:absolute;bottom:18px;left:0;right:0;text-align:center;
+font-size:11.5px;color:var(--dim);opacity:.7}
+</style></head><body>
+<div class="card">
+  <div class="brand">Nivult<i>.</i></div>
+  <div class="sotto">Cruscotto del motore</div>
+  <div class="vivo"><span class="dot"></span>il motore sta raccogliendo, giorno e notte</div>
+  <a class="entra" href="/cruscotto/entra">
+    <svg width="17" height="17" viewBox="0 0 21 21" aria-hidden="true">
+      <rect x="0" y="0" width="10" height="10" fill="#f25022"/>
+      <rect x="11" y="0" width="10" height="10" fill="#7fba00"/>
+      <rect x="0" y="11" width="10" height="10" fill="#00a4ef"/>
+      <rect x="11" y="11" width="10" height="10" fill="#ffb900"/>
+    </svg>
+    Entra con Microsoft
+  </a>
+  <div id="negato" class="negato">Questo account non è autorizzato: il
+  cruscotto apre per un solo operatore.</div>
+  <div class="nota">Accesso riservato · nessuna registrazione</div>
+</div>
+<div class="piede">Nivult — il motore delle offerte</div>
+<script>
+if(new URLSearchParams(location.search).has('negato'))
+  document.getElementById('negato').classList.add('si');
+</script></body></html>"""
+
+
 PAGINA = """<!doctype html><html lang="it"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
@@ -622,6 +695,8 @@ border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px}
 .sub{font-size:12px;color:var(--dim);margin-top:7px;opacity:.85}
 .cols{display:grid;gap:22px;grid-template-columns:1fr 1fr}
 @media(max-width:800px){.cols{grid-template-columns:1fr}}
+.cols3{display:grid;gap:22px;grid-template-columns:1fr 1fr 1fr}
+@media(max-width:1000px){.cols3{grid-template-columns:1fr}}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;
 padding:6px 4px 10px}
 .row{display:flex;align-items:center;gap:12px;padding:8px 14px}
@@ -729,6 +804,17 @@ color:#fff;text-transform:uppercase;overflow:hidden;letter-spacing:0}
 .fr .fa .fd{width:6px;height:6px;border-radius:50%;background:var(--ok)}
 .fr .fa.old .fd{background:var(--dim)}
 a:focus-visible,.pt:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.cols3 .ciamb{flex-direction:column;align-items:stretch}
+.cols3 .ciamb svg{align-self:center}
+.ciamb{display:flex;align-items:center;gap:14px;padding:14px 16px}
+.ciamb svg{flex-shrink:0}
+.ciamb .ctot{font-size:15px;font-weight:700;fill:var(--ink);text-anchor:middle;font-variant-numeric:tabular-nums}
+.ciamb .clbl{font-size:8.5px;fill:var(--dim);text-anchor:middle}
+.leg{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.leg .lr{display:flex;align-items:center;gap:8px;font-size:12.5px;min-width:0}
+.leg .lq{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.leg .lk{flex:1;font-weight:500;text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leg .lv{color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
 </style></head><body>
 <div class="top">
   <div class="brand"><b>Nivult</b><span>Cruscotto</span></div>
@@ -826,6 +912,30 @@ function copertura(rows){if(!rows||!rows.length)return '<div class="hint" style=
  return '<div class="panel">'+rows.map(r=>
   `<div class="db"><div class="dh"><span class="dk">${r.campo}</span><span class="dv"><b>${r.pct}%</b> · ${IT(r.n)}</span></div><div class="dt"><span class="att" style="width:${Math.max(0.5,r.pct)}%"></span></div></div>`
  ).join('')+'</div>'}
+const _TAV=['#4c8dff','#46c46a','#e0a132','#9a7bff','#ff5d54','#4cc4ff','#5fd67a','#e884c0','#8a97a6'];
+function ciambella(rows,kk,vk,etich){
+ if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessun dato</div>';
+ const tot=rows.reduce((a,r)=>a+r[vk],0);
+ if(!tot)return '<div class="hint" style="padding:14px">nessun dato</div>';
+ const parti=rows.slice(0,8).map(r=>({k:String(r[kk]),v:r[vk]}));
+ const resto=tot-parti.reduce((a,p)=>a+p.v,0);
+ if(resto>0)parti.push({k:'altro',v:resto});
+ let a0=-Math.PI/2,archi='';
+ parti.forEach((p,i)=>{
+  const fr=p.v/tot,a1=a0+fr*2*Math.PI,c=_TAV[i%_TAV.length];
+  if(fr>=0.999){archi+=`<circle cx="62" cy="62" r="46" fill="none" stroke="${c}" stroke-width="15"/>`}
+  else{
+   const ep=0.008;
+   const x0=62+46*Math.cos(a0+ep),y0=62+46*Math.sin(a0+ep);
+   const x1=62+46*Math.cos(a1-ep),y1=62+46*Math.sin(a1-ep);
+   const grande=fr>0.5?1:0;
+   archi+=`<path d="M${x0.toFixed(1)} ${y0.toFixed(1)} A46 46 0 ${grande} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${c}" stroke-width="15"><title>${esc(p.k)}: ${IT(p.v)} (${(100*fr).toFixed(1)}%)</title></path>`;
+  }
+  a0=a1;});
+ const kcorta=n=>n>=1e6?(n/1e6).toFixed(1).replace('.',',')+'M':n>=1e4?Math.round(n/1e3)+'k':IT(n);
+ const legenda=parti.map((p,i)=>`<div class="lr"><span class="lq" style="background:${_TAV[i%_TAV.length]}"></span><span class="lk">${esc(p.k)}</span><span class="lv">${IT(p.v)} · ${(100*p.v/tot).toFixed(1)}%</span></div>`).join('');
+ return `<div class="panel"><div class="ciamb"><svg width="124" height="124" viewBox="0 0 124 124" role="img">${archi}<text class="ctot" x="62" y="60">${kcorta(tot)}</text><text class="clbl" x="62" y="74">${esc(etich||'totale')}</text></svg><div class="leg">${legenda}</div></div></div>`;
+}
 function demoni(g){
  if(!g||!g.demoni||!g.demoni.length)return '<div class="hint" style="padding:14px">stato dei servizi non disponibile</div>';
  const giu=g.demoni.filter(x=>!x.ok);
@@ -954,10 +1064,12 @@ async function tick(){
    +'</div>';})(d.nuove24)
  +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'
  +copertura(d.arricchimento)
- +'<div class="cols"><div><div class="sect"><h2>Per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
- +'<div><div class="sect"><h2>Per paese</h2></div>'+lista(d.per_paese,'paese','attive')+'</div></div>'
- +'<div class="cols"><div><div class="sect"><h2>Per famiglia professionale</h2></div>'+lista(d.per_famiglia,'famiglia','attive')+'</div>'
- +'<div>'+(d.agenzie&&d.agenzie.length?'<div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive'):'')+'</div></div>'
+ +'<div class="cols3">'
+ +'<div><div class="sect"><h2>Per piattaforma</h2></div>'+ciambella(d.per_fonte,'fonte','attive','offerte')+'</div>'
+ +'<div><div class="sect"><h2>Per paese</h2></div>'+ciambella(d.per_paese,'paese','attive','offerte')+'</div>'
+ +'<div><div class="sect"><h2>Per famiglia professionale</h2></div>'+ciambella(d.per_famiglia,'famiglia','attive','offerte')+'</div>'
+ +'</div>'
+ +(d.agenzie&&d.agenzie.length?'<div class="cols"><div><div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive')+'</div><div></div></div>':'')
 
  +gband('iscritti','Iscritti','il motore visto dai clienti')
  +'<div class="grid" style="margin-top:14px">'
