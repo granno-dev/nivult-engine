@@ -29,7 +29,9 @@ import psycopg
 from nivult import oauth as _oauth
 
 OPERATORE = os.environ.get("CRUSCOTTO_EMAIL", "g.ranno@outlook.com").lower()
-DURATA = 8 * 3600  # quanto dura la sessione del cruscotto
+# Venti minuti, non otto ore: un cookie rubato vale poco se muore in
+# fretta, e rientrare costa due clic sul conto Microsoft gia' aperto.
+DURATA = 20 * 60
 
 
 # ── accesso: OAuth Microsoft, murato su una sola email ──────────────
@@ -633,7 +635,6 @@ text-decoration:none;transition:border-color .15s,background .15s}
 .entra:hover{border-color:var(--acc);background:#0e1520}
 .entra:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .entra svg{flex-shrink:0}
-.nota{font-size:12px;color:var(--dim);margin-top:18px}
 .negato{margin-top:20px;font-size:13px;color:var(--bad);background:rgba(255,93,84,.08);
 border:1px solid rgba(255,93,84,.35);border-radius:10px;padding:10px 14px;display:none}
 .negato.si{display:block}
@@ -653,7 +654,6 @@ font-size:11.5px;color:var(--dim);opacity:.7}
     Entra con Microsoft
   </a>
   <div id="negato" class="negato">Questo account non è autorizzato.</div>
-  <div class="nota">Accesso riservato · nessuna registrazione</div>
 </div>
 <script>
 if(new URLSearchParams(location.search).has('negato'))
@@ -1013,7 +1013,9 @@ function cardSentinella(g){
  else{v='tutto ok';c='ok';sub='ogni 5 minuti controlla servizi, dati, disco e credito AI'}
  return card(`<span class="${c}">${v}</span>`,'controllo automatico',sub)}
 async function tick(){
- let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
+ let d;try{const r=await fetch('/cruscotto/dati');
+  if(r.status===404){location.replace('/cruscotto');return}
+  if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';
   document.getElementById('dotv').style.background='var(--bad)';return}
  document.getElementById('dotv').style.background='';
