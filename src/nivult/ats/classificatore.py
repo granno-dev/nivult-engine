@@ -85,9 +85,9 @@ class GLMLight(HttpSource):
         self.base_url = os.environ.get(
             "GLM_BASE_URL", "https://api.z.ai/api/paas/v4")
 
-    def chat(self, messages: list[dict]) -> str:
+    def chat(self, messages: list[dict], max_tokens: int = 100) -> str:
         payload = {"model": MODELLO, "messages": messages,
-                   "temperature": 0.0, "max_tokens": 100,
+                   "temperature": 0.0, "max_tokens": max_tokens,
                    "thinking": {"type": "disabled"}}
         r = self.request("POST", f"{self.base_url}/chat/completions",
                          headers={"Authorization": f"Bearer {self.api_key}",

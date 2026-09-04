@@ -250,8 +250,12 @@ if [ -n "${BRANDFETCH_CLIENT_ID:-}" ]; then
 fi
 
 # ── 6. Classificazione a 3 livelli: dizionario + fuzzy + GLM ────
-echo "── classificatore a livelli (5000)"
-"$PY" -m nivult.ats.classificatore_livelli --limite 150000 \
+# Il livello 3 (GLM a pagamento) e' l'unica voce di spesa del giro: il
+# tetto la rende prevedibile. 400 chiamate x 40 titoli = 16.000 titoli
+# nuovi a notte per ~0,30 dollari; il resto aspetta la notte dopo. E ogni
+# risposta insegna al livello 2, che domani ne chiedera' meno.
+echo "── classificatore a livelli (tetto 400 chiamate GLM)"
+"$PY" -m nivult.ats.classificatore_livelli --limite 150000 --glm-max 400 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 

@@ -19,7 +19,6 @@ il 5-10% del totale).
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import re
@@ -39,17 +38,33 @@ ATS_DSN = os.environ.get(
 
 MODELLO = "glm-5.2"
 
-PROMPT_GLM = """Assegna UNA famiglia professionale a questo titolo di offerta di lavoro.
+PROMPT_GRUPPO = """Assegna UNA famiglia professionale a ciascuno di questi titoli di offerte di lavoro.
 
-Famiglie ammesse (rispondi ESATTAMENTE una di queste, in inglese):
+Famiglie ammesse (usa ESATTAMENTE una di queste, in inglese):
 {famiglie}
 
-Titolo: "{titolo}"
-Azienda: {azienda}
-Località: {luogo}
+Titoli:
+{elenco}
 
-Rispondi solo con un oggetto JSON: {{"famiglia": "<una delle famiglie>", "sicurezza": <0.0-1.0>}}
-Se nessuna famiglia va bene, usa "Retail" con sicurezza 0.2."""
+Rispondi SOLO con una riga per titolo, nel formato numero=Famiglia
+(nient'altro: niente JSON, niente spiegazioni, nessuna riga in piu').
+Esempio:
+1=Logistics
+2=Healthcare"""
+
+# Due misure guidano questi numeri, prese sull'API vera:
+#  - l'elenco delle famiglie pesa ~200 token e va ripetuto a ogni
+#    chiamata: in gruppi da 40 il preambolo si divide per 40;
+#  - l'output costa 3,7 volte l'input, quindi il formato della risposta
+#    conta piu' della domanda: "1=Logistics" invece di un oggetto JSON
+#    con la sicurezza fa scendere l'output da 25 a 5 token per titolo.
+# Insieme: da $0.063 a $0.019 ogni mille titoli, a parita' di qualita'
+# (30/40 d'accordo col dizionario in entrambi i formati).
+PER_GRUPPO = 40
+
+# La sicurezza non la chiediamo piu' (costava token per un valore che il
+# modello inventava comunque): il livello 3 vale quanto vale, 0.7 fisso.
+SICUREZZA_GLM = 0.7
 
 
 # ── LIVELLO 2: TITOLI NOTI (fuzzy matching) ───────────────────────
@@ -123,50 +138,45 @@ def _match_titoli_noti(titolo: str, firme: dict[str, str]) -> tuple[str | None, 
 
 # ── LIVELLO 3: GLM (solo per i residui) ──────────────────────────
 
-def _estrai_json(testo: str) -> dict:
+def _classifica_gruppo(titoli: list[str],
+                       modello) -> tuple[dict[int, tuple[str, float]], bool]:
+    """Una chiamata per un gruppo di titoli. Ritorna {indice: (famiglia,
+    sicurezza)} e False se la CHIAMATA e' fallita (429/credito/rete).
+    Le risposte fuori vocabolario si scartano: meglio nessuna famiglia
+    che una inventata."""
+    elenco = "\n".join(f"{i + 1}. {t[:110]}" for i, t in enumerate(titoli))
+    prompt = PROMPT_GRUPPO.format(famiglie=", ".join(FAMIGLIE),
+                                  elenco=elenco)
     try:
-        return json.loads(testo)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", testo, re.S)
-        if not m:
-            raise ValueError(f"nessun JSON: {testo[:120]}")
-        return json.loads(m.group(0))
-
-
-def _classifica_glm(titolo: str, azienda: str, luogo: str,
-                    modello) -> tuple[str | None, float, bool]:
-    """Una chiamata GLM per il titolo che i livelli 1-2 non matchano.
-    Il terzo valore e' False se la CHIAMATA e' fallita (429/credito):
-    senza distinguerla dalla risposta scarsa, una notte a credito zero
-    martella l'API per ore riprovando titolo per titolo."""
-    prompt = PROMPT_GLM.format(
-        famiglie=", ".join(FAMIGLIE),
-        titolo=titolo[:120], azienda=azienda[:40], luogo=luogo[:40])
-    try:
-        grezzo = modello.chat([{"role": "user", "content": prompt}])
-    except Exception:
-        return None, 0.0, False
-    try:
-        risposta = _estrai_json(grezzo)
-        famiglia = risposta.get("famiglia", "")
-        sicurezza = float(risposta.get("sicurezza", 0.5))
+        grezzo = modello.chat([{"role": "user", "content": prompt}],
+                              max_tokens=20 * len(titoli) + 100)
+    except Exception:                                # noqa: BLE001
+        return {}, False
+    esiti: dict[int, tuple[str, float]] = {}
+    for m in re.finditer(r"^\s*(\d+)\s*=\s*(.+?)\s*$", grezzo, re.M):
+        i = int(m.group(1)) - 1
+        if not 0 <= i < len(titoli):
+            continue
+        famiglia = m.group(2).strip()
         if famiglia not in FAMIGLIE:
-            for f in FAMIGLIE:
-                if f.lower() in famiglia.lower():
-                    famiglia = f
-                    break
-            else:
-                return None, 0.0, True
-        return famiglia, sicurezza, True
-    except Exception:
-        return None, 0.0, True
+            famiglia = next(
+                (f for f in FAMIGLIE if f.lower() == famiglia.lower()
+                 or f.lower() in famiglia.lower()), "")
+            if not famiglia:
+                continue         # fuori vocabolario: meglio niente
+        esiti[i] = (famiglia, SICUREZZA_GLM)
+    return esiti, True           # la chiamata c'e' stata (niente allarme)
 
 
 # ── IL CLASSIFICATORE COMPLETO A TRE LIVELLI ──────────────────────
 
-def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
+def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True,
+               glm_max: int = 400) -> dict:
+    """`glm_max` e' il tetto di CHIAMATE a pagamento per corsa: un giro
+    non puo' costare piu' di quanto deciso, qualunque cosa succeda."""
     stats = {"viste": 0, "livello1": 0, "livello2": 0, "livello3": 0,
-             "classificate": 0, "non_classificate": 0}
+             "classificate": 0, "non_classificate": 0,
+             "chiamate_glm": 0, "titoli_ripetuti": 0}
 
     # costruisci l'indice dei titoli noti (livello 2)
     log.info("costruisco l'indice dei titoli noti...")
@@ -213,48 +223,29 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
                 """, righe)
             conn.commit()
 
+    # ── PASSATA 1: i due livelli gratuiti su tutto il lotto ──
     da_scrivere: list[tuple] = []
-    glm_ko_di_fila = 0   # 3 di fila = GLM spento per il resto del lotto
+    residuo: list[tuple] = []        # (jid, titolo) per il livello 3
     for jid, titolo, pid, raw, slug in offerte:
         stats["viste"] += 1
-        famiglia = None
-        conf = 0.0
-        livello = None
 
-        # LIVELLO 1: dizionario
-        famiglia, conf = classifica_da_raw(raw, pid)
-        if famiglia:
-            livello = 1
+        famiglia, conf = classifica_da_raw(raw, pid)      # LIVELLO 1
+        livello = 1 if famiglia else None
         if not famiglia:
             famiglia, conf = classifica_titolo(titolo)
             if famiglia:
                 livello = 1
-
-        # LIVELLO 2: titoli noti
-        if not famiglia:
+        if not famiglia:                                  # LIVELLO 2
             famiglia, conf = _match_titoli_noti(titolo, firme)
             if famiglia:
                 livello = 2
-
-        # LIVELLO 3: GLM (solo se i primi due hanno fallito)
-        if not famiglia and modello:
-            famiglia, conf, ok = _classifica_glm(
-                titolo, slug or "", "", modello)
-            if not ok:
-                glm_ko_di_fila += 1
-                if glm_ko_di_fila >= 3:
-                    log.warning("GLM giu' (429/credito?): livello 3 "
-                                "spento per il resto del lotto")
-                    modello = None
-            else:
-                glm_ko_di_fila = 0
-            if famiglia:
-                livello = 3
 
         if famiglia:
             da_scrivere.append((jid, famiglia, conf, f"livello{livello}"))
             stats["classificate"] += 1
             stats[f"livello{livello}"] += 1
+        elif modello and (titolo or "").strip():
+            residuo.append((jid, titolo))
         else:
             stats["non_classificate"] += 1
 
@@ -262,8 +253,70 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True) -> dict:
             log.info("  … %d viste: %s", stats["viste"], stats)
             _salva(da_scrivere)          # al sicuro nel DB, poi si svuota
             da_scrivere = []
+    _salva(da_scrivere)
+    da_scrivere = []
 
-    _salva(da_scrivere)                  # l'ultimo blocco, sotto i 5000
+    # ── PASSATA 2: il residuo a GLM, in gruppi e una volta per titolo ──
+    # Lo stesso titolo puo' comparire in cento offerte: si paga una volta
+    # sola e la risposta si riusa. Il tetto glm_max chiude il rubinetto.
+    if residuo and modello:
+        log.info("livello 3: %d offerte residue da mandare a GLM",
+                 len(residuo))
+        noti: dict[str, tuple[str, float]] = {}
+        da_chiedere: list[str] = []
+        ko_di_fila = 0
+
+        def _svuota() -> bool:
+            """Manda il gruppo accumulato. False = fermarsi (GLM giu')."""
+            nonlocal ko_di_fila, da_chiedere
+            if not da_chiedere:
+                return True
+            esiti, ok = _classifica_gruppo(da_chiedere, modello)
+            stats["chiamate_glm"] += 1
+            if ok:
+                ko_di_fila = 0
+                for i, (fam, sic) in esiti.items():
+                    noti[da_chiedere[i].lower()] = (fam, sic)
+            else:
+                ko_di_fila += 1
+                if ko_di_fila >= 3:
+                    log.warning("GLM giu' (429/credito?): livello 3 "
+                                "interrotto per questa corsa")
+                    da_chiedere = []
+                    return False
+            da_chiedere = []
+            return True
+
+        visti: set[str] = set()
+        for _, titolo in residuo:
+            chiave = titolo.lower()
+            if chiave in visti:
+                continue
+            visti.add(chiave)
+            da_chiedere.append(titolo)
+            if len(da_chiedere) >= PER_GRUPPO:
+                if stats["chiamate_glm"] >= glm_max:
+                    log.info("tetto di %d chiamate raggiunto: il resto "
+                             "aspetta la prossima corsa", glm_max)
+                    da_chiedere = []
+                    break
+                if not _svuota():
+                    break
+        else:
+            if stats["chiamate_glm"] < glm_max:
+                _svuota()
+
+        for jid, titolo in residuo:
+            esito = noti.get(titolo.lower())
+            if esito:
+                da_scrivere.append((jid, esito[0], esito[1], "livello3"))
+                stats["classificate"] += 1
+                stats["livello3"] += 1
+            else:
+                stats["non_classificate"] += 1
+        stats["titoli_ripetuti"] = len(residuo) - len(visti)
+        _salva(da_scrivere)
+
     return stats
 
 
@@ -302,13 +355,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limite", type=int, default=50000)
     ap.add_argument("--no-glm", action="store_true",
                     help="solo livelli 1-2, senza GLM")
+    ap.add_argument("--glm-max", type=int, default=400,
+                    help="tetto di chiamate a pagamento per corsa "
+                         "(ognuna copre %d titoli)" % PER_GRUPPO)
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
 
     if args.stats:
         stats(ATS_DSN)
     else:
-        s = classifica(ATS_DSN, args.limite, usa_glm=not args.no_glm)
+        s = classifica(ATS_DSN, args.limite, usa_glm=not args.no_glm,
+                       glm_max=args.glm_max)
         print(f"\nClassificatore a livelli: {s}")
     return 0
 
