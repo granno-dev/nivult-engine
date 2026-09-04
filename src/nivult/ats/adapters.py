@@ -150,7 +150,9 @@ class Greenhouse(BaseAdapter):
     platform_id = "greenhouse"
 
     def jobs(self, slug: str) -> list[AtsJob]:
-        r = self.client.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs")
+        # content=true: stessa chiamata, in piu' descrizione completa,
+        # company_name e first_published — gratis.
+        r = self.client.get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")
         if r.status_code == 404:
             return []          # board inesistente o azienda che ha lasciato
         r.raise_for_status()
