@@ -352,6 +352,31 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "WHERE fetched_at > now()-interval '24 hours' "
             "GROUP BY 1 ORDER BY 1")]
 
+    # ── board live: le offerte piu' recenti per data di pubblicazione,
+    # col tempo relativo ("2 min fa"), come il flusso continuo di Fantastic.
+    d["live"] = []
+    for t, slug, p, loc, city, cty, u, pa, raw in _righe(ats_dsn, """
+        SELECT title, slug, platform_id, location, city, country, url,
+               posted_at, raw
+          FROM ats_jobs
+         WHERE expired_at IS NULL AND posted_at IS NOT NULL
+           AND posted_at <= now()
+         ORDER BY posted_at DESC LIMIT 30"""):
+        azienda = None
+        if isinstance(raw, dict):
+            azienda = raw.get("company") or raw.get("hiringOrganization")
+        d["live"].append({
+            "titolo": t, "azienda": azienda or slug, "fonte": p,
+            "luogo": loc or city, "paese": cty, "url": u,
+            "posted": str(pa) if pa else None})
+    # offerte pubblicate nell'ultima ora / 24h: il polso del flusso
+    d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "AND posted_at > now()-interval '1 hour'") or 0
+    d["salute"]["pubblicate_24h"] = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
+        "AND posted_at > now()-interval '24 hours'") or 0
+
     d["salute"]["scadute"] = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL") or 0
     d["salute"]["paesi"] = _uno(ats_dsn,
@@ -486,6 +511,21 @@ border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .spark .sl{fill:none;stroke:var(--ok);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .cols3{display:grid;gap:22px;grid-template-columns:1fr 1fr 1fr}
 @media(max-width:900px){.cols3{grid-template-columns:1fr}}
+/* ── board live delle offerte ── */
+.feed{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.fr{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line)}
+.fr:last-child{border-bottom:none}
+.fr:first-child{background:rgba(76,141,255,.05)}
+.fr .ft{flex:1;min-width:0}
+.fr .ftt{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr .ftt a{color:var(--ink);text-decoration:none}
+.fr .ftt a:hover{color:var(--acc)}
+.fr .fm{font-size:12px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr .fg{font-size:11px;color:var(--dim);background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:2px 8px;white-space:nowrap}
+.fr .fa{font-size:12px;color:var(--ok);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:78px;text-align:right;display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.fr .fa.old{color:var(--dim)}
+.fr .fa .fd{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.fr .fa.old .fd{background:var(--dim)}
 </style></head><body>
 <div class="top">
   <div class="brand"><b>Nivult</b><span>Cruscotto del motore</span></div>
@@ -580,6 +620,15 @@ function sparkline(rows,vk){if(!rows||rows.length<2)return '<div class="hint" st
  const ar=`M0 ${H-pb} `+P.map(p=>'L'+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ')+` L${W} ${H-pb} Z`;
  const last=rows[n-1];
  return `<div class="lcwrap"><svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:88px"><defs><linearGradient id="sag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46c46a" stop-opacity=".3"/><stop offset="1" stop-color="#46c46a" stop-opacity="0"/></linearGradient></defs><path class="sa" d="${ar}"/><path class="sl" d="${ln}"/></svg></div><div class="hint">picco ${IT(max)}/ora · ultima ora ${IT(last.n)} (${last.ora})</div>`}
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function feed(rows){if(!rows||!rows.length)return '<div class="hint" style="padding:14px">nessuna offerta con data recente</div>';
+ return '<div class="feed">'+rows.map(r=>{
+  const s=(Date.now()-new Date(r.posted))/1000,old=s>86400;
+  const loc=[r.luogo,r.paese].filter(Boolean).join(' · ');
+  return `<div class="fr"><div class="ft"><div class="ftt"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></div>`
+   +`<div class="fm">${esc(r.azienda)}${loc?' · '+esc(loc):''}</div></div>`
+   +`<span class="fg">${esc(r.fonte)}</span><span class="fa ${old?'old':''}"><span class="fd"></span>${eta(r.posted)}</span></div>`;
+ }).join('')+'</div>'}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';return}
@@ -594,6 +643,8 @@ async function tick(){
  +`<div class="kpi o"><div class="n">${IT(h.piattaforme)}</div><div class="l">piattaforme ATS attive</div></div>`
  +`<div class="kpi p"><div class="n">${IT(m.utenti)}</div><div class="l">iscritti · ${IT(m.cluster_attivi)} ricerche attive</div></div>`
  +'</div>'
+ +`<div class="sect"><h2>Offerte in arrivo — live</h2><span class="note">${IT(h.pubblicate_1h)} pubblicate nell\\'ultima ora · ${IT(h.pubblicate_24h)} nelle 24h</span></div>`
+ +feed(d.live)
  +'<div class="sect"><h2>In tempo reale</h2><span class="note">aggiornamento ogni 30s</span></div><div class="grid">'
  +card(IT(s.offerte_viste_24h),'raccolte o aggiornate · 24h')
  +card(IT(s.aziende_scrapate_1h),'aziende visitate · ultima ora')
