@@ -16,8 +16,10 @@ vuota, cosi' un dettaglio senza testo non viene ritentato per sempre.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
+import re
 import time
 
 import httpx
@@ -86,6 +88,94 @@ def smartrecruiters(dsn: str, limite: int = 3000) -> dict:
     return stats
 
 
+# Piattaforme la cui PAGINA pubblica porta il JSON-LD JobPosting completo
+# (verificato a campione, una per una): un solo estrattore le copre tutte,
+# e oltre alla descrizione raccoglie paese, citta' e data quando mancano.
+_DA_PAGINA = ("jazzhr", "breezy", "teamtailor", "applicantstack",
+              "freshteam", "vincere")
+
+_LD = re.compile(r"<script[^>]*ld\+json[^>]*>(.*?)</script>", re.S | re.I)
+
+
+def _jobposting(html: str) -> dict | None:
+    for blocco in _LD.findall(html):
+        try:
+            d = json.loads(blocco.strip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(d, list):
+            d = next((x for x in d if isinstance(x, dict)
+                      and x.get("@type") == "JobPosting"), None)
+        if isinstance(d, dict) and d.get("@type") == "JobPosting":
+            return d
+    return None
+
+
+def da_pagina(dsn: str, limite: int = 3000, thread: int = 10) -> dict:
+    """Apre la pagina pubblica delle offerte senza descrizione e legge il
+    JSON-LD. Ogni tenant vive sul suo sottodominio: il carico si spalma
+    da solo. La chiave si scrive anche vuota SOLO se la pagina ha
+    risposto 200 senza JobPosting; un errore di rete non marca niente."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0,
+             "paesi": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, url, country FROM ats_jobs
+             WHERE platform_id = ANY(%s) AND expired_at IS NULL
+               AND NOT (raw ? 'description') AND url IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (list(_DA_PAGINA), limite)).fetchall()
+
+        def leggi(riga):
+            jid, url, paese = riga
+            try:
+                with httpx.Client(timeout=12, follow_redirects=True,
+                                  headers={"User-Agent": _UA}) as cli:
+                    r = cli.get(url)
+            except httpx.HTTPError:
+                return jid, None, None
+            if r.status_code != 200:
+                return jid, None, None
+            jp = _jobposting(r.text) or {}
+            descr = str(jp.get("description") or "")[:30000]
+            paese_nuovo = None
+            if not paese:
+                loc = jp.get("jobLocation") or {}
+                if isinstance(loc, list):
+                    loc = loc[0] if loc else {}
+                cc = ((loc.get("address") or {}).get("addressCountry")
+                      if isinstance(loc, dict) else None)
+                if isinstance(cc, dict):
+                    cc = cc.get("name")
+                if isinstance(cc, str) and len(cc.strip()) == 2:
+                    paese_nuovo = cc.strip().upper()
+            return jid, descr, paese_nuovo
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, descr, paese_nuovo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if descr is None:
+                    stats["errori"] += 1     # rete: si riprovera'
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true),
+                                    country = COALESCE(country, %s)
+                              WHERE id = %s""",
+                          (descr, paese_nuovo, jid))
+                if descr:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if paese_nuovo:
+                    stats["paesi"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … da_pagina %s", stats)
+    log.info("descrizioni da_pagina: %s", stats)
+    return stats
+
+
 def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     from concurrent.futures import ThreadPoolExecutor
     stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
@@ -146,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.descrizioni")
     ap.add_argument("--smartrecruiters", action="store_true")
     ap.add_argument("--workday", action="store_true")
+    ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
@@ -153,7 +244,9 @@ def main(argv: list[str] | None = None) -> int:
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
     if args.workday:
         print(workday(dsn, args.limite))
-    if args.smartrecruiters or not args.workday:
+    if args.da_pagina:
+        print(da_pagina(dsn, args.limite))
+    if args.smartrecruiters or not (args.workday or args.da_pagina):
         print(smartrecruiters(dsn, args.limite))
     return 0
 

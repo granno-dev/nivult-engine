@@ -29,12 +29,13 @@ while true; do
   # lingua dell'annuncio: deterministica, gratis, dopo le descrizioni
   "$PY" -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --workday --limite 1500 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.descrizioni --da-pagina --limite 1500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.
   "$PY" -m nivult.ats.profilo --limite 40000 --glm-max 400 2>&1 | tail -1 || true
   # paese via GLM Flash (gratuito) per il residuo non geocodificabile:
   # accuratezza misurata 29/30; XX/incerto non si salva.
-  "$PY" -m nivult.ats.profilo --paese-glm 250 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.profilo --paese-glm 1500 2>&1 | tail -1 || true
   # salari: estrae min/max/valuta/periodo dal raw (nuove offerte)
   "$PY" -m nivult.ats.salari --limite 30000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true

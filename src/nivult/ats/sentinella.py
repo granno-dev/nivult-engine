@@ -103,6 +103,27 @@ def _controlli() -> list[str]:
                   AND ac.last_fetch_at < now()-interval '24 hours'""").fetchone()[0]
             if o24 > 20000:
                 problemi.append(f"codone affamato: {o24} tenant oltre 24h")
+            # completezza delle offerte NUOVE: il prodotto e' il match
+            # sul testo — se le nuove arrivano spoglie, e' un guasto,
+            # non un dettaglio. created_at esiste dal 04/09/2026 sera:
+            # lo spartiacque tiene fuori il backfill del default.
+            tot, con_d, con_p = c.execute("""SELECT count(*),
+                count(*) FILTER (WHERE raw ?| array['description',
+                    'descriptionHtml','descriptionPlain','jobDescription',
+                    'job_description','content']),
+                count(country)
+                FROM ats_jobs
+               WHERE created_at > greatest(now() - interval '24 hours',
+                     '2026-09-04T20:30:00+00:00'::timestamptz)""").fetchone()
+            if tot and tot >= 2000:
+                if con_d * 100 < tot * 40:
+                    problemi.append(
+                        f"nuove offerte quasi senza descrizione: "
+                        f"{100*con_d//tot}% su {tot} nelle 24h")
+                if con_p * 100 < tot * 70:
+                    problemi.append(
+                        f"nuove offerte quasi senza paese: "
+                        f"{100*con_p//tot}% su {tot} nelle 24h")
     except Exception as exc:                          # noqa: BLE001
         problemi.append(f"database ATS irraggiungibile: {exc!r}"[:160])
 

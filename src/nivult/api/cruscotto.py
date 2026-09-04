@@ -418,6 +418,25 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
 
     d["arricchimento"] = _arricchimento(ats_dsn, attive)
 
+    # ── completezza delle NUOVE (created_at esiste dal 04/09/26 sera:
+    # lo spartiacque tiene fuori il backfill del default) ──
+    r = _righe(ats_dsn, """
+        SELECT count(*), count(country), count(lang),
+               count(*) FILTER (WHERE raw ?| array['description',
+                   'descriptionHtml','descriptionPlain','jobDescription',
+                   'job_description','content']),
+               count(*) FILTER (WHERE EXISTS (SELECT 1
+                   FROM job_classifications x WHERE x.job_id = j.id))
+          FROM ats_jobs j
+         WHERE j.created_at > greatest(now() - interval '24 hours',
+               '2026-09-04T20:30:00+00:00'::timestamptz)
+           AND j.expired_at IS NULL""")[0]
+    tot = r[0] or 0
+    d["nuove24"] = {"totale": tot} | {
+        k: (round(100 * r[i] / tot, 1) if tot else 0)
+        for i, k in ((1, "paese"), (2, "lingua"),
+                     (3, "descrizione"), (4, "categoria"))}
+
     return d
 
 
@@ -525,7 +544,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     pes = _pesanti(ats_dsn, attive)
     for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
               "andamento", "freschezza", "per_scoperta", "attivazione",
-              "nuove_aziende", "ats_pending", "arricchimento"):
+              "nuove_aziende", "ats_pending", "arricchimento", "nuove24"):
         d[k] = pes[k]
     d["salute"] = dict(pes["salute"])
     d["salute"]["offerte_attive"] = attive
@@ -921,6 +940,15 @@ async function tick(){
  +(d.ats_pending&&d.ats_pending.length?'<div class="sect"><h2>Piattaforme trovate ma non ancora leggibili</h2></div>'+pending(d.ats_pending):'')
 
  +gband('dati','Dati','cosa sappiamo di ogni offerta')
+ +(function(nv){if(!nv||!nv.totale)return '';
+   const cl=p=>p>=70?'ok':p>=40?'warn':'bad';
+   return '<div class="sect"><h2>Le nuove delle ultime 24 ore arrivano complete?</h2><span class="note">la garanzia: se descrizione o paese crollano, la sentinella ti scrive</span></div><div class="grid">'
+   +card(IT(nv.totale),'offerte nuove nelle 24h')
+   +card(`<span class="${cl(nv.descrizione)}">${nv.descrizione}%</span>`,'con descrizione')
+   +card(`<span class="${cl(nv.paese)}">${nv.paese}%</span>`,'con paese')
+   +card(`<span class="${cl(nv.categoria)}">${nv.categoria}%</span>`,'con categoria')
+   +card(`<span class="${cl(nv.lingua)}">${nv.lingua}%</span>`,'con lingua')
+   +'</div>';})(d.nuove24)
  +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'
  +copertura(d.arricchimento)
  +'<div class="cols"><div><div class="sect"><h2>Per fonte</h2></div>'+lista(d.per_fonte,'fonte','attive')+'</div>'
