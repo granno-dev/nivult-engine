@@ -162,6 +162,10 @@ def _estrai_slug(urls: set[str], pattern: str) -> set[str]:
         if not m or not m.groups():
             continue
         s = m.group(1).lower().strip(".-")
+        # I pattern con [^/]+ catturano anche il querystring
+        # (immutable?utm_source=...): 40mila slug sporchi finiti in
+        # censimento come duplicati. Tronca ai delimitatori URL, sempre.
+        s = re.split(r"[?#&%\s]", s)[0].strip(".-")
         if (s and s not in SLUG_SPAZZATURA and len(s) > 1
                 and not re.fullmatch(r"[0-9a-f]{16,}", s)):
             slugs.add(s)
