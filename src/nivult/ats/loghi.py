@@ -164,17 +164,26 @@ def da_brandfetch(dsn: str, limite: int = 200,
                        headers={"User-Agent": _UA})
     stats = {"esaminati": 0, "trovati": 0, "scartati_incerti": 0}
     # gli ATS che NON danno un logo proprio: qui serve Brandfetch.
-    senza = ("personio", "teamtailor", "bamboohr", "workday", "icims",
-             "cornerstone", "oracle", "phenom", "jazzhr", "zohorecruit",
-             "recruiterbox", "join", "pinpoint", "catsone", "successfactors")
+    # greenhouse in testa: non espone il logo da NESSUNA parte pubblica
+    # (og:image vuoto sul nuovo job-boards) — qui Brandfetch e' l'unica via.
+    senza = ("greenhouse", "personio", "teamtailor", "bamboohr", "workday",
+             "icims", "cornerstone", "oracle", "phenom", "jazzhr",
+             "zohorecruit", "recruiterbox", "join", "pinpoint", "catsone",
+             "successfactors", "crelate", "jobscore", "werecruit",
+             "smartrecruiters", "vincere", "applicantstack", "freshteam")
     with psycopg.connect(dsn, autocommit=True) as c:
         righe = c.execute("""
-            SELECT platform_id, slug, coalesce(company_name, slug)
-              FROM ats_companies
-             WHERE platform_id = ANY(%s) AND job_count > 0 AND logo_url IS NULL
-               AND (logo_checked_at IS NULL
-                    OR logo_checked_at < now() - interval '30 days')
-             ORDER BY logo_checked_at ASC NULLS FIRST
+            SELECT ac.platform_id, ac.slug, coalesce(ac.company_name, ac.slug)
+              FROM ats_companies ac
+             WHERE ac.platform_id = ANY(%s) AND ac.job_count > 0
+               AND ac.logo_url IS NULL
+               AND (ac.logo_checked_at IS NULL
+                    OR ac.logo_checked_at < now() - interval '30 days')
+             -- prima chi pubblica adesso: e' in bacheca, il logo serve subito
+             ORDER BY (SELECT max(j.posted_at) FROM ats_jobs j
+                        WHERE j.platform_id = ac.platform_id
+                          AND j.slug = ac.slug
+                          AND j.expired_at IS NULL) DESC NULLS LAST
              LIMIT %s""", (list(senza), limite)).fetchall()
         for pid, slug, nome in righe:
             stats["esaminati"] += 1
@@ -182,7 +191,8 @@ def da_brandfetch(dsn: str, limite: int = 200,
             dominio = None
             try:
                 q = _pulisci_nome(nome) or nome
-                r = cli.get(f"https://api.brandfetch.io/v2/search/{q}")
+                r = cli.get(f"https://api.brandfetch.io/v2/search/{q}",
+                            params={"c": client_id} if client_id else None)
                 brands = r.json() if r.status_code == 200 else []
             except (httpx.HTTPError, ValueError):
                 brands = []
