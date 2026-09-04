@@ -104,7 +104,7 @@ def risolvi(dsn: str, limite: int = 200, solo_nuovi: bool = True) -> dict:
     """
     stats = {"esaminati": 0, "candidati": 0, "verificati": 0,
              "nuovi": 0, "gia_noti": 0, "offerte_trovate": 0}
-    gestiti = list(_RES.keys())
+    gestiti = list(_RES.keys()) + ["inrecruiting"]
     cli = httpx.Client(timeout=15, follow_redirects=True,
                        headers={"User-Agent": _UA})
     with psycopg.connect(dsn, autocommit=True) as conn:
@@ -123,6 +123,36 @@ def risolvi(dsn: str, limite: int = 200, solo_nuovi: bool = True) -> dict:
             except httpx.HTTPError:
                 continue
             if r.status_code != 200:
+                continue
+            # In-recruiting: serve ANCHE la chiave di pubblicazione, che
+            # vive nell'embed sulla pagina aziendale (k=...). Wayback per
+            # le chiavi e' a secco: questa e' l'unica fonte viva.
+            if pid == "inrecruiting":
+                m = re.search(r"([a-z0-9-]+)\.intervieweb\.it/[^\"']*?"
+                              r"[?&]k=([a-f0-9]{20,40})", r.text, re.I)
+                if m:
+                    s_ir, k_ir = m.group(1).lower(), m.group(2)
+                    try:
+                        rv = cli.get(f"https://{s_ir}.intervieweb.it/"
+                                     f"annunci.php?lang=it&k={k_ir}"
+                                     f"&format=json_en&utype=0", timeout=10)
+                        if rv.status_code == 200 and \
+                                rv.text.lstrip().startswith("["):
+                            conn.execute(
+                                """INSERT INTO ats_companies (platform_id,
+                                       slug, pub_key, company_name,
+                                       discovered_from)
+                                   VALUES ('inrecruiting', %s, %s, %s,
+                                           'vanity')
+                                   ON CONFLICT (platform_id, slug) DO UPDATE
+                                     SET pub_key = COALESCE(
+                                         ats_companies.pub_key,
+                                         EXCLUDED.pub_key)""",
+                                (s_ir, k_ir, nome))
+                            stats["verificati"] += 1
+                            stats["nuovi"] += 1
+                    except httpx.HTTPError:
+                        pass
                 continue
             slug = _candidato(pid, r.text, str(r.url))
             if not slug:
