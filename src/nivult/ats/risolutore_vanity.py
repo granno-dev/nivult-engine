@@ -61,7 +61,31 @@ _RES: dict[str, re.Pattern] = {
         r"|career\.teamtailor\.com/c/([a-z0-9-]+)"),
     "ashby": re.compile(
         r"jobs\.ashbyhq\.com/([a-zA-Z0-9][a-zA-Z0-9._-]+)"),
+    # ── il raddoppio del bacino (05/09): 2.300 domini rilevati restavano
+    # fuori portata. Lo slug e' il sottodominio dell'ATS, la verifica
+    # resta la stessa garanzia: senza offerte vere non si entra. ──
+    "bamboohr":       re.compile(r"([a-z0-9-]+)\.bamboohr\.com"),
+    "pinpoint":       re.compile(r"([a-z0-9-]+)\.pinpointhq\.com"),
+    "icims":          re.compile(r"([a-z0-9-]+)\.icims\.com"),
+    "cornerstone":    re.compile(r"([a-z0-9-]+)\.csod\.com"),
+    "zohorecruit":    re.compile(r"([a-z0-9-]+)\.zohorecruit\.(?:com|eu|in)"),
+    "freshteam":      re.compile(r"([a-z0-9-]+)\.freshteam\.com"),
+    "applicantstack": re.compile(r"([a-z0-9-]+)\.applicantstack\.com"),
+    "vincere":        re.compile(r"([a-z0-9-]+)\.vincere\.io"),
+    "jazzhr":         re.compile(r"([a-z0-9-]+)\.applytojob\.com"),
+    "breezy":         re.compile(r"([a-z0-9-]+)\.breezy\.hr"),
+    "werecruit":      re.compile(
+        r"careers\.werecruit\.io/(?:[a-z-]+/)?([a-z0-9-]+)"),
+    "rippling":       re.compile(
+        r"ats\.rippling\.com/([a-zA-Z0-9][a-zA-Z0-9_-]+)"),
 }
+
+# Workday merita il caso a parte: dalla career page escono slug, server
+# E site in un colpo solo — le tre coordinate che il risolutore dedicato
+# deve altrimenti pescare da Wayback una alla volta.
+_WORKDAY = re.compile(
+    r"([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com"
+    r"(?:/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]{2,40}))?")
 
 
 def _candidato(platform_id: str, html_txt: str, url_finale: str) -> str | None:
@@ -104,20 +128,30 @@ def risolvi(dsn: str, limite: int = 200, solo_nuovi: bool = True) -> dict:
     """
     stats = {"esaminati": 0, "candidati": 0, "verificati": 0,
              "nuovi": 0, "gia_noti": 0, "offerte_trovate": 0}
-    gestiti = list(_RES.keys()) + ["inrecruiting"]
+    gestiti = list(_RES.keys()) + ["inrecruiting", "workday",
+                                   "successfactors"]
     cli = httpx.Client(timeout=15, follow_redirects=True,
                        headers={"User-Agent": _UA})
     with psycopg.connect(dsn, autocommit=True) as conn:
         rows = conn.execute(
-            """SELECT careers_url, platform_id, domain, company_name, country
+            """SELECT id, careers_url, platform_id, domain, company_name,
+                      country
                  FROM company_domains
                 WHERE careers_url IS NOT NULL
                   AND platform_id = ANY(%s)
-                ORDER BY random() LIMIT %s""",
+                  AND (vanity_checked_at IS NULL
+                       OR vanity_checked_at < now() - interval '45 days')
+                ORDER BY vanity_checked_at ASC NULLS FIRST
+                LIMIT %s""",
             (gestiti, limite)).fetchall()
 
-        for careers_url, pid, dom, nome, paese in rows:
+        for did, careers_url, pid, dom, nome, paese in rows:
             stats["esaminati"] += 1
+            # il segnalibro: prima si girava a caso sugli stessi domini
+            # (50 «gia' noti» su 120 a ogni ciclo). Marcato = non si
+            # ripassa per 45 giorni, il ciclo lavora solo sul fresco.
+            conn.execute("UPDATE company_domains SET vanity_checked_at="
+                         "now() WHERE id = %s", (did,))
             try:
                 r = cli.get(careers_url)
             except httpx.HTTPError:
@@ -154,7 +188,38 @@ def risolvi(dsn: str, limite: int = 200, solo_nuovi: bool = True) -> dict:
                     except httpx.HTTPError:
                         pass
                 continue
-            slug = _candidato(pid, r.text, str(r.url))
+            # Workday: tre coordinate in un colpo (slug, server, site).
+            if pid == "workday":
+                m = _WORKDAY.search(r.text + " " + str(r.url))
+                if not m:
+                    continue
+                w_slug, w_srv, w_site = m.group(1), m.group(2), m.group(3)
+                stats["candidati"] += 1
+                if conn.execute(
+                        "SELECT 1 FROM ats_companies WHERE platform_id="
+                        "'workday' AND slug=%s", (w_slug,)).fetchone():
+                    stats["gia_noti"] += 1
+                    continue
+                conn.execute(
+                    """INSERT INTO ats_companies (platform_id, slug,
+                           wd_server, wd_instance, company_name, country,
+                           discovered_from)
+                       VALUES ('workday', %s, %s, %s, %s, %s, 'vanity')
+                       ON CONFLICT (platform_id, slug) DO NOTHING""",
+                    (w_slug, w_srv, w_site, (nome or None), (paese or None)))
+                stats["nuovi"] += 1
+                log.info("vanity: %s -> workday/%s (%s/%s)",
+                         dom, w_slug, w_srv, w_site)
+                continue
+
+            # SuccessFactors: lo slug E' l'host finale della career page
+            # (l'adapter lavora su https://{slug}/).
+            if pid == "successfactors":
+                slug = str(r.url.host or "").lower()
+                if not slug or "successfactors" in slug:
+                    continue
+            else:
+                slug = _candidato(pid, r.text, str(r.url))
             if not slug:
                 continue
             stats["candidati"] += 1

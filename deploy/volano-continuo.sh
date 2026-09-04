@@ -28,7 +28,7 @@ while true; do
   fi
   "$PY" -m nivult.ats.detector --rileva --limite 400 --thread 20 2>&1 \
     | tail -1 || true
-  "$PY" -m nivult.ats.risolutore_vanity --limite 120 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \
