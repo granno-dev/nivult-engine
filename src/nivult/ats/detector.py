@@ -336,7 +336,15 @@ def _registra_azienda(dsn: str, piattaforma: str, slug: str,
                 VALUES (%s, %s, %s, %s, 'detector', %s, %s)
                 ON CONFLICT (platform_id, slug) DO UPDATE SET
                   company_name = COALESCE(ats_companies.company_name,
-                                          EXCLUDED.company_name)
+                                          EXCLUDED.company_name),
+                  -- BUG storico: senza queste due righe, se lo slug era gia'
+                  -- censito (dall'archivio, nudo) i parametri Workday del
+                  -- detector venivano BUTTATI e il tenant restava
+                  -- inscrapabile per sempre (1.492 cosi' al 04/09).
+                  wd_server = COALESCE(ats_companies.wd_server,
+                                       EXCLUDED.wd_server),
+                  wd_instance = COALESCE(ats_companies.wd_instance,
+                                         EXCLUDED.wd_instance)
             """, (piattaforma, slug, nome, paese, wd_server, wd_instance))
         conn.commit()
 
