@@ -42,6 +42,11 @@ _VIVO = {
     "teamtailor":      ("GET",  "https://{s}.teamtailor.com/jobs.json"),
 }
 
+# Piattaforme dove lo slug morto NON risponde 404 ma REINDIRIZZA al sito
+# vetrina (jazzhr -> info.jazzhr.com): li' il redirect stesso e' la morte,
+# quindi non lo si segue e un 3xx conta come slug morto.
+_MORTO_SU_REDIRECT = {"jazzhr"}
+
 
 def pota(dsn: str, platform_id: str, limite: int = 1000) -> dict:
     if platform_id not in _VIVO:
@@ -60,11 +65,13 @@ def pota(dsn: str, platform_id: str, limite: int = 1000) -> dict:
              ORDER BY last_fetch_at ASC NULLS FIRST
              LIMIT %s""", (platform_id, limite)).fetchall()
 
+        segui = platform_id not in _MORTO_SU_REDIRECT
+
         def _stato(slug):
             url = tmpl.format(s=slug)
             try:
                 r = (cli.post(url, json={}) if metodo == "POST"
-                     else cli.get(url))
+                     else cli.get(url, follow_redirects=segui))
                 return slug, r.status_code
             except httpx.HTTPError:
                 return slug, -1       # errore di rete transitorio: non potare
@@ -74,7 +81,7 @@ def pota(dsn: str, platform_id: str, limite: int = 1000) -> dict:
                 stats["esaminati"] += 1
                 # morto SOLO se 404/410 (definitivo). 429/500/403/rete sono
                 # transitori: NON si pota, per non disattivare un vivo.
-                if code in (404, 410):
+                if code in (404, 410) or (not segui and 300 <= code < 400):
                     c.execute("UPDATE ats_companies SET is_active=false "
                               "WHERE platform_id=%s AND slug=%s",
                               (platform_id, slug))
