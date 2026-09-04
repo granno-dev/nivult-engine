@@ -1197,6 +1197,7 @@ class Taleez(BaseAdapter):
                 location=locstr, city=citta, country=_iso(paese),
                 posted_at=j.get("publishDate"),
                 raw={"contract": j.get("contract"), "remote": j.get("remote"),
+                     "logo": j.get("logo"),
                      "city": citta, "country": paese}))
         return out
 
@@ -1307,6 +1308,8 @@ class Niceboard(BaseAdapter):
                     posted_at=j.get("published_at"),
                     department=(dep or None),
                     raw={"company": j.get("company_name"),
+                         "logo": j.get("company_logo")
+                                 or (j.get("company") or {}).get("logo_url"),
                          "is_remote": j.get("is_remote"),
                          "apply_url": j.get("apply_url"),
                          "location_name": loc}))
