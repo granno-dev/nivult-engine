@@ -201,7 +201,16 @@ def _dk(cli: httpx.Client, nome: str):
     ris = r.json()
     if not isinstance(ris, dict) or not _combacia(nome, [ris.get("name")]):
         return None
-    return (ris.get("industrydesc"), ris.get("employees"), None)
+    # employees puo' essere un numero O una fascia testuale ("200-499")
+    dip, fascia = ris.get("employees"), None
+    if isinstance(dip, str):
+        m = re.match(r"^(\d+)\s*-\s*(\d+)$", dip.strip())
+        if m:
+            fascia = dip.strip()
+            dip = (int(m.group(1)) + int(m.group(2))) // 2
+        else:
+            dip = int(dip) if dip.strip().isdigit() else None
+    return (ris.get("industrydesc"), dip, fascia)
 
 
 class _Edgar:
