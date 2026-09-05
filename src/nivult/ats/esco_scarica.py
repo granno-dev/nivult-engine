@@ -14,13 +14,33 @@ import logging
 import os
 import time
 
+import re
+
 import httpx
 
 log = logging.getLogger("nivult.ats.esco_scarica")
 
-DESTINAZIONE = "/opt/nivult/esco-competenze.jsonl"
 API = "https://ec.europa.eu/esco/api"
-RADICE = "http://data.europa.eu/esco/concept-scheme/skills"
+
+# due schemi, stessa camminata: le COMPETENZE (per il technographic) e
+# le OCCUPAZIONI (~3.000 mestieri: normalizzare i titoli e' cio' che
+# stringe le stime salariali — lo scarto -38% su Manufacturing era
+# proprio la famiglia troppo larga)
+SCHEMI = {
+    "competenze": {
+        "destinazione": "/opt/nivult/esco-competenze.jsonl",
+        "radice": "http://data.europa.eu/esco/concept-scheme/skills",
+        "foglia": r"/skill/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}"
+                  r"-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "occupazioni": {
+        "destinazione": "/opt/nivult/esco-occupazioni.jsonl",
+        "radice": "http://data.europa.eu/esco/concept-scheme/occupations",
+        "foglia": r"/occupation/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}"
+                  r"-[0-9a-f]{4}-[0-9a-f]{12}$"},
+}
+# per l'API SKOS ogni nodo e' className "Concept": le FOGLIE si
+# riconoscono dall'URI, che finisce con un UUID; i gruppi hanno codici
+# corti (S5.7, T2). Scoperto dopo un'ora a zero raccolte.
 
 
 def _get(cli: httpx.Client, percorso: str, uri: str) -> dict | None:
@@ -37,7 +57,11 @@ def _get(cli: httpx.Client, percorso: str, uri: str) -> dict | None:
     return None
 
 
-def scarica(destinazione: str = DESTINAZIONE) -> int:
+def scarica(schema: str = "competenze") -> int:
+    cfg = SCHEMI[schema]
+    destinazione = cfg["destinazione"]
+    foglia = re.compile(cfg["foglia"])
+    radice = cfg["radice"]
     stato_file = destinazione + ".stato"
     parziale = destinazione + ".parziale"
     try:
@@ -46,7 +70,7 @@ def scarica(destinazione: str = DESTINAZIONE) -> int:
         log.info("riprendo: %d in frontiera, %d visti, %d competenze",
                  len(frontiera), len(visti), n)
     except Exception:                                # noqa: BLE001
-        frontiera, visti, n = [RADICE], set(), 0
+        frontiera, visti, n = [radice], set(), 0
         open(parziale, "w").close()
     cli = httpx.Client(timeout=45, headers={
         "User-Agent": "nivult-ats/1.0 (taxonomy sync)"})
@@ -57,13 +81,12 @@ def scarica(destinazione: str = DESTINAZIONE) -> int:
             if uri in visti:
                 continue
             visti.add(uri)
-            percorso = "resource/taxonomy" if uri == RADICE \
+            percorso = "resource/taxonomy" if uri == radice \
                 else "resource/concept"
             d = _get(cli, percorso, uri)
             if d is None:
                 continue
-            classe = d.get("className", "")
-            if classe == "Skill":
+            if foglia.search(uri):
                 pref = d.get("preferredLabel") or {}
                 fp.write(json.dumps({
                     "uri": uri, "preferred": pref,
@@ -73,7 +96,8 @@ def scarica(destinazione: str = DESTINAZIONE) -> int:
                 n += 1
             links = d.get("_links") or {}
             for ramo in ("hasTopConcept", "narrowerConcept",
-                         "narrowerSkill", "narrowerTransversalSkill"):
+                         "narrowerSkill", "narrowerTransversalSkill",
+                         "narrowerOccupation"):
                 for v in links.get(ramo) or []:
                     if v.get("uri") and v["uri"] not in visti:
                         frontiera.append(v["uri"])
@@ -96,5 +120,8 @@ def scarica(destinazione: str = DESTINAZIONE) -> int:
 
 
 if __name__ == "__main__":
+    import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    print(scarica())
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--schema", choices=list(SCHEMI), default="competenze")
+    print(scarica(ap.parse_args().schema))

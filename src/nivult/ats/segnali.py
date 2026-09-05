@@ -39,6 +39,7 @@ def prepara(dsn: str) -> None:
                 slug        text NOT NULL,
                 skill       text NOT NULL,
                 mentions    int  NOT NULL,
+                mentions_title int NOT NULL DEFAULT 0,
                 first_seen  timestamptz NOT NULL DEFAULT now(),
                 last_seen   timestamptz NOT NULL DEFAULT now(),
                 PRIMARY KEY (platform_id, slug, skill))""")
@@ -50,16 +51,25 @@ def aggiorna(dsn: str) -> dict:
     e' nostra e nessun demone la tocca."""
     prepara(dsn)
     with psycopg.connect(dsn, autocommit=True) as c:
+        # fiducia v2, come i grandi: una menzione NEL TITOLO pesa piu'
+        # di dieci nella descrizione — «Senior React Developer» e' una
+        # dichiarazione, «react» a meta' testo puo' essere contorno.
+        c.execute("ALTER TABLE azienda_skill ADD COLUMN IF NOT EXISTS "
+                  "mentions_title int NOT NULL DEFAULT 0")
         n = c.execute("""
             INSERT INTO azienda_skill (platform_id, slug, skill,
-                                       mentions, first_seen, last_seen)
+                                       mentions, mentions_title,
+                                       first_seen, last_seen)
             SELECT j.platform_id, j.slug, s.skill, count(*),
+                   count(*) FILTER (WHERE position(lower(s.skill)
+                                          IN lower(j.title)) > 0),
                    now(), now()
               FROM ats_jobs j, LATERAL unnest(j.skills) AS s(skill)
              WHERE j.expired_at IS NULL
              GROUP BY 1, 2, 3
             ON CONFLICT (platform_id, slug, skill) DO UPDATE
                SET mentions = EXCLUDED.mentions,
+                   mentions_title = EXCLUDED.mentions_title,
                    last_seen = now()""").rowcount
         tot = c.execute("SELECT count(*) FROM azienda_skill").fetchone()[0]
     log.info("azienda_skill: %d toccate, %d totali", n, tot)
@@ -80,8 +90,11 @@ def segnali(dsn: str, giorni: int = 30) -> int:
             cur.execute("""
                 SELECT a.platform_id, a.slug, ac.company_name, ac.country,
                        ac.logo_domain, a.skill, a.mentions, a.first_seen,
-                       CASE WHEN a.mentions >= 3 THEN 'high'
-                            WHEN a.mentions = 2 THEN 'medium'
+                       CASE WHEN a.mentions_title >= 1
+                             AND a.mentions >= 2 THEN 'high'
+                            WHEN a.mentions >= 3 THEN 'high'
+                            WHEN a.mentions = 2
+                              OR a.mentions_title >= 1 THEN 'medium'
                             ELSE 'low' END
                   FROM azienda_skill a
                   JOIN ats_companies ac ON ac.platform_id = a.platform_id
