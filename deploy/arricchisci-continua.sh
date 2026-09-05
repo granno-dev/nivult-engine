@@ -30,9 +30,9 @@ while true; do
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
   # lingua dell'annuncio: deterministica, gratis, dopo le descrizioni
   "$PY" -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
-  "$PY" -m nivult.ats.descrizioni --workday --limite 1500 2>&1 | tail -1 || true
-  "$PY" -m nivult.ats.descrizioni --da-pagina --limite 1500 2>&1 | tail -1 || true
-  "$PY" -m nivult.ats.descrizioni --da-testo --limite 1500 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.descrizioni --workday --limite 2500 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.descrizioni --da-pagina --limite 2500 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.
   "$PY" -m nivult.ats.profilo --limite 40000 --glm-max 400 2>&1 | tail -1 || true
