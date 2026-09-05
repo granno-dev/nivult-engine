@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 
 import psycopg
 
@@ -167,15 +168,99 @@ def arricchisci(dsn: str, limite: int = 100000) -> dict:
     return stats
 
 
+# ── strato GLM (gratuito) sul residuo con descrizione ───────────────
+_PROMPT_EXTRA = """Read this job posting. Answer ONLY with JSON:
+{{"employment_type":"full_time|part_time|contract|temporary|internship|apprenticeship|unknown","seniority":"intern|junior|mid|senior|lead|head|unknown"}}
+Use "unknown" when the posting does not say it. Never guess.
+TITLE: {t}
+TEXT: {d}"""
+
+_VAL_ET = {"full_time", "part_time", "contract", "temporary",
+           "internship", "apprenticeship"}
+_VAL_SEN = {"intern", "junior", "mid", "senior", "lead", "head"}
+
+
+def glm_residuo(dsn: str, limite: int = 2000) -> dict:
+    """Contratto e seniority dal TESTO, per le offerte dove le regole
+    non li hanno trovati: GLM Flash (gratuito) li legge dove sono
+    scritti in modi che nessuna regex enumera. Non e' una stima: se
+    l'annuncio non lo dice, il modello risponde unknown e il campo
+    resta NULL. Marcatore suo (glm_extra_at); chiamata fallita = riga
+    NON marcata (bruciarla la toglierebbe dai ritenti per sempre)."""
+    import json as _json
+    from .profilo import _glm_flash, _descrizione
+    stats = {"esaminate": 0, "contratto": 0, "seniority": 0,
+             "unknown": 0, "errori": 0}
+    modello = _glm_flash()
+    ko_di_fila = 0
+    with psycopg.connect(dsn, autocommit=True) as c:
+        if _colonna_manca(c, "ats_jobs", "glm_extra_at"):
+            c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
+                      "glm_extra_at timestamptz")
+        righe = c.execute("""
+            SELECT id, title, raw FROM ats_jobs
+             WHERE expired_at IS NULL AND glm_extra_at IS NULL
+               AND (employment_type IS NULL OR seniority IS NULL)
+               AND extra_checked_at IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+        for jid, titolo, raw in righe:
+            descr = _descrizione(raw)
+            if not descr:
+                c.execute("UPDATE ats_jobs SET glm_extra_at = now() "
+                          "WHERE id = %s", (jid,))
+                continue
+            stats["esaminate"] += 1
+            try:
+                r = modello.chat([{"role": "user",
+                                   "content": _PROMPT_EXTRA.format(
+                                       t=(titolo or "")[:100],
+                                       d=descr[:1200])}], max_tokens=60)
+            except Exception:                        # noqa: BLE001
+                stats["errori"] += 1
+                ko_di_fila += 1
+                if ko_di_fila >= 3:
+                    log.warning("GLM giu' (429/credito?): lotto interrotto")
+                    break
+                continue
+            ko_di_fila = 0
+            time.sleep(0.4)      # il piano gratuito ha un rate limit
+            et = sen = None
+            try:
+                g = _json.loads(re.search(r"\{.*\}", r, re.S).group(0))
+                if g.get("employment_type") in _VAL_ET:
+                    et = g["employment_type"]
+                if g.get("seniority") in _VAL_SEN:
+                    sen = g["seniority"]
+            except Exception:                        # noqa: BLE001
+                pass
+            if not et and not sen:
+                stats["unknown"] += 1
+            c.execute("""UPDATE ats_jobs
+                            SET employment_type = coalesce(employment_type, %s),
+                                seniority = coalesce(seniority, %s),
+                                glm_extra_at = now()
+                          WHERE id = %s""", (et, sen, jid))
+            stats["contratto"] += 1 if et else 0
+            stats["seniority"] += 1 if sen else 0
+    log.info("glm_residuo: %s", stats)
+    return stats
+
+
 def main() -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="nivult.ats.estrai_extra")
     ap.add_argument("--limite", type=int, default=100000)
+    ap.add_argument("--glm", type=int, default=0, metavar="N",
+                    help="strato GLM sul residuo: al piu' N offerte")
     args = ap.parse_args()
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+    if args.glm:
+        print(glm_residuo(dsn, args.glm))
+        return 0
     print(arricchisci(dsn, args.limite))
     return 0
 

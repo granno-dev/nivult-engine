@@ -102,7 +102,11 @@ def attive(dsn: str) -> int:
             for r in cur:
                 stima = {}
                 if r[13] is None and r[6] and r[20]:
-                    cella = bench.get((r[6], r[20], r[10] or ""))                         or bench.get((r[6], r[20], ""))
+                    cella = bench.get((r[6], r[20], r[10] or ""))
+                    livello = f"{r[6]} x {r[20]} x {r[10]}"
+                    if not cella:
+                        cella = bench.get((r[6], r[20], ""))
+                        livello = f"{r[6]} x {r[20]}, all seniorities"
                     if cella:
                         val, p25, p50, p75, camp = cella
                         stima = {
@@ -113,7 +117,7 @@ def attive(dsn: str) -> int:
                             "salary_estimate_currency": val,
                             "salary_estimate_basis":
                                 f"Nivult benchmark: {camp} observed "
-                                f"postings, {r[6]} x {r[20]}"}
+                                f"postings, {livello}"}
                 f.write(_riga(
                     id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
                     company=r[4], url=r[5], country=r[6], city=r[7],
@@ -172,8 +176,22 @@ def aziende(dsn: str) -> int:
             cur.execute("""
                 SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
                        ac.logo_domain, ac.logo_url, ac.job_count,
-                       COALESCE(ac.employees_wd, cd.employees),
-                       ac.industry,
+                       COALESCE(ac.employees_reg, ac.employees_wd,
+                                cd.employees),
+                       COALESCE(ac.industry_reg, ac.industry,
+                                ac.industry_mix),
+                       ac.employees_reg_band, ac.reg_source,
+                       CASE WHEN ac.employees_reg IS NOT NULL
+                            THEN ac.reg_source
+                            WHEN ac.employees_wd IS NOT NULL
+                            THEN 'wikidata'
+                            WHEN cd.employees IS NOT NULL
+                            THEN 'domain' END,
+                       CASE WHEN ac.industry_reg IS NOT NULL
+                            THEN ac.reg_source
+                            WHEN ac.industry IS NOT NULL THEN 'wikidata'
+                            WHEN ac.industry_mix IS NOT NULL
+                            THEN 'job_mix' END,
                        (SELECT count(*) FROM ats_jobs j
                          WHERE j.platform_id = ac.platform_id
                            AND j.slug = ac.slug AND j.expired_at IS NULL
@@ -192,8 +210,11 @@ def aziende(dsn: str) -> int:
                 f.write(_riga(
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
                     domain=r[4], logo=r[5], active_jobs=r[6],
-                    employees=r[7], industry=r[8], jobs_posted_30d=r[9],
-                    languages=list(r[10] or []),
+                    employees=r[7], industry=r[8],
+                    employees_band=r[9], employees_source=r[11],
+                    industry_source=r[12],
+                    jobs_posted_30d=r[13],
+                    languages=list(r[14] or []),
                     top_skills=[{"skill": s, "jobs": c} for c, s in cime]))
                 n += 1
     _chiudi(percorso, f, n)

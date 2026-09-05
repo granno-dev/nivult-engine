@@ -40,7 +40,10 @@ def _tabella_manca(c, tabella: str) -> bool:
     return c.execute("SELECT to_regclass(%s)",
                      (tabella,)).fetchone()[0] is None
 
-MIN_CAMPIONE = 20
+MIN_CAMPIONE = 20      # per il pool '' (tutte le seniority insieme)
+MIN_CELLA = 12         # per la cella con seniority: e' un sottogruppo
+                       # del pool gia' validato, la base puo' essere
+                       # piu' piccola senza diventare rumore
 
 # (fattore verso l'anno, minimo plausibile, massimo plausibile)
 _PERIODI = {
@@ -88,7 +91,7 @@ def aggiorna(dsn: str) -> dict:
                        AND ({guardie})) j
               JOIN job_classifications x ON x.job_id = j.id
              GROUP BY 1, 2, 3, 4
-            HAVING count(*) >= {MIN_CAMPIONE}"""
+            HAVING count(*) >= {{min_n}}"""
         c.execute("TRUNCATE stipendi_benchmark")
         n_tot = 0
         # due livelli: con seniority (quando c'e') e senza (ripiego '')
@@ -96,8 +99,10 @@ def aggiorna(dsn: str) -> dict:
         # specifiche: con DO NOTHING vince chi arriva primo, e il primo
         # collaudo aveva l'ordine invertito — la cella-ripiego conteneva
         # solo i lavori SENZA seniority, un sottogruppo distorto.
-        for sen in ("''", "COALESCE(j.seniority, '')"):
-            for r in c.execute(base.format(sen=sen)).fetchall():
+        for sen, min_n in (("''", MIN_CAMPIONE),
+                           ("COALESCE(j.seniority, '')", MIN_CELLA)):
+            for r in c.execute(base.format(sen=sen,
+                                           min_n=min_n)).fetchall():
                 c.execute("""
                     INSERT INTO stipendi_benchmark
                         (country, currency, family, seniority,
@@ -110,7 +115,7 @@ def aggiorna(dsn: str) -> dict:
                 n_tot += 1
         celle = c.execute(
             "SELECT count(*) FROM stipendi_benchmark").fetchone()[0]
-    log.info("benchmark: %d celle con base >= %d", celle, MIN_CAMPIONE)
+    log.info("benchmark: %d celle (pool>=%d, celle>=%d)", celle, MIN_CAMPIONE, MIN_CELLA)
     return {"celle": celle}
 
 
