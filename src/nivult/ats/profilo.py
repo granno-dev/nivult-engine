@@ -279,8 +279,11 @@ def deterministico(titolo: str, luogo: str, raw: dict):
 
 # ── GLM-4.5-Flash: solo il residuo, gratuito, con tetto ─────────────
 
-_PROMPT = """Analizza questa offerta di lavoro. Rispondi SOLO con JSON:
+_PROMPT = """Analizza questa offerta. Rispondi SOLO con JSON:
 {{"seniority":"intern|junior|mid|senior|lead|head|unknown","remote":"remote|hybrid|onsite|unknown"}}
+seniority: DEDUCILA da responsabilita', anni richiesti, autonomia e
+ampiezza del ruolo, anche se non scritta esplicitamente; usa "unknown"
+solo se il testo non da' alcun segnale. remote: deducilo dall'assetto.
 TITOLO: {t}
 LUOGO: {l}
 TESTO: {d}"""

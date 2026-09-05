@@ -171,7 +171,9 @@ def arricchisci(dsn: str, limite: int = 100000) -> dict:
 # ── strato GLM (gratuito) sul residuo con descrizione ───────────────
 _PROMPT_EXTRA = """Read this job posting. Answer ONLY with JSON:
 {{"employment_type":"full_time|part_time|contract|temporary|internship|apprenticeship|unknown","seniority":"intern|junior|mid|senior|lead|head|unknown"}}
-Use "unknown" when the posting does not say it. Never guess.
+seniority: INFER from responsibilities, required years, autonomy and
+scope even if not stated; use "unknown" only if there is no signal.
+employment_type: only if stated or strongly implied; do NOT guess.
 TITLE: {t}
 TEXT: {d}"""
 
