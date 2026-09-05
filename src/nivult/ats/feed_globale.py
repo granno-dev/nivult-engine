@@ -133,7 +133,18 @@ def smartrecruiters(dsn: str, paesi: set[str] | None = None,
                           city = EXCLUDED.city,
                           country = COALESCE(EXCLUDED.country,
                                              ats_jobs.country),
-                          posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                          posted_at = EXCLUDED.posted_at,
+                          -- la descrizione la recupera un passo a valle
+                          -- (dettaglio /postings): non c'e' nel payload
+                          -- della lista, e un raw=EXCLUDED.raw nudo la
+                          -- cancellava a ogni ri-ingestione (misurato:
+                          -- SR fermo al 4%). La si ri-attacca.
+                          raw = CASE
+                            WHEN ats_jobs.raw ? 'description'
+                                 AND NOT (EXCLUDED.raw ? 'description')
+                            THEN EXCLUDED.raw || jsonb_build_object(
+                                   'description', ats_jobs.raw->'description')
+                            ELSE EXCLUDED.raw END,
                           fetched_at = now()
                         RETURNING (xmax = 0) AS is_new
                     """, (tenant, jid, titolo[:300], url, citta,

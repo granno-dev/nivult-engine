@@ -113,15 +113,19 @@ def _controlli() -> list[str]:
             # sparava sull'appena-nato non ancora arricchito).
             # created_at esiste dal 04/09/2026 sera: lo spartiacque
             # tiene fuori il backfill del default.
+            # Si giudicano le offerte NUOVE per posted_at (la data vera
+            # dell'annuncio), non per created_at: quest'ultimo e' stato
+            # inquinato dal fix del backfill (righe senza posted_at
+            # finite su fetched_at, che e' sempre recente) e faceva
+            # sembrare "nuove" 227k offerte vecchie e spoglie.
             tot, con_d, con_p = c.execute("""SELECT count(*),
                 count(*) FILTER (WHERE raw ?| array['description',
                     'descriptionHtml','descriptionPlain','jobDescription',
                     'job_description','content','externalDescription']),
                 count(country)
                 FROM ats_jobs
-               WHERE created_at > greatest(now() - interval '30 hours',
-                     '2026-09-04T20:30:00+00:00'::timestamptz)
-                 AND created_at < now() - interval '6 hours'""").fetchone()
+               WHERE posted_at > now() - interval '30 hours'
+                 AND posted_at < now() - interval '6 hours'""").fetchone()
             if tot and tot >= 2000:
                 if con_d * 100 < tot * 40:
                     problemi.append(

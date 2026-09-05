@@ -112,7 +112,7 @@ def scarica_arbetsformedlingen(dsn: str, limite: int = 1000) -> dict:
                             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
-                              posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                              posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (jid,
@@ -228,7 +228,7 @@ def scarica_francetravail(dsn: str, limite: int = 1000) -> dict:
                             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
-                              posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                              posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (oid,
@@ -336,7 +336,7 @@ def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
                             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
-                              posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                              posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (refnr, titolo, url, citta, citta, dt,
@@ -582,7 +582,7 @@ def eures(dsn: str, limite: int = 2000, paesi: str = "IT") -> dict:
                                   title = EXCLUDED.title, url = EXCLUDED.url,
                                   location = EXCLUDED.location, city = EXCLUDED.city,
                                   country = COALESCE(EXCLUDED.country, ats_jobs.country),
-                                  posted_at = EXCLUDED.posted_at, raw = EXCLUDED.raw,
+                                  posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                                   fetched_at = now()
                                 RETURNING (xmax = 0) AS is_new
                             """, (paese.lower(), jid, titolo[:300], url,

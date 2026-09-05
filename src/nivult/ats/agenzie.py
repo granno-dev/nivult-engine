@@ -300,7 +300,7 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                                 %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (platform_id, external_id) DO UPDATE SET
                           title = EXCLUDED.title,
-                          city = EXCLUDED.city, raw = EXCLUDED.raw,
+                          city = EXCLUDED.city, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                           -- COALESCE, non assegnazione secca: un paese
                           -- gia' scritto non va perso se oggi arriva vuoto
                           country = COALESCE(EXCLUDED.country, ats_jobs.country),

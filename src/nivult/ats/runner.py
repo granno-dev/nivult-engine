@@ -224,7 +224,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
                               location = EXCLUDED.location,
                               country = COALESCE(EXCLUDED.country, ats_jobs.country),
                               city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
-                              department = EXCLUDED.department, raw = EXCLUDED.raw,
+                              department = EXCLUDED.department, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                               expired_at = NULL,   -- rivista = di nuovo viva
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
