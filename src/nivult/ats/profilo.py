@@ -290,10 +290,18 @@ _VAL_REM = {"remote", "hybrid", "onsite"}
 
 
 def _glm_flash():
-    from nivult.matching.llm import GLM
-    m = GLM()
-    m.model = "glm-4.5-flash"          # il modello GRATUITO: mai credito pagato
-    return m
+    """Il pool di modelli GRATUITI a rotazione (Groq/Qwen + GLM-flash +
+    Mistral): quando uno e' saturo passa al successivo, throughput da
+    tier a pagamento a costo zero. Ricade su GLM-flash da solo se le
+    altre chiavi non ci sono. Il nome resta _glm_flash per non toccare
+    i chiamanti."""
+    from nivult.matching.llm import PoolModello, GLM
+    try:
+        return PoolModello()
+    except SystemExit:
+        m = GLM()
+        m.model = "glm-4.5-flash"
+        return m
 
 
 def col_flash(modello, titolo, luogo, descr):

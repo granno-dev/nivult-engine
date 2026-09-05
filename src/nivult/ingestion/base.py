@@ -126,6 +126,12 @@ class HttpSource:
                 # causa vera dietro un errore che non le somiglia.
                 raise CreditoEsaurito(f"{self.source}: {r.text[:200]}")
 
+            if r.status_code == 429 and getattr(self, "fail_fast", False):
+                # Dentro un pool a rotazione non si aspetta: si alza subito
+                # il 429 e il pool passa a un altro modello. La pausa la
+                # gestisce il pool, non il singolo client.
+                raise RuntimeError(f"{self.source}: 429")
+
             if r.status_code == 429:
                 # Retry-After è il numero che la fonte ci sta dando: ignorarlo
                 # e riprovare col nostro backoff è il modo di farsi bandire.

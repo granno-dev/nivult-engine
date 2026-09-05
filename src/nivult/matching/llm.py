@@ -130,6 +130,95 @@ class MistralSmall(ChatModel):
         return os.environ.get("MISTRAL_BASE_URL", "https://api.mistral.ai/v1")
 
 
+class Groq(ChatModel):
+    source = "groq"
+    model = "qwen/qwen3.8-27b"          # multilingua pulito, JSON al primo colpo
+    env_key = "GROQ_API_KEY"
+
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("GROQ_BASE_URL",
+                              "https://api.groq.com/openai/v1")
+
+
+class PoolModello:
+    """Un client unico che ruota su piu' modelli GRATUITI: quando uno e'
+    saturo (429) passa al successivo, cosi' la somma delle quote gratuite
+    da' throughput da tier a pagamento. Espone .chat() identico a
+    ChatModel, quindi i passi esistenti non cambiano.
+
+    Ogni provider ha un 'disponibile_da': un 429 lo mette in pausa breve
+    e il giro prosegue sugli altri. Se sono tutti in pausa si aspetta il
+    piu' vicino. NON e' per il matching del digest (quello resta GLM 5.2,
+    scelta di prodotto): e' per l'arricchimento ad alto volume."""
+
+    # (classe, modello, pausa dopo un 429 in secondi). Ordine = preferenza:
+    # prima i piu' generosi/puliti, Mistral per ultimo (free tier severo).
+    _RICETTA = [
+        (Groq, "qwen/qwen3.8-27b", 3.0),
+        ("GLM_FLASH", "glm-4.5-flash", 2.0),
+        (MistralSmall, "mistral-small-latest", 8.0),
+    ]
+
+    def __init__(self):
+        import time as _t
+        self._t = _t
+        self.membri = []           # [{"m":client,"pausa":s,"pronto":ts,"nome":str}]
+        for classe, modello, pausa in self._RICETTA:
+            try:
+                if classe == "GLM_FLASH":
+                    m = GLM(max_retries=1)
+                    m.model = modello
+                else:
+                    m = classe(max_retries=1)
+                    m.model = modello
+            except SystemExit:
+                continue           # chiave assente: si salta, non e' un errore
+            m.fail_fast = True     # il 429 rimbalza subito: il pool ruota
+            self.membri.append({"m": m, "pausa": pausa,
+                                "pronto": 0.0, "nome": m.source})
+        if not self.membri:
+            raise SystemExit("nessun modello gratuito configurato")
+        self._giro = 0
+
+    def quanti(self) -> int:
+        return len(self.membri)
+
+    def chat(self, messages, **kw) -> str:
+        n = len(self.membri)
+        ultimo_errore = None
+        for _ in range(n * 2):
+            adesso = self._t.monotonic()
+            # scelta a rotazione, saltando chi e' in pausa
+            scelto = None
+            for k in range(n):
+                cand = self.membri[(self._giro + k) % n]
+                if cand["pronto"] <= adesso:
+                    scelto = cand
+                    self._giro = (self._giro + k + 1) % n
+                    break
+            if scelto is None:
+                # tutti in pausa: aspetta il piu' vicino
+                attesa = min(x["pronto"] for x in self.membri) - adesso
+                if attesa > 0:
+                    self._t.sleep(min(attesa, 10))
+                continue
+            try:
+                return scelto["m"].chat(messages, **kw)
+            except RuntimeError as e:
+                ultimo_errore = e
+                testo = str(e)
+                # 429 / rate / quota: metti in pausa questo, prova un altro
+                if "429" in testo or "rate" in testo.lower() \
+                        or "quota" in testo.lower() or "1300" in testo:
+                    scelto["pronto"] = self._t.monotonic() + scelto["pausa"]
+                    continue
+                # errore diverso (modello, rete): pausa breve e prova altrove
+                scelto["pronto"] = self._t.monotonic() + 1.0
+                continue
+        raise RuntimeError(f"pool: tutti i modelli falliti ({ultimo_errore})")
+
+
 RUBRICA = """Sei un selezionatore esperto. Valuta se QUESTA offerta merita il
 tempo di QUESTO candidato: potrebbe farla, e sarebbe un passo sensato per lui?
 
