@@ -310,20 +310,40 @@ def _chiave(titolo: str, slug: str, citta: str | None) -> str | None:
 
 def dedup(dsn: str, limite: int = 50000) -> int:
     """Calcola la duplicate_key e marca i duplicati."""
-    with psycopg.connect(dsn) as conn:
+    with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, title, slug, city FROM ats_jobs
                  WHERE duplicate_key IS NULL
+                 ORDER BY id
                  LIMIT %s
             """, (limite,))
             righe = cur.fetchall()
+
+        def _scrivi(lotto: list) -> None:
+            # in ordine di id e a lotti corti: i demoni toccano le stesse
+            # righe, e 50k UPDATE sparsi in un'unica transazione erano un
+            # calamita-deadlock (FALLITO in manutenzione). Un tentativo
+            # di riserva per gli incroci residui.
+            for _ in range(2):
+                try:
+                    with conn.cursor() as cur:
+                        cur.executemany(
+                            "UPDATE ats_jobs SET duplicate_key = %s "
+                            "WHERE id = %s", lotto)
+                    return
+                except psycopg.errors.DeadlockDetected:
+                    pass
+            raise RuntimeError("dedup: lotto bloccato due volte")
+
+        lotto: list = []
         for jid, titolo, slug, citta in righe:
-            k = _chiave(titolo, slug, citta)
-            with conn.cursor() as cur:
-                cur.execute("UPDATE ats_jobs SET duplicate_key = %s WHERE id = %s",
-                            (k, jid))
-        conn.commit()
+            lotto.append((_chiave(titolo, slug, citta), jid))
+            if len(lotto) >= 300:
+                _scrivi(lotto)
+                lotto = []
+        if lotto:
+            _scrivi(lotto)
     # statistiche: quante chiavi condivise
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:

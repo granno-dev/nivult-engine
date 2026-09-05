@@ -107,10 +107,30 @@ def _http(url: str, timeout: int = 90) -> str:
     raise ultimo
 
 
+_CRAWL_CACHE = "/opt/nivult/crawls-recenti.json"
+
+
 def _crawl_recenti(quanti: int = 3) -> list[str]:
-    dati = json.loads(_http("https://index.commoncrawl.org/collinfo.json",
-                            timeout=30))
-    return [c["id"] for c in dati[:quanti]]
+    """L'elenco dei crawl recenti, con memoria: l'indice di Common Crawl
+    di notte a volte RIFIUTA le connessioni (visto: tre tentativi, tre
+    Connection refused), ma l'elenco cambia una volta al mese — quello
+    di ieri va benissimo. Si salva a ogni successo, si ripesca al bisogno."""
+    try:
+        dati = json.loads(_http("https://index.commoncrawl.org/collinfo.json",
+                                timeout=30))
+        ids = [c["id"] for c in dati[:quanti]]
+        with open(_CRAWL_CACHE + ".tmp", "w") as f:
+            json.dump(ids, f)
+        os.replace(_CRAWL_CACHE + ".tmp", _CRAWL_CACHE)
+        return ids
+    except Exception as exc:                         # noqa: BLE001
+        try:
+            ids = json.load(open(_CRAWL_CACHE))[:quanti]
+            log.warning("indice CC irraggiungibile (%s): uso l'elenco "
+                        "ricordato %s", type(exc).__name__, ids)
+            return ids
+        except OSError:
+            raise exc
 
 
 def _urls_da_cc(dominio: str, crawls: list[str]) -> set[str]:
