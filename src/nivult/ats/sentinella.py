@@ -215,9 +215,17 @@ def main() -> int:
     problemi = [p for p in problemi if p not in sospetti_ora]
 
     nuovi = [p for p in problemi if p not in attivi]
+    def _soglia_riallarme(problema: str) -> int:
+        # la manutenzione puo' guarire SOLO alla corsa notturna
+        # successiva: ricordarglielo ogni 6 ore e' spavento inutile
+        # (successo: mail delle 14:40 per il fallito delle 04 gia' noto)
+        if problema.startswith("manutenzione"):
+            return 24 * 3600
+        return RIALLARME_ORE * 3600
+
     persistenti = [p for p in problemi
                    if p in attivi
-                   and adesso - attivi[p] > RIALLARME_ORE * 3600]
+                   and adesso - attivi[p] > _soglia_riallarme(p)]
     rientrati = [p for p in attivi if p not in problemi]
 
     if nuovi or persistenti:
