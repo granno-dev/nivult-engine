@@ -133,9 +133,25 @@ def _crawl_recenti(quanti: int = 3) -> list[str]:
             raise exc
 
 
+class IndiceCCChiuso(Exception):
+    """L'indice ci sta rifiutando: continuare a bussare peggiora il
+    castigo. Ci siamo gia' fatti bloccare l'IP una volta cosi'."""
+
+
+_CC_RIFIUTI = 0
+
+
 def _urls_da_cc(dominio: str, crawls: list[str]) -> set[str]:
-    """Tutti gli URL archiviati da Common Crawl sotto *.dominio."""
+    """Tutti gli URL archiviati da Common Crawl sotto *.dominio.
+
+    Con l'interruttore: tre domini di fila rifiutati a livello di
+    connessione = l'indice ci ha chiuso la porta (e' successo: IP
+    bloccato dopo mesi di interrogazioni fitte). Si smette subito e
+    si riprova alla corsa successiva, da educati.
+    """
+    global _CC_RIFIUTI
     urls: set[str] = set()
+    rifiutato_qui = False
     for cr in crawls:
         q = urllib.parse.quote(f"*.{dominio}", safe="*.")
         base = f"https://index.commoncrawl.org/{cr}-index?url={q}&output=json"
@@ -145,9 +161,16 @@ def _urls_da_cc(dominio: str, crawls: list[str]) -> set[str]:
                     urls.add(json.loads(riga)["url"])
                 except (ValueError, KeyError):
                     continue
+            _CC_RIFIUTI = 0
         except Exception as e:                      # noqa: BLE001
             log.info("CC %s su %s: %s", cr, dominio, e)
-        time.sleep(2)
+            if "refused" in str(e).lower():
+                rifiutato_qui = True
+        time.sleep(3)          # passo educato: mai piu' martellare
+    if rifiutato_qui:
+        _CC_RIFIUTI += 1
+        if _CC_RIFIUTI >= 3:
+            raise IndiceCCChiuso
     return urls
 
 
@@ -222,7 +245,12 @@ def scopri(dsn: str, piattaforme: list[str] | None, limite_nuove: int,
             esito["piattaforme"] += 1
             urls: set[str] = set()
             if not solo_wayback:
-                urls |= _urls_da_cc(dominio, crawls)
+                try:
+                    urls |= _urls_da_cc(dominio, crawls)
+                except IndiceCCChiuso:
+                    log.warning("indice CC ci rifiuta: parte CC chiusa "
+                                "per questa corsa, si riprova domani")
+                    crawls = []          # il resto del giro salta il CC
             if not solo_cc:
                 stato = seg.get(pid, {})
                 da = 0 if stato.get("finito") else stato.get("pagina", 0)
