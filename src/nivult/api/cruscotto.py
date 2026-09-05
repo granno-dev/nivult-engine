@@ -519,7 +519,8 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
             "coalesce(industry_reg, industry, industry_mix) IS NOT NULL"),
         "aziende_con_organico": _forse(
             "SELECT count(*) FROM ats_companies "
-            "WHERE coalesce(employees_reg, employees_wd) IS NOT NULL"),
+            "WHERE coalesce(employees_reg, employees_wd, "
+            "employees_self) IS NOT NULL"),
         "storico_chiuse": _forse(
             "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL"),
         "paesi_memoria": _forse(
@@ -1177,7 +1178,7 @@ async function tick(){
    +c(mg.storico_chiuse,'offerte nello storico','con data di chiusura: mai cancellate')
    +c(mg.celle_benchmark,'celle benchmark salari','base minima 20 annunci l’una')
    +c(mg.aziende_con_settore,'aziende con settore','registri pubblici, Wikidata o mix delle offerte')
-   +c(mg.aziende_con_organico,'aziende con organico','dai registri imprese o Wikidata')
+   +c(mg.aziende_con_organico,'aziende con organico','registri, Wikidata o dichiarato negli annunci')
    +c(mg.paesi_memoria,'coppie azienda-paese','per i segnali di espansione')
    +'</div>';})(d.magazzino)
  +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'

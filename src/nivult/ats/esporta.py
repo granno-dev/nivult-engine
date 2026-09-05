@@ -177,7 +177,7 @@ def aziende(dsn: str) -> int:
                 SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
                        ac.logo_domain, ac.logo_url, ac.job_count,
                        COALESCE(ac.employees_reg, ac.employees_wd,
-                                cd.employees),
+                                ac.employees_self, cd.employees),
                        COALESCE(ac.industry_reg, ac.industry,
                                 ac.industry_mix),
                        ac.employees_reg_band, ac.reg_source,
@@ -185,6 +185,8 @@ def aziende(dsn: str) -> int:
                             THEN ac.reg_source
                             WHEN ac.employees_wd IS NOT NULL
                             THEN 'wikidata'
+                            WHEN ac.employees_self IS NOT NULL
+                            THEN 'self_declared'
                             WHEN cd.employees IS NOT NULL
                             THEN 'domain' END,
                        CASE WHEN ac.industry_reg IS NOT NULL
