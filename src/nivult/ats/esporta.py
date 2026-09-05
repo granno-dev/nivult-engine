@@ -67,7 +67,19 @@ def _riga(**kv) -> str:
 def attive(dsn: str) -> int:
     percorso, f = _apri("offerte-attive")
     n = 0
+    copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
+                                "description", "language", "category",
+                                "country", "skills")}
     with psycopg.connect(dsn) as conn:
+        # il benchmark in memoria: stima SOLO dove l'annuncio tace, in
+        # campi SEPARATI e dichiarati — mai mescolata con l'osservato
+        bench: dict = {}
+        with conn.cursor() as cur:
+            cur.execute("""SELECT country, currency, family, seniority,
+                                  p25, p50, p75, n
+                             FROM stipendi_benchmark""")
+            for r in cur:
+                bench[(r[0], r[2], r[3])] = (r[1], r[4], r[5], r[6], r[7])
         with conn.cursor(name="esp_attive") as cur:
             cur.itersize = 2000
             cur.execute(f"""
@@ -78,13 +90,28 @@ def attive(dsn: str) -> int:
                        j.salary_min, j.salary_max, j.salary_currency,
                        j.posted_at, COALESCE(j.created_at, j.posted_at,
                                              j.fetched_at), j.fetched_at,
-                       {_DESCR}
+                       {_DESCR}, x.family
                   FROM ats_jobs j
                   LEFT JOIN ats_companies co
                          ON co.platform_id = j.platform_id
                         AND co.slug = j.slug
+                  LEFT JOIN job_classifications x ON x.job_id = j.id
                  WHERE j.expired_at IS NULL""")
             for r in cur:
+                stima = {}
+                if r[13] is None and r[6] and r[20]:
+                    cella = bench.get((r[6], r[20], r[10] or ""))                         or bench.get((r[6], r[20], ""))
+                    if cella:
+                        val, p25, p50, p75, camp = cella
+                        stima = {
+                            "salary_is_estimate": True,
+                            "salary_estimate_min": p25,
+                            "salary_estimate_median": p50,
+                            "salary_estimate_max": p75,
+                            "salary_estimate_currency": val,
+                            "salary_estimate_basis":
+                                f"Nivult benchmark: {camp} observed "
+                                f"postings, {r[6]} x {r[20]}"}
                 f.write(_riga(
                     id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
                     company=r[4], url=r[5], country=r[6], city=r[7],
@@ -93,9 +120,28 @@ def attive(dsn: str) -> int:
                     salary_min=float(r[13]) if r[13] is not None else None,
                     salary_max=float(r[14]) if r[14] is not None else None,
                     salary_currency=r[15], posted_at=r[16],
-                    first_seen=r[17], last_seen=r[18], description=r[19]))
+                    first_seen=r[17], last_seen=r[18], description=r[19],
+                    category=r[20], **stima))
                 n += 1
+                copertura["salary_observed"] += r[13] is not None
+                copertura["salary_estimate"] += bool(stima)
+                copertura["description"] += bool(r[19])
+                copertura["language"] += r[9] is not None
+                copertura["category"] += r[20] is not None
+                copertura["country"] += r[6] is not None
+                copertura["skills"] += bool(r[12])
     _chiudi(percorso, f, n)
+    # il manifest: la copertura di ogni campo, dichiarata. I venditori
+    # seri pubblicano i fill-rate; i buchi dichiarati sono un argomento
+    # di vendita, quelli scoperti dal cliente sono un rimborso.
+    manifest = {"date": dt.date.today().isoformat(), "rows": n,
+                "coverage": {k: round(100 * v / max(n, 1), 1)
+                             for k, v in copertura.items()}}
+    with open(f"{CARTELLA}/manifest-ultimo.json.tmp", "w") as mf:
+        json.dump(manifest, mf, indent=1)
+    os.replace(f"{CARTELLA}/manifest-ultimo.json.tmp",
+               f"{CARTELLA}/manifest-ultimo.json")
+    log.info("manifest: %s", manifest["coverage"])
     return n
 
 
