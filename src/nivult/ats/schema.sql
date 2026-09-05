@@ -98,3 +98,54 @@ CREATE TABLE IF NOT EXISTS company_domains (
 );
 
 CREATE INDEX IF NOT EXISTS company_domains_status_idx ON company_domains(status, employees DESC NULLS LAST);
+-- Guardia country a livello database: l'imbuto che ogni scrittore
+-- (runner, feed_globale, servizi_pubblici, agenzie, headless, e
+-- qualunque fonte futura) attraversa. Nato dopo aver trovato 71 codici
+-- non-ISO ('中国', 'M1', '26'...) sfuggiti da vie diverse: enforce in
+-- Postgres, non promesso dal codice.
+CREATE TABLE IF NOT EXISTS iso_paesi (code text PRIMARY KEY);
+INSERT INTO iso_paesi (code) VALUES
+ ('AD'),('AE'),('AF'),('AG'),('AI'),('AL'),('AM'),('AO'),('AQ'),('AR'),
+ ('AS'),('AT'),('AU'),('AW'),('AX'),('AZ'),('BA'),('BB'),('BD'),('BE'),
+ ('BF'),('BG'),('BH'),('BI'),('BJ'),('BL'),('BM'),('BN'),('BO'),('BQ'),
+ ('BR'),('BS'),('BT'),('BV'),('BW'),('BY'),('BZ'),('CA'),('CC'),('CD'),
+ ('CF'),('CG'),('CH'),('CI'),('CK'),('CL'),('CM'),('CN'),('CO'),('CR'),
+ ('CU'),('CV'),('CW'),('CX'),('CY'),('CZ'),('DE'),('DJ'),('DK'),('DM'),
+ ('DO'),('DZ'),('EC'),('EE'),('EG'),('EH'),('ER'),('ES'),('ET'),('FI'),
+ ('FJ'),('FK'),('FM'),('FO'),('FR'),('GA'),('GB'),('GD'),('GE'),('GF'),
+ ('GG'),('GH'),('GI'),('GL'),('GM'),('GN'),('GP'),('GQ'),('GR'),('GS'),
+ ('GT'),('GU'),('GW'),('GY'),('HK'),('HM'),('HN'),('HR'),('HT'),('HU'),
+ ('ID'),('IE'),('IL'),('IM'),('IN'),('IO'),('IQ'),('IR'),('IS'),('IT'),
+ ('JE'),('JM'),('JO'),('JP'),('KE'),('KG'),('KH'),('KI'),('KM'),('KN'),
+ ('KP'),('KR'),('KW'),('KY'),('KZ'),('LA'),('LB'),('LC'),('LI'),('LK'),
+ ('LR'),('LS'),('LT'),('LU'),('LV'),('LY'),('MA'),('MC'),('MD'),('ME'),
+ ('MF'),('MG'),('MH'),('MK'),('ML'),('MM'),('MN'),('MO'),('MP'),('MQ'),
+ ('MR'),('MS'),('MT'),('MU'),('MV'),('MW'),('MX'),('MY'),('MZ'),('NA'),
+ ('NC'),('NE'),('NF'),('NG'),('NI'),('NL'),('NO'),('NP'),('NR'),('NU'),
+ ('NZ'),('OM'),('PA'),('PE'),('PF'),('PG'),('PH'),('PK'),('PL'),('PM'),
+ ('PN'),('PR'),('PS'),('PT'),('PW'),('PY'),('QA'),('RE'),('RO'),('RS'),
+ ('RU'),('RW'),('SA'),('SB'),('SC'),('SD'),('SE'),('SG'),('SH'),('SI'),
+ ('SJ'),('SK'),('SL'),('SM'),('SN'),('SO'),('SR'),('SS'),('ST'),('SV'),
+ ('SX'),('SY'),('SZ'),('TC'),('TD'),('TF'),('TG'),('TH'),('TJ'),('TK'),
+ ('TL'),('TM'),('TN'),('TO'),('TR'),('TT'),('TV'),('TW'),('TZ'),('UA'),
+ ('UG'),('UM'),('US'),('UY'),('UZ'),('VA'),('VC'),('VE'),('VG'),('VI'),
+ ('VN'),('VU'),('WF'),('WS'),('YE'),('YT'),('ZA'),('ZM'),('ZW'),
+ ('UK'),('EL'),('XK')
+ON CONFLICT DO NOTHING;
+
+CREATE OR REPLACE FUNCTION valida_country() RETURNS trigger AS $$
+BEGIN
+  IF NEW.country IS NOT NULL THEN
+    NEW.country := upper(trim(NEW.country));
+    IF NOT EXISTS (SELECT 1 FROM iso_paesi WHERE code = NEW.country) THEN
+      NEW.country := NULL;   -- non e' un paese vero: meglio vuoto che falso
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_valida_country ON ats_jobs;
+CREATE TRIGGER trg_valida_country
+  BEFORE INSERT OR UPDATE OF country ON ats_jobs
+  FOR EACH ROW EXECUTE FUNCTION valida_country();
