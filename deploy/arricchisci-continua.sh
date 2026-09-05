@@ -30,6 +30,8 @@ while true; do
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
   # lingua dell'annuncio: deterministica, gratis, dopo le descrizioni
   "$PY" -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
+  # tipo di contratto + contatto pubblicato nell'annuncio
+  "$PY" -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --workday --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-pagina --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true

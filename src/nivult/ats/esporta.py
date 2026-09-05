@@ -69,7 +69,8 @@ def attive(dsn: str) -> int:
     n = 0
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
-                                "country", "skills")}
+                                "country", "skills", "employment_type",
+                                "contact_email")}
     with psycopg.connect(dsn) as conn:
         # il benchmark in memoria: stima SOLO dove l'annuncio tace, in
         # campi SEPARATI e dichiarati — mai mescolata con l'osservato
@@ -90,7 +91,8 @@ def attive(dsn: str) -> int:
                        j.salary_min, j.salary_max, j.salary_currency,
                        j.posted_at, COALESCE(j.created_at, j.posted_at,
                                              j.fetched_at), j.fetched_at,
-                       {_DESCR}, x.family
+                       {_DESCR}, x.family,
+                       j.employment_type, j.contact_email
                   FROM ats_jobs j
                   LEFT JOIN ats_companies co
                          ON co.platform_id = j.platform_id
@@ -121,7 +123,8 @@ def attive(dsn: str) -> int:
                     salary_max=float(r[14]) if r[14] is not None else None,
                     salary_currency=r[15], posted_at=r[16],
                     first_seen=r[17], last_seen=r[18], description=r[19],
-                    category=r[20], **stima))
+                    category=r[20], employment_type=r[21],
+                    contact_email=r[22], **stima))
                 n += 1
                 copertura["salary_observed"] += r[13] is not None
                 copertura["salary_estimate"] += bool(stima)
@@ -130,6 +133,8 @@ def attive(dsn: str) -> int:
                 copertura["category"] += r[20] is not None
                 copertura["country"] += r[6] is not None
                 copertura["skills"] += bool(r[12])
+                copertura["employment_type"] += r[21] is not None
+                copertura["contact_email"] += r[22] is not None
     _chiudi(percorso, f, n)
     # il manifest: la copertura di ogni campo, dichiarata. I venditori
     # seri pubblicano i fill-rate; i buchi dichiarati sono un argomento

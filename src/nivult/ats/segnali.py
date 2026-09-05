@@ -76,6 +76,34 @@ def aggiorna(dsn: str) -> dict:
     return {"toccate": n, "totali": tot}
 
 
+def aggiorna_paesi(dsn: str) -> dict:
+    """La memoria geografica: quando un'azienda e' apparsa per la prima
+    volta in ciascun paese. Il primo annuncio in un paese NUOVO di
+    un'azienda gia' nota e' un segnale di espansione — per chi vende
+    servizi alle aziende vale quanto l'adozione di una tecnologia."""
+    with psycopg.connect(dsn, autocommit=True) as c:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS azienda_paese (
+                platform_id text NOT NULL,
+                slug        text NOT NULL,
+                country     text NOT NULL,
+                jobs        int  NOT NULL,
+                first_seen  timestamptz NOT NULL DEFAULT now(),
+                last_seen   timestamptz NOT NULL DEFAULT now(),
+                PRIMARY KEY (platform_id, slug, country))""")
+        n = c.execute("""
+            INSERT INTO azienda_paese (platform_id, slug, country,
+                                       jobs, first_seen, last_seen)
+            SELECT platform_id, slug, country, count(*), now(), now()
+              FROM ats_jobs
+             WHERE expired_at IS NULL AND country IS NOT NULL
+             GROUP BY 1, 2, 3
+            ON CONFLICT (platform_id, slug, country) DO UPDATE
+               SET jobs = EXCLUDED.jobs, last_seen = now()""").rowcount
+    log.info("azienda_paese: %d toccate", n)
+    return {"toccate": n}
+
+
 def segnali(dsn: str, giorni: int = 30) -> int:
     """Esporta le adozioni: competenze nuove in aziende gia' note."""
     from nivult.ats.esporta import CARTELLA, _riga
@@ -114,6 +142,29 @@ def segnali(dsn: str, giorni: int = 30) -> int:
                     company=r[2], country=r[3], domain=r[4], skill=r[5],
                     mentions=r[6], first_seen=r[7], confidence=r[8]))
                 n += 1
+        # le espansioni geografiche: primo annuncio in un paese nuovo
+        # di un'azienda che conoscevamo gia' da prima
+        with conn.cursor(name="geo") as cur:
+            cur.itersize = 2000
+            cur.execute("""
+                SELECT g.platform_id, g.slug, ac.company_name, g.country,
+                       ac.country, g.jobs, g.first_seen
+                  FROM azienda_paese g
+                  JOIN ats_companies ac ON ac.platform_id = g.platform_id
+                                       AND ac.slug = g.slug
+                 WHERE g.first_seen > now() - make_interval(days => %s)
+                   AND EXISTS (SELECT 1 FROM azienda_paese v
+                                WHERE v.platform_id = g.platform_id
+                                  AND v.slug = g.slug
+                                  AND v.first_seen < g.first_seen
+                                        - interval '14 days')
+                 ORDER BY g.first_seen DESC""", (giorni,))
+            for r in cur:
+                f.write(_riga(
+                    event="geo_expansion", ats=r[0], company_slug=r[1],
+                    company=r[2], new_country=r[3], home_country=r[4],
+                    jobs=r[5], first_seen=r[6]))
+                n += 1
     os.replace(percorso + ".tmp", percorso)
     stabile = f"{CARTELLA}/segnali-tecnografici-ultimo.jsonl.gz"
     try:
@@ -139,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
     if args.aggiorna or not args.segnali:
         print("aggiorna:", aggiorna(dsn))
+        print("paesi:", aggiorna_paesi(dsn))
     if args.segnali:
         print("segnali:", segnali(dsn, args.giorni))
     return 0
