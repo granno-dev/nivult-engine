@@ -148,6 +148,27 @@ def _controlli() -> list[str]:
     except OSError:
         problemi.append("ponte: log non trovato")
 
+    # 3-bis. la manutenzione notturna: un passo FALLITO merita una mail,
+    # non solo una card gialla sul cruscotto. La data nel testo fa si'
+    # che ogni corsa faccia allarme una volta sola, e il rientro scatti
+    # alla prima corsa pulita.
+    try:
+        log_cron = open("/opt/nivult/engine/logs/ats-cron.log",
+                        errors="replace").read()[-40000:]
+        import re as _re
+        avvii = _re.findall(r"=== ATS nightly (20\S+) ===", log_cron)
+        blocco = log_cron.rsplit("=== ATS nightly 20", 1)[-1]
+        if avvii and "completato" in blocco:
+            passi = _re.findall(r"── ([^\n]+)\n\s+(ok|FALLITO)", blocco)
+            falliti = [n_.split("(")[0].strip() for n_, esito in passi
+                       if esito == "FALLITO"]
+            if falliti:
+                problemi.append(
+                    f"manutenzione del {avvii[-1][:10]}: passi falliti "
+                    f"({', '.join(falliti[:4])})")
+    except OSError:
+        pass
+
     # 4. credito GLM: a zero si fermano digest e CV, in silenzio. La
     # sonda da 1 token costa nulla; a credito zero l'API risponde 429
     # con codice 1113 senza addebitare.
