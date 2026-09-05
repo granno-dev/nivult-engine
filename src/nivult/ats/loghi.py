@@ -218,6 +218,64 @@ def da_brandfetch(dsn: str, limite: int = 200,
     return stats
 
 
+def da_dominio(dsn: str, limite: int = 2000,
+               client_id: str | None = None) -> dict:
+    """Logo cercando per DOMINIO invece che per nome: quando il dominio
+    l'abbiamo gia' risolto (vanity o brandfetch-nome con prova), la
+    ricerca per dominio non ha rischio di omonimi — e restituisce l'URL
+    CDN col brandId che funziona (i loghi-per-nome erano l'unica fonte
+    di errore, 31 casi nome!=dominio). Serve le aziende con dominio ma
+    ancora senza logo."""
+    cid = client_id or os.environ.get("BRANDFETCH_CLIENT_ID")
+    if not cid:
+        return {"da_dominio": 0}
+    import time
+    stats = {"esaminate": 0, "da_dominio": 0}
+    cli = httpx.Client(timeout=15, headers={"User-Agent": _UA})
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT platform_id, slug,
+                   coalesce(logo_domain, site_domain) AS dom
+              FROM ats_companies
+             WHERE is_active AND job_count >= 2
+               AND logo_url IS NULL
+               AND coalesce(logo_domain, site_domain) IS NOT NULL
+             ORDER BY job_count DESC LIMIT %s""", (limite,)).fetchall()
+        for pid, slug, dom in righe:
+            stats["esaminate"] += 1
+            try:
+                r = cli.get(f"https://api.brandfetch.io/v2/search/{dom}",
+                            params={"c": cid})
+                voci = r.json() if r.status_code == 200 else []
+            except Exception:                        # noqa: BLE001
+                time.sleep(3)
+                continue
+            time.sleep(0.6)
+            logo = None
+            droot = _norm(dom.split(".")[0])
+            for v in voci[:3]:
+                # match ESATTO sul dominio: nessun omonimo possibile
+                if isinstance(v, dict) and _norm(
+                        (v.get("domain") or "").split(".")[0]) == droot:
+                    ic = v.get("icon") or v.get("logo")
+                    if isinstance(ic, str) and ic.startswith("http") \
+                            and not _RIFIUTA.search(ic):
+                        logo = ic
+                        break
+            if logo:
+                c.execute("UPDATE ats_companies SET logo_url=%s, "
+                          "logo_checked_at=now() WHERE platform_id=%s "
+                          "AND slug=%s", (logo, pid, slug))
+                stats["da_dominio"] += 1
+    log.info("loghi da_dominio: %s", stats)
+    return stats
+
+
+def _dsn_env() -> str:
+    return os.environ.get("ATS_DATABASE_URL",
+        "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -225,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--da-offerte", action="store_true")
     ap.add_argument("--da-board", action="store_true")
     ap.add_argument("--da-brandfetch", action="store_true")
+    ap.add_argument("--da-dominio", action="store_true")
     ap.add_argument("--limite", type=int, default=400)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
@@ -238,6 +297,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.da_brandfetch:
         log.info("loghi da brandfetch: %s",
                  da_brandfetch(dsn, args.limite)); fatto = True
+    if args.da_dominio:
+        log.info("loghi da dominio: %s",
+                 da_dominio(dsn, args.limite)); fatto = True
     if not fatto:
         log.info("loghi da offerte: %d aziende", da_offerte(dsn))
     return 0

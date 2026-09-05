@@ -578,7 +578,8 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     d["live"] = []
     for t, slug, p, loc, city, cty, u, pa, raw, logo_az, dom in _righe(ats_dsn, """
         SELECT j.title, j.slug, j.platform_id, j.location, j.city, j.country,
-               j.url, j.posted_at, j.raw, ac.logo_url, ac.logo_domain
+               j.url, j.posted_at, j.raw, ac.logo_url,
+               coalesce(ac.logo_domain, ac.site_domain)
           FROM ats_jobs j
           LEFT JOIN ats_companies ac
                  ON ac.platform_id = j.platform_id AND ac.slug = j.slug
@@ -587,7 +588,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
          ORDER BY j.posted_at DESC LIMIT 30"""):
         azienda = None
         logo = logo_az   # logo a livello azienda (og:image / consolidato)
-        favicon = (f"https://www.google.com/s2/favicons?sz=64&domain={dom}"
+        favicon = (f"https://www.google.com/s2/favicons?sz=128&domain={dom}"
                    if dom else None)
         if isinstance(raw, dict):
             co = raw.get("company") or raw.get("hiringOrganization")
