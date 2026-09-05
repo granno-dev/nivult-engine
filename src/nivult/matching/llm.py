@@ -141,6 +141,19 @@ class Groq(ChatModel):
                               "https://api.groq.com/openai/v1")
 
 
+class Nvidia(ChatModel):
+    source = "nvidia"
+    # solo nemotron-3-super risponde pulito su questo account (gli altri
+    # danno 404 "not found for account"): un membro in piu', non sei
+    model = "nvidia/nemotron-3-super-120b-a12b"
+    env_key = "NVIDIA_API_KEY"
+
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("NVIDIA_BASE_URL",
+                              "https://integrate.api.nvidia.com/v1")
+
+
 class PoolModello:
     """Un client unico che ruota su piu' modelli GRATUITI: quando uno e'
     saturo (429) passa al successivo, cosi' la somma delle quote gratuite
@@ -156,6 +169,7 @@ class PoolModello:
     # prima i piu' generosi/puliti, Mistral per ultimo (free tier severo).
     _RICETTA = [
         (Groq, "qwen/qwen3.8-27b", 3.0),
+        (Nvidia, "nvidia/nemotron-3-super-120b-a12b", 120.0),
         ("GLM_FLASH", "glm-4.5-flash", 2.0),
         (MistralSmall, "mistral-small-latest", 8.0),
     ]
