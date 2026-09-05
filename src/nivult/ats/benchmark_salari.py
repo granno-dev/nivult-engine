@@ -73,7 +73,11 @@ def aggiorna(dsn: str) -> dict:
         c.execute("TRUNCATE stipendi_benchmark")
         n_tot = 0
         # due livelli: con seniority (quando c'e') e senza (ripiego '')
-        for sen in ("COALESCE(j.seniority, '')", "''"):
+        # PRIMA il pool ('' = tutte le seniority insieme), POI le celle
+        # specifiche: con DO NOTHING vince chi arriva primo, e il primo
+        # collaudo aveva l'ordine invertito — la cella-ripiego conteneva
+        # solo i lavori SENZA seniority, un sottogruppo distorto.
+        for sen in ("''", "COALESCE(j.seniority, '')"):
             for r in c.execute(base.format(sen=sen)).fetchall():
                 c.execute("""
                     INSERT INTO stipendi_benchmark

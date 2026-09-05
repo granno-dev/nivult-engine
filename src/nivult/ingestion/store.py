@@ -39,9 +39,19 @@ _MUTABLE = tuple(c for c in _COLUMNS if c not in ("source", "source_job_id", "ca
 _JSON_COLUMNS = {"locations", "salary", "raw"}
 
 
+def _numero_json(v):
+    """Il Decimal (da qualunque strada arrivi: jsonb, salary, raw) non
+    deve MAI piu' uccidere il ponte — e' gia' successo due volte."""
+    import decimal
+    if isinstance(v, decimal.Decimal):
+        return float(v)
+    raise TypeError(f"non serializzabile: {type(v).__name__}")
+
+
 def _values(job: RawJob) -> list:
     d = asdict(job)
-    return [json.dumps(d[c]) if c in _JSON_COLUMNS and d[c] is not None else d[c]
+    return [json.dumps(d[c], default=_numero_json)
+            if c in _JSON_COLUMNS and d[c] is not None else d[c]
             for c in _COLUMNS]
 
 

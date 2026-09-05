@@ -167,7 +167,8 @@ def aziende(dsn: str) -> int:
             cur.execute("""
                 SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
                        ac.logo_domain, ac.logo_url, ac.job_count,
-                       cd.employees,
+                       COALESCE(ac.employees_wd, cd.employees),
+                       ac.industry,
                        (SELECT count(*) FROM ats_jobs j
                          WHERE j.platform_id = ac.platform_id
                            AND j.slug = ac.slug AND j.expired_at IS NULL
@@ -186,8 +187,8 @@ def aziende(dsn: str) -> int:
                 f.write(_riga(
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
                     domain=r[4], logo=r[5], active_jobs=r[6],
-                    employees=r[7], jobs_posted_30d=r[8],
-                    languages=list(r[9] or []),
+                    employees=r[7], industry=r[8], jobs_posted_30d=r[9],
+                    languages=list(r[10] or []),
                     top_skills=[{"skill": s, "jobs": c} for c, s in cime]))
                 n += 1
     _chiudi(percorso, f, n)
