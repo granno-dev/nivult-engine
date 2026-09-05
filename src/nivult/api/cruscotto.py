@@ -232,14 +232,17 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                                   AND array_length(skills, 1) > 0),
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','jobDescription','job_description',
-                   'content','externalDescription','descriptionPlain'])
+                   'content','externalDescription','descriptionPlain']),
+               count(employment_type), count(contact_email)
           FROM ats_jobs WHERE expired_at IS NULL""")[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
           FROM ats_companies WHERE is_active AND job_count > 0""")[0]
     campi = [("paese", r[0]), ("descrizione", r[5]), ("seniority", r[2]),
-             ("lavoro remoto", r[3]), ("competenze", r[4]), ("salario", r[1])]
+             ("lavoro remoto", r[3]), ("competenze", r[4]),
+             ("tipo di contratto", r[6]), ("contatto nell'annuncio", r[7]),
+             ("salario", r[1])]
     v = [{"campo": k, "n": n,
           "pct": round(100 * n / attive, 1) if attive else 0}
          for k, n in campi]
@@ -474,6 +477,28 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
 
     d["arricchimento"] = _arricchimento(ats_dsn, attive)
 
+    # ── il magazzino da vendere: le grandezze che crescono da sole ──
+    def _forse(sql):
+        try:
+            return _uno(ats_dsn, sql)
+        except Exception:                            # noqa: BLE001
+            return None
+    d["magazzino"] = {
+        "coppie_tecnografiche": _forse(
+            "SELECT count(*) FROM azienda_skill"),
+        "celle_benchmark": _forse(
+            "SELECT count(*) FROM stipendi_benchmark"),
+        "aziende_con_settore": _forse(
+            "SELECT count(*) FROM ats_companies WHERE industry IS NOT NULL"),
+        "aziende_con_organico": _forse(
+            "SELECT count(*) FROM ats_companies "
+            "WHERE employees_wd IS NOT NULL"),
+        "storico_chiuse": _forse(
+            "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL"),
+        "paesi_memoria": _forse(
+            "SELECT count(*) FROM azienda_paese"),
+    }
+
     # ── completezza delle NUOVE (created_at esiste dal 04/09/26 sera:
     # lo spartiacque tiene fuori il backfill del default) ──
     r = _righe(ats_dsn, """
@@ -602,7 +627,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
               "andamento", "freschezza", "per_scoperta", "attivazione",
               "nuove_aziende", "ats_pending", "arricchimento", "nuove24",
-              "raccolta_oraria"):
+              "raccolta_oraria", "magazzino"):
         d[k] = pes[k]
     d["salute"] = dict(pes["salute"])
     d["salute"]["offerte_attive"] = attive
@@ -1118,6 +1143,16 @@ async function tick(){
    +card(`<span class="${cl(nv.categoria)}">${nv.categoria}%</span>`,'con categoria')
    +card(`<span class="${cl(nv.lingua)}">${nv.lingua}%</span>`,'con lingua')
    +'</div>';})(d.nuove24)
+ +(function(mg){if(!mg)return '';
+   const c=(v,l,sub)=>v==null?'':card(IT(v),l,sub);
+   return '<div class="sect"><h2>Il magazzino da vendere</h2><span class="note">i dataset per i clienti dati — crescono da soli, giorno e notte</span></div><div class="grid">'
+   +c(mg.coppie_tecnografiche,'coppie azienda-competenza','la memoria tecnografica')
+   +c(mg.storico_chiuse,'offerte nello storico','con data di chiusura: mai cancellate')
+   +c(mg.celle_benchmark,'celle benchmark salari','base minima 20 annunci l’una')
+   +c(mg.aziende_con_settore,'aziende con settore','da Wikidata, con guardia anti-omonimi')
+   +c(mg.aziende_con_organico,'aziende con organico','numero dipendenti verificato')
+   +c(mg.paesi_memoria,'coppie azienda-paese','per i segnali di espansione')
+   +'</div>';})(d.magazzino)
  +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'
  +copertura(d.arricchimento)
  +'<div class="cols3">'
