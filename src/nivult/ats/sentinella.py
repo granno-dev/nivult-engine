@@ -169,6 +169,23 @@ def _controlli() -> list[str]:
     except OSError:
         pass
 
+    # 3-ter. i passi diurni a cron: ciascuno scrive il suo log, e un
+    # log fermo oltre il giro atteso vuol dire passo morto in silenzio
+    # (successo: due passi "in coda" morti senza che nessuno lo vedesse).
+    _PASSI = [("registri.log", 26), ("domini.log", 26),
+              ("scheda-sito.log", 26), ("glm-extra.log", 26),
+              ("organico.log", 8 * 24)]
+    for nome_log, ore in _PASSI:
+        percorso = f"/opt/nivult/engine/logs/{nome_log}"
+        try:
+            eta_h = (time.time() - os.path.getmtime(percorso)) / 3600
+            if eta_h > ore:
+                problemi.append(f"passo {nome_log.split('.')[0]} fermo "
+                                f"da {int(eta_h)}h (atteso ogni {ore}h)")
+        except OSError:
+            problemi.append(f"passo {nome_log.split('.')[0]}: mai partito"
+                            " (log assente)")
+
     # 4. credito GLM: a zero si fermano digest e CV, in silenzio. La
     # sonda da 1 token costa nulla; a credito zero l'API risponde 429
     # con codice 1113 senza addebitare.
