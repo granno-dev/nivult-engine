@@ -264,6 +264,16 @@ def deterministico(titolo: str, luogo: str, raw: dict):
     descr = _descrizione(raw)
     campo_skill = f"{titolo}\n{descr}"
     skills = [s for s, rx in _SKILL_RX if rx.search(campo_skill)][:20]
+    # ESCO: 13.485 competenze in 28 lingue, canonicalizzate in inglese
+    # («saldatura» -> «welding»). Entra SOLO a calibrazione avvenuta
+    # (cancello in esco.py); se spento, questa riga non cambia nulla.
+    try:
+        from nivult.ats import esco as _esco
+        per_esco = _esco.estrai(campo_skill, massimo=15)
+        skills += [e for e in per_esco if e not in skills]
+        skills = skills[:30]
+    except Exception:                                # noqa: BLE001
+        pass
     return seniority, remote, skills
 
 
