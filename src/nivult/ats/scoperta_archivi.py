@@ -130,7 +130,12 @@ def _crawl_recenti(quanti: int = 3) -> list[str]:
                         "ricordato %s", type(exc).__name__, ids)
             return ids
         except OSError:
-            raise exc
+            # ne' live ne' cache: CC e' un bonus, non un obbligo. Si
+            # torna vuoto e il giro prosegue senza la parte CC, invece
+            # di far fallire l'intera manutenzione per una fonte flaky.
+            log.warning("indice CC irraggiungibile e nessuna cache: "
+                        "salto la parte Common Crawl per questo giro")
+            return []
 
 
 class IndiceCCChiuso(Exception):
