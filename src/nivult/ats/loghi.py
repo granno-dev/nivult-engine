@@ -30,9 +30,10 @@ _BOARD = {
     "workable":        "https://apply.workable.com/{s}/",
     "smartrecruiters": "https://careers.smartrecruiters.com/{s}",
     "greenhouse":      "https://job-boards.greenhouse.io/{s}",
-    # og:image col logo verificato a campione (3/3 ciascuna):
-    "teamtailor":      "https://{s}.teamtailor.com",
-    "breezy":          "https://{s}.breezy.hr",
+    # NB: breezy e teamtailor TOLTI — il loro og:image e' il banner
+    # social (1200x630) o uno screenshot, non il logo (misurato
+    # 2026-09-06). Recruitee e pinpoint restano ma passano il controllo
+    # dimensioni sotto.
     "recruitee":       "https://{s}.recruitee.com",
     "pinpoint":        "https://{s}.pinpointhq.com",
 }
@@ -46,7 +47,36 @@ _LOGO_IMG = {
 # host da rifiutare: asset generici dell'ATS, non il logo dell'azienda.
 _RIFIUTA = re.compile(
     r"screenshots\.|/cdn_assets/|assets\.cdn\.|/rebrand|placeholder|default"
-    r"|sr-careersite", re.I)
+    r"|sr-careersite|social-portal|social-image|breezy-gallery|/gallery/"
+    r"|/img_\d|/photo", re.I)
+
+
+def _e_logo(dati: bytes) -> bool:
+    """Un logo e' piccolo e squadrato; un banner social e' 1200x630 e
+    una foto e' grande in entrambe le dimensioni. Rifiuta cio' che ha
+    l'aria della pagina, non del marchio. Legge le dimensioni dai primi
+    byte, senza dipendenze."""
+    import struct
+    w = h = None
+    if dati[:8] == b"\x89PNG\r\n\x1a\n":
+        w, h = struct.unpack(">II", dati[16:24])
+    elif dati[:2] == b"\xff\xd8":
+        i = 2
+        while i < len(dati) - 9:
+            if dati[i] != 0xFF:
+                i += 1
+                continue
+            m = dati[i + 1]
+            if m in (0xC0, 0xC1, 0xC2, 0xC3):
+                h, w = struct.unpack(">HH", dati[i + 5:i + 9])
+                break
+            i += 2 + struct.unpack(">H", dati[i + 2:i + 4])[0]
+    if w is None or h is None:
+        return True          # formato ignoto (svg/webp): non giudico
+    # banner/foto: entrambe grandi, o la classica card social larga
+    if w >= 1000 and h >= 400:
+        return False
+    return True
 
 _OG = re.compile(
     r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)'
@@ -110,6 +140,13 @@ def da_board(dsn: str, limite: int = 400) -> dict:
                 logo = (m.group(1) or m.group(2)) if m else None
             if logo and (_RIFIUTA.search(logo) or not logo.startswith("http")):
                 logo = None
+            if logo:
+                try:
+                    d = cli.get(logo).content
+                    if not _e_logo(d):
+                        logo = None      # e' un banner/foto, non un logo
+                except httpx.HTTPError:
+                    logo = None
             return pid, slug, logo
 
         with ThreadPoolExecutor(max_workers=12) as ex:
