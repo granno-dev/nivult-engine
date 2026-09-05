@@ -86,6 +86,7 @@ def _testo_azienda(cli: httpx.Client, dominio: str) -> str:
 def arricchisci(dsn: str, limite: int = 300) -> dict:
     from .profilo import _glm_flash
     from .organico_dichiarato import _numeri
+    from .registri_imprese import _norm
     stats = {"esaminate": 0, "con_testo": 0, "organico": 0,
              "settore": 0, "errori_glm": 0}
     cli = httpx.Client(timeout=15, headers={"User-Agent": _UA},
@@ -103,18 +104,28 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS site_checked_at timestamptz")
         righe = c.execute("""
-            SELECT platform_id, slug, logo_domain FROM ats_companies
+            SELECT platform_id, slug,
+                   coalesce(logo_domain, site_domain), company_name
+              FROM ats_companies
              WHERE is_active AND job_count > 0
-               AND logo_domain IS NOT NULL
+               AND coalesce(logo_domain, site_domain) IS NOT NULL
                AND site_checked_at IS NULL
                AND employees_reg IS NULL AND employees_wd IS NULL
              ORDER BY job_count DESC
              LIMIT %s""", (limite,)).fetchall()
-        for pid, slug, dominio in righe:
+        for pid, slug, dominio, nome in righe:
             stats["esaminate"] += 1
             testo = _testo_azienda(cli, dominio)
             time.sleep(0.5)
             if len(testo) < 300:
+                c.execute("UPDATE ats_companies SET site_checked_at=now() "
+                          "WHERE platform_id=%s AND slug=%s", (pid, slug))
+                continue
+            # prova d'identita': il nome dell'azienda deve comparire
+            # nella pagina — protegge dai domini-candidato sbagliati
+            # (Brandfetch su un omonimo) e dai logo_domain sporchi.
+            if nome and _norm(nome) and len(_norm(nome)) >= 4 \
+                    and _norm(nome) not in _norm(testo):
                 c.execute("UPDATE ats_companies SET site_checked_at=now() "
                           "WHERE platform_id=%s AND slug=%s", (pid, slug))
                 continue
