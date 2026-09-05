@@ -82,6 +82,11 @@ _OG = re.compile(
     r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)'
     r'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', re.I)
 
+_SITO_NOME = re.compile(
+    r'<meta[^>]+property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)'
+    r'|<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:site_name', re.I)
+_RUMORE_NOME = re.compile(r"^(jobs?|careers?|join|apply|hiring)\b[\s@:|-]*", re.I)
+
 
 def da_offerte(dsn: str) -> int:
     """Copia il logo per-offerta al livello azienda, in blocco SQL."""
@@ -147,14 +152,21 @@ def da_board(dsn: str, limite: int = 400) -> dict:
                         logo = None      # e' un banner/foto, non un logo
                 except httpx.HTTPError:
                     logo = None
-            return pid, slug, logo
+            # gia' che abbiamo la pagina: il NOME dell'azienda, per chi
+            # non ce l'ha (og:site_name, ripulito da "Jobs at"/"Careers")
+            mn = _SITO_NOME.search(r.text)
+            nome = None
+            if mn:
+                nome = _RUMORE_NOME.sub("", (mn.group(1) or mn.group(2) or "").strip())[:120] or None
+            return pid, slug, logo, nome
 
         with ThreadPoolExecutor(max_workers=12) as ex:
-            for pid, slug, logo in ex.map(_uno, righe):
+            for pid, slug, logo, nome in ex.map(_uno, righe):
                 stats["esaminati"] += 1
                 c.execute(
-                    "UPDATE ats_companies SET logo_url=%s, logo_checked_at=now() "
-                    "WHERE platform_id=%s AND slug=%s", (logo, pid, slug))
+                    "UPDATE ats_companies SET logo_url=%s, logo_checked_at=now(), "
+                    "company_name=coalesce(company_name, %s) "
+                    "WHERE platform_id=%s AND slug=%s", (logo, nome, pid, slug))
                 if logo:
                     stats["trovati"] += 1
     cli.close()

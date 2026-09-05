@@ -149,3 +149,34 @@ DROP TRIGGER IF EXISTS trg_valida_country ON ats_jobs;
 CREATE TRIGGER trg_valida_country
   BEFORE INSERT OR UPDATE OF country ON ats_jobs
   FOR EACH ROW EXECUTE FUNCTION valida_country();
+-- posted_at al 100% per il FUTURO: lavoriamo a ciclo continuo, quindi
+-- la data in cui vediamo l'offerta per la prima volta e' una stima
+-- onesta della pubblicazione (scarto: ore). Flag dichiarato, mai
+-- spacciato per data della fonte. Trigger = un solo imbuto per tutti
+-- gli scrittori, presenti e futuri (stessa filosofia di valida_country).
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS posted_at_estimated boolean NOT NULL DEFAULT false;
+
+CREATE OR REPLACE FUNCTION riempi_posted_at() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.posted_at IS NULL THEN
+      NEW.posted_at := now();
+      NEW.posted_at_estimated := true;
+    END IF;
+  ELSE  -- UPDATE: un refetch senza data NON deve cancellare quella che abbiamo
+    IF NEW.posted_at IS NULL THEN
+      NEW.posted_at := OLD.posted_at;
+      NEW.posted_at_estimated := OLD.posted_at_estimated;
+    ELSIF OLD.posted_at_estimated AND NEW.posted_at IS NOT NULL
+          AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN
+      NEW.posted_at_estimated := false;  -- arrivata la data vera: vince
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_riempi_posted_at ON ats_jobs;
+CREATE TRIGGER trg_riempi_posted_at
+  BEFORE INSERT OR UPDATE OF posted_at ON ats_jobs
+  FOR EACH ROW EXECUTE FUNCTION riempi_posted_at();
