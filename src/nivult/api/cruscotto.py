@@ -664,10 +664,12 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
 
     d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND posted_at > now()-interval '1 hour' AND posted_at <= now()") or 0
+        "AND posted_at > now()-interval '1 hour' AND posted_at <= now() "
+        "AND NOT coalesce(posted_at_estimated, false)") or 0
     d["salute"]["pubblicate_24h"] = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND posted_at > now()-interval '24 hours' AND posted_at <= now()") or 0
+        "AND posted_at > now()-interval '24 hours' AND posted_at <= now() "
+        "AND NOT coalesce(posted_at_estimated, false)") or 0
 
     # ── funnel: da azienda censita a offerta consegnata ──
     cens = d["salute"]["aziende_censite"] or 0

@@ -26,6 +26,7 @@ while true; do
   # loghi azienda per la board: consolida i logo per-offerta + og:image
   # della board (ashby/lever/workable/smartrecruiters/greenhouse), a lotti.
   "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
+  "$PY" /opt/nivult/engine/deploy/timbra_prima_vista.py 2>&1 | tail -1 || true
   # descrizioni dal dettaglio, per chi non le mette in lista
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
   # lingua dell'annuncio: deterministica, gratis, dopo le descrizioni
