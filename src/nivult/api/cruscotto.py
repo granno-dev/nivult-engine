@@ -258,6 +258,24 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
 # (feed, battiti, demoni) resta fresca a ogni chiamata.
 
 _CACHE_PES: dict = {"t": 0.0, "v": None, "in_corso": False}
+_CACHE_FILE = "/opt/nivult/cruscotto-cache.json"
+
+
+def _carica_cache_da_disco() -> None:
+    """Un riavvio dell'API non deve ripartire freddo: la parte pesante
+    salvata dall'ultimo giro si ricarica dal disco se ha meno di 15
+    minuti — la pagina apre subito, il ricalcolo avviene in sfondo.
+    (Successo: riavvio + database sotto tre passate = minuti di pagina
+    bianca e Giuseppe convinto che fosse rotta.)"""
+    import json as _json
+    if _CACHE_PES["v"] is not None:
+        return
+    try:
+        d = _json.load(open(_CACHE_FILE))
+        if time.time() - d["t"] < 900:
+            _CACHE_PES.update(t=d["t"], v=d["v"])
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 def _pesanti(ats_dsn: str, attive: int) -> dict:
@@ -265,6 +283,7 @@ def _pesanti(ats_dsn: str, attive: int) -> dict:
     cache e' scaduta si serve comunque la versione vecchia e un thread
     la rinfresca; solo la primissima chiamata (cache vuota) blocca."""
     import threading
+    _carica_cache_da_disco()
     if _CACHE_PES["v"] is not None:
         if time.time() - _CACHE_PES["t"] >= 240 and not _CACHE_PES["in_corso"]:
             _CACHE_PES["in_corso"] = True
@@ -282,9 +301,16 @@ def _pesanti(ats_dsn: str, attive: int) -> dict:
 
 
 def _ricalcola_pesanti(ats_dsn: str, attive: int) -> dict:
+    import json as _json
     try:
         d = _calcola_pesanti(ats_dsn, attive)
         _CACHE_PES.update(t=time.time(), v=d)
+        try:
+            with open(_CACHE_FILE + ".tmp", "w") as f:
+                _json.dump({"t": _CACHE_PES["t"], "v": d}, f, default=str)
+            os.replace(_CACHE_FILE + ".tmp", _CACHE_FILE)
+        except Exception:                            # noqa: BLE001
+            pass
         return d
     finally:
         _CACHE_PES["in_corso"] = False

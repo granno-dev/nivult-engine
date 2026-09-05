@@ -31,8 +31,27 @@ import psycopg
 log = logging.getLogger("nivult.ats.segnali")
 
 
+def _colonna_manca(c, tabella: str, colonna: str) -> bool:
+    """Un ALTER TABLE, anche IF NOT EXISTS, chiede il lock esclusivo: in
+    coda dietro una transazione lunga CONGELA tutto cio' che arriva dopo
+    (successo: mezz'ora di sistema fermo, dashboard compresa). Il DDL
+    nei cicli caldi si esegue SOLO se serve davvero: prima si guarda il
+    catalogo, che non chiede lock a nessuno."""
+    return c.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = %s AND column_name = %s",
+        (tabella, colonna)).fetchone() is None
+
+
+def _tabella_manca(c, tabella: str) -> bool:
+    return c.execute("SELECT to_regclass(%s)",
+                     (tabella,)).fetchone()[0] is None
+
+
 def prepara(dsn: str) -> None:
     with psycopg.connect(dsn, autocommit=True) as c:
+        if not _tabella_manca(c, "azienda_skill"):
+            return
         c.execute("""
             CREATE TABLE IF NOT EXISTS azienda_skill (
                 platform_id text NOT NULL,
@@ -54,8 +73,9 @@ def aggiorna(dsn: str) -> dict:
         # fiducia v2, come i grandi: una menzione NEL TITOLO pesa piu'
         # di dieci nella descrizione — «Senior React Developer» e' una
         # dichiarazione, «react» a meta' testo puo' essere contorno.
-        c.execute("ALTER TABLE azienda_skill ADD COLUMN IF NOT EXISTS "
-                  "mentions_title int NOT NULL DEFAULT 0")
+        if _colonna_manca(c, "azienda_skill", "mentions_title"):
+            c.execute("ALTER TABLE azienda_skill ADD COLUMN IF NOT "
+                      "EXISTS mentions_title int NOT NULL DEFAULT 0")
         n = c.execute("""
             INSERT INTO azienda_skill (platform_id, slug, skill,
                                        mentions, mentions_title,
@@ -82,7 +102,8 @@ def aggiorna_paesi(dsn: str) -> dict:
     un'azienda gia' nota e' un segnale di espansione — per chi vende
     servizi alle aziende vale quanto l'adozione di una tecnologia."""
     with psycopg.connect(dsn, autocommit=True) as c:
-        c.execute("""
+        if _tabella_manca(c, "azienda_paese"):
+            c.execute("""
             CREATE TABLE IF NOT EXISTS azienda_paese (
                 platform_id text NOT NULL,
                 slug        text NOT NULL,

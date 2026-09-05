@@ -24,6 +24,23 @@ import psycopg
 
 log = logging.getLogger("nivult.ats.estrai_extra")
 
+
+def _colonna_manca(c, tabella: str, colonna: str) -> bool:
+    """Un ALTER TABLE, anche IF NOT EXISTS, chiede il lock esclusivo: in
+    coda dietro una transazione lunga CONGELA tutto cio' che arriva dopo
+    (successo: mezz'ora di sistema fermo, dashboard compresa). Il DDL
+    nei cicli caldi si esegue SOLO se serve davvero: prima si guarda il
+    catalogo, che non chiede lock a nessuno."""
+    return c.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = %s AND column_name = %s",
+        (tabella, colonna)).fetchone() is None
+
+
+def _tabella_manca(c, tabella: str) -> bool:
+    return c.execute("SELECT to_regclass(%s)",
+                     (tabella,)).fetchone()[0] is None
+
 # campi strutturati per piattaforma/standard -> nostro vocabolario
 _MAPPA = {
     "full-time": "full_time", "full_time": "full_time",
@@ -102,12 +119,13 @@ def _email_da_testo(testo: str) -> str | None:
 def arricchisci(dsn: str, limite: int = 100000) -> dict:
     stats = {"esaminate": 0, "tipo": 0, "contatto": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
-        c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
-                  "employment_type text")
-        c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
-                  "contact_email text")
-        c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
-                  "extra_checked_at timestamptz")
+        if _colonna_manca(c, "ats_jobs", "extra_checked_at"):
+            c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
+                      "employment_type text")
+            c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
+                      "contact_email text")
+            c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
+                      "extra_checked_at timestamptz")
         righe = c.execute(f"""
             SELECT id, title, raw, {_DESCR}
               FROM ats_jobs

@@ -23,6 +23,23 @@ import psycopg
 
 log = logging.getLogger("nivult.ats.wikidata_ditte")
 
+
+def _colonna_manca(c, tabella: str, colonna: str) -> bool:
+    """Un ALTER TABLE, anche IF NOT EXISTS, chiede il lock esclusivo: in
+    coda dietro una transazione lunga CONGELA tutto cio' che arriva dopo
+    (successo: mezz'ora di sistema fermo, dashboard compresa). Il DDL
+    nei cicli caldi si esegue SOLO se serve davvero: prima si guarda il
+    catalogo, che non chiede lock a nessuno."""
+    return c.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = %s AND column_name = %s",
+        (tabella, colonna)).fetchone() is None
+
+
+def _tabella_manca(c, tabella: str) -> bool:
+    return c.execute("SELECT to_regclass(%s)",
+                     (tabella,)).fetchone()[0] is None
+
 API = "https://www.wikidata.org/w/api.php"
 _UA = "nivult-ats/1.0 (firmographics; contact: ops@nivult.com)"
 
@@ -51,12 +68,13 @@ def arricchisci(dsn: str, limite: int = 1500) -> dict:
     cli = httpx.Client(timeout=20, headers={"User-Agent": _UA})
     settori_qid: dict[str, list[str]] = {}     # (pid,slug) -> [QID..]
     with psycopg.connect(dsn, autocommit=True) as c:
-        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS "
-                  "industry text")
-        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS "
-                  "employees_wd int")
-        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS "
-                  "industry_checked_at timestamptz")
+        if _colonna_manca(c, "ats_companies", "industry_checked_at"):
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
+                      "EXISTS industry text")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
+                      "EXISTS employees_wd int")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
+                      "EXISTS industry_checked_at timestamptz")
         righe = c.execute("""
             SELECT platform_id, slug, company_name FROM ats_companies
              WHERE is_active AND job_count > 0

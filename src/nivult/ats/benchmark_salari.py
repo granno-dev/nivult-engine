@@ -23,6 +23,23 @@ import psycopg
 
 log = logging.getLogger("nivult.ats.benchmark")
 
+
+def _colonna_manca(c, tabella: str, colonna: str) -> bool:
+    """Un ALTER TABLE, anche IF NOT EXISTS, chiede il lock esclusivo: in
+    coda dietro una transazione lunga CONGELA tutto cio' che arriva dopo
+    (successo: mezz'ora di sistema fermo, dashboard compresa). Il DDL
+    nei cicli caldi si esegue SOLO se serve davvero: prima si guarda il
+    catalogo, che non chiede lock a nessuno."""
+    return c.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = %s AND column_name = %s",
+        (tabella, colonna)).fetchone() is None
+
+
+def _tabella_manca(c, tabella: str) -> bool:
+    return c.execute("SELECT to_regclass(%s)",
+                     (tabella,)).fetchone()[0] is None
+
 MIN_CAMPIONE = 20
 
 # (fattore verso l'anno, minimo plausibile, massimo plausibile)
@@ -37,6 +54,8 @@ _PERIODI = {
 
 def aggiorna(dsn: str) -> dict:
     with psycopg.connect(dsn, autocommit=True) as c:
+        if _tabella_manca(c, "stipendi_benchmark"):
+            pass  # si crea sotto
         c.execute("""
             CREATE TABLE IF NOT EXISTS stipendi_benchmark (
                 country   text NOT NULL,
