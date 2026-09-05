@@ -516,11 +516,12 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
             "SELECT count(*) FROM stipendi_benchmark"),
         "aziende_con_settore": _forse(
             "SELECT count(*) FROM ats_companies WHERE "
-            "coalesce(industry_reg, industry, industry_mix) IS NOT NULL"),
+            "coalesce(industry_reg, industry, industry_site, "
+            "industry_mix) IS NOT NULL"),
         "aziende_con_organico": _forse(
             "SELECT count(*) FROM ats_companies "
             "WHERE coalesce(employees_reg, employees_wd, "
-            "employees_self) IS NOT NULL"),
+            "employees_site, employees_self) IS NOT NULL"),
         "storico_chiuse": _forse(
             "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL"),
         "paesi_memoria": _forse(

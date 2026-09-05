@@ -177,14 +177,17 @@ def aziende(dsn: str) -> int:
                 SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
                        ac.logo_domain, ac.logo_url, ac.job_count,
                        COALESCE(ac.employees_reg, ac.employees_wd,
-                                ac.employees_self, cd.employees),
+                                ac.employees_site, ac.employees_self,
+                                cd.employees),
                        COALESCE(ac.industry_reg, ac.industry,
-                                ac.industry_mix),
+                                ac.industry_site, ac.industry_mix),
                        ac.employees_reg_band, ac.reg_source,
                        CASE WHEN ac.employees_reg IS NOT NULL
                             THEN ac.reg_source
                             WHEN ac.employees_wd IS NOT NULL
                             THEN 'wikidata'
+                            WHEN ac.employees_site IS NOT NULL
+                            THEN 'company_site'
                             WHEN ac.employees_self IS NOT NULL
                             THEN 'self_declared'
                             WHEN cd.employees IS NOT NULL
@@ -192,6 +195,8 @@ def aziende(dsn: str) -> int:
                        CASE WHEN ac.industry_reg IS NOT NULL
                             THEN ac.reg_source
                             WHEN ac.industry IS NOT NULL THEN 'wikidata'
+                            WHEN ac.industry_site IS NOT NULL
+                            THEN 'company_site'
                             WHEN ac.industry_mix IS NOT NULL
                             THEN 'job_mix' END,
                        (SELECT count(*) FROM ats_jobs j
