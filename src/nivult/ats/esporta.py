@@ -174,6 +174,78 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
     return n
 
 
+def flusso(dsn: str) -> dict:
+    """Il magazzino in tempo reale: le novita' dall'ultimo giro.
+
+    Nessuna richiesta esterna — si legge il NOSTRO database, quindi
+    zero rischio ban: il rischio sta nella raccolta, che ha i suoi
+    ritmi; qui si confeziona soltanto. Ogni giro produce un file con
+    le offerte NUOVE (prima volta viste) e CHIUSE dall'ultimo cursore:
+    e' il formato che i clienti dati chiamano delta feed, e che
+    trasforma «foto del mattino» in «flusso continuo».
+    """
+    cartella = f"{CARTELLA}/flusso"
+    os.makedirs(cartella, exist_ok=True)
+    cursore_file = f"{cartella}/cursore.json"
+    try:
+        da = json.load(open(cursore_file))["t"]
+    except Exception:                                # noqa: BLE001
+        da = (dt.datetime.now(dt.timezone.utc)
+              - dt.timedelta(minutes=15)).isoformat()
+    adesso = dt.datetime.now(dt.timezone.utc)
+    marca = adesso.strftime("%Y%m%d-%H%M%S")
+    percorso = f"{cartella}/novita-{marca}.jsonl.gz"
+    stats = {"nuove": 0, "chiuse": 0}
+    with psycopg.connect(dsn) as conn, \
+            gzip.open(percorso + ".tmp", "wt", encoding="utf-8") as f:
+        with conn.cursor(name="fl_nuove") as cur:
+            cur.itersize = 2000
+            cur.execute(f"""
+                SELECT j.id, j.title, j.platform_id, j.slug,
+                       COALESCE(co.company_name, j.raw->'company'->>'name'),
+                       j.url, j.country, j.city, j.lang, j.seniority,
+                       j.remote, j.skills, j.salary_min, j.salary_max,
+                       j.salary_currency, j.posted_at, j.created_at,
+                       {_DESCR}
+                  FROM ats_jobs j
+                  LEFT JOIN ats_companies co
+                         ON co.platform_id = j.platform_id
+                        AND co.slug = j.slug
+                 WHERE j.created_at > %s::timestamptz
+                   AND j.expired_at IS NULL""", (da,))
+            for r in cur:
+                f.write(_riga(
+                    event="new", id=str(r[0]), title=r[1], ats=r[2],
+                    company_slug=r[3], company=r[4], url=r[5],
+                    country=r[6], city=r[7], language=r[8],
+                    seniority=r[9], remote=r[10],
+                    skills=list(r[11] or []),
+                    salary_min=float(r[12]) if r[12] is not None else None,
+                    salary_max=float(r[13]) if r[13] is not None else None,
+                    salary_currency=r[14], posted_at=r[15],
+                    first_seen=r[16], description=r[17]))
+                stats["nuove"] += 1
+        with conn.cursor(name="fl_chiuse") as cur:
+            cur.itersize = 2000
+            cur.execute("""
+                SELECT id, title, platform_id, slug, url, country,
+                       posted_at, expired_at
+                  FROM ats_jobs
+                 WHERE expired_at > %s::timestamptz""", (da,))
+            for r in cur:
+                f.write(_riga(
+                    event="closed", id=str(r[0]), title=r[1], ats=r[2],
+                    company_slug=r[3], url=r[4], country=r[5],
+                    posted_at=r[6], closed_at=r[7]))
+                stats["chiuse"] += 1
+    os.replace(percorso + ".tmp", percorso)
+    with open(cursore_file + ".tmp", "w") as f:
+        json.dump({"t": adesso.isoformat()}, f)
+    os.replace(cursore_file + ".tmp", cursore_file)
+    log.info("flusso %s: %s", marca, stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -181,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--attive", action="store_true")
     ap.add_argument("--aziende", action="store_true")
     ap.add_argument("--scadute", action="store_true")
+    ap.add_argument("--flusso", action="store_true")
     ap.add_argument("--giorni", type=int, default=None,
                     help="per --scadute: solo le chiuse negli ultimi N giorni")
     args = ap.parse_args(argv)
@@ -193,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
         print("aziende:", aziende(dsn))
     if args.scadute:
         print("scadute:", scadute(dsn, args.giorni))
+    if args.flusso:
+        print("flusso:", flusso(dsn))
     return 0
 
 

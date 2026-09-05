@@ -33,6 +33,9 @@ while true; do
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \
     | tail -1 || true
+  # il magazzino in tempo reale: nuove e chiuse dall'ultimo giro
+  # (legge solo il NOSTRO db: zero richieste esterne, zero rischio ban)
+  "$PY" -m nivult.ats.esporta --flusso 2>&1 | tail -1 || true
   i=$((i + 1))
   sleep 600
 done
