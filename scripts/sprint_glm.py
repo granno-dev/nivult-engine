@@ -15,7 +15,10 @@ from concurrent.futures import ThreadPoolExecutor
 DSN = os.environ["ATS_DATABASE_URL"]
 GLM = os.environ["GLM_API_KEY"]
 TETTO = float(os.environ.get("TETTO_SPESA", "35.0"))   # dollari, cap duro
-PAR = 20
+# chiamate in parallelo: la latenza di GLM-5.3-Flash e' ~8 s a chiamata
+# (misurato 06/09), quindi il ritmo e' PAR/8 offerte al secondo. Si alza
+# finche' le «fallite (429?)» nel log restano sotto il 2% di una pagina.
+PAR = int(os.environ.get("SPRINT_PAR", "40"))
 PREZZO_IN, PREZZO_OUT = 0.075/1e6, 0.25/1e6            # promo
 PREZZO_CACHE = 0.015/1e6   # il prompt di sistema (la rubrica) e' in cache: misurato 512/572 token
 

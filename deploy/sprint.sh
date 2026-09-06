@@ -4,7 +4,7 @@
 # la shell che lo lanciava, perche' la riga di lancio conteneva il nome
 # dello script. Con systemd-run quel modo di sbagliare non esiste.
 #
-#   deploy/sprint.sh start [TETTO_SPESA]   avvia (default 35 dollari)
+#   deploy/sprint.sh start [TETTO_SPESA] [PARALLELE]   avvia (default 35 dollari, 60 chiamate parallele)
 #   deploy/sprint.sh stop                  ferma pulito (riprendibile)
 #   deploy/sprint.sh status                stato e ultime righe del log
 set -uo pipefail
@@ -23,6 +23,7 @@ case "${1:-status}" in
       --setenv=ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" \
       --setenv=GLM_API_KEY="$GLM" \
       --setenv=TETTO_SPESA="${2:-35.0}" \
+      --setenv=SPRINT_PAR="${3:-60}" \
       "$BASE/.venv/bin/python" /opt/nivult/sprint_glm.py
     sleep 2; systemctl is-active "$UNIT" && echo "sprint avviato (unita' $UNIT)";;
   stop)
