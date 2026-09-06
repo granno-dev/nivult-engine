@@ -1852,17 +1852,36 @@ class JazzHR(BaseAdapter):
         r'<a href="(https?://[^"]*\.applytojob\.com/apply/([A-Za-z0-9]+)/[^"]*)"[^>]*>(.*?)</a>', re.S)
     _SEDE_LISTA = re.compile(r"fa-map-marker[^>]*></i>\s*([^<]*?)\s*</li>")
 
-    def _righe_lista(self, testo: str) -> list[tuple]:
+    # Il TERZO template (bacheca «job-card», 09/2026): ogni offerta e' un
+    # <li class="job-card"> con il link nell'<h3 class='job-card__title'>,
+    # la sede dopo l'icona `icon-pin` e il reparto (quando c'e') dopo
+    # `fa-sitemap`. Stesso link /apply/{codice}/... dei template vecchi,
+    # quindi l'external_id resta il codice. Il tenant campione
+    # (amadaseniorcarenorthshore, 830 offerte) rispondeva zero.
+    _SEDE_CARD = re.compile(r"icon-pin[^>]*></i>\s*([^<]*?)\s*</li>")
+    _REPARTO_CARD = re.compile(r"fa-sitemap[^>]*></i>\s*([^<]*?)\s*</li>")
+
+    def _righe_lista(self, testo: str, separatore: str = '<li class="list-group-item">',
+                     sede_re: "re.Pattern | None" = None,
+                     reparto_re: "re.Pattern | None" = None) -> list[tuple]:
         """Un blocco per offerta, tagliato sul <li>: la sede si cerca
-        dentro il blocco, cosi' non si sconfina nell'annuncio dopo."""
+        dentro il blocco, cosi' non si sconfina nell'annuncio dopo.
+        Ogni riga e' (url, codice, titolo grezzo, sede, reparto)."""
+        sede_re = sede_re or self._SEDE_LISTA
         out = []
-        for blocco in testo.split('<li class="list-group-item">')[1:]:
+        for blocco in testo.split(separatore)[1:]:
             m = self._LINK_LISTA.search(blocco)
             if not m:
                 continue
-            ms = self._SEDE_LISTA.search(blocco)
-            out.append((m.group(1), m.group(2), m.group(3), ms.group(1) if ms else ""))
+            ms = sede_re.search(blocco)
+            mr = reparto_re.search(blocco) if reparto_re else None
+            out.append((m.group(1), m.group(2), m.group(3),
+                        ms.group(1) if ms else "", mr.group(1) if mr else ""))
         return out
+
+    def _righe_card(self, testo: str) -> list[tuple]:
+        return self._righe_lista(testo, '<li class="job-card">',
+                                 self._SEDE_CARD, self._REPARTO_CARD)
 
     def jobs(self, slug: str) -> list[AtsJob]:
         r = self.client.get(f"https://{slug}.applytojob.com/")
@@ -1870,10 +1889,12 @@ class JazzHR(BaseAdapter):
             return []
         out: list[AtsJob] = []
         visti: set[str] = set()
-        righe = self._RIGA.findall(r.text)
+        righe = [(url, code, txt, loc, "") for url, code, txt, loc in self._RIGA.findall(r.text)]
         if not righe:
             righe = self._righe_lista(r.text)
-        for url, code, txt, loc in righe:
+        if not righe:
+            righe = self._righe_card(r.text)
+        for url, code, txt, loc, rep in righe:
             if code in visti:
                 continue
             visti.add(code)
@@ -1882,10 +1903,11 @@ class JazzHR(BaseAdapter):
             if not titolo:
                 continue
             sede = html_mod.unescape(re.sub(r"\s+", " ", loc).strip()) or None
+            reparto = html_mod.unescape(re.sub(r"\s+", " ", rep).strip()) or None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=code, title=titolo, url=url,
-                location=sede, city=sede,
+                location=sede, city=sede, department=reparto,
                 raw={"code": code}))
         return out
 
