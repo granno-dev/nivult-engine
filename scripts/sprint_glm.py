@@ -88,8 +88,8 @@ def label(jid, tit, luo, desc):
         r = cli.post("https://api.z.ai/api/paas/v4/chat/completions",
                      headers={"Authorization":f"Bearer {GLM}"}, json=p)
         d = r.json()
-        if "choices" not in d:
-            return jid, None, 0, 0
+        if "choices" not in d:          # 429 o errore API: non marco, si riprova
+            return jid, None, 0, 0, 0
         u = d.get("usage",{})
         g = json.loads(re.search(r"\{.*\}", d["choices"][0]["message"]["content"], re.S).group(0))
         cached = (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
