@@ -61,6 +61,11 @@ REGOLE = (
  "product manager of physical products -> Marketing; data product owner -> Data & Analytics; "
  "CNC programmer/machinist/line operator -> Manufacturing; repair technician (devices, vehicles, machinery) -> Trades; QA/QC engineer -> Engineering. "
  "If title and text describe different jobs, the TEXT wins. Unsolicited application/'not hiring'/'Test' -> unknown. "
+ # dall'esame di v1-anteprima (06/09 sera): le coppie che il modello confondeva
+ "Commercial back-office clerk / order-processing clerk / office technical clerk -> Administrative (not Sales/Customer Service/Logistics); "
+ "transport planner/dispatcher (exploitant transport), delivery-merchandising driver -> Transportation; warehouse/picking -> Logistics (not Retail); "
+ "presales 'solutions consultant', property consultant -> Sales; in-house SAP/ERP consultant (employee) and IT delivery manager -> Technology; "
+ "cooking instructor -> Education; architectural assistant / BIM coordinator -> Construction or Engineering (not Art & Design). "
  "If the TEXT is empty and the title is ambiguous, family MUST be unknown: never guess. "
  "Seniority: INFER from responsibilities, years, autonomy, scope; unknown only with no signal. "
  "employment_type: only if stated or strongly implied (per diem/CDD/befristet -> temporary; Ausbildung -> apprenticeship); never assume full_time. "
