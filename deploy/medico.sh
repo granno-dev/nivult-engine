@@ -36,10 +36,21 @@ cd "$BASE"
   echo "=== $(date -Is) medico avviato per: $*"
   # si abbassa a nivult-medico: nessun accesso ai .env (600 root), solo il
   # runbook via sudo; il gettone passa per l'ambiente e non tocca il disco
-  timeout 900 sudo -u nivult-medico --preserve-env=CLAUDE_CODE_OAUTH_TOKEN \
-    env HOME=/home/nivult-medico claude -p "$PROMPT" \
-    --max-turns 25 \
-    --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" \
-    --permission-mode acceptEdits 2>&1 | tail -60
-  echo "=== $(date -Is) medico finito (rc ${PIPESTATUS[0]})"
+  # Fable 5.1, lo stesso modello della chat di Giuseppe; se in modalita'
+  # senza terminale non fosse disponibile, ripiego sul modello del piano
+  MODELLO="${MEDICO_MODELLO:-claude-fable-5-1}"
+  visita() {
+    timeout 900 sudo -u nivult-medico --preserve-env=CLAUDE_CODE_OAUTH_TOKEN \
+      env HOME=/home/nivult-medico claude -p "$PROMPT" $1 \
+      --max-turns 25 \
+      --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" \
+      --permission-mode acceptEdits 2>&1
+  }
+  ESITO=$(visita "--model $MODELLO"); rc=$?
+  if [ $rc -ne 0 ] && echo "$ESITO" | grep -qi "model"; then
+    echo "--- modello $MODELLO non disponibile qui, ripiego sul predefinito"
+    ESITO=$(visita ""); rc=$?
+  fi
+  echo "$ESITO" | tail -60
+  echo "=== $(date -Is) medico finito (rc $rc, modello $MODELLO)"
 } >> "$LOG" 2>&1
