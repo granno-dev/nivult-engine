@@ -19,7 +19,9 @@ TESTO=$(cat "$FILE" 2>/dev/null); rm -f "$FILE"
 rispondi() {  # testo -> Telegram (spezzato a 3900)
   cd "$BASE" && "$BASE/.venv/bin/python" - "$CHAT_ID" "$1" <<'EOF'
 import sys
+from nivult.ats import pronto_soccorso as ps
 from nivult.delivery.telegram import invia_testo
+ps._pronto_bot()  # carica TELEGRAM_BOT_TOKEN dal .env (non e' nell'ambiente di systemd-run)
 chat, t = sys.argv[1], sys.argv[2].strip() or "(risposta vuota)"
 while t:
     invia_testo(chat, t[:3900]); t = t[3900:]
