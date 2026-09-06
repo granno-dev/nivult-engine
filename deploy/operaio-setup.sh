@@ -41,8 +41,10 @@ ssh "$N5" 'docker exec -e DEBIAN_FRONTEND=noninteractive nivult-operaio bash -c 
   [ -x .venv/bin/python ] || python3.12 -m venv .venv
   .venv/bin/pip install -q --upgrade pip > /opt/nivult/pip.log 2>&1
   .venv/bin/pip install -q -e . >> /opt/nivult/pip.log 2>&1
-  # torch per ROCm 6.4: usa la iGPU Radeon 890M (10x la CPU, misurato 06/09)
-  .venv/bin/pip install -q torch --index-url https://download.pytorch.org/whl/rocm6.4 >> /opt/nivult/pip.log 2>&1
+  # torch per ROCm 6.4: usa la iGPU Radeon 890M (3-4x la CPU su mmBERT, misurato 06/09).
+  # --force-reinstall: se un torch per CPU e' gia' nel venv, pip lo considera
+  # «soddisfatto» e non lo sostituisce (successo il 06/09).
+  .venv/bin/pip install -q --force-reinstall torch --index-url https://download.pytorch.org/whl/rocm6.4 >> /opt/nivult/pip.log 2>&1
   .venv/bin/pip install -q transformers sentencepiece >> /opt/nivult/pip.log 2>&1
   echo PIP_OK >> /opt/nivult/pip.log
   .venv/bin/python -c \"import nivult, torch, transformers; print(\\\"python ok, torch\\\", torch.__version__)\"
