@@ -293,25 +293,35 @@ def _controlli() -> list[str]:
     return problemi
 
 
+def _chiave(problema: str) -> str:
+    """Lo STESSO guasto con un numero diverso e' lo stesso guasto: «scadute
+    59.608» e «scadute 53.122» non sono due mail. Il 06/09 Giuseppe ne ha
+    ricevute una ogni 5 minuti perche' il conteggio cambiava a ogni corsa.
+    La chiave dell'allarme e' il testo senza cifre."""
+    return re.sub(r"\d+", "N", problema)
+
+
 def main() -> int:
     problemi = _controlli()
     try:
         stato = json.load(open(STATO))
     except Exception:                                 # noqa: BLE001
         stato = {"attivi": {}, }
-    attivi: dict = stato.get("attivi", {})
+    # gli attivi sono indicizzati per chiave (testo senza cifre); gli stati
+    # vecchi, indicizzati per testo, si convertono al volo
+    attivi: dict = {_chiave(k): v for k, v in stato.get("attivi", {}).items()}
     adesso = time.time()
 
     # Un demone visto giu' UNA volta e' quasi sempre un riavvio (deploy,
     # systemctl restart): si tiene in sospeso e fa allarme solo se e'
     # giu' anche al giro dopo. Gli altri problemi non aspettano.
-    sospetti_prima = set(stato.get("sospetti", []))
+    sospetti_prima = {_chiave(s) for s in stato.get("sospetti", [])}
     sospetti_ora = [p for p in problemi
-                    if p.startswith("demone ") and p not in sospetti_prima
-                    and p not in attivi]
+                    if p.startswith("demone ") and _chiave(p) not in sospetti_prima
+                    and _chiave(p) not in attivi]
     problemi = [p for p in problemi if p not in sospetti_ora]
 
-    nuovi = [p for p in problemi if p not in attivi]
+    nuovi = [p for p in problemi if _chiave(p) not in attivi]
     def _soglia_riallarme(problema: str) -> int:
         # la manutenzione puo' guarire SOLO alla corsa notturna
         # successiva: ricordarglielo ogni 6 ore e' spavento inutile
@@ -321,9 +331,10 @@ def main() -> int:
         return RIALLARME_ORE * 3600
 
     persistenti = [p for p in problemi
-                   if p in attivi
-                   and adesso - attivi[p] > _soglia_riallarme(p)]
-    rientrati = [p for p in attivi if p not in problemi]
+                   if _chiave(p) in attivi
+                   and adesso - attivi[_chiave(p)] > _soglia_riallarme(p)]
+    chiavi_ora = {_chiave(p) for p in problemi}
+    rientrati = [k for k in attivi if k not in chiavi_ora]
 
     if nuovi or persistenti:
         corpo = "Sentinella Nivult — problemi rilevati:\n\n" + \
@@ -332,13 +343,13 @@ def main() -> int:
         if _manda_mail(f"[Nivult] {len(problemi)} problema/i: "
                        f"{problemi[0][:60]}", corpo):
             for p in nuovi + persistenti:
-                attivi[p] = adesso
+                attivi[_chiave(p)] = adesso
     if rientrati and not problemi:
         _manda_mail("[Nivult] rientrato: tutto ok",
                     "Problemi rientrati:\n" +
-                    "\n".join(f"  • {p}" for p in rientrati))
-    for p in rientrati:
-        attivi.pop(p, None)
+                    "\n".join(f"  • {k}" for k in rientrati))
+    for k in rientrati:
+        attivi.pop(k, None)
 
     with open(STATO + ".tmp", "w") as f:
         json.dump({"attivi": attivi, "sospetti": sospetti_ora}, f)
