@@ -41,23 +41,43 @@ OUT="$LOCAL_DIR/nivult-$STAMP.sql.gz.enc"
 # set -o pipefail è essenziale qui: la versione precedente di questo script non
 # ce l'aveva, quindi se pg_dumpall falliva gzip scriveva un file vuoto e il
 # backup "riusciva" in silenzio.
-log "dump in corso -> $OUT"
-docker exec "$CONTAINER" pg_dumpall -U "$DB_SUPERUSER" \
-  | gzip -9 \
-  | openssl cms -encrypt -aes-256-cbc -binary -stream -outform DER \
-      -recip "$RECIPIENT" -out "$OUT.part" \
-  || die "dump o cifratura falliti"
+# SOLO_INVIO=1: il file di oggi esiste già e va solo verificato e spedito.
+# Serve quando il giro è morto DOPO la cifratura (successo il 2026-09-06):
+# rifare il dump costerebbe sette minuti, due giga di disco e la RAM che
+# proprio allora mancava.
+if [ "${SOLO_INVIO:-0}" = "1" ] && [ -s "$OUT" ]; then
+  log "SOLO_INVIO: salto il dump, uso $OUT"
+else
+  log "dump in corso -> $OUT"
+  docker exec "$CONTAINER" pg_dumpall -U "$DB_SUPERUSER" \
+    | gzip -9 \
+    | openssl cms -encrypt -aes-256-cbc -binary -stream -outform DER \
+        -recip "$RECIPIENT" -out "$OUT.part" \
+    || die "dump o cifratura falliti"
+  mv "$OUT.part" "$OUT"
+  chmod 600 "$OUT"
+fi
 
-mv "$OUT.part" "$OUT"
-chmod 600 "$OUT"
-
-# Verifiche possibili SENZA la chiave privata: che il file sia una struttura
-# CMS valida e non sia sospettosamente piccolo. Che il contenuto in chiaro sia
-# ripristinabile lo può dire solo un ripristino di prova fuori da qui.
+# Verifiche possibili SENZA la chiave privata: che il file cominci come una
+# busta CMS (SEQUENCE a lunghezza indefinita, com'è lo streaming, seguita
+# dall'OID id-envelopedData 1.2.840.113549.1.7.3) e non sia sospettosamente
+# piccolo. Che il contenuto in chiaro sia ripristinabile lo può dire solo un
+# ripristino di prova fuori da qui.
+#
+# NON `openssl cms -cmsout -noout`: legge l'intero file in memoria per
+# analizzarlo — con 1,8 GB di backup ha chiesto 3,8 GB di RAM e il kernel
+# l'ha ucciso (2026-09-06 03:07), lasciando un backup valido sul disco ma
+# mai spedito. Il controllo dell'intestazione costa 16 byte e dice la stessa
+# cosa: era comunque una verifica di struttura, non di contenuto.
 SIZE=$(stat -c%s "$OUT")
 [ "$SIZE" -ge "$MIN_BYTES" ] || die "backup troppo piccolo ($SIZE byte): dump vuoto?"
-openssl cms -cmsout -noout -inform DER -in "$OUT" 2>/dev/null \
-  || die "il file cifrato non è una struttura CMS valida"
+HEAD_HEX=$(head -c 16 "$OUT" | od -An -tx1 | tr -d ' \n')
+# misurato sui file reali: 308006092a864886f70d010703a08030… (30 80 = SEQUENCE
+# a lunghezza indefinita; 06 09 2a…03 = OID id-envelopedData)
+case "$HEAD_HEX" in
+  30*06092a864886f70d010703*) ;;
+  *) die "il file cifrato non comincia come una busta CMS EnvelopedData (testa: $HEAD_HEX)";;
+esac
 log "backup locale ok: $SIZE byte"
 
 # --- copia off-site ---------------------------------------------------------
