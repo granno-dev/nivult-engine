@@ -125,7 +125,11 @@ def _controlli() -> list[str]:
                 count(country)
                 FROM ats_jobs
                WHERE posted_at > now() - interval '30 hours'
-                 AND posted_at < now() - interval '6 hours'""").fetchone()
+                 AND posted_at < now() - interval '6 hours'
+                 -- solo le DAVVERO nuove: i timbri prima-vista
+                 -- (posted_at = created_at) non sono pubblicazioni reali
+                 -- e falsavano la completezza (67%% della finestra)
+                 AND NOT coalesce(posted_at_estimated, false)""").fetchone()
             if tot and tot >= 2000:
                 if con_d * 100 < tot * 40:
                     problemi.append(
