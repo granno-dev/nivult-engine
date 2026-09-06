@@ -70,12 +70,12 @@ INIZIO=$(date +%s)
   ESITO=$(cd "$CASA" && timeout 600 sudo -u nivult-medico --preserve-env=CLAUDE_CODE_OAUTH_TOKEN \
       env HOME=/home/nivult-medico claude -p "$PROMPT" $CONTINUA --model "$MODELLO" \
       --max-turns 20 \
-      --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" "Edit(/home/nivult-medico/chat/appunti.md)" "Write(/home/nivult-medico/chat/appunti.md)" \
+      --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" "Edit(/home/nivult-medico/chat/appunti.md)" \
       --permission-mode acceptEdits < /dev/null 2>&1); rc=$?
   if [ $rc -ne 0 ] && echo "$ESITO" | grep -qi "model"; then
     ESITO=$(cd "$CASA" && timeout 600 sudo -u nivult-medico --preserve-env=CLAUDE_CODE_OAUTH_TOKEN \
       env HOME=/home/nivult-medico claude -p "$PROMPT" $CONTINUA --max-turns 20 \
-      --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" "Edit(/home/nivult-medico/chat/appunti.md)" "Write(/home/nivult-medico/chat/appunti.md)" \
+      --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" "Edit(/home/nivult-medico/chat/appunti.md)" \
       --permission-mode acceptEdits < /dev/null 2>&1); rc=$?
   fi
   [ -n "$ESITO" ] || ESITO="(nessuna risposta, rc $rc)"
