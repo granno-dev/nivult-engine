@@ -19,8 +19,11 @@ PAR = 20
 PREZZO_IN, PREZZO_OUT = 0.075/1e6, 0.25/1e6            # promo
 PREZZO_CACHE = 0.015/1e6   # il prompt di sistema (la rubrica) e' in cache: misurato 512/572 token
 
-c0 = psycopg.connect(DSN)
-FAM = [r[0] for r in c0.execute("SELECT DISTINCT family FROM job_classifications ORDER BY 1").fetchall()]
+# autocommit e chiusura: senza, questa connessione restava «idle in
+# transaction» per tutta la durata dello sprint (giorni) e VACUUM non
+# poteva pulire niente di quello che lo sprint stesso riscriveva
+with psycopg.connect(DSN, autocommit=True) as c0:
+    FAM = [r[0] for r in c0.execute("SELECT DISTINCT family FROM job_classifications ORDER BY 1").fetchall()]
 VAL_SEN = {"intern","junior","mid","senior","lead","head"}
 VAL_ET = {"full_time","part_time","contract","temporary","internship","apprenticeship"}
 VAL_REM = {"remote","hybrid","onsite"}
@@ -117,12 +120,13 @@ def main():
                  LIMIT 600""").fetchall()
             if not righe:
                 print("FINITO: niente piu' da fare"); break
-            agg_job = []; agg_fam = []
+            agg_job = []; agg_fam = []; fallite = 0
             with ThreadPoolExecutor(max_workers=PAR) as ex:
                 for jid, g, ti, to, cached in ex.map(lambda r: label(*r), righe):
                     speso += (ti-cached)*PREZZO_IN + cached*PREZZO_CACHE + to*PREZZO_OUT
                     if g is None:
-                        continue   # chiamata fallita: NON marco, si riprova
+                        fallite += 1
+                        continue   # chiamata fallita (429/rete): NON marco, si riprova
                     sv = _str(g.get("seniority")); ev = _str(g.get("employment_type"))
                     rv = _str(g.get("remote")); cv = _str(g.get("country")); fv = _str(g.get("family"))
                     sen = sv if sv in VAL_SEN else None
@@ -162,7 +166,10 @@ def main():
                         break
                     except psycopg.errors.DeadlockDetected: time.sleep(1)
             fatte += len(agg_job); fam_scritte += len(fam_ord)
-            print(f"{fatte} offerte, {fam_scritte} famiglie, spesi ${speso:.2f}/{TETTO}", flush=True)
+            print(f"{fatte} offerte, {fam_scritte} famiglie, spesi ${speso:.2f}/{TETTO}"
+                  + (f", {fallite} fallite (429?)" if fallite else "") + f" [{time.strftime('%H:%M')}]", flush=True)
+            if fallite > len(righe) // 2:
+                time.sleep(60)     # GLM sta rifiutando: aspettare costa meno che martellare
     print(f"FINE: {fatte} offerte arricchite, {fam_scritte} classificate, spesa totale ${speso:.2f}")
 
 if __name__ == "__main__":

@@ -18,6 +18,14 @@ POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | c
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
 while true; do
+  # Finche' gira lo sprint GLM (stessa chiave, 50 chiamate parallele), i
+  # passi che chiamano GLM da qui producono solo 429 — per se' e per lo
+  # sprint. Misurato il 2026-09-06: glm-extra 3 errori su 3 alle 09:00.
+  if ps -eo cmd | grep -q "python /opt/nivult/sprint_glm[.]py"; then
+    GLM_MAX=0; PAESE_GLM=0
+  else
+    GLM_MAX=400; PAESE_GLM=1500
+  fi
   "$PY" -m nivult.ats.arricchisci --da-localita 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.arricchisci --francetravail 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.arricchisci --da-geonames --limite 200000 2>&1 | tail -1 || true
@@ -31,17 +39,19 @@ while true; do
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
   # lingua dell'annuncio: deterministica, gratis, dopo le descrizioni
   "$PY" -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
-  # tipo di contratto + contatto pubblicato nell'annuncio
-  "$PY" -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
+  # tipo di contratto + contatto (estrai_extra): sull'operaio N5 dal 2026-09-06
   "$PY" -m nivult.ats.descrizioni --workday --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-pagina --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.
-  "$PY" -m nivult.ats.profilo --limite 40000 --glm-max 400 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.profilo --limite 40000 --glm-max "$GLM_MAX" 2>&1 | tail -1 || true
   # paese via GLM Flash (gratuito) per il residuo non geocodificabile:
   # accuratezza misurata 29/30; XX/incerto non si salva.
-  "$PY" -m nivult.ats.profilo --paese-glm 1500 2>&1 | tail -1 || true
+  if [ "$PAESE_GLM" -gt 0 ]; then
+    "$PY" -m nivult.ats.profilo --paese-glm "$PAESE_GLM" 2>&1 | tail -1 || true
+  fi
+  # estrai_extra e' passato all'operaio sul N5 (2026-09-06): qui non piu'.
   # salari: estrae min/max/valuta/periodo dal raw (nuove offerte)
   "$PY" -m nivult.ats.salari --limite 30000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.loghi --da-board --limite 600 2>&1 | tail -1 || true
