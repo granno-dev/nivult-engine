@@ -30,8 +30,10 @@ ENV = "/opt/nivult/.env"
 DESTINATARIO = "g.ranno@outlook.com"
 RIALLARME_ORE = 6
 
+# nivult-classifica non c'e' piu': il classificatore gira sull'operaio N5
+# (dal 2026-09-06), e il suo battito lo dice il dato, non systemd
 DEMONI = ["nivult-scrape", "nivult-scrape-veloce", "nivult-profonda",
-          "nivult-scoperta", "nivult-classifica", "nivult-arricchisci",
+          "nivult-scoperta", "nivult-arricchisci",
           "nivult-volano", "nivult-certificati", "nivult-api"]
 
 
