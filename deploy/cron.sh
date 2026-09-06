@@ -46,6 +46,7 @@ RIGHE=$(cat <<'EOF'
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/retention-utenti.sh >> /var/log/nivult-retention.log 2>&1
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
+30 7 * * 1 /opt/nivult/engine/deploy/revisione-settimanale.sh >> /var/log/nivult-chat.log 2>&1
 EOF
 )
 

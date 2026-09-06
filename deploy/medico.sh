@@ -65,5 +65,10 @@ testo = sys.argv[1].strip()[-1800:] or "(nessuna risposta dal medico)"
 print("inviato" if ps.telegram("Medico Nivult (resoconto ripreso dal log)", [], [testo]) else "NON inviato")
 EOF
   fi
+  # il diario: la visita resta in medico_visite, per la revisione settimanale
+  T=$(mktemp); printf %s "$ESITO" | tail -c 8000 > "$T"
+  cd "$BASE" && "$BASE/.venv/bin/python" -m nivult.ats.diario registra visita "$*" "$T" \
+    $(( $(date +%s) - $(date -d "$INIZIO" +%s) )) 2>&1
+  rm -f "$T"
   echo "=== $(date -Is) medico finito (rc $rc, modello $MODELLO)"
 } >> "$LOG" 2>&1

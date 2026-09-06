@@ -1406,6 +1406,41 @@ def create_app() -> FastAPI:
                 "WHERE id = %s", (uid,))
         conn.commit()
 
+    def _chat_amministratore(conn) -> str:
+        """Il chat id di chi amministra: quello dell'utente ADMIN_EMAIL
+        (default il proprietario), letto dal motore a ogni messaggio. Non
+        e' in un file: se il collegamento Telegram cambia, cambia da solo."""
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT telegram_chat_id FROM users WHERE email = %s AND telegram_chat_id IS NOT NULL",
+                            (os.environ.get("ADMIN_EMAIL", "g.ranno@outlook.com"),))
+                r = cur.fetchone()
+            return str(r[0]) if r else ""
+        except Exception:                             # noqa: BLE001
+            conn.rollback()
+            return ""
+
+    def _consegna_chat(chat_id: str, testo: str) -> None:
+        """Il messaggio va in un file leggibile solo da root, e chat.sh
+        parte in un'unita' propria. Il testo NON passa per la riga di
+        comando: e' dell'amministratore, ma resta un dato da non mostrare
+        in `ps`."""
+        import subprocess
+        import tempfile
+        import time
+        try:
+            os.makedirs("/var/lib/nivult-chat", mode=0o700, exist_ok=True)
+            fd, path = tempfile.mkstemp(prefix="msg-", suffix=".txt", dir="/var/lib/nivult-chat")
+            with os.fdopen(fd, "w") as f:
+                f.write(testo)
+            subprocess.Popen(["systemd-run", "--collect", "--quiet",
+                              "--unit", f"nivult-chat-{int(time.time()*1000)}",
+                              "-p", "OOMScoreAdjust=500",
+                              "/opt/nivult/engine/deploy/chat.sh", chat_id, path],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:                      # noqa: BLE001
+            telegram_mod.invia_testo(chat_id, f"Non riesco ad avviare la chat sul server: {type(exc).__name__}")
+
     @app.post("/telegram/webhook", include_in_schema=False)
     async def telegram_webhook(request: Request, conn=Depends(connessione)):
         """Dove Telegram consegna il «/start <gettone>».
@@ -1429,7 +1464,17 @@ def create_app() -> FastAPI:
         msg = (corpo or {}).get("message") or {}
         chat_id = str(((msg.get("chat") or {}).get("id") or "")).strip()
         testo = (msg.get("text") or "").strip()
-        if not chat_id or not testo.startswith("/start"):
+        if not chat_id or not testo:
+            return {"ok": True}
+        # La chat dell'amministratore e' un canale a doppio senso: tutto
+        # cio' che NON e' un /start viene consegnato a deploy/chat.sh
+        # (Claude sul server), in un'unita' systemd separata cosi' la
+        # risposta a Telegram arriva subito. L'amministratore e' UNO, e lo
+        # decide il suo chat id collegato nel motore, non un testo.
+        if not testo.startswith("/start") and chat_id == _chat_amministratore(conn):
+            _consegna_chat(chat_id, testo)
+            return {"ok": True}
+        if not testo.startswith("/start"):
             return {"ok": True}
         pezzi = testo.split(maxsplit=1)
         gettone = pezzi[1].strip() if len(pezzi) > 1 else ""

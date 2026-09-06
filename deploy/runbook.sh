@@ -13,6 +13,8 @@
 #   runbook.sh sentinella                una corsa della sentinella, adesso
 #   runbook.sh sql "<SELECT ...>"        SOLA LETTURA sul db delle offerte (read-only, 30 s, 50 righe)
 #   runbook.sh telegram "<testo>"        un messaggio a Giuseppe
+#   runbook.sh silenzio <minuti>         manutenzione: niente avvisi per N minuti (0 = fine)
+#   runbook.sh diario [n]                le ultime visite del medico e chat
 set -uo pipefail
 BASE=/opt/nivult/engine
 PY="$BASE/.venv/bin/python"
@@ -87,6 +89,17 @@ EOF
     cd "$BASE" && "$PY" -c "
 import sys; from nivult.ats import pronto_soccorso as ps
 print('inviato' if ps.telegram('Medico Nivult', [], [sys.argv[1]]) else 'NON inviato')" "${2:?testo}"
+    ;;
+  silenzio)
+    # silenzio <minuti>: avvisi e info non aprono incidenti; le critiche si'. 0 = fine
+    m="${2:?minuti}"; case "$m" in ''|*[!0-9]*) echo "minuti interi"; exit 2 ;; esac
+    if [ "$m" -eq 0 ]; then rm -f /opt/nivult/silenzio-fino; echo "silenzio finito"
+    else echo $(( $(date +%s) + m*60 )) > /opt/nivult/silenzio-fino; echo "silenzio per $m minuti (le critiche passano)"; fi
+    ;;
+  diario)
+    # diario [n]: le ultime visite del medico e le chat, dalla tabella medico_visite
+    if [ "${2:-}" = settimana ]; then cd "$BASE" && "$PY" -m nivult.ats.diario settimana
+    else cd "$BASE" && "$PY" -m nivult.ats.diario ultime "${2:-10}"; fi
     ;;
   *) sed -n '2,15p' "$0"; exit 2 ;;
 esac

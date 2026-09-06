@@ -204,6 +204,63 @@ def _controlli() -> list[Condizione]:
         except Exception:                             # noqa: BLE001
             pass
 
+    # l'API risponde DAVVERO? (non «il servizio e' acceso»)
+    try:
+        import httpx
+        t0 = time.time()
+        r = httpx.get("https://api.nivult.com/cruscotto", timeout=15, follow_redirects=True)
+        ms = int((time.time() - t0) * 1000)
+        if r.status_code >= 500:
+            c.append(Condizione("api errore", "critica", "l'API risponde con errore", f"HTTP {r.status_code} in {ms} ms"))
+        elif ms > 5000:
+            c.append(Condizione("api lenta", "avviso", "l'API risponde lentamente", f"{ms} ms per /cruscotto"))
+    except Exception as exc:                          # noqa: BLE001
+        c.append(Condizione("api giu", "critica", "l'API non risponde", repr(exc)[:120]))
+    # certificato HTTPS
+    try:
+        out = subprocess.run("echo | openssl s_client -servername api.nivult.com -connect api.nivult.com:443 2>/dev/null | openssl x509 -noout -enddate",
+                             shell=True, capture_output=True, text=True, timeout=20).stdout.strip()
+        m = re.search(r"notAfter=(.+)", out)
+        if m:
+            import email.utils
+            scad = time.mktime(time.strptime(m.group(1).strip(), "%b %d %H:%M:%S %Y %Z"))
+            giorni = (scad - time.time()) / 86400
+            if giorni < 10:
+                c.append(Condizione("certificato", "critica" if giorni < 3 else "avviso",
+                                    "certificato HTTPS in scadenza", f"api.nivult.com scade fra {int(giorni)} giorni"))
+    except Exception:                                 # noqa: BLE001
+        pass
+    # i digest del motore (il prodotto): falliti nelle ultime 24h
+    try:
+        import psycopg
+        url = _env().get("DATABASE_URL")
+        if url:
+            with psycopg.connect(url, connect_timeout=10) as m_:
+                falliti = m_.execute("SELECT count(*) FROM digests WHERE started_at > now()-interval '24 hours' AND status='failed'").fetchone()[0]
+                if falliti:
+                    c.append(Condizione("digest falliti", "critica", "digest falliti", f"{falliti} nelle ultime 24h (utenti senza consegna)"))
+    except Exception:                                 # noqa: BLE001
+        pass
+    # temperatura del N5, dal suo battito
+    try:
+        with _db() as db:
+            nota = db.execute("SELECT note FROM operaio_battiti WHERE nome='n5' AND battito > now()-interval '30 minutes'").fetchone()
+            if nota and nota[0]:
+                t_ = json.loads(nota[0]).get("temp_c")
+                if t_ and t_ >= 92:
+                    c.append(Condizione("n5 caldo", "avviso", "N5 troppo caldo", f"{t_} °C: abbassare i core (operaio-n5.sh --cpus)"))
+    except Exception:                                 # noqa: BLE001
+        pass
+    # errori 5xx dell'API negli ultimi 15 minuti
+    try:
+        out = subprocess.run(["journalctl", "-u", "nivult-api", "--since", "-15min", "--no-pager", "-q"],
+                             capture_output=True, text=True, timeout=20).stdout
+        n5xx = len(re.findall(r'" 5\d\d ', out))
+        if n5xx >= 5:
+            c.append(Condizione("api 5xx", "avviso", "errori 5xx dell'API", f"{n5xx} negli ultimi 15 minuti"))
+    except Exception:                                 # noqa: BLE001
+        pass
+
     # disco, memoria adesso, uccisioni recenti
     d = shutil.disk_usage("/")
     if d.free / d.total < 0.10:
@@ -276,11 +333,34 @@ def _testo(inc: dict, condizione: Condizione | None = None) -> tuple[str, list[s
     return titolo, [r for r in righe if r]
 
 
+SILENZIO = "/opt/nivult/silenzio-fino"
+
+
+def _in_silenzio() -> bool:
+    """`/silenzio 30m` dal bot (o `runbook.sh silenzio 30`): finche' dura,
+    gli avvisi e le info non aprono incidenti. Le critiche passano sempre:
+    un silenzio che nasconde un database giu' non e' manutenzione."""
+    try:
+        return time.time() < float(open(SILENZIO).read().strip())
+    except (OSError, ValueError):
+        return False
+
+
+def _battito(db) -> None:
+    """La sentinella lascia il proprio battito: il guardiano sul N5 lo
+    legge per accorgersi se e' LEI a essere morta (cron fermo, server giu')."""
+    db.execute("INSERT INTO operaio_battiti (nome, battito, note) VALUES ('sentinella', now(), NULL) "
+               "ON CONFLICT (nome) DO UPDATE SET battito = now()")
+
+
 def main() -> int:
     from nivult.ats import pronto_soccorso as ps
     cond = {c.chiave: c for c in _controlli()}
+    if _in_silenzio():
+        cond = {k: c for k, c in cond.items() if c.gravita == "critica"}
     with _db() as db:
         _prepara(db)
+        _battito(db)
         aperti = {r[0]: dict(zip(("chiave", "id", "gravita", "titolo", "dettaglio", "stato", "aperto_at", "telegram_id", "escalato", "cura"), r))
                   for r in db.execute("SELECT chiave, id, gravita, titolo, dettaglio, stato, aperto_at, telegram_id, escalato, cura "
                                       "FROM incidenti WHERE stato <> 'risolto'").fetchall()}
@@ -329,6 +409,8 @@ def main() -> int:
         if any(inc["cura"] and not inc["cura"].startswith("chiamato") for _, inc in nuovi_da_curare):
             time.sleep(3)
             cond = {c.chiave: c for c in _controlli()}
+            if _in_silenzio():
+                cond = {k: c for k, c in cond.items() if c.gravita == "critica"}
         # 4. incidenti aperti la cui condizione e' sparita: risolti
         for chiave, inc in list(aperti.items()):
             if chiave in cond:
