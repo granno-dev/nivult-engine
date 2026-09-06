@@ -160,8 +160,10 @@ def _controlli() -> list[str]:
                 "count(*) FILTER (WHERE expired_at > now() - interval '2 hours') "
                 "FROM ats_jobs").fetchone()
             if attive and scadute_2h * 100 > attive * 3:
-                problemi.append(f"scadenze di massa: {scadute_2h} offerte marcate scadute "
-                                f"nelle ultime 2h ({100*scadute_2h//attive}% delle attive)")
+                # testo STABILE (niente numeri): il conteggio cambia a ogni corsa
+                # e ogni testo nuovo e' una mail nuova — valanga del 06/09 sera
+                problemi.append("scadenze di massa: oltre il 3% delle attive marcate scadute "
+                                "nelle ultime 2h (dettaglio sul cruscotto)")
     except Exception:                                 # noqa: BLE001
         pass
 
