@@ -258,9 +258,12 @@ def _controlli() -> list[str]:
                              capture_output=True, text=True, timeout=20).stdout
         vittime = re.findall(r"Out of memory: Killed process \d+ \((\S+)\)", out)
         if vittime:
-            from collections import Counter
-            conta = ", ".join(f"{k}x{v}" if v > 1 else k for k, v in Counter(vittime).most_common(4))
-            problemi.append(f"memoria esaurita: il kernel ha ucciso {len(vittime)} processi nelle 24h ({conta})")
+            # testo STABILE: il numero cambia a ogni corsa (la finestra di
+            # 24h scorre) e ogni testo nuovo era una mail nuova — Giuseppe ne
+            # ha ricevute tre per lo stesso guasto il 06/09. I nomi bastano.
+            nomi = ", ".join(sorted(set(vittime))[:4])
+            problemi.append(f"memoria esaurita nelle ultime 24h: il kernel ha ucciso {nomi}"
+                            " (dettagli: journalctl -k)")
     except Exception:                                 # noqa: BLE001
         pass
 
