@@ -117,10 +117,31 @@ class Modello(nn.Module):
         return {t: head(pooled) for t, head in self.teste.items()} | {"lingue": self.lingue(pooled)}
 
 
+PESI_CLASSI: dict = {}     # testa -> tensore dei pesi per classe (riempito in main)
+
+
+def pesi_classi(train: list[dict], dev) -> dict:
+    """Pesi inversi alla frequenza, tagliati a [0.5, 4]: nell'anteprima del
+    06/09 il modello prediceva full_time al posto di temporary/part_time
+    (16 errori su 25) e mid al posto di lead (7): le classi rare le
+    ignorava. Il taglio evita di sovrapesare classi con pochi esempi."""
+    out = {}
+    for t, voc in TESTE.items():
+        conta = torch.ones(len(voc))
+        for x in train:
+            v = x.get(t)
+            if v in voc:
+                conta[voc.index(v)] += 1
+        w = (conta.sum() / (len(voc) * conta)).clamp(0.5, 4.0)
+        out[t] = w.to(dev)
+    return out
+
+
 def perdita(logits: dict, y: dict, smoothing: float = 0.1) -> torch.Tensor:
     tot = 0.0
     for t in TESTE:
-        tot = tot + F.cross_entropy(logits[t], y[t], ignore_index=IGN, label_smoothing=smoothing)
+        tot = tot + F.cross_entropy(logits[t], y[t], ignore_index=IGN, label_smoothing=smoothing,
+                                    weight=PESI_CLASSI.get(t))
     bce = F.binary_cross_entropy_with_logits(logits["lingue"], y["lingue"], reduction="none").mean(1)
     mask = y["lingue_mask"]
     if mask.sum() > 0:
@@ -212,6 +233,7 @@ def main() -> int:
     print(f"train {len(train)} | golden {len(golden)} | device {dev} | base {a.base}", flush=True)
 
     model = Modello(a.base).to(dev)
+    PESI_CLASSI.update(pesi_classi(train, dev))
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
     passi_epoca = math.ceil(len(train) / a.bs)
     tot_passi = a.max_passi or passi_epoca * a.epoche

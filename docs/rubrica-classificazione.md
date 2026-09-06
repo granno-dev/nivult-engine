@@ -81,6 +81,20 @@ coppie che la tabella non nominava. Ora le nomina:
 | tecnico di riparazione (endoscopi, veicoli, macchinari) | **Trades** | Healthcare, Engineering |
 | QA/QC inspector con laurea tecnica | **Engineering** | Trades |
 
+### Dall'esame di v1-anteprima (06/09 sera: 86,4% sui 273 casi a mano, 37 errori)
+
+Le coppie che il modello confonde, con la decisione:
+
+| Se il ruolo è… | Famiglia | NON |
+|---|---|---|
+| impiegato commerciale, back-office commerciale/post-vendita, Sachbearbeiter Auftragsabwicklung, impiegato tecnico d'ufficio | **Administrative** | Sales, Customer Service, Logistics, Engineering |
+| exploitant transport, pianificatore trasporti, autista-allestitore (Aufbaufahrer) | **Transportation** | Logistics |
+| magazziniere, picking, addetto al magazzino | **Logistics** | Retail |
+| solutions consultant / presales, property consultant | **Sales** | Consulting |
+| inhouse consultant SAP/ERP (dipendente, non per clienti), delivery manager IT | **Technology** | Consulting |
+| chef instructor, formatore di cucina | **Education** | Food & Beverage |
+| assistente architetto, BIM coordinator | **Construction** / **Engineering** | Art & Design |
+
 Tre regole trasversali:
 
 - **Se titolo e testo parlano di due mestieri diversi, vince il testo.**
