@@ -17,6 +17,7 @@ GLM = os.environ["GLM_API_KEY"]
 TETTO = float(os.environ.get("TETTO_SPESA", "35.0"))   # dollari, cap duro
 PAR = 20
 PREZZO_IN, PREZZO_OUT = 0.075/1e6, 0.25/1e6            # promo
+PREZZO_CACHE = 0.015/1e6   # il prompt di sistema (la rubrica) e' in cache: misurato 512/572 token
 
 c0 = psycopg.connect(DSN)
 FAM = [r[0] for r in c0.execute("SELECT DISTINCT family FROM job_classifications ORDER BY 1").fetchall()]
@@ -78,9 +79,10 @@ def label(jid, tit, luo, desc):
             return jid, None, 0, 0
         u = d.get("usage",{})
         g = json.loads(re.search(r"\{.*\}", d["choices"][0]["message"]["content"], re.S).group(0))
-        return jid, g, u.get("prompt_tokens",0), u.get("completion_tokens",0)
+        cached = (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
+        return jid, g, u.get("prompt_tokens",0), u.get("completion_tokens",0), cached
     except Exception:
-        return jid, None, 0, 0
+        return jid, None, 0, 0, 0
 
 def main():
     speso = 0.0; fatte = 0; fam_scritte = 0
@@ -100,8 +102,8 @@ def main():
                 print("FINITO: niente piu' da fare"); break
             agg_job = []; agg_fam = []
             with ThreadPoolExecutor(max_workers=PAR) as ex:
-                for jid, g, ti, to in ex.map(lambda r: label(*r), righe):
-                    speso += ti*PREZZO_IN + to*PREZZO_OUT
+                for jid, g, ti, to, cached in ex.map(lambda r: label(*r), righe):
+                    speso += (ti-cached)*PREZZO_IN + cached*PREZZO_CACHE + to*PREZZO_OUT
                     if g is None:
                         continue   # chiamata fallita: NON marco, si riprova
                     sv = _str(g.get("seniority")); ev = _str(g.get("employment_type"))
