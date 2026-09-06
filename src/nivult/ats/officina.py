@@ -68,7 +68,7 @@ def _git(*args: str, cwd: str = REPO, check: bool = True) -> str:
 
 # ── il dossier ─────────────────────────────────────────────────────────
 
-def sanifica(pagina: str, massimo: int = 300_000) -> str:
+def sanifica(pagina: str, massimo: int = 600_000) -> str:
     """La pagina per il modello: struttura e testo visibile, senza codice.
     Restano i blocchi <script type="application/json|ld+json"> (sono
     dati, e certi adapter leggono proprio quelli)."""
@@ -113,9 +113,13 @@ def dossier(pid: str, slug: str | None = None, campione_dato: str | None = None)
             slug, origine = camp[0], camp[1]
             pagina = open(camp[1], errors="replace").read()
         if not pagina:
-            # nessun campione: la pagina si scarica adesso dal canarino piu' grosso
+            # nessun campione: la pagina si scarica adesso. Meglio un tenant
+            # di taglia media (10-300 offerte) che il piu' grosso: una
+            # bacheca da 3.000 annunci non entra nel campione, e gli
+            # esempi finirebbero fuori (successo alla prima prova).
             if not slug:
-                r = db.execute("SELECT slug FROM canarini WHERE platform_id=%s ORDER BY attese DESC LIMIT 1", (pid,)).fetchone()
+                r = db.execute("""SELECT slug FROM canarini WHERE platform_id=%s
+                                  ORDER BY (attese BETWEEN 10 AND 300) DESC, attese ASC LIMIT 1""", (pid,)).fetchone()
                 slug = r[0] if r else None
             if not slug:
                 raise SystemExit(f"{pid}: nessun campione e nessun canarino da cui scaricarlo")
@@ -130,13 +134,22 @@ def dossier(pid: str, slug: str | None = None, campione_dato: str | None = None)
             raise SystemExit(f"{pid}/{slug}: pagina vuota, niente da riparare")
         attive = db.execute("SELECT count(*) FROM ats_jobs WHERE platform_id=%s AND slug=%s AND expired_at IS NULL",
                             (pid, slug)).fetchone()[0]
-        esempi = [{"url": u, "external_id": e, "title": t} for u, e, t in db.execute(
+        archivio = db.execute(
             "SELECT url, external_id, title FROM ats_jobs WHERE platform_id=%s AND slug=%s AND expired_at IS NULL "
-            "AND url LIKE 'http%%' ORDER BY fetched_at DESC LIMIT 8", (pid, slug)).fetchall()]
+            "AND url LIKE 'http%%' ORDER BY fetched_at DESC LIMIT 2000", (pid, slug)).fetchall()
         canarini = [s for (s,) in db.execute("SELECT slug FROM canarini WHERE platform_id=%s", (pid,)).fetchall()]
+    pulita = sanifica(pagina)
     with open(f"{d}/campione.html", "w") as f:
-        f.write(sanifica(pagina))
-    attese = {"piattaforma": pid, "classe": classe, "slug": slug, "attese": attive, "esempi": esempi,
+        f.write(pulita)
+    # gli esempi si scelgono DENTRO il campione: un'offerta d'archivio che
+    # non sta nella pagina salvata non puo' essere ritrovata da nessun
+    # adapter, e «attese» e' quante ce ne stanno davvero, non il totale
+    testo = pulita.replace("&amp;", "&")
+    dentro = [(u, e, t) for u, e, t in archivio if u.split("?", 1)[0].rstrip("/") in testo]
+    esempi = [{"url": u, "external_id": e, "title": t} for u, e, t in dentro[:8]]
+    attese_nel_campione = len(dentro) if dentro else attive
+    attese = {"piattaforma": pid, "classe": classe, "slug": slug, "attese": attese_nel_campione,
+              "attive_in_archivio": attive, "esempi": esempi,
               "canarini": canarini, "campione_da": origine, "preparato_at": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())}
     with open(f"{d}/attese.json", "w") as f:
         json.dump(attese, f, indent=1, ensure_ascii=False)
@@ -145,7 +158,7 @@ def dossier(pid: str, slug: str | None = None, campione_dato: str | None = None)
     tree = ast.parse(src)
     cls_src = next((ast.get_source_segment(src, n) for n in tree.body if isinstance(n, ast.ClassDef) and n.name == classe), "")
     with open(f"{d}/DOSSIER.md", "w") as f:
-        f.write(_dossier_md(pid, classe, slug, attive, esempi, canarini, origine, cls_src))
+        f.write(_dossier_md(pid, classe, slug, attese_nel_campione, esempi, canarini, origine, cls_src))
     subprocess.run(["chown", "-R", f"{UTENTE}:{UTENTE}", d], check=False)
     return attese
 
