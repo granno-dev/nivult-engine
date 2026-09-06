@@ -66,7 +66,12 @@ SYS = ("You label job postings. Reply ONLY compact JSON, no prose. Fields: "
        "seniority(intern|junior|mid|senior|lead|head|unknown), "
        "employment_type(full_time|part_time|contract|temporary|internship|apprenticeship|unknown), "
        "remote(remote|hybrid|onsite|unknown), country(ISO2 or XX), "
-       f"family(exactly one of: {', '.join(FAM)}, or unknown). " + REGOLE)
+       f"family(exactly one of: {', '.join(FAM)}, or unknown), "
+       # aggiunti il 06/09 su osservazione di Giuseppe: l'ingresso e' gia'
+       # pagato, una riga in piu' di uscita costa +$0.012/1000 offerte
+       "skills(list of up to 8 short skill/tool names as written in the text, [] if none), "
+       "salary_min, salary_max (numbers ONLY if a salary is explicitly stated, else null; never estimate), "
+       "salary_currency(ISO 4217 or null), salary_period(year|month|day|hour|null). " + REGOLE)
 
 cli = httpx.Client(timeout=45)
 
@@ -83,7 +88,7 @@ def _colonna(c):
         c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS sprint_at timestamptz")
 
 def label(jid, tit, luo, desc):
-    p = {"model":"glm-5.3-flash","temperature":0,"max_tokens":120,
+    p = {"model":"glm-5.3-flash","temperature":0,"max_tokens":260,   # 120 -> 260: entrano le competenze
          "reasoning_effort":"low",
          "messages":[{"role":"system","content":SYS},
              {"role":"user","content":f"TITLE: {tit}\nLOCATION: {luo}\nTEXT: {desc}"}]}
@@ -134,14 +139,37 @@ def main():
                     rem = rv if rv in VAL_REM else None
                     ctry = cv if cv and re.match(r"^[A-Z]{2}$", cv) and cv != "XX" else None
                     fam = fv if fv in FAM else None
-                    agg_job.append((sen, et, rem, ctry, jid))
+                    # competenze: liste corte, minuscole, senza doppi; niente frasi
+                    sk = g.get("skills") if isinstance(g.get("skills"), list) else []
+                    visti = set(); skills = []
+                    for s in sk:
+                        if isinstance(s, str):
+                            s = re.sub(r"\s+", " ", s).strip().strip(".,;:").lower()[:40]
+                            if 1 < len(s) and s not in visti:
+                                visti.add(s); skills.append(s)
+                    skills = skills[:8] or None
+                    # stipendio: solo numeri veri, solo se dichiarato (min<=max, tetto anti-delirio)
+                    def _num(x):
+                        try:
+                            v = float(x); return v if 0 < v < 10_000_000 else None
+                        except (TypeError, ValueError): return None
+                    smin, smax = _num(g.get("salary_min")), _num(g.get("salary_max"))
+                    if smin and smax and smin > smax: smin, smax = smax, smin
+                    scur = _str(g.get("salary_currency")); scur = scur.upper() if scur and re.match(r"^[A-Za-z]{3}$", scur) else None
+                    sper = _str(g.get("salary_period")); sper = sper if sper in ("year","month","day","hour") else None
+                    if not (smin or smax): scur = sper = None
+                    agg_job.append((sen, et, rem, ctry, skills, smin, smax, scur, sper, jid))
                     if fam:
                         agg_fam.append((jid, fam))
             # scritture a lotti ordinati, retry deadlock
-            for lotto, sql in ((sorted(agg_job, key=lambda x:x[4]),
+            for lotto, sql in ((sorted(agg_job, key=lambda x:x[-1]),
                     "UPDATE ats_jobs SET seniority=coalesce(seniority,%s), "
                     "employment_type=coalesce(employment_type,%s), "
                     "remote=coalesce(remote,%s), country=coalesce(country,%s), "
+                    # competenze solo dove mancano: i dizionari gia' scritti restano
+                    "skills=CASE WHEN skills IS NULL OR cardinality(skills)=0 THEN %s ELSE skills END, "
+                    "salary_min=coalesce(salary_min,%s), salary_max=coalesce(salary_max,%s), "
+                    "salary_currency=coalesce(salary_currency,%s), salary_period=coalesce(salary_period,%s), "
                     "sprint_at=now() WHERE id=%s"),):
                 for i in range(0,len(lotto),300):
                     parte=lotto[i:i+300]
