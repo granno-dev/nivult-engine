@@ -39,6 +39,24 @@ def _riavvia(unita: str) -> str:
     return f"riavviato {unita}: {'attivo' if out.strip() == 'active' else 'ANCORA GIU (' + out.strip() + ')'}"
 
 
+_CURABILI = ("demone nivult-", "scrape fermo", "sprint fermo", "BACKUP FALLITO", "backup:", "ponte")
+
+
+def curabile(problema: str) -> bool:
+    return problema.startswith(_CURABILI)
+
+
+def chiama_medico(problemi: list[str]) -> bool:
+    """I problemi senza cura vanno al medico (Claude sul server), in
+    background sotto systemd cosi' la sentinella non aspetta. Un'unita'
+    sola per volta: se una visita e' in corso, si accoda al giro dopo."""
+    if not problemi:
+        return False
+    rc, out = _sh(["systemd-run", "--unit=nivult-medico", "--collect", "--quiet",
+                   f"{BASE}/deploy/medico.sh", *problemi], timeout=20)
+    return rc == 0
+
+
 def cura(problemi: list[str]) -> list[str]:
     """Per ogni problema nuovo, la cura se esiste. Ritorna le righe di
     resoconto (cosa fatto, con esito)."""

@@ -363,6 +363,10 @@ def main() -> int:
         # il pronto soccorso cura i guasti NUOVI e noti, e racconta su Telegram
         from nivult.ats import pronto_soccorso
         fatte = pronto_soccorso.cura(nuovi)
+        # i nuovi problemi SENZA cura nota vanno al medico (Claude sul server)
+        incurabili = [p for p in nuovi if not pronto_soccorso.curabile(p)]
+        if incurabili and pronto_soccorso.chiama_medico(incurabili):
+            fatte.append("chiamato il medico (Claude sul server) per: " + "; ".join(p[:50] for p in incurabili))
         corpo = "Sentinella Nivult — problemi rilevati:\n\n" + \
             "\n".join(f"  • {p}" for p in problemi) + \
             ("\n\nPronto soccorso:\n" + "\n".join(f"  • {f}" for f in fatte) if fatte else "") + \
