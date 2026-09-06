@@ -127,8 +127,22 @@ def _lettura_vuota(conn, az: dict, pagina: str | None, campioni_ora: dict) -> tu
     from . import ripiego
     pid, slug = az["platform_id"], az["slug"]
     attive, confermate = ripiego.conferma(conn, pid, slug, pagina or "")
-    if attive < 3 or not confermate:
+    # Una pagina «vuota» e' credibile se e' JSON (le API dicono [] e
+    # basta) o se e' una pagina vera (con dei link). Un 200 da 800 byte
+    # senza un solo <a> e' un muro di consenso o una pagina d'errore
+    # cortese, e da quello non si deduce niente.
+    p = (pagina or "").lstrip()
+    credibile = p[:1] in "{[" or (len(p) >= 1500 and "<a" in p.lower())
+    if attive < 3 or (not confermate and credibile):
         return attive, 0
+    if not confermate and not credibile:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO letture_sospette (platform_id, slug, attive_prima, trovate, confermate, http_status, campione) "
+                        "VALUES (%s, %s, %s, 0, 0, 200, NULL)", (pid, slug, attive))
+        conn.commit()
+        log.warning("  %s/%s: pagina non credibile (%d byte) con %d offerte in archivio: non la conto come vuota",
+                    pid, slug, len(p), attive)
+        return attive, -1
     campione = None
     if pagina and time.time() - campioni_ora.get(pid, 0) > 3600:
         campioni_ora[pid] = time.time()
@@ -265,7 +279,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     # chi dovra' riparare. Se non ne ritrova, la bacheca
                     # e' vuota davvero e si registra come tale.
                     attive, confermate = _lettura_vuota(conn, az, pagina, campioni_ora)
-                    if confermate:
+                    if confermate:   # > 0 ritrovate, oppure -1 = pagina non credibile: mai «vuota»
                         stats["sospette"] = stats.get("sospette", 0) + 1
                         with conn.cursor() as cur:
                             cur.execute("UPDATE ats_companies SET last_fetch_at = now() "
