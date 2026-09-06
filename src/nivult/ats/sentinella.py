@@ -336,7 +336,7 @@ def main() -> int:
             if inc["stato"] == "sospetto":
                 db.execute("DELETE FROM incidenti WHERE id=%s", (inc["id"],)); continue
             da = "pronto soccorso" if (inc.get("cura") and not inc["cura"].startswith("chiamato")) \
-                else "medico" if inc.get("cura") else "rientro spontaneo"
+                else "rientro dopo la visita del medico" if inc.get("cura") else "rientro spontaneo"
             db.execute("UPDATE incidenti SET stato='risolto', risolto_at=now(), risolto_da=%s WHERE id=%s", (da, inc["id"]))
             r = db.execute("SELECT risolto_at FROM incidenti WHERE id=%s", (inc["id"],)).fetchone()
             inc.update(stato="risolto", risolto_at=r[0], risolto_da=da)
