@@ -54,12 +54,24 @@ _TAG = re.compile(r"<[^>]+>")
 
 
 def pulisci(t: str | None, n: int = 1000) -> str:
-    t = _TAG.sub(" ", t or "")
+    """Prima le entita' (due volte: phenom e freshteam codificano l'HTML
+    intero come &lt;p&gt;), poi i tag, poi gli spazi. Misurato il 06/09
+    sulla prima versione: il 54% delle righe portava &nbsp;/&lt; nel testo."""
+    import html
+    t = html.unescape(html.unescape(t or ""))
+    t = _TAG.sub(" ", t).replace("\xa0", " ")
     return re.sub(r"\s+", " ", t).strip()[:n]
 
 
 def chiave_dup(titolo: str, azienda: str, luogo: str) -> str:
     base = f"{(titolo or '').lower().strip()}|{azienda}|{(luogo or '').lower().strip()}"
+    return hashlib.sha1(base.encode()).hexdigest()[:16]
+
+
+def chiave_testo(titolo: str, testo: str) -> str:
+    """Annunci-fotocopia di catene e agenzie: stesso titolo e stesso testo in
+    citta' diverse (5.430 nella prima versione). Uno basta."""
+    base = f"{(titolo or '').lower().strip()}|{(testo or '')[:300].lower()}"
     return hashlib.sha1(base.encode()).hexdigest()[:16]
 
 
@@ -107,26 +119,36 @@ def main() -> int:
     golden: list[dict] = []
     if a.golden_mano:
         for g in json.load(open(a.golden_mano)):
-            g = dict(g); g["fonte"] = "mano"; golden.append(g); escludi_id.add(g["id"])
+            g = dict(g); g["fonte"] = "mano"; g["text"] = pulisci(g.get("text"))
+            golden.append(g); escludi_id.add(g["id"])
         az_mano = {r[0]: r[1] for r in c.execute(
             "SELECT id::text, platform_id || '/' || slug FROM ats_jobs WHERE id = ANY(%s::uuid[])",
             ([g["id"] for g in golden],)).fetchall()}
+        for g in golden:
+            g["azienda"] = az_mano.get(g["id"])
         aziende_esame |= set(az_mano.values())
         print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame)")
 
     # --- dedup + divisione per azienda
     visti_dup: set[str] = set()
+    visti_testo: set[str] = set()
     dup = 0
     train_pool: dict[str, list] = defaultdict(list)
     esame_pool: dict[str, list] = defaultdict(list)
+    # i testi dell'esame a mano sono "visti": una fotocopia loro non entra nel training
+    for g in golden:
+        visti_testo.add(chiave_testo(g.get("title"), pulisci(g.get("text"))))
     for r in rubrica:
         x = riga(r)
         if x["id"] in escludi_id:
             continue
         k = chiave_dup(x["title"], x["azienda"], x["location"])
-        if k in visti_dup:
+        kt = chiave_testo(x["title"], x["text"]) if len(x["text"]) > 80 else None
+        if k in visti_dup or (kt and kt in visti_testo):
             dup += 1; continue
         visti_dup.add(k)
+        if kt:
+            visti_testo.add(kt)
         lato = "esame" if x["azienda"] in aziende_esame else lato_azienda(x["azienda"])
         (esame_pool if lato == "esame" else train_pool)[x["family"]].append(x)
     print(f"  duplicati titolo+azienda+citta' scartati: {dup}")
@@ -157,9 +179,10 @@ def main() -> int:
         if x["id"] in escludi_id or x["azienda"] in aziende_esame or lato_azienda(x["azienda"]) == "esame":
             continue
         k = chiave_dup(x["title"], x["azienda"], x["location"])
-        if k in visti_dup:
+        kt = chiave_testo(x["title"], x["text"])
+        if k in visti_dup or kt in visti_testo:
             continue
-        visti_dup.add(k)
+        visti_dup.add(k); visti_testo.add(kt)
         pre_fam[x["family"]].append(x)
     for fam, lst in pre_fam.items():
         if fam in AMBIGUE:

@@ -65,8 +65,22 @@ def leggi(percorso: str, max_righe: int | None = None) -> list[dict]:
     return out
 
 
+_TAG = None
+
+
+def _pulito(t: str) -> str:
+    """Difesa in profondita': anche se il dataset arrivasse sporco, il modello
+    non vede mai entita' o tag HTML (il 06/09 il 54% delle righe li aveva)."""
+    global _TAG
+    import html, re
+    if _TAG is None:
+        _TAG = re.compile(r"<[^>]+>")
+    t = html.unescape(html.unescape(t or ""))
+    return re.sub(r"\s+", " ", _TAG.sub(" ", t).replace("\xa0", " ")).strip()
+
+
 def testo(x: dict) -> str:
-    return f"{x.get('title') or ''} | {x.get('location') or ''}\n{(x.get('text') or '')[:1200]}"
+    return f"{x.get('title') or ''} | {x.get('location') or ''}\n{_pulito(x.get('text'))[:1200]}"
 
 
 def etichette(x: dict) -> dict:
