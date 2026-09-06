@@ -19,14 +19,16 @@ import psycopg
 
 
 def _dsn() -> str:
-    for f in ("/opt/nivult/engine/.env", "/opt/nivult/.env"):
+    """Il database delle offerte con il ruolo `nivult` (la tabella e' sua,
+    e deve poterla creare): stessa strada della sentinella."""
+    for f in ("/opt/nivult/.env", "/opt/nivult/engine/.env"):
         try:
-            m = re.search(r"^ATS_DATABASE_URL=(.*)$", open(f).read(), re.M)
+            m = re.search(r"^POSTGRES_PASSWORD=(.*)$", open(f).read(), re.M)
             if m:
-                return m.group(1).strip()
+                return f"postgresql://nivult:{m.group(1).strip()}@127.0.0.1:5432/nivult_ats"
         except OSError:
             pass
-    raise SystemExit("ATS_DATABASE_URL assente")
+    raise SystemExit("POSTGRES_PASSWORD assente")
 
 
 def _prepara(db) -> None:
