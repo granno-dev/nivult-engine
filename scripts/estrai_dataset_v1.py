@@ -1,39 +1,50 @@
 """Dataset di addestramento per nivult-v1 — curato secondo la rubrica
-(docs/rubrica-classificazione.md), non semplicemente scaricato.
+(docs/rubrica-classificazione.md), con le garanzie promesse a Giuseppe il
+2026-09-06 («assicuriamoci che questa volta il database di training sia
+fatto bene»):
 
-Cosa cambia rispetto a v0 (che aveva il 63% di righe SENZA testo e
-imparava dai titoli, da maestri incoerenti sulle coppie ambigue):
+1. SOLO etichette GLM con rubrica (sprint dal 06/09 08:30 UTC). Niente
+   dizionario, niente v0, niente ESCO.
+2. IL TESTO E' LA REGOLA: righe senza descrizione ammesse solo se GLM ha
+   dato una famiglia (titolo inequivocabile) e mai oltre il 20% di una
+   famiglia. v0 era al 63% senza testo: e' il motivo per cui confondeva.
+3. DIVISIONE PER AZIENDA, non per riga: gli annunci-fotocopia della stessa
+   azienda stanno tutti da una parte sola, cosi' l'esame misura il capire,
+   non il ricordare.
+4. DEDUPLICA di titolo+azienda+citta' prima di contare.
+5. BILANCIAMENTO: tetto per famiglia, pavimento per le rare integrato solo
+   da etichette GLM pre-rubrica con testo e fuori dalle coppie ambigue.
+6. ESAME separato: i 280 casi a mano (autorita') + 12 casuali per famiglia
+   (termometro), tutti fuori dall'addestramento per id E per azienda.
+7. RAPPORTO: distribuzioni, quote senza testo, lingue, e 100 righe a caso
+   in un file leggibile (controllo a occhio prima del via: >5 sbagliate
+   su 100 = non si addestra).
+8. Teste: famiglia, seniority, contratto, remoto, lingue richieste.
+   null = la loss ignora quella testa per quella riga.
 
-1. **Solo etichette GLM con rubrica** (sprint dal 06/09 08:30 UTC). Le
-   etichette a dizionario (livello1/2/3, dizionario*) NON entrano: sono
-   coerenti con se stesse, non con la rubrica.
-2. **Il testo e' la regola, non l'eccezione.** Le righe senza descrizione
-   entrano solo se GLM ha comunque dato una famiglia (= titolo che la
-   rubrica considera inequivocabile) e al massimo per il 20% di ogni
-   famiglia: il modello deve saper leggere anche un titolo nudo, ma non
-   deve imparare a indovinare da li'.
-3. **Teste nuove:** oltre a famiglia e seniority, contratto, remoto e
-   lingue richieste (queste ultime a regole, `lingue_richieste.py`).
-   `null` = nessuna etichetta = la loss ignora quella testa per quella
-   riga (il notebook usa ignore_index).
-4. **Bilanciamento** a tetto per famiglia (20k), e le famiglie sotto il
-   pavimento (3k) si integrano con etichette GLM pre-rubrica — solo con
-   testo, e solo su famiglie fuori dalle coppie ambigue.
-5. **Il set d'esame e' fuori per id**: il golden v1 (giudicato a mano)
-   piu' 12 righe casuali per famiglia come termometro generale.
-
-Uso (sul server, nel venv):
-    ATS_DATABASE_URL=... python estrai_dataset_v1.py [--dopo 2026-09-06T08:30+00] [--golden-mano campione_esame_v1_giudicato.json]
+Uso (sul server o sul N5, nel venv):
+  ATS_DATABASE_URL=... python scripts/estrai_dataset_v1.py \
+      --golden-mano docs/esame-v1-giudicato.json --out /opt/nivult/v1
 """
-import os, sys, json, gzip, random, re, argparse
+from __future__ import annotations
+
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import random
+import re
+import sys
 from collections import Counter, defaultdict
+
 import psycopg
 
 random.seed(42)
 TETTO_FAM = 20000
 PAVIMENTO_FAM = 3000
 QUOTA_SENZA_TESTO = 0.20
-# famiglie delle coppie ambigue: qui entrano SOLO etichette con rubrica
+QUOTA_ESAME_AZIENDE = 0.05        # 5% delle aziende va all'esame/validazione
 AMBIGUE = {"Trades", "Construction", "Retail", "Sales", "Finance & Accounting",
            "Consulting", "Food & Beverage", "Hospitality", "Transportation",
            "Logistics", "Software", "Technology", "Management & Leadership",
@@ -44,74 +55,112 @@ _TAG = re.compile(r"<[^>]+>")
 
 def pulisci(t: str | None, n: int = 1000) -> str:
     t = _TAG.sub(" ", t or "")
-    t = re.sub(r"\s+", " ", t).strip()
-    return t[:n]
+    return re.sub(r"\s+", " ", t).strip()[:n]
+
+
+def chiave_dup(titolo: str, azienda: str, luogo: str) -> str:
+    base = f"{(titolo or '').lower().strip()}|{azienda}|{(luogo or '').lower().strip()}"
+    return hashlib.sha1(base.encode()).hexdigest()[:16]
+
+
+def lato_azienda(azienda: str) -> str:
+    """Deterministico: la stessa azienda finisce sempre dallo stesso lato."""
+    h = int(hashlib.sha1(azienda.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return "esame" if h < QUOTA_ESAME_AZIENDE else "train"
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dopo", default="2026-09-06T08:30:00+00:00", help="inizio dello sprint con rubrica")
-    ap.add_argument("--golden-mano", default=None, help="json giudicato a mano: [{id, family, seniority?, ...}]")
-    ap.add_argument("--out", default="/opt/nivult")
+    ap.add_argument("--dopo", default="2026-09-06T08:30:00+00:00")
+    ap.add_argument("--golden-mano", default=None)
+    ap.add_argument("--out", default="/opt/nivult/v1")
     a = ap.parse_args()
+    os.makedirs(a.out, exist_ok=True)
     c = psycopg.connect(os.environ["ATS_DATABASE_URL"])
 
     SEL = """SELECT j.id::text, j.title, coalesce(j.location, j.city, ''), j.country,
                     coalesce(j.raw->>'description', j.raw->>'descriptionPlain', j.raw->>'descriptionHtml', ''),
-                    x.family, j.seniority, j.employment_type, j.remote, j.languages_required, j.lang
+                    x.family, j.seniority, j.employment_type, j.remote, j.languages_required, j.lang,
+                    j.platform_id || '/' || j.slug
                FROM ats_jobs j JOIN job_classifications x ON x.job_id = j.id
-              WHERE j.title IS NOT NULL AND length(j.title) > 2 AND x.model = 'glm-5.3-flash'"""
+              WHERE j.title IS NOT NULL AND length(j.title) > 2 AND {modello}"""
     print("estrazione rubrica...", flush=True)
-    rubrica = c.execute(SEL + " AND j.sprint_at >= %s", (a.dopo,)).fetchall()
+    rubrica = c.execute(SEL.format(modello="x.model = 'glm-5.3-flash'") + " AND j.sprint_at >= %s",
+                        (a.dopo,)).fetchall()
     print(f"  etichette con rubrica: {len(rubrica)}", flush=True)
-    print("estrazione pre-rubrica (solo per integrare le famiglie rare)...", flush=True)
-    pre = c.execute(SEL.replace("x.model = 'glm-5.3-flash'", "x.model IN ('glm-5.3-flash','glm-5.2')")
-                    + " AND j.sprint_at < %s AND length(coalesce(j.raw->>'description','')) > 80", (a.dopo,)).fetchall()
+    pre = c.execute(SEL.format(modello="x.model IN ('glm-5.3-flash','glm-5.2')")
+                    + " AND j.sprint_at < %s AND length(coalesce(j.raw->>'description','')) > 80",
+                    (a.dopo,)).fetchall()
     print(f"  etichette GLM pre-rubrica con testo: {len(pre)}", flush=True)
 
     def riga(r):
-        jid, tit, loc, ctry, desc, fam, sen, et, rem, lingue, lang = r
+        jid, tit, loc, ctry, desc, fam, sen, et, rem, lingue, lang, az = r
         return {"id": jid, "title": tit, "location": loc, "country": ctry,
                 "text": pulisci(desc), "family": fam, "seniority": sen,
                 "employment_type": et, "remote": rem,
-                "languages_required": list(lingue) if lingue else None, "lang": lang}
+                "languages_required": list(lingue) if lingue else None,
+                "lang": lang, "azienda": az}
 
-    # --- set d'esame: a mano (autorita') + termometro casuale
-    escludi: set[str] = set()
+    # --- esame a mano: autorita'; le sue aziende vanno tutte al lato esame
+    escludi_id: set[str] = set()
+    aziende_esame: set[str] = set()
     golden: list[dict] = []
     if a.golden_mano:
         for g in json.load(open(a.golden_mano)):
-            g = dict(g); g["fonte"] = "mano"
-            golden.append(g); escludi.add(g["id"])
-        print(f"  golden a mano: {len(golden)}")
+            g = dict(g); g["fonte"] = "mano"; golden.append(g); escludi_id.add(g["id"])
+        az_mano = {r[0]: r[1] for r in c.execute(
+            "SELECT id::text, platform_id || '/' || slug FROM ats_jobs WHERE id = ANY(%s::uuid[])",
+            ([g["id"] for g in golden],)).fetchall()}
+        aziende_esame |= set(az_mano.values())
+        print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame)")
 
-    per_fam: dict[str, list] = defaultdict(list)
+    # --- dedup + divisione per azienda
+    visti_dup: set[str] = set()
+    dup = 0
+    train_pool: dict[str, list] = defaultdict(list)
+    esame_pool: dict[str, list] = defaultdict(list)
     for r in rubrica:
-        if r[0] not in escludi:
-            per_fam[r[5]].append(riga(r))
-    for fam, lst in per_fam.items():
+        x = riga(r)
+        if x["id"] in escludi_id:
+            continue
+        k = chiave_dup(x["title"], x["azienda"], x["location"])
+        if k in visti_dup:
+            dup += 1; continue
+        visti_dup.add(k)
+        lato = "esame" if x["azienda"] in aziende_esame else lato_azienda(x["azienda"])
+        (esame_pool if lato == "esame" else train_pool)[x["family"]].append(x)
+    print(f"  duplicati titolo+azienda+citta' scartati: {dup}")
+
+    # --- esame casuale: 12 per famiglia dal lato esame, con testo
+    for fam, lst in esame_pool.items():
         random.shuffle(lst)
-        con = [x for x in lst if len(x["text"]) > 80]
-        for x in con[:12]:
-            x = dict(x); x["fonte"] = "casuale"; golden.append(x); escludi.add(x["id"])
+        for x in [y for y in lst if len(y["text"]) > 80][:12]:
+            x = dict(x); x["fonte"] = "casuale"; golden.append(x); escludi_id.add(x["id"])
 
     # --- training: testo prima, senza testo con quota, tetto per famiglia
     train: list[dict] = []
-    stat = {}
-    for fam, lst in per_fam.items():
-        con = [x for x in lst if len(x["text"]) > 80 and x["id"] not in escludi]
-        senza = [x for x in lst if len(x["text"]) <= 80 and x["id"] not in escludi]
+    stat: dict[str, list] = {}
+    for fam, lst in train_pool.items():
+        random.shuffle(lst)
+        con = [x for x in lst if len(x["text"]) > 80]
+        senza = [x for x in lst if len(x["text"]) <= 80]
         presi = con[:TETTO_FAM]
         q = min(len(senza), int(len(presi) * QUOTA_SENZA_TESTO / (1 - QUOTA_SENZA_TESTO)) if presi else 0,
                 TETTO_FAM - len(presi))
         presi += senza[:q]
         stat[fam] = [len(presi), len(con), len(senza), 0]
         train += presi
-    # --- pavimento: famiglie rare integrate dal pre-rubrica (mai le ambigue)
+    # --- pavimento dal pre-rubrica: solo con testo, mai le ambigue, mai aziende dell'esame
     pre_fam: dict[str, list] = defaultdict(list)
     for r in pre:
-        if r[0] not in escludi:
-            pre_fam[r[5]].append(riga(r))
+        x = riga(r)
+        if x["id"] in escludi_id or x["azienda"] in aziende_esame or lato_azienda(x["azienda"]) == "esame":
+            continue
+        k = chiave_dup(x["title"], x["azienda"], x["location"])
+        if k in visti_dup:
+            continue
+        visti_dup.add(k)
+        pre_fam[x["family"]].append(x)
     for fam, lst in pre_fam.items():
         if fam in AMBIGUE:
             continue
@@ -124,13 +173,37 @@ def main() -> int:
             stat[fam][0] += len(agg); stat[fam][3] = len(agg)
     random.shuffle(train)
 
-    print("\nfamiglia: nel training | con testo disponibili | senza testo disponibili | integrate pre-rubrica")
+    # --- controlli duri: niente fughe fra train ed esame
+    id_train = {x["id"] for x in train}; az_train = {x["azienda"] for x in train}
+    fuga_id = sum(1 for g in golden if g["id"] in id_train)
+    az_gold = set(a_ for a_ in (az_mano.values() if a.golden_mano else []))
+    az_gold |= {g["azienda"] for g in golden if g.get("azienda")}
+    fuga_az = len(az_gold & az_train)
+    assert fuga_id == 0, f"FUGA: {fuga_id} id dell'esame nel training"
+    assert fuga_az == 0, f"FUGA: {fuga_az} aziende dell'esame nel training"
+
+    # --- rapporto
+    rap = []
+    rap.append("famiglia | training | con testo disp. | senza testo disp. | dal pre-rubrica")
     for fam, (n, con, senza, integ) in sorted(stat.items(), key=lambda kv: -kv[1][0]):
-        print(f"  {fam:32s} {n:6d} | {con:6d} | {senza:6d} | {integ:5d}")
-    print(f"\ntraining: {len(train)} righe ({sum(1 for x in train if len(x['text']) > 80)} con testo) | golden: {len(golden)}")
+        rap.append(f"  {fam:32s} {n:6d} | {con:6d} | {senza:6d} | {integ:5d}")
+    con_testo = sum(1 for x in train if len(x["text"]) > 80)
+    rap.append(f"\ntraining: {len(train)} righe, {con_testo} con testo ({100*con_testo//max(1,len(train))}%) | "
+               f"esame: {len(golden)} ({sum(1 for g in golden if g.get('fonte')=='mano')} a mano) | aziende nel training: {len(az_train)}")
     for testa in ("seniority", "employment_type", "remote", "languages_required"):
-        print(f"  testa {testa}: etichettate {sum(1 for x in train if x.get(testa))}")
-    print("  lingue del testo:", Counter(x["lang"] for x in train).most_common(8))
+        rap.append(f"  testa {testa}: etichettate {sum(1 for x in train if x.get(testa))}")
+    rap.append("  lingue del testo: " + str(Counter(x["lang"] for x in train).most_common(8)))
+    rap.append(f"  fughe train/esame: id={fuga_id} aziende={fuga_az} (devono essere 0)")
+    testo_rap = "\n".join(rap); print(testo_rap)
+    open(f"{a.out}/rapporto-v1.txt", "w").write(testo_rap + "\n")
+
+    # --- 100 righe a caso per il controllo a occhio
+    campione = random.sample(train, min(100, len(train)))
+    with open(f"{a.out}/controllo-100.txt", "w") as f:
+        for i, x in enumerate(campione):
+            f.write(f"#{i} [{x['family']} | sen={x['seniority']} et={x['employment_type']} rem={x['remote']} "
+                    f"lr={x['languages_required']}] {x['title']} | {x['location']} | {x['azienda']}\n"
+                    f"   {x['text'][:400]}\n")
 
     def scrivi(nome, dati):
         with gzip.open(nome, "wt") as f:
@@ -138,7 +211,7 @@ def main() -> int:
                 f.write(json.dumps(x, ensure_ascii=False) + "\n")
     scrivi(f"{a.out}/dataset-train-v1.jsonl.gz", train)
     scrivi(f"{a.out}/dataset-golden-v1.jsonl.gz", golden)
-    print("scritti", f"{a.out}/dataset-train-v1.jsonl.gz", f"{a.out}/dataset-golden-v1.jsonl.gz")
+    print("scritti:", a.out)
     return 0
 
 
