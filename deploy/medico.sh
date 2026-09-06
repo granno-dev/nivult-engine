@@ -44,7 +44,7 @@ cd "$BASE"
       env HOME=/home/nivult-medico claude -p "$PROMPT" $1 \
       --max-turns 25 \
       --allowedTools "Bash(sudo /opt/nivult/engine/deploy/runbook.sh *)" "Read" "Grep" "Glob" \
-      --permission-mode acceptEdits 2>&1
+      --permission-mode acceptEdits < /dev/null 2>&1
   }
   ESITO=$(visita "--model $MODELLO"); rc=$?
   if [ $rc -ne 0 ] && echo "$ESITO" | grep -qi "model"; then
