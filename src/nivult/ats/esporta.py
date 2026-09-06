@@ -92,7 +92,8 @@ def attive(dsn: str) -> int:
                        j.posted_at, COALESCE(j.created_at, j.posted_at,
                                              j.fetched_at), j.fetched_at,
                        {_DESCR}, x.family,
-                       j.employment_type, j.contact_email
+                       j.employment_type, j.contact_email,
+                       j.languages_required
                   FROM ats_jobs j
                   LEFT JOIN ats_companies co
                          ON co.platform_id = j.platform_id
@@ -128,7 +129,8 @@ def attive(dsn: str) -> int:
                     salary_currency=r[15], posted_at=r[16],
                     first_seen=r[17], last_seen=r[18], description=r[19],
                     category=r[20], employment_type=r[21],
-                    contact_email=r[22], **stima))
+                    contact_email=r[22],
+                    languages_required=list(r[23] or []), **stima))
                 n += 1
                 copertura["salary_observed"] += r[13] is not None
                 copertura["salary_estimate"] += bool(stima)
