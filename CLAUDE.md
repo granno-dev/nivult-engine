@@ -189,6 +189,34 @@ trovata alle 10:00 può finire nel digest delle 11:10. Nacque a 05:00 —
 dopo l'ATS delle 02:30 e dopo il riavvio delle 04:00 che troncherebbe un
 travaso a metà — e quel giro resta compreso nei mezz'ora.
 
+### Gli adapter dell'ATS si rompono in silenzio — e l'officina li ripara
+
+Un adapter (`src/nivult/ats/adapters.py`) che non riconosce più il
+template di una piattaforma torna **zero offerte con HTTP 200**, e nulla
+fa rumore. Il 06/09/2026 così sono scadute 33.344 offerte JazzHR vive —
+terza strage dello stesso giorno con la stessa radice: fidarsi di un
+segnale senza contro-verifica. Da allora quattro strati, tutti misurabili
+e descritti in `docs/manuale-guasti.md`:
+
+1. **letture veritiere** — 403/429/5xx alzano `LetturaFallita`; uno zero
+   su un tenant che aveva offerte passa dal **ripiego**
+   (`nivult.ats.ripiego`), che ritrova in pagina le offerte d'archivio e
+   le rinfresca, e finisce in `letture_sospette` con un campione;
+2. **scadenza solo dopo una rilettura riuscita** del tenant
+   (`ats_companies.last_ok_at`), solo sulle piattaforme con adapter — le
+   fonti a fetta (France Travail, Arbetsförmedlingen, EURES, «agenzie»)
+   non scadono per presenza — con interruttore al 30%;
+3. **canarini** (`nivult.ats.canarini`, ogni ora): 3 tenant di
+   riferimento per piattaforma; tutti a zero = «adapter rotto», entro
+   l'ora;
+4. **officina** (`deploy/officina.sh`): Claude sul server ripara la sola
+   classe della piattaforma nel suo clone, il banco
+   `scripts/prova_adapter.py` deve passare, la verifica impone il
+   perimetro a macchina, poi deploy con canarini e rollback. **Deploy
+   automatico per decisione di Giuseppe (07/09/2026).** Dopo una
+   riparazione il bare del server è avanti rispetto a GitHub: dal Mac,
+   `git pull server main` prima di pushare.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
