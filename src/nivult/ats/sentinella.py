@@ -155,15 +155,19 @@ def _controlli() -> list[str]:
                 host="127.0.0.1", port=5432, user="nivult",
                 password=_env().get("POSTGRES_PASSWORD", ""),
                 dbname="nivult_ats", connect_timeout=10) as c:
+            # conta le scadute che erano state VISTE negli ultimi 3 giorni:
+            # un'offerta assente da tre giorni che scade e' fisiologia; una
+            # vista ieri che scade e' un guasto (successo due volte il 06/09)
             attive, scadute_2h = c.execute(
                 "SELECT count(*) FILTER (WHERE expired_at IS NULL), "
-                "count(*) FILTER (WHERE expired_at > now() - interval '2 hours') "
+                "count(*) FILTER (WHERE expired_at > now() - interval '2 hours' "
+                "                 AND fetched_at > now() - interval '3 days') "
                 "FROM ats_jobs").fetchone()
-            if attive and scadute_2h * 100 > attive * 3:
+            if attive and scadute_2h * 100 > attive * 1:
                 # testo STABILE (niente numeri): il conteggio cambia a ogni corsa
                 # e ogni testo nuovo e' una mail nuova — valanga del 06/09 sera
-                problemi.append("scadenze di massa: oltre il 3% delle attive marcate scadute "
-                                "nelle ultime 2h (dettaglio sul cruscotto)")
+                problemi.append("scadenze anomale: oltre l'1% delle attive, viste di recente, "
+                                "marcate scadute nelle ultime 2h (dettaglio sul cruscotto)")
     except Exception:                                 # noqa: BLE001
         pass
 

@@ -59,15 +59,15 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     2. posted_at ANTICO — l'ATS continua a elencarla ma è uno zombie
        (listing del 2013 ancora sulla pagina).
 
-    ⚠ La regola 2 era a 90 giorni e il 2026-09-06, fra le 12:36 e le
-    13:34, ha marcato scadute 163.710 offerte VISTE SUL SITO NEGLI
-    ULTIMI 3 GIORNI: su 6 controllate a mano sul career site, 5 erano
-    online. Molti ATS tengono annunci aperti per mesi (evergreen,
-    Lever/SmartRecruiters/Greenhouse): «pubblicata da tempo» non vuol
-    dire «chiusa». La presenza sulla pagina e' la verita'; la data
-    decide la FRESCHEZZA, e quella la applica il ponte (30 giorni) per
-    il digest, non la scadenza. Ora la regola 2 prende solo gli zombie
-    veri: piu' di 2 anni.
+    ⚠ La regola 2 NON ESISTE PIU' (2026-09-06). A 90 giorni ha marcato
+    scadute 163.710 offerte viste sul sito negli ultimi 3 giorni (5 su 6
+    controllate a mano erano online); portata a 2 anni ne ha scartate
+    altre 94.000 nel pomeriggio, sempre viste di recente. Molti ATS
+    tengono annunci aperti per mesi o anni, e certe piattaforme scrivono
+    date di pubblicazione inaffidabili (2013 su annunci vivi). La
+    presenza sulla pagina e' l'UNICA verita' sulla scadenza; la
+    freschezza per il digest la applica il ponte (30 giorni), non
+    questa funzione. Il parametro `giorni` e' la sola regola.
     """
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -75,10 +75,7 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                 UPDATE ats_jobs
                    SET expired_at = now()
                  WHERE expired_at IS NULL
-                   AND (
-                        fetched_at < now() - make_interval(days => %s)
-                     OR posted_at < now() - make_interval(days => 730)
-                   )
+                   AND fetched_at < now() - make_interval(days => %s)
                 RETURNING id
             """, (giorni,))
             n = cur.rowcount
