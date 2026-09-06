@@ -85,9 +85,15 @@ def cura(problemi: list[str]) -> list[str]:
                          f"{'avviato' if rc == 0 else 'NON avviato: ' + out}"); continue
         if p.startswith("ponte") and "ponte" not in gia:
             gia.add("ponte")
+            # lo script del cron, non il modulo Python: cosi' la corsa
+            # rispetta il flock E scrive nello stesso log che la
+            # sentinella guarda. Curare in un posto e controllare in un
+            # altro lasciava l'incidente aperto per sempre a guasto
+            # risolto — successo il 06/09, con 14 offerte davvero
+            # importate e l'allarme ancora acceso.
             rc, out = _sh(["systemd-run", "--unit=nivult-ponte-cura", "--collect", "--quiet",
-                           f"--property=WorkingDirectory={BASE}",
-                           f"{BASE}/.venv/bin/python", "scripts/ponte_ats.py"], timeout=20)
+                           "/bin/bash", "-c",
+                           f"{BASE}/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1"], timeout=20)
             fatte.append(f"ponte rilanciato in background: {'avviato' if rc == 0 else 'NON avviato: ' + out}"); continue
         # per tutto il resto (N5 muto, scadenze anomale, memoria, disco, credito,
         # completezza) non c'e' una cura automatica sicura: si racconta e basta

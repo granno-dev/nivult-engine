@@ -39,6 +39,17 @@ def _connetti():
 
 
 def _prepara(db) -> None:
+    # `IF NOT EXISTS` non protegge da due creazioni SIMULTANEE: Postgres
+    # alza una violazione di unicita' su pg_type, e chi crea la tabella a
+    # ogni giro puo' morire per questo (successo alla sentinella il
+    # 06/09). Qui si tollera: se c'e' gia', va bene comunque.
+    try:
+        _crea(db)
+    except psycopg.errors.UniqueViolation:
+        pass
+
+
+def _crea(db) -> None:
     db.execute("""CREATE TABLE IF NOT EXISTS medico_visite (
         id        bigserial PRIMARY KEY,
         at        timestamptz NOT NULL DEFAULT now(),

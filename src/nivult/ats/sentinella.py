@@ -300,6 +300,19 @@ def _controlli() -> list[Condizione]:
 # ── la scheda degli incidenti ──────────────────────────────────────────
 
 def _prepara(db) -> None:
+    """`IF NOT EXISTS` non protegge da due creazioni SIMULTANEE: Postgres
+    alza una violazione di unicita' su `pg_type`, e la sentinella moriva
+    lì — proprio nel giro in cui c'erano due esecuzioni sovrapposte, cioe'
+    quando si sta lavorando sul server. Il guardiano non deve poter
+    morire per una corsa fra due copie di se stesso."""
+    import psycopg
+    try:
+        _crea(db)
+    except psycopg.errors.UniqueViolation:
+        pass
+
+
+def _crea(db) -> None:
     db.execute("""CREATE TABLE IF NOT EXISTS incidenti (
         id bigserial PRIMARY KEY, chiave text NOT NULL, gravita text NOT NULL, titolo text NOT NULL,
         dettaglio text, stato text NOT NULL DEFAULT 'aperto',
