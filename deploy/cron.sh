@@ -107,8 +107,11 @@ if [[ -n "$attuale" ]]; then
   printf '%s\n' "$attuale" > "$copia" 2>/dev/null && echo "tabella precedente salvata in $copia"
 fi
 
-# Le righe che non sono nostre passano intatte.
-altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" || true)
+# Le righe che non sono nostre passano intatte. Si toglie pero'
+# l'intestazione che questo script stesso scrive sopra le righe ignote,
+# o si accumulerebbe una copia a ogni esecuzione.
+altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" \
+         | grep -v '^# righe Nivult non elencate' || true)
 
 # Righe superate, da togliere se ci sono ancora: l'unico modo ammesso di
 # cancellare qualcosa e' nominarlo qui, per esteso, dove si vede nel
