@@ -44,7 +44,17 @@ while true; do
   # trova poco (1.032 famiglie in 10 minuti il 06/09: quei casi li copre lo
   # sprint GLM). Lotti piccoli e pause lunghe: un core in boost a 77 °C
   # faceva girare la ventola del N5 «a palla» — parola di Giuseppe.
-  nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
+  # Il classificatore a livelli (dizionario + fuzzy sui titoli) e' il
+  # passo che scalda i 16 core, e sull'arretrato rende l'1,8% a giro:
+  # 300-500 classificate su 20.000 viste, sempre le stesse che non sa
+  # leggere (misurato la notte del 06/09/2026, mentre GLM ne faceva
+  # 28.000 l'ora). Con il file di pausa il passo si salta; si toglie
+  # quando lo sprint GLM finisce o quando arriva nivult v1.
+  if [ -f /opt/nivult/engine/logs/.classificatore-pausa ]; then
+    echo "-- classificatore a livelli in pausa (logs/.classificatore-pausa)"
+  else
+    nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
+  fi
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
