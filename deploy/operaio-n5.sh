@@ -32,8 +32,15 @@ if docker ps -a --format '{{.Names}}' | grep -qx nivult-operaio; then
 fi
 # il ciclo arriva col checkout git (push dal Mac su engine.git), non da /root
 chmod +x "$DIR/engine/deploy/operaio-loop.sh"
+# La iGPU (Radeon 890M, gfx1150) entra nel container: misurato il 06/09,
+# encoder tipo mmBERT 64x384 in 412 ms su GPU fp16 contro 4.007 ms a CPU
+# (10x). ROCm 6.4 non conosce gfx1150 nativamente ("invalid device
+# function"): HSA_OVERRIDE_GFX_VERSION=11.0.0 la fa passare per gfx1100 e
+# funziona. Il torch nel venv deve essere quello per ROCm (operaio-setup.sh).
 docker run -d --name nivult-operaio --network host --restart unless-stopped \
   --memory 48g --cpus "$CPUS" -v "$DIR:/opt/nivult" \
+  --device /dev/kfd --device /dev/dri --group-add video \
+  -e HSA_OVERRIDE_GFX_VERSION=11.0.0 \
   -e DEBIAN_FRONTEND=noninteractive nivult-operaio:base \
   bash -c 'exec /opt/nivult/engine/deploy/operaio-loop.sh >> /opt/nivult/engine/logs/operaio.log 2>&1' >/dev/null
 sleep 3
