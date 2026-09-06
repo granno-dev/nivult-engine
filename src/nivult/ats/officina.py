@@ -313,9 +313,21 @@ def _registra(pid: str, motivo: str, esito: str, commit: str | None, dettaglio: 
 
 def deploy(pid: str, motivo: str, t0: float | None = None) -> tuple[bool, str]:
     t0 = t0 or time.time()
-    _git("add", FILE_ADAPTER)
-    _git("commit", "-q", "-m", f"Officina: adapter {pid} riparato\n\n{motivo}\n\nRiparazione automatica di Claude sul server, "
-                               f"verificata dal banco di prova (scripts/prova_adapter.py) e dai canarini.")
+    if _git("status", "--porcelain").strip():
+        _git("add", FILE_ADAPTER)
+        _git("commit", "-q", "-m", f"Officina: adapter {pid} riparato\n\n{motivo}\n\nRiparazione automatica di Claude sul server, "
+                                   f"verificata dal banco di prova (scripts/prova_adapter.py) e dai canarini.")
+    # Il main puo' essere andato avanti mentre l'officina lavorava (un
+    # deploy dal Mac): la riparazione si rimette sopra, e se non ci sta
+    # senza conflitti non si deploya — si registra e si avvisa.
+    _git("fetch", "-q", "origin")
+    try:
+        _git("rebase", "-q", "origin/main")
+    except RuntimeError as exc:
+        _git("rebase", "--abort", check=False)
+        det = f"la riparazione non si applica sopra il main aggiornato ({str(exc)[:120]}): niente deploy"
+        _registra(pid, motivo, "fallita", None, det, int(time.time() - t0))
+        return False, det
     commit = _git("rev-parse", "--short", "HEAD").strip()
     _git("push", "-q", BARE, "HEAD:main")
     time.sleep(3)
