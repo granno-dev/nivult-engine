@@ -38,7 +38,13 @@ print("  nessuno" if not rs else "\n".join(f"  [{g}/{s} dalle {ap}] {t} — {d}"
 EOF
     echo "-- sprint"; "$BASE/deploy/sprint.sh" status 2>/dev/null | tail -2
     echo "-- backup"; cat /opt/nivult/backup-state 2>/dev/null
-    echo "-- memoria/carico/disco"; free -m | sed -n 2p; uptime | sed 's/.*load/load/'; df -h / | tail -1
+    # «disponibile», non «libera»: Linux tiene libera pochissima memoria
+    # perche' usa il resto come cache dei file, e la restituisce appena
+    # serve. Chi legge la colonna sbagliata crede che il server stia per
+    # bloccarsi mentre ha 5 GB a disposizione (successo il 06/09).
+    echo "-- memoria/carico/disco"
+    awk '/MemTotal|MemAvailable/{printf "%s %d MB  ", $1, $2/1024} END{print ""}' /proc/meminfo
+    free -m | sed -n 2p; uptime | sed 's/.*load/load/'; df -h / | tail -1
     echo "-- uccisioni per memoria 24h"; journalctl -k --since -24h --no-pager -q 2>/dev/null | grep -c "Out of memory"
     echo "-- battito N5 e offerte"
     "$PY" - <<'EOF' 2>/dev/null

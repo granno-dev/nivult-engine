@@ -31,6 +31,13 @@ from nivult import oauth as _oauth
 OPERATORE = os.environ.get("CRUSCOTTO_EMAIL", "g.ranno@outlook.com").lower()
 # Venti minuti, non otto ore: un cookie rubato vale poco se muore in
 # fretta, e rientrare costa due clic sul conto Microsoft gia' aperto.
+#
+# ⚠ Venti minuti di INATTIVITA', non di sessione. Il cookie si rinnova a
+# ogni giro di `/cruscotto/dati`, cioe' finche' la pagina e' aperta e
+# aggiorna. Senza rinnovo il cruscotto buttava fuori chi lo stava
+# guardando: dopo venti minuti esatti il primo `dati` rispondeva 404 e la
+# pagina si sostituiva da sola con la schermata d'accesso, senza dire
+# perche'. Da fuori sembra un guasto, ed e' successo davvero il 06/09.
 DURATA = 20 * 60
 
 
@@ -833,10 +840,13 @@ font-size:11.5px;color:var(--dim);opacity:.7}
     Entra con Microsoft
   </a>
   <div id="negato" class="negato">Questo account non è autorizzato.</div>
+  <div id="scaduta" class="negato">Sessione scaduta dopo venti minuti fermi. Rientra: due clic.</div>
 </div>
 <script>
 if(new URLSearchParams(location.search).has('negato'))
   document.getElementById('negato').classList.add('si');
+if(new URLSearchParams(location.search).has('scaduta'))
+  document.getElementById('scaduta').classList.add('si');
 </script></body></html>"""
 
 
@@ -1213,7 +1223,7 @@ function cardSentinella(g){
  return card(`<span class="${c}">${v}</span>`,'controllo automatico',sub)}
 async function tick(){
  let d;try{const r=await fetch('/cruscotto/dati');
-  if(r.status===404){location.replace('/cruscotto');return}
+  if(r.status===404){location.replace('/cruscotto?scaduta=1');return}
   if(!r.ok)throw 0;d=await r.json()}
  catch(e){document.getElementById('ts').textContent='non raggiungibile';
   document.getElementById('dotv').style.background='var(--bad)';return}

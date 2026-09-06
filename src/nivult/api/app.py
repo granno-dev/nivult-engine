@@ -31,7 +31,7 @@ from psycopg.types.json import Json
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
                      Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
@@ -466,7 +466,14 @@ def create_app() -> FastAPI:
     def cruscotto_dati(request: Request):
         if not cruscotto_mod.sessione_valida(request.cookies.get("crus", "")):
             raise HTTPException(status_code=404)
-        return cruscotto_mod.metriche(ats_database_url(), database_url())
+        # sessione a scorrimento: ogni aggiornamento della pagina sposta
+        # avanti la scadenza. I venti minuti valgono da fermi, non da
+        # aperti — vedi la nota su DURATA in cruscotto.py.
+        resp = JSONResponse(cruscotto_mod.metriche(ats_database_url(), database_url()))
+        resp.set_cookie("crus", cruscotto_mod.cookie_sessione(),
+                        max_age=cruscotto_mod.DURATA, httponly=True,
+                        secure=True, samesite="lax", path="/cruscotto")
+        return resp
 
     @app.post("/auth/magic-link", status_code=202)
     def magic_link(corpo: RichiestaLink, request: Request,

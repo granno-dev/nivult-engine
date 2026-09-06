@@ -18,14 +18,21 @@ import sys
 import psycopg
 
 
-def _dsn() -> str:
-    """Il database delle offerte con il ruolo `nivult` (la tabella e' sua,
-    e deve poterla creare): stessa strada della sentinella."""
+def _connetti():
+    """Il database delle offerte col ruolo `nivult` (la tabella e' sua, e
+    deve poterla creare): stessa strada della sentinella.
+
+    Parametri separati e non una URL: una stringa `postgresql://utente:…@`
+    scritta in codice fa scattare lo scanner dei segreti in CI — a ragione,
+    perche' e' la forma in cui le password finiscono davvero nei repo.
+    """
     for f in ("/opt/nivult/.env", "/opt/nivult/engine/.env"):
         try:
             m = re.search(r"^POSTGRES_PASSWORD=(.*)$", open(f).read(), re.M)
             if m:
-                return f"postgresql://nivult:{m.group(1).strip()}@127.0.0.1:5432/nivult_ats"
+                return psycopg.connect(host="127.0.0.1", port=5432, user="nivult",
+                                       password=m.group(1).strip(), dbname="nivult_ats",
+                                       connect_timeout=10, autocommit=True)
         except OSError:
             pass
     raise SystemExit("POSTGRES_PASSWORD assente")
@@ -44,14 +51,14 @@ def _prepara(db) -> None:
 
 
 def registra(tipo: str, motivo: str, esito: str, durata_s: int | None = None) -> int:
-    with psycopg.connect(_dsn(), autocommit=True) as db:
+    with _connetti() as db:
         _prepara(db)
         return db.execute("INSERT INTO medico_visite (tipo, motivo, esito, durata_s) VALUES (%s,%s,%s,%s) RETURNING id",
                           (tipo, motivo[:2000], esito[-8000:] if esito else None, durata_s)).fetchone()[0]
 
 
 def ultime(n: int = 10) -> list[tuple]:
-    with psycopg.connect(_dsn(), autocommit=True) as db:
+    with _connetti() as db:
         _prepara(db)
         return db.execute("SELECT at, tipo, motivo, esito, durata_s FROM medico_visite ORDER BY at DESC LIMIT %s", (n,)).fetchall()
 
@@ -59,7 +66,7 @@ def ultime(n: int = 10) -> list[tuple]:
 def settimana() -> str:
     """Il materiale per la revisione: visite degli ultimi 7 giorni non ancora
     riviste, con motivo ed esito, e gli incidenti che le hanno causate."""
-    with psycopg.connect(_dsn(), autocommit=True) as db:
+    with _connetti() as db:
         _prepara(db)
         vis = db.execute("SELECT id, at, tipo, motivo, esito FROM medico_visite "
                          "WHERE at > now()-interval '7 days' AND NOT rivista ORDER BY at").fetchall()
@@ -75,7 +82,7 @@ def settimana() -> str:
 
 
 def segna_riviste(ids: list[int]) -> None:
-    with psycopg.connect(_dsn(), autocommit=True) as db:
+    with _connetti() as db:
         db.execute("UPDATE medico_visite SET rivista=true WHERE id = ANY(%s)", (ids,))
 
 
