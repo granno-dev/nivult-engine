@@ -21,7 +21,9 @@ ssh "$SERVER" 'chmod 700 /opt/nivult/engine/deploy/apri-db-tailscale.sh && /opt/
 echo "== 2) container sul N5, codice e segreti"
 scp -q "$QUI/operaio-n5.sh" "$N5:/root/operaio-n5.sh"
 ssh "$N5" 'chmod 700 /root/operaio-n5.sh && /root/operaio-n5.sh'
-ssh "$SERVER" 'tar czf - -C /opt/nivult engine --exclude=engine/.venv --exclude=engine/logs --exclude=engine/.git --exclude="*.pyc" --exclude="__pycache__"' \
+# gli --exclude vanno PRIMA della cartella: dopo, GNU tar li ignora ed esce in errore
+ssh "$N5" 'rm -rf /mnt/cache/appdata/nivult-operaio/engine/.venv /mnt/cache/appdata/nivult-operaio/engine/logs'
+ssh "$SERVER" 'tar --exclude=engine/.venv --exclude=engine/logs --exclude=engine/.git --exclude="*.pyc" --exclude="__pycache__" -czf - -C /opt/nivult engine' \
   | ssh "$N5" 'tar xzf - -C /mnt/cache/appdata/nivult-operaio && du -sh /mnt/cache/appdata/nivult-operaio/engine'
 ssh "$SERVER" 'grep -h -E "^(POSTGRES_PASSWORD|GLM_API_KEY|GLM_BASE_URL|GROQ_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|BRANDFETCH_CLIENT_ID)=" /opt/nivult/.env /opt/nivult/engine/.env 2>/dev/null | sort -u' \
   | ssh "$N5" "umask 077; D=/mnt/cache/appdata/nivult-operaio; cat > \$D/.env
