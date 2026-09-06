@@ -1,0 +1,486 @@
+{
+ "base": "jhu-clsp/mmBERT-base",
+ "train": 58259,
+ "golden": 669,
+ "passi": 5463,
+ "family": {
+  "casuale": {
+   "n": 389,
+   "accuratezza": 0.8098,
+   "T": 0.8500000000000001,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.907,
+     "precisione": 0.85
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.884,
+     "precisione": 0.855
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.838,
+     "precisione": 0.859
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.82,
+     "precisione": 0.865
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.794,
+     "precisione": 0.874
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.735,
+     "precisione": 0.892
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.679,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.625,
+     "precisione": 0.922
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.54,
+     "precisione": 0.933
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.36,
+     "precisione": 0.95
+    }
+   ],
+   "soglia_95": 0.95
+  },
+  "mano": {
+   "n": 273,
+   "accuratezza": 0.8645,
+   "T": 0.8500000000000001,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.934,
+     "precisione": 0.894
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.897,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.879,
+     "precisione": 0.912
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.824,
+     "precisione": 0.92
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.78,
+     "precisione": 0.925
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.747,
+     "precisione": 0.922
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.714,
+     "precisione": 0.938
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.681,
+     "precisione": 0.941
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.582,
+     "precisione": 0.962
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.392,
+     "precisione": 0.963
+    }
+   ],
+   "soglia_95": 0.9
+  }
+ },
+ "seniority": {
+  "casuale": {
+   "n": 317,
+   "accuratezza": 0.8044,
+   "T": 0.8500000000000001,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.943,
+     "precisione": 0.819
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.909,
+     "precisione": 0.837
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.871,
+     "precisione": 0.859
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.823,
+     "precisione": 0.874
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.77,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.722,
+     "precisione": 0.913
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.678,
+     "precisione": 0.93
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.65,
+     "precisione": 0.932
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.562,
+     "precisione": 0.966
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.385,
+     "precisione": 0.992
+    }
+   ],
+   "soglia_95": 0.9
+  },
+  "mano": {
+   "n": 137,
+   "accuratezza": 0.8248,
+   "T": 0.8500000000000001,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.978,
+     "precisione": 0.821
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.971,
+     "precisione": 0.827
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.942,
+     "precisione": 0.829
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.891,
+     "precisione": 0.861
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.832,
+     "precisione": 0.886
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.781,
+     "precisione": 0.907
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.745,
+     "precisione": 0.922
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.708,
+     "precisione": 0.948
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.628,
+     "precisione": 0.953
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.453,
+     "precisione": 0.952
+    }
+   ],
+   "soglia_95": 0.9
+  }
+ },
+ "employment_type": {
+  "casuale": {
+   "n": 243,
+   "accuratezza": 0.7284,
+   "T": 1.05,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.856,
+     "precisione": 0.808
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.827,
+     "precisione": 0.811
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.782,
+     "precisione": 0.832
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.708,
+     "precisione": 0.837
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.671,
+     "precisione": 0.847
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.597,
+     "precisione": 0.834
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.481,
+     "precisione": 0.872
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.387,
+     "precisione": 0.894
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.235,
+     "precisione": 0.912
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.058,
+     "precisione": 0.929
+    }
+   ],
+   "soglia_95": null
+  },
+  "mano": {
+   "n": 112,
+   "accuratezza": 0.7768,
+   "T": 1.05,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 0.875,
+     "precisione": 0.806
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 0.866,
+     "precisione": 0.804
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 0.812,
+     "precisione": 0.813
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 0.768,
+     "precisione": 0.826
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 0.705,
+     "precisione": 0.823
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.643,
+     "precisione": 0.819
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.536,
+     "precisione": 0.8
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.375,
+     "precisione": 0.857
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.241,
+     "precisione": 0.889
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.027,
+     "precisione": 1.0
+    }
+   ],
+   "soglia_95": 0.95
+  }
+ },
+ "remote": {
+  "casuale": {
+   "n": 296,
+   "accuratezza": 0.9865,
+   "T": 0.55,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 1.0,
+     "precisione": 0.986
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 1.0,
+     "precisione": 0.986
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 1.0,
+     "precisione": 0.986
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 1.0,
+     "precisione": 0.986
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 1.0,
+     "precisione": 0.986
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 0.993,
+     "precisione": 0.993
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.99,
+     "precisione": 0.997
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.99,
+     "precisione": 0.997
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.99,
+     "precisione": 0.997
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.99,
+     "precisione": 0.997
+    }
+   ],
+   "soglia_95": 0.5
+  },
+  "mano": {
+   "n": 102,
+   "accuratezza": 0.902,
+   "T": 0.55,
+   "curva": [
+    {
+     "soglia": 0.5,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.55,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.6,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.65,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.7,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.75,
+     "copertura": 1.0,
+     "precisione": 0.902
+    },
+    {
+     "soglia": 0.8,
+     "copertura": 0.99,
+     "precisione": 0.911
+    },
+    {
+     "soglia": 0.85,
+     "copertura": 0.98,
+     "precisione": 0.92
+    },
+    {
+     "soglia": 0.9,
+     "copertura": 0.98,
+     "precisione": 0.92
+    },
+    {
+     "soglia": 0.95,
+     "copertura": 0.951,
+     "precisione": 0.938
+    }
+   ],
+   "soglia_95": null
+  }
+ },
+ "lingue": {
+  "precisione": 0.861,
+  "copertura": 0.775
+ },
+ "cancello": {
+  "famiglia_mano": 0.8645,
+  "passa": false
+ }
+}
