@@ -24,7 +24,7 @@ import json
 import logging
 import os
 import re
-import signal
+
 import time
 
 import psycopg
@@ -83,18 +83,13 @@ def scegli(dsn: str) -> int:
     return n
 
 
-class _Scaduto(Exception):
-    pass
+def _leggi(pid: str, slug: str) -> tuple[int | None, str | None]:
+    """(trovate, pagina). trovate = None se la lettura e' fallita.
 
-
-def _alarm(*_):
-    raise _Scaduto()
-
-
-def _leggi(pid: str, slug: str, secondi: int = 60) -> tuple[int | None, str | None]:
-    """(trovate, pagina). trovate = None se la lettura e' fallita."""
-    signal.signal(signal.SIGALRM, _alarm)
-    signal.alarm(secondi)
+    Gira in un thread: il limite di tempo e' quello del client HTTP
+    dell'adapter (30 s a richiesta), non un alarm — che funziona solo nel
+    thread principale. Il primo giro sequenziale e' durato piu' di 15
+    minuti su 130 canarini; in parallelo sta nei limiti di un cron orario."""
     try:
         with ADAPTERS[pid]() as a:
             jobs = a.jobs(slug)
@@ -102,14 +97,9 @@ def _leggi(pid: str, slug: str, secondi: int = 60) -> tuple[int | None, str | No
     except LetturaFallita as exc:
         log.warning("canarino %s/%s: lettura fallita (%s)", pid, slug, exc)
         return None, None
-    except _Scaduto:
-        log.warning("canarino %s/%s: oltre %ds", pid, slug, secondi)
-        return None, None
     except Exception as exc:  # noqa: BLE001
         log.warning("canarino %s/%s: errore %s", pid, slug, type(exc).__name__)
         return None, None
-    finally:
-        signal.alarm(0)
 
 
 def controlla(dsn: str, solo: str | None = None) -> dict:
@@ -126,10 +116,17 @@ def controlla(dsn: str, solo: str | None = None) -> dict:
         per_pid: dict[str, list] = {}
         for pid, slug, attese in can:
             per_pid.setdefault(pid, []).append((slug, attese))
+        # le letture in parallelo (8 alla volta, una piattaforma per
+        # thread cosi' non si martella lo stesso dominio), le scritture
+        # qui nel thread principale
+        from concurrent.futures import ThreadPoolExecutor
+        def _leggi_piattaforma(pid):
+            return pid, [(slug, attese, *_leggi(pid, slug)) for slug, attese in per_pid[pid]]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            letture = dict(pool.map(_leggi_piattaforma, per_pid))
         for pid, lista in per_pid.items():
             esiti = []
-            for slug, attese in lista:
-                trovate, pagina = _leggi(pid, slug)
+            for slug, attese, trovate, pagina in letture[pid]:
                 campione = None
                 if trovate == 0 and pagina:
                     try:
@@ -143,7 +140,6 @@ def controlla(dsn: str, solo: str | None = None) -> dict:
                 db.execute("INSERT INTO canarini_esiti (platform_id, slug, trovate, attese, campione) VALUES (%s,%s,%s,%s,%s)",
                            (pid, slug, trovate, attese, campione))
                 esiti.append((slug, attese, trovate, campione))
-                time.sleep(1)
             riuscite = [e for e in esiti if e[2] is not None]
             letti += len(riuscite)
             vivi += sum(1 for e in riuscite if e[2] > 0)
