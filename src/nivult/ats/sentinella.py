@@ -171,6 +171,25 @@ def _controlli() -> list[str]:
     except Exception:                                 # noqa: BLE001
         pass
 
+    # 2-quater. lo sprint GLM: se l'unita' e' giu' ma la coda non e' vuota e
+    # il log non dice FINE/credito, e' morto per un errore: il pronto
+    # soccorso lo rilancia (e' riprendibile). Nessun allarme a fine corsa.
+    try:
+        r = subprocess.run(["systemctl", "is-active", "nivult-sprint"], capture_output=True, text=True)
+        if r.stdout.strip() != "active":
+            coda = open("/opt/nivult/engine/logs/sprint-glm.log", errors="replace").read()[-1500:]
+            fine = any(k in coda for k in ("FINE:", "FINITO", "1113", "credito"))
+            import psycopg
+            with psycopg.connect(host="127.0.0.1", port=5432, user="nivult",
+                                 password=_env().get("POSTGRES_PASSWORD", ""),
+                                 dbname="nivult_ats", connect_timeout=10) as c:
+                if c.execute("SELECT to_regclass('sprint_coda')").fetchone()[0]:
+                    n = c.execute("SELECT count(*) FROM sprint_coda").fetchone()[0]
+                    if n > 1000 and not fine:
+                        problemi.append(f"sprint fermo con {n} offerte in coda (non per fine o credito)")
+    except Exception:                                 # noqa: BLE001
+        pass
+
     # 2-bis. l'operaio a casa (N5): scrive un battito a ogni giro in
     # operaio_battiti. Se casa si spegne, l'arretrato aspetta senza che
     # nessuno se ne accorga: questo e' il "qualcuno".
@@ -341,14 +360,21 @@ def main() -> int:
     rientrati = [k for k in attivi if k not in chiavi_ora]
 
     if nuovi or persistenti:
+        # il pronto soccorso cura i guasti NUOVI e noti, e racconta su Telegram
+        from nivult.ats import pronto_soccorso
+        fatte = pronto_soccorso.cura(nuovi)
         corpo = "Sentinella Nivult — problemi rilevati:\n\n" + \
             "\n".join(f"  • {p}" for p in problemi) + \
+            ("\n\nPronto soccorso:\n" + "\n".join(f"  • {f}" for f in fatte) if fatte else "") + \
             "\n\nCruscotto: /cruscotto sul sito."
+        pronto_soccorso.telegram("Sentinella Nivult", problemi, fatte)
         if _manda_mail(f"[Nivult] {len(problemi)} problema/i: "
                        f"{problemi[0][:60]}", corpo):
             for p in nuovi + persistenti:
                 attivi[_chiave(p)] = adesso
     if rientrati and not problemi:
+        from nivult.ats import pronto_soccorso
+        pronto_soccorso.telegram("Sentinella Nivult: tutto ok", [], [], rientrati)
         _manda_mail("[Nivult] rientrato: tutto ok",
                     "Problemi rientrati:\n" +
                     "\n".join(f"  • {k}" for k in rientrati))
