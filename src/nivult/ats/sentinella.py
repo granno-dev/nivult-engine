@@ -144,6 +144,27 @@ def _controlli() -> list[str]:
     except Exception as exc:                          # noqa: BLE001
         problemi.append(f"database ATS irraggiungibile: {exc!r}"[:160])
 
+    # 2-ter. scadenze di massa: il 2026-09-06 la regola «pubblicata da
+    # piu' di 90 giorni» ha marcato scadute 163.710 offerte vive in
+    # un'ora, e nessun controllo l'ha visto: Giuseppe ha notato il
+    # numero delle attive scendere sul cruscotto. Piu' del 3% delle
+    # attive scadute in due ore non e' fisiologia, e' un guasto.
+    try:
+        import psycopg
+        with psycopg.connect(
+                host="127.0.0.1", port=5432, user="nivult",
+                password=_env().get("POSTGRES_PASSWORD", ""),
+                dbname="nivult_ats", connect_timeout=10) as c:
+            attive, scadute_2h = c.execute(
+                "SELECT count(*) FILTER (WHERE expired_at IS NULL), "
+                "count(*) FILTER (WHERE expired_at > now() - interval '2 hours') "
+                "FROM ats_jobs").fetchone()
+            if attive and scadute_2h * 100 > attive * 3:
+                problemi.append(f"scadenze di massa: {scadute_2h} offerte marcate scadute "
+                                f"nelle ultime 2h ({100*scadute_2h//attive}% delle attive)")
+    except Exception:                                 # noqa: BLE001
+        pass
+
     # 2-bis. l'operaio a casa (N5): scrive un battito a ogni giro in
     # operaio_battiti. Se casa si spegne, l'arretrato aspetta senza che
     # nessuno se ne accorga: questo e' il "qualcuno".

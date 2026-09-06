@@ -56,9 +56,18 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
 
     Due regole:
     1. fetched_at vecchio — lo scraper non la rivede: ritirata.
-    2. posted_at molto vecchio — l'ATS continua a elencarla ma è uno
-       zombie (listing del 2013 ancora sulla pagina): la freschezza
-       la decide la data di pubblicazione, non la presenza.
+    2. posted_at ANTICO — l'ATS continua a elencarla ma è uno zombie
+       (listing del 2013 ancora sulla pagina).
+
+    ⚠ La regola 2 era a 90 giorni e il 2026-09-06, fra le 12:36 e le
+    13:34, ha marcato scadute 163.710 offerte VISTE SUL SITO NEGLI
+    ULTIMI 3 GIORNI: su 6 controllate a mano sul career site, 5 erano
+    online. Molti ATS tengono annunci aperti per mesi (evergreen,
+    Lever/SmartRecruiters/Greenhouse): «pubblicata da tempo» non vuol
+    dire «chiusa». La presenza sulla pagina e' la verita'; la data
+    decide la FRESCHEZZA, e quella la applica il ponte (30 giorni) per
+    il digest, non la scadenza. Ora la regola 2 prende solo gli zombie
+    veri: piu' di 2 anni.
     """
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -68,7 +77,7 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                  WHERE expired_at IS NULL
                    AND (
                         fetched_at < now() - make_interval(days => %s)
-                     OR posted_at < now() - make_interval(days => 90)
+                     OR posted_at < now() - make_interval(days => 730)
                    )
                 RETURNING id
             """, (giorni,))
