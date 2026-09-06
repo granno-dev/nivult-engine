@@ -99,7 +99,13 @@ def attive(dsn: str) -> int:
                          ON co.platform_id = j.platform_id
                         AND co.slug = j.slug
                   LEFT JOIN job_classifications x ON x.job_id = j.id
-                 WHERE j.expired_at IS NULL""")
+                 WHERE j.expired_at IS NULL
+                   -- un annuncio per chiave (titolo+azienda+citta'): nel
+                   -- corpus i doppi restano (10.573 gruppi il 06/09), al
+                   -- cliente arriva il piu' vecchio di ciascun gruppo
+                   AND NOT EXISTS (SELECT 1 FROM ats_jobs d
+                                    WHERE d.duplicate_key = j.duplicate_key
+                                      AND d.expired_at IS NULL AND d.id < j.id)""")
             for r in cur:
                 stima = {}
                 if r[13] is None and r[6] and r[20]:
