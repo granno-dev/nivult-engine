@@ -81,6 +81,20 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     altre piattaforme scadono regolarmente: un adapter rotto non deve
     congelare le scadenze oneste degli altri.
     """
+    # ⚠ SOLO le piattaforme lette da un adapter, cioe' bacheca per
+    # bacheca e per intero. Le fonti a FETTA — France Travail,
+    # Arbetsförmedlingen, Bundesanstellung, EURES, il feed «agenzie» — si
+    # leggono di notte con `--limite 2000`: le piu' recenti, mai l'elenco
+    # completo. Li' «non vista da 3 giorni» non significa niente, e la
+    # presenza le stava macinando: France Travail 60.184 scadute in 7
+    # giorni contro 5.437 attive (misurato il 07/09/2026), poi rivissute
+    # alla fetta successiva come «nuove». Stessa regola del motore
+    # (`fetch_complete`): da una lettura parziale la scadenza non si
+    # deduce. La loro scadenza va presa dai segnali della fonte
+    # (`removed` di Arbetsförmedlingen, assenza dopo una lettura completa
+    # per ROME…) — finche' non c'e', non scadono per presenza.
+    from .adapters import ADAPTERS
+    con_adapter = sorted(ADAPTERS)
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -88,6 +102,7 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                     SELECT platform_id, count(*) AS n FROM ats_jobs
                      WHERE expired_at IS NULL
                        AND fetched_at < now() - make_interval(days => %s)
+                       AND platform_id = ANY(%s)
                      GROUP BY 1),
                 att AS (
                     SELECT platform_id, count(*) AS tot FROM ats_jobs
@@ -95,7 +110,7 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                 SELECT cand.platform_id, cand.n, att.tot
                   FROM cand JOIN att USING (platform_id)
                  WHERE cand.n >= %s AND cand.n > att.tot * %s
-            """, (giorni, RIFIUTO_MINIMO, RIFIUTO_QUOTA))
+            """, (giorni, con_adapter, RIFIUTO_MINIMO, RIFIUTO_QUOTA))
             rifiutate = cur.fetchall()
             escluse = [r[0] for r in rifiutate]
             cur.execute("""
@@ -103,9 +118,10 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                    SET expired_at = now()
                  WHERE expired_at IS NULL
                    AND fetched_at < now() - make_interval(days => %s)
+                   AND platform_id = ANY(%s)
                    AND NOT (platform_id = ANY(%s))
                 RETURNING id
-            """, (giorni, escluse))
+            """, (giorni, con_adapter, escluse))
             n = cur.rowcount
         conn.commit()
     _segna_rifiuto(rifiutate)
