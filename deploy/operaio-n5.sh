@@ -30,7 +30,7 @@ fi
 if docker ps -a --format '{{.Names}}' | grep -qx nivult-operaio; then
   docker rm -f nivult-operaio >/dev/null
 fi
-cp /root/operaio-loop.sh "$DIR/engine/deploy/operaio-loop.sh" 2>/dev/null || true
+# il ciclo arriva col checkout git (push dal Mac su engine.git), non da /root
 chmod +x "$DIR/engine/deploy/operaio-loop.sh"
 docker run -d --name nivult-operaio --network host --restart unless-stopped \
   --memory 48g --cpus "$CPUS" -v "$DIR:/opt/nivult" \

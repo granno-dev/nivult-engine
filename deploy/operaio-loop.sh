@@ -33,6 +33,15 @@ while true; do
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
+  # Render detector (Chrome headless) una volta al giorno: sul server era il
+  # piu' goloso di RAM (8 processi uccisi dal kernel il 05/09); qui ha 48 GB
+  # e un IP residenziale che i career site bloccano meno.
+  TIMBRO=/opt/nivult/engine/logs/.render-detector.timbro
+  if [ ! -f "$TIMBRO" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO") )) -gt 82800 ]; then
+    echo "-- render detector (60 grandi)"
+    nice -n 10 $PY -m nivult.ats.detector --render --limite 60 --dip-minimi 3000 --thread 2 2>&1 | tail -2 || true
+    touch "$TIMBRO"
+  fi
   battito "fine giro"
   sleep 900
 done

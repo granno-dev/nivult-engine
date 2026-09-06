@@ -21,7 +21,9 @@ c = psycopg.connect(f"postgresql://nivult:{pw}@127.0.0.1:5432/nivult_ats", autoc
 
 if not c.execute("SELECT 1 FROM pg_roles WHERE rolname='nivult_operaio'").fetchone():
     nuova = secrets.token_urlsafe(24)
-    c.execute("CREATE ROLE nivult_operaio LOGIN PASSWORD %s", (nuova,))
+    # CREATE ROLE non accetta parametri legati: la password va come letterale
+    from psycopg import sql
+    c.execute(sql.SQL("CREATE ROLE nivult_operaio LOGIN PASSWORD {}").format(sql.Literal(nuova)))
     with open(FILE_PW, "w") as f:
         f.write(nuova)
     os.chmod(FILE_PW, 0o600)
