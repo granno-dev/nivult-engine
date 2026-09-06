@@ -32,7 +32,7 @@ import unicodedata
 
 import psycopg
 
-from .contratto import normalizza as normalizza_contratto
+from .contratto import normalizza as normalizza_contratto, da_raw as contratto_da_raw
 
 log = logging.getLogger("nivult.ats.mantenimento")
 
@@ -170,7 +170,12 @@ def normalizza(dsn: str, limite: int = 5000) -> int:
             # nel NOSTRO vocabolario, mai il grezzo della piattaforma
             # («FullTime», «Tempo pieno»): un valore che nessun filtro
             # trova e' peggio di un NULL
-            contratto = normalizza_contratto(contratto) if isinstance(contratto, str) else None
+            contratto = normalizza_contratto(contratto) if isinstance(contratto, (str, dict)) else None
+            if contratto is None:
+                # la piattaforma non ha una regola sua, o il campo era vuoto:
+                # si provano le chiavi note (misurato 06/09: 140k offerte
+                # con il contratto scritto nel grezzo e NULL in colonna)
+                contratto = contratto_da_raw(raw)
             with conn.cursor() as cur:
                 cur.execute("""
                     UPDATE ats_jobs SET salary_min = %s, salary_max = %s,
