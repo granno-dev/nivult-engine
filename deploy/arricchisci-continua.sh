@@ -17,6 +17,8 @@ BRANDFETCH_CLIENT_ID=$(grep -E '^BRANDFETCH_CLIENT_ID=' /opt/nivult/.env | head 
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
+# lotti riprendibili: se la memoria finisce, muoiano loro e non il database
+choom -n 500 -p $$ >/dev/null 2>&1 || true
 while true; do
   # Finche' gira lo sprint GLM (stessa chiave, 50 chiamate parallele), i
   # passi che chiamano GLM da qui producono solo 429 — per se' e per lo

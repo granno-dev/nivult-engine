@@ -218,6 +218,33 @@ def _controlli() -> list[str]:
     if d.free / d.total < 0.10:
         problemi.append(f"disco quasi pieno: {d.free // 2**30}GB liberi")
 
+    # 6. il backup: lo stato lo scrive backup.sh (ok/failed + data). Il
+    # 2026-09-06 il backup e' stato ucciso dal kernel alle 03:07 e l'ha
+    # scoperto una persona leggendo il log alle 10: doveva dirlo lei.
+    try:
+        riga = open("/opt/nivult/backup-state").read().strip()
+        esito, quando = riga.split("\t")[:2]
+        eta_h = (time.time() - time.mktime(time.strptime(quando[:19], "%Y-%m-%dT%H:%M:%S"))) / 3600
+        if esito != "ok":
+            problemi.append(f"BACKUP FALLITO: {riga[:120]}")
+        elif eta_h > 30:
+            problemi.append(f"backup: ultimo ok {int(eta_h)}h fa (atteso ogni 24h)")
+    except Exception as exc:                          # noqa: BLE001
+        problemi.append(f"backup: stato illeggibile ({exc!r})"[:120])
+
+    # 7. uccisioni per memoria nelle ultime 24h: il kernel non avvisa
+    # nessuno, e un lotto morto a meta' notte sembra solo "non ha girato".
+    try:
+        out = subprocess.run(["journalctl", "-k", "--since", "-24h", "--no-pager", "-q"],
+                             capture_output=True, text=True, timeout=20).stdout
+        vittime = re.findall(r"Out of memory: Killed process \d+ \((\S+)\)", out)
+        if vittime:
+            from collections import Counter
+            conta = ", ".join(f"{k}x{v}" if v > 1 else k for k, v in Counter(vittime).most_common(4))
+            problemi.append(f"memoria esaurita: il kernel ha ucciso {len(vittime)} processi nelle 24h ({conta})")
+    except Exception:                                 # noqa: BLE001
+        pass
+
     return problemi
 
 
