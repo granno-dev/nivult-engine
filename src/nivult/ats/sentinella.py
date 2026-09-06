@@ -178,7 +178,10 @@ def _controlli() -> list[str]:
         r = subprocess.run(["systemctl", "is-active", "nivult-sprint"], capture_output=True, text=True)
         if r.stdout.strip() != "active":
             coda = open("/opt/nivult/engine/logs/sprint-glm.log", errors="replace").read()[-1500:]
-            fine = any(k in coda for k in ("FINE:", "FINITO", "1113", "credito"))
+            # '"1113"' con le virgolette: e' il codice nel JSON dell'errore, e
+            # senza virgolette combacia con «111313 famiglie» (falso allarme
+            # del monitor il 06/09 sera)
+            fine = any(k in coda for k in ("FINE:", "FINITO", '"1113"', "Insufficient balance", "credito esaurito"))
             import psycopg
             with psycopg.connect(host="127.0.0.1", port=5432, user="nivult",
                                  password=_env().get("POSTGRES_PASSWORD", ""),
