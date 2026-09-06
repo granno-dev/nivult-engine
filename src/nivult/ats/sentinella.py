@@ -182,7 +182,7 @@ def _controlli() -> list[str]:
     # (successo: due passi "in coda" morti senza che nessuno lo vedesse).
     _PASSI = [("registri.log", 26), ("domini.log", 26),
               ("scheda-sito.log", 26), ("glm-extra.log", 26),
-              ("organico.log", 8 * 24)]
+              ("lingue.log", 26), ("organico.log", 8 * 24)]
     for nome_log, ore in _PASSI:
         percorso = f"/opt/nivult/engine/logs/{nome_log}"
         try:
