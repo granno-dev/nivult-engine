@@ -14,8 +14,17 @@ set -uo pipefail
 set -a; . /opt/nivult/.env; set +a
 cd /opt/nivult/engine
 PY=.venv/bin/python
+battito() {   # la sentinella sul server avvisa se manca da piu' di 2 ore
+  $PY - "$1" <<'EOF' 2>/dev/null || true
+import os, sys, psycopg
+with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=True) as c:
+    c.execute("INSERT INTO operaio_battiti (nome, battito, note) VALUES ('n5', now(), %s) "
+              "ON CONFLICT (nome) DO UPDATE SET battito = now(), note = EXCLUDED.note", (sys.argv[1],))
+EOF
+}
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
+  battito "inizio giro"
   # Il classificatore a dizionario e' sequenziale (un core) e sull'arretrato
   # trova poco (1.032 famiglie in 10 minuti il 06/09: quei casi li copre lo
   # sprint GLM). Lotti piccoli e pause lunghe: un core in boost a 77 °C
@@ -24,5 +33,6 @@ while true; do
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
+  battito "fine giro"
   sleep 900
 done

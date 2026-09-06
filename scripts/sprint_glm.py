@@ -170,7 +170,13 @@ def main():
                   + (f", {fallite} fallite (429?)" if fallite else "") + f" [{time.strftime('%H:%M')}]", flush=True)
             if fallite > len(righe) // 2:
                 time.sleep(60)     # GLM sta rifiutando: aspettare costa meno che martellare
-    print(f"FINE: {fatte} offerte arricchite, {fam_scritte} classificate, spesa totale ${speso:.2f}")
+    print(f"FINE: {fatte} offerte arricchite, {fam_scritte} classificate, spesa totale ${speso:.2f}", flush=True)
+    # un milione di righe riscritte lasciano spazio morto e statistiche
+    # vecchie: si pulisce subito, non quando qualcuno se ne accorge
+    with psycopg.connect(DSN, autocommit=True) as cv:
+        for t in ("ats_jobs", "job_classifications"):
+            cv.execute(f"VACUUM (ANALYZE) {t}")
+            print(f"VACUUM ANALYZE {t}: fatto", flush=True)
 
 if __name__ == "__main__":
     main()

@@ -144,6 +144,23 @@ def _controlli() -> list[str]:
     except Exception as exc:                          # noqa: BLE001
         problemi.append(f"database ATS irraggiungibile: {exc!r}"[:160])
 
+    # 2-bis. l'operaio a casa (N5): scrive un battito a ogni giro in
+    # operaio_battiti. Se casa si spegne, l'arretrato aspetta senza che
+    # nessuno se ne accorga: questo e' il "qualcuno".
+    try:
+        import psycopg
+        with psycopg.connect(
+                host="127.0.0.1", port=5432, user="nivult",
+                password=_env().get("POSTGRES_PASSWORD", ""),
+                dbname="nivult_ats", connect_timeout=10) as c:
+            for nome, eta_s in c.execute(
+                    "SELECT nome, extract(epoch FROM now()-battito) FROM operaio_battiti"):
+                if eta_s > 2 * 3600:
+                    problemi.append(f"operaio {nome} muto da {int(eta_s // 3600)}h "
+                                    f"(N5 spento o Tailscale giu'?)")
+    except Exception:                                 # noqa: BLE001
+        pass                    # la tabella nasce col primo battito
+
     # 3. il ponte: log recente e senza errori nell'ultima corsa
     try:
         log = "/var/log/nivult-ponte-ats.log"
