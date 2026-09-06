@@ -155,8 +155,8 @@ _DEMONI = (
      "setaccia gli archivi del web piattaforma per piattaforma"),
     ("scoperta", "scoperta archivi",
      "trova aziende nuove negli archivi storici del web"),
-    ("classifica", "classificatore",
-     "assegna a ogni offerta la famiglia professionale"),
+    # «classifica» non e' piu' un servizio del server: il classificatore
+    # gira sull'operaio N5 (dal 2026-09-06) e il suo stato viene dal battito
     ("arricchisci", "arricchimento",
      "aggiunge salari, descrizioni, profilo AI, paesi e loghi"),
     ("volano", "scoperta continua",
@@ -215,6 +215,80 @@ def _giri() -> dict:
     except OSError:
         pass
     return g
+
+
+# ── la salute delle MACCHINE: il server Hetzner e l'operaio N5 ──────
+# (idea di Giuseppe, 2026-09-06: «non possiamo mettere nella dashboard lo
+# stato di salute del server, sia N5 che Hetzner?»). Numeri veri, letti
+# ora: RAM, carico, disco, uccisioni per memoria nelle 24h, backup,
+# sprint GLM; per il N5 cio' che il suo battito scrive in operaio_battiti.
+
+def _macchine(ats_dsn: str) -> dict:
+    import json as _json
+    import shutil
+    import subprocess
+    srv: dict = {}
+    try:
+        m = {}
+        for riga in open("/proc/meminfo"):
+            k, v = riga.split(":")
+            m[k] = int(v.split()[0])
+        srv["ram_mb"] = m["MemTotal"] // 1024
+        srv["ram_libera_mb"] = m["MemAvailable"] // 1024
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        srv["carico"] = round(os.getloadavg()[0], 2)
+        srv["cpu"] = os.cpu_count()
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        du = shutil.disk_usage("/")
+        srv["disco_pct"] = int(100 * du.used / du.total)
+        srv["disco_liberi_gb"] = du.free // 2**30
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        out = subprocess.run(["journalctl", "-k", "--since", "-24h", "--no-pager", "-q"],
+                             capture_output=True, text=True, timeout=10).stdout
+        vittime = re.findall(r"^(\w+ \d+ [\d:]+).*Killed process \d+ \((\S+)\)", out, re.M)
+        srv["oom_24h"] = len(vittime)
+        srv["oom_ultima"] = vittime[-1][0] + " " + vittime[-1][1] if vittime else None
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        esito, quando, *resto = open("/opt/nivult/backup-state").read().strip().split("\t")
+        srv["backup"] = {"ok": esito == "ok", "quando": quando[:16],
+                         "dettaglio": (resto[0] if resto else "")[:60]}
+    except Exception:                                # noqa: BLE001
+        srv["backup"] = None
+    try:
+        r = subprocess.run(["systemctl", "is-active", "nivult-sprint"],
+                           capture_output=True, text=True, timeout=5)
+        sp = {"attivo": r.stdout.strip() == "active"}
+        log = open("/opt/nivult/engine/logs/sprint-glm.log", errors="replace").read()[-3000:]
+        righe = [l for l in log.splitlines() if " offerte, " in l]
+        sp["ultima"] = righe[-1][:110] if righe else None
+        sp["in_coda"] = _uno(ats_dsn, "SELECT count(*) FROM sprint_coda")
+        sp["ultima_ora"] = _uno(ats_dsn, "SELECT count(*) FROM ats_jobs "
+                                         "WHERE sprint_at > now() - interval '1 hour'")
+        srv["sprint"] = sp
+    except Exception:                                # noqa: BLE001
+        srv["sprint"] = None
+    n5: dict = {}
+    try:
+        r = _righe(ats_dsn, "SELECT nome, extract(epoch FROM now()-battito), note "
+                            "FROM operaio_battiti WHERE nome='n5'")
+        if r:
+            _, eta_s, nota = r[0]
+            n5 = {"eta_min": int(eta_s // 60), "vivo": eta_s < 2 * 3600}
+            try:
+                n5.update(_json.loads(nota or "{}"))
+            except Exception:                        # noqa: BLE001
+                n5["fase"] = nota
+    except Exception:                                # noqa: BLE001
+        pass
+    return {"server": srv, "n5": n5}
 
 
 # ── copertura degli arricchimenti (query pesanti: cache 10 minuti) ──
@@ -614,6 +688,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "posted": str(pa) if pa else None})
 
     d["giri"] = _giri()
+    d["macchine"] = _macchine(ats_dsn)
 
     try:
         d["motore"] = {
@@ -1100,6 +1175,25 @@ function cardNotturno(nt){
   else if(ore>14){v='mai finita';c='bad';sub='partita '+ore+' ore fa e mai completata: probabilmente un passo si è bloccato — dettaglio nei log'}
   else{v='in corso';c='warn';sub='partita alle '+nt.quando.slice(11,16)+', dura qualche ora; la raccolta continua gira comunque'+(pf.length?' · falliti finora: '+pf.map(esc).join(', '):'')}}
  return card(`<span class="${c}">${v}</span>`,'manutenzione (parte alle 02:30)',sub)}
+function macchine(mc){
+ const s=mc.server||{},n=mc.n5||{};
+ const pct=(a,b)=>a&&b?Math.round(100*a/b):null;
+ const ramS=s.ram_mb?100-pct(s.ram_libera_mb,s.ram_mb):null, ramN=n.ram_mb?100-pct(n.ram_libera_mb,n.ram_mb):null;
+ const cl=(v,w,b)=>v==null?'':v>=b?'bad':v>=w?'warn':'ok';
+ const gb=mb=>mb==null?'—':(mb/1024).toFixed(1)+' GB';
+ const bk=s.backup;const bkTxt=bk?(bk.ok?`ok · ${bk.quando.replace('T',' ')}`:`FALLITO · ${bk.dettaglio}`):'sconosciuto';
+ const sp=s.sprint;const spTxt=sp?(sp.attivo?`attivo · ${IT(sp.ultima_ora)}/ora · ${IT(sp.in_coda)} in coda`:'fermo'):'—';
+ return '<div class="grid">'
+  +card(`<span class="${cl(ramS,80,92)}">${ramS==null?'—':ramS+'%'}</span>`,'Hetzner · RAM usata',`${gb(s.ram_libera_mb)} liberi su ${gb(s.ram_mb)} · carico ${s.carico??'—'} su ${s.cpu??'—'} vCPU`)
+  +card(`<span class="${cl(s.disco_pct,80,90)}">${s.disco_pct==null?'—':s.disco_pct+'%'}</span>`,'Hetzner · disco',`${s.disco_liberi_gb??'—'} GB liberi`)
+  +card(`<span class="${s.oom_24h?'bad':'ok'}">${s.oom_24h??'—'}</span>`,'processi uccisi per memoria · 24h',s.oom_ultima?`ultimo: ${s.oom_ultima}`:'nessuno: bene')
+  +card(`<span class="${bk?(bk.ok?'ok':'bad'):'warn'}">${bk?(bk.ok?'✓':'✗'):'?'}</span>`,'backup cifrato',bkTxt)
+  +card(`<span class="${sp&&sp.attivo?'ok':''}">${sp&&sp.attivo?'▶':'■'}</span>`,'sprint GLM',spTxt)
+  +card(`<span class="${n.vivo?'ok':'bad'}">${n.eta_min==null?'—':n.vivo?'vivo':'muto'}</span>`,'N5 · operaio a casa',n.eta_min==null?'mai sentito':`ultimo battito ${n.eta_min} min fa · ${n.fase||''}`)
+  +card(`<span class="${cl(ramN,80,92)}">${ramN==null?'—':ramN+'%'}</span>`,'N5 · RAM usata',`${gb(n.ram_libera_mb)} liberi su ${gb(n.ram_mb)} · carico ${n.carico??'—'}`)
+  +card(`<span class="${cl(n.temp_c,75,85)}">${n.temp_c==null?'—':n.temp_c+' °C'}</span>`,'N5 · temperatura CPU',n.temp_c==null?'':n.temp_c>=75?'la ventola gira: lavoro pesante in corso':'tranquillo')
+  +'</div>';
+}
 function cardSentinella(g){
  let v,c,sub;const n=(g.allarmi||[]).length;
  if(!g.sentinella){v='—';c='warn';sub='stato non leggibile'}
@@ -1129,6 +1223,8 @@ async function tick(){
  +'<div class="sect"><h2>I servizi del motore</h2><span class="note">girano giorno e notte — verde = acceso · passa il mouse per la spiegazione</span></div>'
  +demoni(g)
  +allarmi(g)
+ +'<div class="sect"><h2>Salute delle macchine</h2><span class="note">Hetzner tiene sito, database e digest · il N5 a casa fa i lotti pesanti · se il N5 tace, l’arretrato aspetta e nessun utente se ne accorge</span></div>'
+ +macchine(d.macchine||{})
  +'<div class="sect"><h2>Ultime corse ed errori</h2></div><div class="grid">'
  +cardSentinella(g)
  +cardPonte(g.ponte)

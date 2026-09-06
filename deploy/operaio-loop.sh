@@ -14,12 +14,27 @@ set -uo pipefail
 set -a; . /opt/nivult/.env; set +a
 cd /opt/nivult/engine
 PY=.venv/bin/python
-battito() {   # la sentinella sul server avvisa se manca da piu' di 2 ore
+battito() {   # la sentinella sul server avvisa se manca da piu' di 2 ore;
+              # il cruscotto mostra la salute del N5 dalla nota (JSON)
   $PY - "$1" <<'EOF' 2>/dev/null || true
-import os, sys, psycopg
+import os, sys, json, glob, psycopg
+def _mem():
+    m = {}
+    for riga in open("/proc/meminfo"):
+        k, v = riga.split(":"); m[k] = int(v.split()[0])
+    return m["MemTotal"] // 1024, m["MemAvailable"] // 1024
+def _temp():     # Tctl del Ryzen: sysfs e' quello dell'host anche nel container
+    for f in glob.glob("/sys/class/hwmon/hwmon*/temp*_label"):
+        if open(f).read().strip() in ("Tctl", "Package id 0"):
+            return int(open(f.replace("_label", "_input")).read()) // 1000
+    return None
+tot, lib = _mem()
+nota = {"fase": sys.argv[1], "ram_mb": tot, "ram_libera_mb": lib,
+        "carico": round(os.getloadavg()[0], 2), "temp_c": _temp()}
 with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=True) as c:
     c.execute("INSERT INTO operaio_battiti (nome, battito, note) VALUES ('n5', now(), %s) "
-              "ON CONFLICT (nome) DO UPDATE SET battito = now(), note = EXCLUDED.note", (sys.argv[1],))
+              "ON CONFLICT (nome) DO UPDATE SET battito = now(), note = EXCLUDED.note",
+              (json.dumps(nota),))
 EOF
 }
 while true; do
