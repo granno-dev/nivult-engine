@@ -32,8 +32,9 @@ Leggi PRIMA docs/manuale-guasti.md (le regole e le cure ammesse). Poi:
 4. OBBLIGATORIO alla fine: sudo /opt/nivult/engine/deploy/runbook.sh telegram \"<resoconto in italiano, breve, numeri veri: trovato / fatto / resta>\"
 Non hai altri strumenti: se serve altro, scrivilo nel resoconto. Non inventare numeri. Se non capisci la causa, dillo."
 cd "$BASE"
+INIZIO=$(date -Is)
 {
-  echo "=== $(date -Is) medico avviato per: $*"
+  echo "=== $INIZIO medico avviato per: $*"
   # si abbassa a nivult-medico: nessun accesso ai .env (600 root), solo il
   # runbook via sudo; il gettone passa per l'ambiente e non tocca il disco
   # Fable 5.1, lo stesso modello della chat di Giuseppe; se in modalita'
@@ -52,5 +53,17 @@ cd "$BASE"
     ESITO=$(visita ""); rc=$?
   fi
   echo "$ESITO" | tail -60
+  # il resoconto DEVE arrivare: se nel registro del runbook non c'e' un
+  # «telegram» dopo l'inizio della visita, lo manda lo script con la
+  # risposta del medico (che a volte dice «inviato» senza averlo fatto)
+  if ! awk -v t="$INIZIO" '$1 >= t && / telegram /' /var/log/nivult-runbook.log 2>/dev/null | grep -q .; then
+    echo "--- il medico non ha scritto su Telegram: lo faccio io con la sua risposta"
+    cd "$BASE" && "$BASE/.venv/bin/python" - "$ESITO" <<'EOF'
+import sys
+from nivult.ats import pronto_soccorso as ps
+testo = sys.argv[1].strip()[-1800:] or "(nessuna risposta dal medico)"
+print("inviato" if ps.telegram("Medico Nivult (resoconto ripreso dal log)", [], [testo]) else "NON inviato")
+EOF
+  fi
   echo "=== $(date -Is) medico finito (rc $rc, modello $MODELLO)"
 } >> "$LOG" 2>&1

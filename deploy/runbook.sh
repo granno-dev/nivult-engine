@@ -18,6 +18,9 @@ BASE=/opt/nivult/engine
 PY="$BASE/.venv/bin/python"
 DEMONI="scrape scrape-veloce profonda scoperta arricchisci volano certificati api sprint"
 LOG_DIR="$BASE/logs"
+# registro di ogni azione: chi ha chiesto cosa, quando. E' anche il modo in
+# cui medico.sh sa se il medico ha davvero scritto su Telegram.
+echo "$(date -Is) [$(logname 2>/dev/null || echo "$SUDO_USER")] ${1:-} ${2:-}" | cut -c1-200 >> /var/log/nivult-runbook.log 2>/dev/null || true
 
 case "${1:-}" in
   stato)
