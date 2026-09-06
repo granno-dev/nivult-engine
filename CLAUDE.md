@@ -183,11 +183,11 @@ python scripts/ponte_ats.py --giorni 60  # allarga la finestra
 ./deploy/ponte-ats-grants.sh --check     # la lettura sola è a posto?
 ```
 
-In cron alle **05:00** (`deploy/cron.sh`): dopo l'ATS delle 02:30 che deve
-aver finito di classificare, dopo il riavvio automatico delle 04:00 che
-troncherebbe un travaso a metà, e prima del primo digest utile delle 07:10 —
-così un'offerta travasata la mattina può finire nel digest di quella stessa
-mattina.
+In cron **ogni 30 minuti** (`deploy/cron.sh`), con `flock`: da quando la
+raccolta è continua il ponte non aspetta più la notte, e un'offerta
+trovata alle 10:00 può finire nel digest delle 11:10. Nacque a 05:00 —
+dopo l'ATS delle 02:30 e dopo il riavvio delle 04:00 che troncherebbe un
+travaso a metà — e quel giro resta compreso nei mezz'ora.
 
 ### 2. Matching — valutazione diretta, non a imbuto
 

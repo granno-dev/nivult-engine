@@ -110,13 +110,23 @@ fi
 # Le righe che non sono nostre passano intatte.
 altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" || true)
 
+# Righe superate, da togliere se ci sono ancora: l'unico modo ammesso di
+# cancellare qualcosa e' nominarlo qui, per esteso, dove si vede nel
+# diff. Il ponte a 05:00 e' stato sostituito da quello ogni 30 minuti.
+OBSOLETE=$(cat <<'EOF'
+0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
+EOF
+)
+
 # Le righe NOSTRE che questo script non conosce si CONSERVANO e si
 # segnalano. E' la differenza fra «lo script e' la fonte di verita'» e
 # «lo script cancella cio' che non ha ancora imparato»: la seconda ha
 # gia' spento la sentinella una volta.
 ignote=$(grep '/opt/nivult/' <<<"$attuale" | grep -v "^#" | while IFS= read -r r; do
   [[ -z "$r" ]] && continue
-  grep -Fqx "$r" <<<"$RIGHE" || printf '%s\n' "$r"
+  grep -Fqx "$r" <<<"$RIGHE" && continue
+  grep -Fqx "$r" <<<"$OBSOLETE" && continue
+  printf '%s\n' "$r"
 done)
 
 {
