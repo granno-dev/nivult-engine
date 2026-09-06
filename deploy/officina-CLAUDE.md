@@ -30,9 +30,11 @@ bocciare la riparazione per intero, per quanto buona sia.
    se la classe ha già `import html as html_mod`; altrimenti `re.sub`).
 3. Il banco, finché non dice `PROVA: OK`:
    ```
-   {{PY}} {{REPO}}/scripts/prova_adapter.py {{PID}} --repo {{REPO}} --campione campione.html --attese attese.json
+   ./banco
    ```
-   e alla fine una volta con `--vivo` (lettura vera del tenant).
+   e alla fine una volta `./banco --vivo` (lettura vera del tenant). È
+   l'unico comando che puoi eseguire, e va scritto esattamente così, da
+   questa cartella: nessun `cd`, nessun `python` davanti.
 4. **Non fare commit.** L'officina lo fa dopo la verifica, poi deploya,
    rilegge i canarini col codice nuovo e, se tacciono, fa rollback da sola.
 5. Ultima risposta: due righe, cosa hai cambiato e perché. Arriva a

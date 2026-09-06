@@ -55,15 +55,27 @@ if [ ! -d "$REPO/.git" ]; then
 fi
 sudo -u $UT git -C "$REPO" fetch -q origin && sudo -u $UT git -C "$REPO" reset -q --hard origin/main && sudo -u $UT git -C "$REPO" clean -fdq
 install -o $UT -g $UT -m 644 "$BASE/deploy/officina-CLAUDE.md" "$D/CLAUDE.md"
-sed -i "s|{{PID}}|$PID|g; s|{{REPO}}|$REPO|g; s|{{PY}}|$PY|g" "$D/CLAUDE.md"
+# il BANCO come comando fisso: la regola di permesso di Claude e' un
+# prefisso letterale del comando, e un percorso lungo con opzioni in
+# ordine libero non lo si azzecca mai. `./banco` e `./banco --vivo` si'.
+cat > "$D/banco" <<EOF
+#!/usr/bin/env bash
+exec $PY $REPO/scripts/prova_adapter.py $PID --repo $REPO --campione $D/campione.html --attese $D/attese.json "\$@"
+EOF
+chown $UT:$UT "$D/banco"; chmod 755 "$D/banco"
+sed -i "s|{{PID}}|$PID|g; s|{{REPO}}|$REPO|g; s|{{PY}}|$PY|g; s|{{BANCO}}|$D/banco|g" "$D/CLAUDE.md"
 
 # --- 3. Claude ripara nel suo clone ---------------------------------------
-PROMPT="Sei in officina. L'adapter «$PID» non legge piu' la bacheca. Leggi DOSSIER.md in questa cartella e ripara la classe nel clone $REPO/src/nivult/ats/adapters.py, provando sul banco finche' non passa (PROVA: OK, anche con --vivo). Non fare commit. Chiudi con due righe: cosa hai cambiato e perche'."
+# Regole di permesso: i percorsi assoluti si scrivono con «//» (con una
+# barra sola sono relativi alla cartella di lavoro e la regola non
+# scatta mai: e' cosi' che la prima esercitazione e' finita senza
+# poter scrivere). --add-dir apre il clone come cartella di lavoro.
+PROMPT="Sei in officina. L'adapter «$PID» non legge piu' la bacheca. Leggi DOSSIER.md in questa cartella e ripara la classe nel clone $REPO/src/nivult/ats/adapters.py, provando sul banco con ./banco finche' non passa (PROVA: OK, e una volta anche ./banco --vivo). Non fare commit. Chiudi con due righe: cosa hai cambiato e perche'."
 MODELLO="${MEDICO_MODELLO:-claude-fable-5-1}"
 ripara() {
   cd "$D" && timeout 1500 sudo -u $UT --preserve-env=CLAUDE_CODE_OAUTH_TOKEN env HOME=/home/$UT \
-    claude -p "$PROMPT" $1 --max-turns 40 \
-    --allowedTools "Read" "Grep" "Glob" "Edit($REPO/src/nivult/ats/adapters.py)" "Bash($PY $REPO/scripts/prova_adapter.py *)" \
+    claude -p "$PROMPT" $1 --max-turns 40 --add-dir "$REPO" \
+    --allowedTools "Read" "Grep" "Glob" "Edit(//$REPO/src/nivult/ats/adapters.py)" "Bash(./banco *)" "Bash(./banco)" "Bash($D/banco *)" "Bash($D/banco)" \
     --permission-mode acceptEdits < /dev/null 2>&1
 }
 ESITO=$(ripara "--model $MODELLO"); rc=$?

@@ -197,9 +197,9 @@ sotto: DEVONO combaciare.
 2. Modifica **solo quella classe**. Di solito basta un secondo pattern
    accanto al primo: il template vecchio puo' essere ancora in uso su
    altri tenant, quindi il vecchio resta e il nuovo si aggiunge.
-3. Prova sul banco, finche' non passa:
-   `{PY} repo/scripts/prova_adapter.py {pid} --repo repo --campione campione.html --attese attese.json`
-   e poi una volta anche `--vivo` (lettura vera del tenant).
+3. Prova sul banco, finche' non passa: `./banco` (da questa cartella,
+   scritto esattamente cosi'), e poi una volta anche `./banco --vivo`
+   (lettura vera del tenant).
 4. Fermati quando il banco dice `PROVA: OK`. Non fare commit: lo fa
    l'officina dopo aver verificato il perimetro. Scrivi in due righe cosa
    hai cambiato e perche', come ultima risposta.
