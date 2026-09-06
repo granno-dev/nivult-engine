@@ -95,8 +95,12 @@ def main():
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.sprint_at IS NULL
                    AND (j.seniority IS NULL OR j.employment_type IS NULL
-                        OR NOT EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id=j.id))
-                 ORDER BY j.posted_at DESC NULLS LAST
+                        OR NOT EXISTS (SELECT 1 FROM job_classifications x
+                                        WHERE x.job_id=j.id AND x.model IN ('glm-5.3-flash','glm-5.2')))
+                 -- prima chi ha una descrizione: e' cio' che il digest puo' usare
+                 -- e cio' su cui il modellino v1 puo' imparare; poi le piu' recenti
+                 ORDER BY (length(coalesce(j.raw->>'description','')) > 80) DESC,
+                          j.posted_at DESC NULLS LAST
                  LIMIT 600""").fetchall()
             if not righe:
                 print("FINITO: niente piu' da fare"); break
@@ -136,7 +140,12 @@ def main():
                     try:
                         with c.cursor() as cc:
                             cc.executemany("INSERT INTO job_classifications (job_id,family,confidence,model,classified_at) "
-                                "VALUES (%s,%s,0.8,'glm-5.3-flash',now()) ON CONFLICT (job_id) DO NOTHING", parte)
+                                "VALUES (%s,%s,0.8,'glm-5.3-flash',now()) "
+                                # GLM con rubrica vince sul dizionario (audit a mano: ~95%);
+                                # 'unknown' non arriva qui (fam e' None), quindi non cancella mai
+                                "ON CONFLICT (job_id) DO UPDATE SET family=EXCLUDED.family, "
+                                "confidence=EXCLUDED.confidence, model=EXCLUDED.model, "
+                                "classified_at=EXCLUDED.classified_at", parte)
                         break
                     except psycopg.errors.DeadlockDetected: time.sleep(1)
             fatte += len(agg_job); fam_scritte += len(fam_ord)
