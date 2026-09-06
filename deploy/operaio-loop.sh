@@ -16,9 +16,13 @@ cd /opt/nivult/engine
 PY=.venv/bin/python
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
-  nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 60000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
+  # Il classificatore a dizionario e' sequenziale (un core) e sull'arretrato
+  # trova poco (1.032 famiglie in 10 minuti il 06/09: quei casi li copre lo
+  # sprint GLM). Lotti piccoli e pause lunghe: un core in boost a 77 °C
+  # faceva girare la ventola del N5 «a palla» — parola di Giuseppe.
+  nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
-  sleep 300
+  sleep 900
 done
