@@ -78,6 +78,8 @@ RIGHE=$(cat <<'EOF'
 0 9 * * * /opt/nivult/engine/deploy/passo-diurno.sh glm-extra nivult.ats.estrai_extra --glm 600
 0 10 * * * /opt/nivult/engine/deploy/passo-diurno.sh organico nivult.ats.organico_dichiarato
 30 7 * * 1 /opt/nivult/engine/deploy/revisione-settimanale.sh >> /var/log/nivult-chat.log 2>&1
+25 * * * * cd /opt/nivult/engine && .venv/bin/python -m nivult.ats.canarini --controlla >> /var/log/nivult-canarini.log 2>&1
+40 6 * * 1 cd /opt/nivult/engine && .venv/bin/python -m nivult.ats.canarini --scegli >> /var/log/nivult-canarini.log 2>&1
 EOF
 )
 

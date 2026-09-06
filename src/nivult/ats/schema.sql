@@ -177,3 +177,60 @@ DROP TRIGGER IF EXISTS trg_riempi_posted_at ON ats_jobs;
 CREATE TRIGGER trg_riempi_posted_at
   BEFORE UPDATE OF posted_at ON ats_jobs
   FOR EACH ROW EXECUTE FUNCTION riempi_posted_at();
+
+-- ── Letture veritiere e riparazione degli adapter (07/09/2026) ────────
+-- Il 06/09 tre stragi di offerte vive avevano la stessa radice: una
+-- lettura fallita o muta trattata come «bacheca vuota». Da qui:
+--   last_ok_at        — l'ultima lettura RIUSCITA del tenant (offerte
+--                       parseate, o bacheca vuota confermata). La scadenza
+--                       per presenza si deduce solo da questa.
+--   letture_sospette  — un adapter che torna zero su un tenant che aveva
+--                       offerte; con il campione della pagina.
+--   canarini          — 3 tenant di riferimento per piattaforma, riletti
+--                       ogni ora: se tutti e tre danno zero, l'adapter e' rotto.
+--   officina_riparazioni — cosa ha riparato Claude sul server, con esito.
+ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS last_ok_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS letture_sospette (
+    id            BIGSERIAL PRIMARY KEY,
+    at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    platform_id   TEXT NOT NULL,
+    slug          TEXT NOT NULL,
+    attive_prima  INTEGER NOT NULL,      -- offerte attive in archivio prima della lettura
+    trovate       INTEGER NOT NULL,      -- cosa ha trovato l'adapter (0 = muto)
+    confermate    INTEGER NOT NULL,      -- offerte d'archivio ritrovate dal ripiego nella pagina
+    http_status   INTEGER,
+    campione      TEXT                   -- percorso dell'HTML salvato, se salvato
+);
+CREATE INDEX IF NOT EXISTS letture_sospette_at_idx ON letture_sospette (at DESC);
+
+CREATE TABLE IF NOT EXISTS canarini (
+    platform_id   TEXT NOT NULL,
+    slug          TEXT NOT NULL,
+    attese        INTEGER NOT NULL,      -- offerte attive quando fu scelto
+    scelto_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (platform_id, slug)
+);
+
+CREATE TABLE IF NOT EXISTS canarini_esiti (
+    id            BIGSERIAL PRIMARY KEY,
+    at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    platform_id   TEXT NOT NULL,
+    slug          TEXT NOT NULL,
+    trovate       INTEGER,               -- NULL = lettura fallita (rete, blocco)
+    attese        INTEGER NOT NULL,
+    campione      TEXT
+);
+CREATE INDEX IF NOT EXISTS canarini_esiti_at_idx ON canarini_esiti (at DESC);
+
+CREATE TABLE IF NOT EXISTS officina_riparazioni (
+    id            BIGSERIAL PRIMARY KEY,
+    at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    platform_id   TEXT NOT NULL,
+    motivo        TEXT NOT NULL,
+    esito         TEXT NOT NULL,         -- 'deployata' | 'rollback' | 'bocciata' | 'fallita'
+    commit        TEXT,
+    dettaglio     TEXT,
+    durata_s      INTEGER
+);
+GRANT SELECT ON letture_sospette, canarini, canarini_esiti, officina_riparazioni TO nivult_app;

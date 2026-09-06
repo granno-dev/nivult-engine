@@ -116,6 +116,39 @@ def semina_aziende(dsn: str, dsn_produzione: str) -> int:
     return len(estratti)
 
 
+CAMPIONI_DIR = "/opt/nivult/campioni"
+
+
+def _lettura_vuota(conn, az: dict, pagina: str | None, campioni_ora: dict) -> tuple[int, int]:
+    """L'adapter ha detto «zero» con HTTP 200. Ritorna (attive_in_archivio,
+    confermate_dal_ripiego). Se ne conferma almeno una, la lettura e'
+    sospetta e viene registrata con un campione della pagina (uno per
+    piattaforma l'ora: basta a chi ripara, non riempie il disco)."""
+    from . import ripiego
+    pid, slug = az["platform_id"], az["slug"]
+    attive, confermate = ripiego.conferma(conn, pid, slug, pagina or "")
+    if attive < 3 or not confermate:
+        return attive, 0
+    campione = None
+    if pagina and time.time() - campioni_ora.get(pid, 0) > 3600:
+        campioni_ora[pid] = time.time()
+        try:
+            d = os.path.join(CAMPIONI_DIR, pid)
+            os.makedirs(d, exist_ok=True)
+            campione = os.path.join(d, f"{slug[:60]}-{time.strftime('%Y%m%d-%H%M')}.html")
+            with open(campione, "w") as f:
+                f.write(pagina[:2_000_000])
+        except OSError:
+            campione = None
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO letture_sospette (platform_id, slug, attive_prima, trovate, confermate, http_status, campione) "
+                    "VALUES (%s, %s, %s, 0, %s, 200, %s)", (pid, slug, attive, confermate, campione))
+    conn.commit()
+    log.warning("  %s/%s: adapter MUTO? 0 trovate, %d/%d d'archivio ancora nella pagina",
+                pid, slug, confermate, attive)
+    return attive, confermate
+
+
 def scrape(dsn: str, piattaforma: str | None = None,
            thread: int = 10, limite: int | None = None,
            solo_attivi: bool = False) -> dict[str, int]:
@@ -173,28 +206,37 @@ def scrape(dsn: str, piattaforma: str | None = None,
             aziende = cur.fetchall()
 
         def _fetch(az):
-            """Solo rete: nessun tocco al DB, cosi' gira in parallelo."""
+            """Solo rete: nessun tocco al DB, cosi' gira in parallelo.
+
+            Ritorna (azienda, offerte, pagina): `pagina` e' il testo
+            dell'ultima risposta 200, che serve al ripiego se l'adapter
+            e' tornato vuoto. Un blocco o un errore del server e' una
+            LetturaFallita e arriva qui come `None`, mai come lista vuota.
+            """
             adapter_cls = ADAPTERS.get(az["platform_id"])
             if not adapter_cls:
-                return az, None
+                return az, None, None
             _rate_gate(az["platform_id"])   # gate solo per gli endpoint condivisi
             try:
                 with adapter_cls() as adapter:
                     if az["platform_id"] == "workday":
-                        return az, adapter.jobs(
-                            az["slug"], az["wd_server"], az["wd_instance"])
-                    if az["platform_id"] == "inrecruiting":
-                        return az, adapter.jobs(az["slug"], az["pub_key"])
-                    return az, adapter.jobs(az["slug"])
+                        jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
+                    elif az["platform_id"] == "inrecruiting":
+                        jobs = adapter.jobs(az["slug"], az["pub_key"])
+                    else:
+                        jobs = adapter.jobs(az["slug"])
+                    return az, jobs, (adapter.ultima_pagina if not jobs else None)
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s/%s: fetch fallita: %s",
                             az["platform_id"], az["slug"], exc)
-                return az, None
+                return az, None, None
+
+        campioni_ora: dict[str, float] = {}   # un campione per piattaforma l'ora, non uno per tenant
 
         with ThreadPoolExecutor(max_workers=thread) as pool:
             futuri = [pool.submit(_fetch, az) for az in aziende]
             for fut in as_completed(futuri):
-                az, jobs = fut.result()
+                az, jobs, pagina = fut.result()
                 if jobs is None:
                     # Fetch fallita (rete, slug morto, piattaforma senza
                     # adapter). Va segnata comunque come tentata: senza
@@ -212,6 +254,25 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     stats["fallite"] = stats.get("fallite", 0) + 1
                     continue
                 stats["aziende"] += 1
+
+                if not jobs:
+                    # Zero con HTTP 200. Se il tenant aveva offerte, non ci
+                    # si crede sulla parola: il ripiego cerca nella pagina
+                    # le offerte d'archivio. Se ne ritrova, l'adapter e'
+                    # MUTO (template cambiato): le offerte si rinfrescano,
+                    # job_count resta, la lettura finisce in
+                    # letture_sospette con un campione della pagina per
+                    # chi dovra' riparare. Se non ne ritrova, la bacheca
+                    # e' vuota davvero e si registra come tale.
+                    attive, confermate = _lettura_vuota(conn, az, pagina, campioni_ora)
+                    if confermate:
+                        stats["sospette"] = stats.get("sospette", 0) + 1
+                        with conn.cursor() as cur:
+                            cur.execute("UPDATE ats_companies SET last_fetch_at = now() "
+                                        "WHERE platform_id = %s AND slug = %s",
+                                        (az["platform_id"], az["slug"]))
+                        conn.commit()
+                        continue
 
                 for j in jobs:
                     with conn.cursor() as cur:
@@ -239,8 +300,11 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     stats["offerte"] += 1
 
                 with conn.cursor() as cur:
+                    # last_ok_at: la lettura e' RIUSCITA (offerte parseate, o
+                    # bacheca vuota confermata dal ripiego). E' l'unica data
+                    # da cui la scadenza per presenza puo' dedurre qualcosa.
                     cur.execute(
-                        "UPDATE ats_companies SET last_fetch_at = now(), "
+                        "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
                         "job_count = %s WHERE platform_id = %s AND slug = %s",
                         (len(jobs), az["platform_id"], az["slug"]))
                 conn.commit()
@@ -364,6 +428,8 @@ def main(argv: list[str] | None = None) -> int:
                 _t.sleep(5)
         s = scrape(dsn, args.piattaforma, thread=args.thread,
                    limite=args.limite, solo_attivi=args.solo_attivi)
+        if s.get("sospette"):
+            print(f"\n⚠ {s['sospette']} letture SOSPETTE (adapter a zero su tenant con offerte ancora in pagina)")
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "
               f"({s['nuove']} nuove, {s['aggiornate']} aggiornate, "
               f"{s.get('fallite', 0)} fallite)")

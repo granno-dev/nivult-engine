@@ -174,7 +174,7 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
                 with psycopg.connect(dsn) as conn:
                     with conn.cursor() as cur:
                         cur.execute(
-                            "UPDATE ats_companies SET last_fetch_at = now(), "
+                            "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
                             "job_count = %s WHERE platform_id = %s AND slug = %s",
                             (jobs_trovati, platform_id, slug))
                     conn.commit()
@@ -183,11 +183,14 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
 
             except Exception as exc:
                 log.warning("  %s/%s: errore: %s", platform_id, slug, str(exc)[:80])
-                # Segna comunque come processata per non riprovarci subito
+                # Segna come TENTATA (va in fondo alla coda) ma NON come
+                # vuota: un timeout del browser non e' una bacheca senza
+                # offerte, e job_count = 0 qui faceva scadere offerte vive
+                # tre giorni dopo (06/09/2026).
                 with psycopg.connect(dsn) as conn:
                     with conn.cursor() as cur:
                         cur.execute(
-                            "UPDATE ats_companies SET last_fetch_at = now(), job_count = 0 "
+                            "UPDATE ats_companies SET last_fetch_at = now() "
                             "WHERE platform_id = %s AND slug = %s",
                             (platform_id, slug))
                     conn.commit()

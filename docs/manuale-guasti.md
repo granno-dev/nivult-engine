@@ -68,6 +68,36 @@ in italiano, numeri veri.
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
 | `nuove offerte quasi senza descrizione/paese` | `log arricchisci-continua 30` | `riavvia arricchisci` se il loop è fermo; altrimenti segnala |
 
+## Gli adapter si rompono in silenzio, e l'officina li ripara
+
+Un adapter (`src/nivult/ats/adapters.py`, uno per piattaforma ATS) legge
+una bacheca e torna una lista di offerte. Quando la piattaforma cambia
+template, torna **zero** con HTTP 200 — e nulla si rompe rumorosamente.
+Il 06/09/2026 così sono scadute 33.344 offerte JazzHR vive. Da allora:
+
+- **letture veritiere**: 403/429/5xx sono `LetturaFallita`, non «vuoto»;
+  uno zero su un tenant che aveva offerte fa scattare il **ripiego**, che
+  cerca nella pagina le offerte d'archivio e le rinfresca (tabella
+  `letture_sospette`, campione in `/opt/nivult/campioni/`);
+- **scadenza per presenza** solo se il tenant è stato **riletto con
+  successo dopo** (`ats_companies.last_ok_at`), e solo sulle piattaforme
+  con adapter; sopra il 30% delle attive di una piattaforma si rifiuta;
+- **canarini**: 3 tenant di riferimento per piattaforma, riletti ogni
+  ora (`runbook.sh canarini`); se tacciono tutti → incidente
+  `adapter rotto: <pid>`;
+- **officina**: sull'incidente il pronto soccorso apre
+  `deploy/officina.sh <pid>`: Claude (tu, in un'altra veste) ripara la
+  classe nel clone `/home/nivult-medico/officina/repo`, il banco
+  `scripts/prova_adapter.py` deve passare, la verifica impone il
+  perimetro (solo quella classe, niente import/rete/disco), poi commit,
+  push, riavvio scraper, canarini col codice nuovo, e **rollback** se
+  tacciono. Esiti in `officina_riparazioni` (`runbook.sh riparazioni`).
+
+| Sintomo | Cosa guardare | Cura ammessa |
+|---|---|---|
+| `adapter rotto: X` / `adapter muto: X` | `runbook.sh canarini`, `riparazioni`; `sql` su `letture_sospette` dell'ultima ora | il pronto soccorso apre l'officina da solo (una per piattaforma ogni 6 h, sei al giorno). Se è già passata e ha fallito: `officina X` NON va rilanciata a raffica — segnala con i numeri |
+| `scadenze rifiutate` | quale piattaforma, quante | quasi sempre lo stesso guasto: verifica i canarini di quella piattaforma |
+
 ## Gli incidenti hanno una scheda
 
 La sentinella (v2) tiene ogni problema nella tabella `incidenti` con uno

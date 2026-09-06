@@ -53,7 +53,7 @@ def _crea(db) -> None:
     db.execute("""CREATE TABLE IF NOT EXISTS medico_visite (
         id        bigserial PRIMARY KEY,
         at        timestamptz NOT NULL DEFAULT now(),
-        tipo      text NOT NULL CHECK (tipo IN ('visita', 'chat', 'guardiano')),
+        tipo      text NOT NULL CHECK (tipo IN ('visita', 'chat', 'guardiano', 'officina')),
         motivo    text NOT NULL,
         esito     text,
         durata_s  int,

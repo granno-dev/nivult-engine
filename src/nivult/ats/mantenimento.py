@@ -97,12 +97,20 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     con_adapter = sorted(ADAPTERS)
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # La condizione che manca da sempre: il tenant e' stato RILETTO
+            # CON SUCCESSO dopo l'ultima volta che abbiamo visto l'offerta
+            # (ats_companies.last_ok_at). Senza, «non vista da 3 giorni»
+            # include le letture fallite, quelle mute e i tenant mai
+            # rivisitati — cioe' tutte le stragi del 06/09.
             cur.execute("""
                 WITH cand AS (
-                    SELECT platform_id, count(*) AS n FROM ats_jobs
-                     WHERE expired_at IS NULL
-                       AND fetched_at < now() - make_interval(days => %s)
-                       AND platform_id = ANY(%s)
+                    SELECT j.platform_id, count(*) AS n FROM ats_jobs j
+                     WHERE j.expired_at IS NULL
+                       AND j.fetched_at < now() - make_interval(days => %s)
+                       AND j.platform_id = ANY(%s)
+                       AND EXISTS (SELECT 1 FROM ats_companies c
+                                    WHERE c.platform_id = j.platform_id AND c.slug = j.slug
+                                      AND c.last_ok_at > j.fetched_at)
                      GROUP BY 1),
                 att AS (
                     SELECT platform_id, count(*) AS tot FROM ats_jobs
@@ -114,13 +122,16 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
             rifiutate = cur.fetchall()
             escluse = [r[0] for r in rifiutate]
             cur.execute("""
-                UPDATE ats_jobs
+                UPDATE ats_jobs j
                    SET expired_at = now()
-                 WHERE expired_at IS NULL
-                   AND fetched_at < now() - make_interval(days => %s)
-                   AND platform_id = ANY(%s)
-                   AND NOT (platform_id = ANY(%s))
-                RETURNING id
+                 WHERE j.expired_at IS NULL
+                   AND j.fetched_at < now() - make_interval(days => %s)
+                   AND j.platform_id = ANY(%s)
+                   AND NOT (j.platform_id = ANY(%s))
+                   AND EXISTS (SELECT 1 FROM ats_companies c
+                                WHERE c.platform_id = j.platform_id AND c.slug = j.slug
+                                  AND c.last_ok_at > j.fetched_at)
+                RETURNING j.id
             """, (giorni, con_adapter, escluse))
             n = cur.rowcount
         conn.commit()

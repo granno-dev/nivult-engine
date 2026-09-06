@@ -125,14 +125,49 @@ def _iso(country: str | None) -> str | None:
     return NAMES.get(c, None if len(c) > 2 else c)
 
 
+class LetturaFallita(Exception):
+    """La bacheca NON e' stata letta: bloccati, limitati, server in errore.
+
+    Non e' «zero offerte». Il 06/09/2026 un 429 o un 403 diventavano una
+    lista vuota, il runner scriveva job_count = 0, e tre giorni dopo la
+    regola di presenza scadeva offerte vive. Da qui, chi legge sa la
+    differenza fra «vuoto» e «non letto»."""
+
+    def __init__(self, status: int, url: str = ""):
+        super().__init__(f"HTTP {status} su {url[:80]}")
+        self.status = status
+
+
+# 404 e 410 NON sono qui: un tenant sparito e' legittimamente vuoto.
+_STATUS_FALLITA = {401, 403, 407, 408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526}
+
+
 class BaseAdapter:
-    """Il contratto: scarica le offerte di un'azienda e le ritorna."""
+    """Il contratto: scarica le offerte di un'azienda e le ritorna.
+
+    Dopo `jobs()` l'adapter espone `ultima_pagina` (il testo dell'ultima
+    risposta 200) e `ultimo_status`: servono al ripiego, che su una
+    lettura «vuota» cerca nella pagina le offerte che abbiamo in archivio.
+    """
     platform_id: str = "?"
     base_url: str = ""
 
     def __init__(self):
+        self.ultima_pagina: str | None = None
+        self.ultimo_status: int | None = None
         self.client = httpx.Client(timeout=30, follow_redirects=True,
-                                   headers={"User-Agent": "nivult-ats/0.1"})
+                                   headers={"User-Agent": "nivult-ats/0.1"},
+                                   event_hooks={"response": [self._dopo_risposta]})
+
+    def _dopo_risposta(self, r: httpx.Response) -> None:
+        self.ultimo_status = r.status_code
+        if r.status_code in _STATUS_FALLITA:
+            raise LetturaFallita(r.status_code, str(r.url))
+        if r.status_code == 200:
+            r.read()
+            ct = r.headers.get("content-type", "")
+            if "html" in ct or "json" in ct or "xml" in ct or not ct:
+                self.ultima_pagina = r.text
 
     def close(self):
         self.client.close()

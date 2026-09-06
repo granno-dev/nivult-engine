@@ -39,7 +39,7 @@ def _riavvia(unita: str) -> str:
     return f"riavviato {unita}: {'attivo' if out.strip() == 'active' else 'ANCORA GIU (' + out.strip() + ')'}"
 
 
-_CURABILI = ("demone nivult-", "scrape fermo", "sprint fermo", "BACKUP FALLITO", "backup:", "ponte")
+_CURABILI = ("demone nivult-", "scrape fermo", "sprint fermo", "BACKUP FALLITO", "backup:", "ponte", "adapter")
 
 
 def curabile(problema: str) -> bool:
@@ -63,6 +63,16 @@ def cura(problemi: list[str]) -> list[str]:
     fatte: list[str] = []
     gia: set[str] = set()
     for p in problemi:
+        m = re.match(r"adapter (?:rotto|muto) ([a-z0-9_-]+)", p)
+        if m and ("officina " + m.group(1)) not in gia:
+            # L'OFFICINA: Claude sul server ripara l'adapter da un campione
+            # della pagina, lo prova sul banco, e se passa lo deploya con
+            # canarino e rollback. Limiti di frequenza dentro officina.sh.
+            gia.add("officina " + m.group(1))
+            rc, out = _sh(["systemd-run", f"--unit=nivult-officina-{m.group(1)}", "--collect", "--quiet",
+                           f"{BASE}/deploy/officina.sh", m.group(1)], timeout=20)
+            fatte.append(f"officina aperta su {m.group(1)}: {'avviata' if rc == 0 else 'NON avviata: ' + out}")
+            continue
         m = re.match(r"demone (nivult-[\w-]+):", p)
         if m and m.group(1) not in gia:
             gia.add(m.group(1)); fatte.append(_riavvia(m.group(1))); continue

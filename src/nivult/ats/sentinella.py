@@ -263,6 +263,34 @@ def _controlli() -> list[Condizione]:
                                     f"{m15:,} scadute ({100.0*m15/att_:.1f}% delle attive) — le pagine sono vive?".replace(",", ".")))
     except Exception:                                 # noqa: BLE001
         pass
+    # ADAPTER ROTTO: i canarini (3 tenant di riferimento per piattaforma,
+    # ogni ora) danno tutti zero. Il file lo scrive nivult.ats.canarini.
+    try:
+        cf = "/opt/nivult/canarini.json"
+        if time.time() - os.path.getmtime(cf) < 2 * 3600:
+            for r_ in json.load(open(cf)).get("rotte", []):
+                pid = r_["piattaforma"]
+                att = ", ".join(f"{k['slug']} (attese {k['attese']})" for k in r_["canarini"][:3])
+                c.append(Condizione(f"adapter rotto {pid}", "avviso", f"adapter rotto: {pid}",
+                                    f"tutti i canarini a zero: {att}"))
+    except (OSError, ValueError, KeyError):
+        pass
+    # ADAPTER MUTO: nell'ultima ora l'adapter ha detto «zero» su tenant le
+    # cui offerte stanno ANCORA nella pagina (letture_sospette, scritte
+    # dal runner col ripiego). Dal 5 in su e almeno meta' delle visite.
+    try:
+        with _db() as db:
+            for pid, sosp, vis in db.execute("""
+                WITH s AS (SELECT platform_id, count(DISTINCT slug) n FROM letture_sospette
+                            WHERE at > now()-interval '60 minutes' GROUP BY 1),
+                     v AS (SELECT platform_id, count(*) n FROM ats_companies
+                            WHERE last_fetch_at > now()-interval '60 minutes' AND job_count > 0 GROUP BY 1)
+                SELECT s.platform_id, s.n, coalesce(v.n, 0) FROM s LEFT JOIN v USING (platform_id)
+                 WHERE s.n >= 5 AND s.n >= coalesce(v.n, 0) * 0.5""").fetchall():
+                c.append(Condizione(f"adapter muto {pid}", "avviso", f"adapter muto: {pid}",
+                                    f"{sosp} tenant a zero nell'ultima ora con offerte ancora in pagina ({vis} letti bene)"))
+    except Exception:                                 # noqa: BLE001
+        pass
     # scadenze di massa RIFIUTATE da expira (adapter muto su una piattaforma):
     # il file lo scrive mantenimento.expira e lo toglie quando il rifiuto cessa
     try:
@@ -484,6 +512,10 @@ def _prefisso_cura(c: Condizione) -> str:
             "backup fallito": "BACKUP FALLITO", "backup vecchio": "backup: vecchio",
             "ponte fermo": "ponte fermo", "ponte errore": "ponte in ERRORE"}.get(
         c.chiave, c.chiave + ":" if c.chiave.startswith("demone ") else c.chiave)
+
+
+# le chiavi «adapter rotto <pid>» / «adapter muto <pid>» passano intere:
+# il pronto soccorso ne estrae la piattaforma con un'espressione regolare
 
 
 if __name__ == "__main__":

@@ -15,6 +15,9 @@
 #   runbook.sh telegram "<testo>"        un messaggio a Giuseppe
 #   runbook.sh silenzio <minuti>         manutenzione: niente avvisi per N minuti (0 = fine)
 #   runbook.sh diario [n]                le ultime visite del medico e chat
+#   runbook.sh officina <piattaforma>    ripara un adapter (Claude in officina, in background)
+#   runbook.sh riparazioni               le ultime riparazioni dell'officina
+#   runbook.sh canarini                  l'ultimo esito dei canarini per piattaforma
 set -uo pipefail
 BASE=/opt/nivult/engine
 PY="$BASE/.venv/bin/python"
@@ -102,6 +105,19 @@ print('inviato' if ps.telegram('Medico Nivult', [], [sys.argv[1]]) else 'NON inv
     if [ "$m" -eq 0 ]; then rm -f /opt/nivult/silenzio-fino; echo "silenzio finito"
     else echo $(( $(date +%s) + m*60 )) > /opt/nivult/silenzio-fino; echo "silenzio per $m minuti (le critiche passano)"; fi
     ;;
+  officina)
+    # officina <piattaforma> [--senza-deploy]: apre l'officina su quell'adapter (in background)
+    p="${2:?piattaforma}"; case "$p" in *[!a-z0-9_-]*) echo "piattaforma non valida"; exit 2 ;; esac
+    systemd-run --unit="nivult-officina-$p" --collect --quiet "$BASE/deploy/officina.sh" "$p" ${3:-} && echo "officina aperta su $p: il resoconto arriva su Telegram"
+    ;;
+  riparazioni)
+    cd "$BASE" && "$PY" -c "
+from nivult.ats import diario
+with diario._connetti() as db:
+    for at, pid, esito, c, det in db.execute('SELECT at, platform_id, esito, commit, left(dettaglio,140) FROM officina_riparazioni ORDER BY at DESC LIMIT 10'):
+        print(f'{at:%d/%m %H:%M} {pid:14s} {esito:10s} {c or \"\":8s} {det}')" 2>&1
+    ;;
+  canarini) cd "$BASE" && "$PY" -m nivult.ats.canarini --stato 2>&1 | tail -80 ;;
   diario)
     # diario [n]: le ultime visite del medico e le chat, dalla tabella medico_visite
     if [ "${2:-}" = settimana ]; then cd "$BASE" && "$PY" -m nivult.ats.diario settimana
