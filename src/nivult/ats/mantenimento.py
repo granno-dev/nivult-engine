@@ -32,6 +32,8 @@ import unicodedata
 
 import psycopg
 
+from .contratto import normalizza as normalizza_contratto
+
 log = logging.getLogger("nivult.ats.mantenimento")
 
 ATS_DSN = os.environ.get(
@@ -156,7 +158,10 @@ def normalizza(dsn: str, limite: int = 5000) -> int:
             smin = smin if isinstance(smin, (int, float)) else None
             smax = smax if isinstance(smax, (int, float)) else None
             valuta = (valuta.strip()[:8] or None) if isinstance(valuta, str) else None
-            contratto = (contratto.strip()[:80] or None) if isinstance(contratto, str) else None
+            # nel NOSTRO vocabolario, mai il grezzo della piattaforma
+            # («FullTime», «Tempo pieno»): un valore che nessun filtro
+            # trova e' peggio di un NULL
+            contratto = normalizza_contratto(contratto) if isinstance(contratto, str) else None
             with conn.cursor() as cur:
                 cur.execute("""
                     UPDATE ats_jobs SET salary_min = %s, salary_max = %s,

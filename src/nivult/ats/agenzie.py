@@ -32,6 +32,8 @@ from datetime import datetime, timezone
 import httpx
 import psycopg
 
+from .contratto import normalizza as normalizza_contratto
+
 from .runner import ATS_DSN
 from .adapters import senza_nulli
 
@@ -307,7 +309,7 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                           fetched_at = now()
                     """, (slug, u, titolo[:300], u, citta,
                           paese, citta, _data(jp),
-                          (str(jp.get("employmentType") or "")[:40] or None),
+                          normalizza_contratto(str(jp.get("employmentType") or "")),
                           psycopg.types.json.Json(senza_nulli(jp))))
                     stats["nuove"] += 1
                     if stats["nuove"] % 200 == 0:

@@ -22,7 +22,7 @@ PREZZO_CACHE = 0.015/1e6   # il prompt di sistema (la rubrica) e' in cache: misu
 c0 = psycopg.connect(DSN)
 FAM = [r[0] for r in c0.execute("SELECT DISTINCT family FROM job_classifications ORDER BY 1").fetchall()]
 VAL_SEN = {"intern","junior","mid","senior","lead","head"}
-VAL_ET = {"full_time","part_time","contract","temporary","internship"}
+VAL_ET = {"full_time","part_time","contract","temporary","internship","apprenticeship"}
 VAL_REM = {"remote","hybrid","onsite"}
 # La RUBRICA (docs/rubrica-classificazione.md) nel prompt: le coppie ambigue
 # decise una volta, e niente indovinelli senza testo. Nata dall'audit del
@@ -42,6 +42,19 @@ REGOLE = (
  "VP/director/head with P&L or people leadership as the core -> Management & Leadership, but 'Senior Manager Sales' -> Sales; "
  "tutor/educator/mentoring/activity leader -> Education; sports/recreation instructor -> Sports & Recreation; "
  "veterinary -> Healthcare; secretary/office facility supervisor -> Administrative. "
+ # aggiunte dal set d'esame a mano (280 casi, 2026-09-06)
+ "Restaurant/bar/kitchen service EVEN INSIDE A HOTEL -> Food & Beverage; hotel front office/housekeeping/rooms -> Hospitality; "
+ "office or clinic receptionist -> Administrative; patient access/registration/medical billing -> Administrative (not Healthcare); "
+ "welder/pipefitter/electrician even on a construction site -> Trades; laborer/mason/drywall/site foreman -> Construction; "
+ "'Consultant' doing accounting/tax -> Finance & Accounting; 'Consultant' on SAP/ERP/process for clients -> Consulting; "
+ "Engineer/Architect/Developer titles -> Software or Technology even if the employer is a consultancy; "
+ "internal IT help desk -> Technology; a company's customer care -> Customer Service & Support; grocery/store floor staff -> Retail; "
+ "corporate learning & development -> Human Resources; teachers/tutors/instructors (even cooking) -> Education; "
+ "job coach/support worker/disability care -> Social Services; regulatory affairs/compliance -> Legal; "
+ "mortgage/banking-product advisor or seller -> Sales; credit analyst/accountant/treasury -> Finance & Accounting; "
+ "product manager of physical products -> Marketing; data product owner -> Data & Analytics; "
+ "CNC programmer/machinist/line operator -> Manufacturing; repair technician (devices, vehicles, machinery) -> Trades; QA/QC engineer -> Engineering. "
+ "If title and text describe different jobs, the TEXT wins. Unsolicited application/'not hiring'/'Test' -> unknown. "
  "If the TEXT is empty and the title is ambiguous, family MUST be unknown: never guess. "
  "Seniority: INFER from responsibilities, years, autonomy, scope; unknown only with no signal. "
  "employment_type: only if stated or strongly implied (per diem/CDD/befristet -> temporary; Ausbildung -> apprenticeship); never assume full_time. "

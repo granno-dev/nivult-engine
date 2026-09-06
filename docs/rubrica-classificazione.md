@@ -49,6 +49,48 @@ Un titolo *inequivocabile* («Registered Nurse», «Senior Java Developer»,
 Regola di scioglimento residuo: **vince il verbo del titolo**. «Manager» da
 solo non è Management: serve che *gestire persone/P&L* sia il contenuto.
 
+### Aggiunte dal set d'esame a mano (2026-09-06, 280 casi con testo)
+
+Misurato: sui casi difficili GLM pre-rubrica concordava col giudizio a mano
+al 76,6%, il dizionario al 62,7%. Quasi tutti i disaccordi di GLM erano
+coppie che la tabella non nominava. Ora le nomina:
+
+| Se il ruolo è… | Famiglia | NON |
+|---|---|---|
+| servizio in sala/bar/cucina **anche dentro un hotel** (Servicemitarbeiter, bartender, Restaurantleiter, minibar) | **Food & Beverage** | Hospitality |
+| front office, reception d'albergo, housekeeping, rooms division | **Hospitality** | Food & Beverage |
+| reception/segreteria in un ufficio o studio medico (non albergo) | **Administrative** | Hospitality |
+| accettazione pazienti, «patient access», fatturazione sanitaria | **Administrative** | Healthcare |
+| saldatore, tubista, elettricista **anche in cantiere** | **Trades** | Construction |
+| manovale, muratore, aiuto muratore, plaquiste, uitvoerder, conducteur de travaux | **Construction** | Trades |
+| il titolo dice «Consultant» e il contenuto è contabilità/fisco/tesoreria | **Finance & Accounting** | Consulting |
+| il titolo dice «Consultant» su SAP/ERP/processi per clienti | **Consulting** | Technology |
+| il titolo dice Engineer/Architect/Developer, **anche se il datore è una società di consulenza** | Software / Technology | Consulting |
+| help desk IT interno, supporto tecnico ai dipendenti | **Technology** | Customer Service |
+| assistenza clienti di un'azienda, call center, customer care | **Customer Service & Support** | Technology |
+| commesso di supermercato chiamato «Customer Service Representative» | **Retail** | Customer Service |
+| formazione aziendale, learning & development, «learning design» | **Human Resources** | Education |
+| insegnante, tutor, istruttore (anche di cucina), formatore per esterni | **Education** | Food & Beverage, Technology |
+| job coach, support worker, educatore per disabilità, soziale Betreuung | **Social Services** | Customer Service, Sports |
+| regulatory affairs, compliance | **Legal** | Healthcare |
+| consulente/venditore di mutui, prodotti bancari, immobili | **Sales** | Finance |
+| analista credito, contabile, tesoreria, operations bancarie | **Finance & Accounting** | Sales |
+| product manager di prodotti fisici (strategia, portafoglio) | **Marketing** | Engineering |
+| product owner tecnico, data warehouse | **Data & Analytics** / **Software** | Logistics |
+| programmatore CNC, zerspanungsmechaniker, operaio di linea | **Manufacturing** | Software, Trades |
+| tecnico di riparazione (endoscopi, veicoli, macchinari) | **Trades** | Healthcare, Engineering |
+| QA/QC inspector con laurea tecnica | **Engineering** | Trades |
+
+Tre regole trasversali:
+
+- **Se titolo e testo parlano di due mestieri diversi, vince il testo.**
+  «R&D Manager» con testo da tecnico irrigazione è Trades: il testo è
+  l'annuncio, il titolo un errore di chi l'ha pubblicato.
+- **Candidatura spontanea, «not hiring», «Test» → unknown.** Non è un
+  mestiere.
+- **PRN, per diem, bank staff, zero hours → `temporary`** anche se il
+  campo dice part_time.
+
 ## Seniority — si DEDUCE, non si aspetta la parola
 
 Si legge da responsabilità, anni richiesti, autonomia, ampiezza:
