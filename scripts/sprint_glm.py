@@ -112,22 +112,48 @@ def main():
     speso = 0.0; fatte = 0; fam_scritte = 0
     with psycopg.connect(DSN, autocommit=True) as c:
         _colonna(c)
-        while speso < TETTO:
-            righe = c.execute("""
-                SELECT j.id, j.title, coalesce(j.location,j.city,''),
-                       left(coalesce(j.raw->>'description',j.raw->>'descriptionPlain',''),700)
+        # LA CODA. Scegliere la pagina ordinando ogni volta le 900k righe
+        # residue costava 143-190 s a pagina (misurato 06/09: seq scan +
+        # sort sul grezzo), contro ~1 minuto di GLM. La coda si calcola
+        # UNA volta (stesso ordine: prima chi ha la descrizione, poi le
+        # piu' recenti) e ogni pagina e' una lettura per chiave. Le righe
+        # servite si tolgono; quando e' vuota si ricostruisce (entrano le
+        # nuove arrivate), e se resta vuota lo sprint ha finito.
+        def costruisci_coda():
+            c.execute("DROP TABLE IF EXISTS sprint_coda")
+            c.execute("""
+                CREATE TABLE sprint_coda AS
+                SELECT j.id, row_number() OVER (
+                         ORDER BY (length(coalesce(j.raw->>'description','')) > 80) DESC,
+                                  j.posted_at DESC NULLS LAST) AS ord
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.sprint_at IS NULL
                    AND (j.seniority IS NULL OR j.employment_type IS NULL
                         OR NOT EXISTS (SELECT 1 FROM job_classifications x
-                                        WHERE x.job_id=j.id AND x.model IN ('glm-5.3-flash','glm-5.2')))
-                 -- prima chi ha una descrizione: e' cio' che il digest puo' usare
-                 -- e cio' su cui il modellino v1 puo' imparare; poi le piu' recenti
-                 ORDER BY (length(coalesce(j.raw->>'description','')) > 80) DESC,
-                          j.posted_at DESC NULLS LAST
-                 LIMIT 600""").fetchall()
+                                        WHERE x.job_id=j.id AND x.model IN ('glm-5.3-flash','glm-5.2')))""")
+            c.execute("ALTER TABLE sprint_coda ADD PRIMARY KEY (ord)")
+            n = c.execute("SELECT count(*) FROM sprint_coda").fetchone()[0]
+            print(f"coda costruita: {n} offerte [{time.strftime('%H:%M')}]", flush=True)
+            return n
+        if c.execute("SELECT to_regclass('sprint_coda')").fetchone()[0] is None \
+                or c.execute("SELECT count(*) FROM sprint_coda").fetchone()[0] == 0:
+            costruisci_coda()
+        ricostruita = False
+        while speso < TETTO:
+            righe = c.execute("""
+                SELECT j.id, j.title, coalesce(j.location,j.city,''),
+                       left(coalesce(j.raw->>'description',j.raw->>'descriptionPlain',''),700), q.ord
+                  FROM sprint_coda q JOIN ats_jobs j ON j.id = q.id
+                 WHERE j.sprint_at IS NULL AND j.expired_at IS NULL
+                 ORDER BY q.ord LIMIT 600""").fetchall()
             if not righe:
-                print("FINITO: niente piu' da fare"); break
+                if ricostruita or costruisci_coda() == 0:
+                    print("FINITO: niente piu' da fare"); break
+                ricostruita = True
+                continue
+            ricostruita = False
+            ord_max = righe[-1][4]
+            righe = [r[:4] for r in righe]
             agg_job = []; agg_fam = []; fallite = 0
             with ThreadPoolExecutor(max_workers=PAR) as ex:
                 for jid, g, ti, to, cached in ex.map(lambda r: label(*r), righe):
@@ -169,8 +195,11 @@ def main():
                     "UPDATE ats_jobs SET seniority=coalesce(seniority,%s), "
                     "employment_type=coalesce(employment_type,%s), "
                     "remote=coalesce(remote,%s), country=coalesce(country,%s), "
-                    # competenze solo dove mancano: i dizionari gia' scritti restano
-                    "skills=CASE WHEN skills IS NULL OR cardinality(skills)=0 THEN %s ELSE skills END, "
+                    # le competenze di GLM VINCONO su quelle gia' scritte: il matcher
+                    # ESCO di profilo.py metteva «compile airport certification
+                    # manuals» su 15.344 offerte (cassieri, ecografisti, carpentieri).
+                    # Se GLM non ne trova, resta cio' che c'era.
+                    "skills=coalesce(%s, skills), "
                     "salary_min=coalesce(salary_min,%s), salary_max=coalesce(salary_max,%s), "
                     "salary_currency=coalesce(salary_currency,%s), salary_period=coalesce(salary_period,%s), "
                     "sprint_at=now() WHERE id=%s"),):
@@ -196,6 +225,7 @@ def main():
                                 "classified_at=EXCLUDED.classified_at", parte)
                         break
                     except psycopg.errors.DeadlockDetected: time.sleep(1)
+            c.execute("DELETE FROM sprint_coda WHERE ord <= %s", (ord_max,))
             fatte += len(agg_job); fam_scritte += len(fam_ord)
             print(f"{fatte} offerte, {fam_scritte} famiglie, spesi ${speso:.2f}/{TETTO}"
                   + (f", {fallite} fallite (429?)" if fallite else "") + f" [{time.strftime('%H:%M')}]", flush=True)

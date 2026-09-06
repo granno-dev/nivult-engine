@@ -264,17 +264,25 @@ def deterministico(titolo: str, luogo: str, raw: dict):
     descr = _descrizione(raw)
     campo_skill = f"{titolo}\n{descr}"
     skills = [s for s, rx in _SKILL_RX if rx.search(campo_skill)][:20]
-    # ESCO: 13.485 competenze in 28 lingue, canonicalizzate in inglese
-    # («saldatura» -> «welding»). Entra SOLO a calibrazione avvenuta
-    # (cancello in esco.py); se spento, questa riga non cambia nulla.
-    try:
-        from nivult.ats import esco as _esco
-        per_esco = _esco.estrai(campo_skill, massimo=15)
-        skills += [e for e in per_esco if e not in skills]
-        skills = skills[:30]
-    except Exception:                                # noqa: BLE001
-        pass
+    # ESCO SPENTO (2026-09-06). Misurato sul corpus: «compile airport
+    # certification manuals» su 15.344 offerte (cassieri, ecografisti,
+    # carpentieri), «dental» la competenza piu' frequente in assoluto,
+    # «Georgian» e «Microsoft Access» su un paramedico. Il matcher a
+    # sottostringa sulle 13.485 etichette ESCO produce piu' rumore che
+    # segnale; le competenze le legge GLM nello sprint e poi il modellino
+    # v1. Si riaccende solo dopo una calibrazione misurata (esco.py).
+    if ESCO_ATTIVO:
+        try:
+            from nivult.ats import esco as _esco
+            per_esco = _esco.estrai(campo_skill, massimo=15)
+            skills += [e for e in per_esco if e not in skills]
+            skills = skills[:30]
+        except Exception:                            # noqa: BLE001
+            pass
     return seniority, remote, skills
+
+
+ESCO_ATTIVO = False
 
 
 # ── GLM-4.5-Flash: solo il residuo, gratuito, con tetto ─────────────
