@@ -293,6 +293,17 @@ def _canarini_vivi(pid: str) -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
+def _togli_da_canarini_json(pid: str) -> None:
+    f = "/opt/nivult/canarini.json"
+    try:
+        d = json.load(open(f))
+        d["rotte"] = [r for r in d.get("rotte", []) if r.get("piattaforma") != pid]
+        with open(f, "w") as out:
+            json.dump(d, out)
+    except (OSError, ValueError):
+        pass
+
+
 def _registra(pid: str, motivo: str, esito: str, commit: str | None, dettaglio: str, durata: int) -> None:
     import psycopg
     with psycopg.connect(_dsn(), autocommit=True) as db:
@@ -314,6 +325,7 @@ def deploy(pid: str, motivo: str, t0: float | None = None) -> tuple[bool, str]:
     if letti and vivi >= max(1, letti - 1):
         det = f"deployato {commit}; canarini vivi {vivi}/{letti}"
         _registra(pid, motivo, "deployata", commit, det, int(time.time() - t0))
+        _togli_da_canarini_json(pid)   # cosi' la sentinella chiude l'incidente al giro dopo, non fra un'ora
         return True, det
     # rollback
     _git("revert", "--no-edit", "HEAD")
