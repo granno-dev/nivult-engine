@@ -26,7 +26,14 @@ case "${1:-}" in
   stato)
     echo "== $(date -u +%FT%TZ) $(hostname)"
     echo "-- demoni"; for d in $DEMONI; do printf "  %-16s %s\n" "$d" "$(systemctl is-active nivult-$d 2>/dev/null)"; done
-    echo "-- sentinella"; cat /opt/nivult/sentinella-stato.json 2>/dev/null | head -c 800; echo
+    echo "-- incidenti aperti (sentinella v2)"
+    "$PY" - <<'EOF' 2>/dev/null
+import psycopg, re
+pw = re.search(r"^POSTGRES_PASSWORD=(.*)$", open("/opt/nivult/.env").read(), re.M).group(1).strip()
+c = psycopg.connect(f"postgresql://nivult:{pw}@127.0.0.1:5432/nivult_ats", autocommit=True)
+rs = c.execute("SELECT gravita, stato, titolo, left(dettaglio,90), to_char(aperto_at,'HH24:MI'), cura FROM incidenti WHERE stato<>'risolto' ORDER BY aperto_at").fetchall()
+print("  nessuno" if not rs else "\n".join(f"  [{g}/{s} dalle {ap}] {t} — {d}" + (f" · cura: {cu}" if cu else "") for g, s, t, d, ap, cu in rs))
+EOF
     echo "-- sprint"; "$BASE/deploy/sprint.sh" status 2>/dev/null | tail -2
     echo "-- backup"; cat /opt/nivult/backup-state 2>/dev/null
     echo "-- memoria/carico/disco"; free -m | sed -n 2p; uptime | sed 's/.*load/load/'; df -h / | tail -1

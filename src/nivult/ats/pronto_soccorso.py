@@ -116,6 +116,48 @@ def _chat_id() -> str | None:
         return None
 
 
+def _pronto_bot() -> str | None:
+    for f in ("/opt/nivult/engine/.env", "/opt/nivult/.env"):
+        try:
+            m = re.search(r"^TELEGRAM_BOT_TOKEN=(.+)$", open(f).read(), re.M)
+            if m:
+                os.environ.setdefault("TELEGRAM_BOT_TOKEN", m.group(1).strip()); break
+        except OSError:
+            pass
+    chat = _chat_id()
+    return chat if chat and os.environ.get("TELEGRAM_BOT_TOKEN") else None
+
+
+def _corpo(titolo: str, righe: list[str]) -> str:
+    e = html.escape
+    return "\n".join([f"<b>{e(titolo)}</b> · {time.strftime('%H:%M')} UTC"] + [e(r) for r in righe if r])[:3900]
+
+
+def telegram_id(titolo: str, righe: list[str]) -> str | None:
+    """Un messaggio per incidente: ritorna l'id, che serve per MODIFICARLO
+    alla risoluzione invece di mandarne un altro."""
+    try:
+        from nivult.delivery.telegram import invia_testo
+        chat = _pronto_bot()
+        return invia_testo(chat, _corpo(titolo, righe)) if chat else None
+    except Exception:                                 # noqa: BLE001
+        return None
+
+
+def telegram_modifica(message_id: str, titolo: str, righe: list[str]) -> bool:
+    try:
+        from nivult.delivery.telegram import _chiama
+        chat = _pronto_bot()
+        if not chat:
+            return False
+        _chiama("editMessageText", {"chat_id": chat, "message_id": int(message_id),
+                                    "text": _corpo(titolo, righe), "parse_mode": "HTML",
+                                    "link_preview_options": {"is_disabled": True}})
+        return True
+    except Exception:                                 # noqa: BLE001
+        return False
+
+
 def telegram(titolo: str, problemi: list[str], fatte: list[str], rientrati: list[str] | None = None) -> bool:
     """Il messaggio di conferma: cosa c'era, cosa e' stato fatto, cosa resta a Giuseppe."""
     try:

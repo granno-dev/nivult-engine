@@ -67,6 +67,16 @@ in italiano, numeri veri.
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
 | `nuove offerte quasi senza descrizione/paese` | `log arricchisci-continua 30` | `riavvia arricchisci` se il loop è fermo; altrimenti segnala |
 
+## Gli incidenti hanno una scheda
+
+La sentinella (v2) tiene ogni problema nella tabella `incidenti` con uno
+stato: `aperto` → `in_cura` (pronto soccorso o tu) → `risolto`, con chi e
+quando. **Tu non chiudi gli incidenti a mano**: quando la causa sparisce,
+`runbook.sh sentinella` li chiude da sola al giro successivo e modifica il
+messaggio Telegram in «🟢 risolto». Quindi, dopo una cura, lancia sempre
+`runbook.sh sentinella` e leggi cosa resta aperto. Le gravità: 🔴 critica,
+🟠 avviso, ⚪ info (solo cruscotto).
+
 ## Come lavorare
 
 1. `stato` per primo, sempre.

@@ -168,7 +168,7 @@ _DEMONI = (
 )
 
 
-def _giri() -> dict:
+def _giri(ATS_DSN_CRUSCOTTO: str = "") -> dict:
     """Come stanno i giri — con gli errori, non solo i verdi: demoni
     systemd, allarmi aperti della sentinella, esito dell'ultima corsa
     del ponte e del giro notturno (contando i passi FALLITO)."""
@@ -185,10 +185,21 @@ def _giri() -> dict:
             attivo = False
         g["demoni"].append({"nome": dm, "etichetta": etichetta,
                             "spiega": spiega, "ok": attivo})
+    # gli incidenti APERTI dalla scheda della sentinella (v2, 06/09): con
+    # stato e cura; a risolto spariscono da qui e restano nello storico
     try:
-        st = _json.load(open("/opt/nivult/sentinella-stato.json"))
-        g["allarmi"] = [{"testo": k, "da": v} for k, v
-                        in sorted(st.get("attivi", {}).items())]
+        boll = {"critica": "🔴", "avviso": "🟠", "info": "⚪"}
+        for gr, ti, de, stt, cura, ap in _righe(ATS_DSN_CRUSCOTTO, """
+                SELECT gravita, titolo, dettaglio, stato, cura, extract(epoch FROM aperto_at)
+                  FROM incidenti WHERE stato IN ('aperto','in_cura')
+                 ORDER BY CASE gravita WHEN 'critica' THEN 0 WHEN 'avviso' THEN 1 ELSE 2 END, aperto_at"""):
+            testo = f"{boll.get(gr,'⚪')} {ti} — {de or ''}"
+            if stt == "in_cura":
+                testo += f" · in cura: {cura or ''}"
+            g["allarmi"].append({"testo": testo, "da": float(ap)})
+        g["risolti_24h"] = [{"testo": f"🟢 {ti} · risolto da {da}", "da": float(ra)} for ti, da, ra in _righe(
+            ATS_DSN_CRUSCOTTO, "SELECT titolo, risolto_da, extract(epoch FROM risolto_at) FROM incidenti "
+                               "WHERE risolto_at > now()-interval '24 hours' ORDER BY risolto_at DESC LIMIT 10")]
         g["sentinella"] = True
     except Exception:                                # noqa: BLE001
         pass
@@ -687,7 +698,7 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
             "logo": logo, "favicon": favicon,
             "posted": str(pa) if pa else None})
 
-    d["giri"] = _giri()
+    d["giri"] = _giri(ats_dsn)
     d["macchine"] = _macchine(ats_dsn)
 
     try:
