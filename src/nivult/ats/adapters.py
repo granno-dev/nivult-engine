@@ -1805,20 +1805,48 @@ class JazzHR(BaseAdapter):
         r'(?:(?!resumator-job-title-link).)*?'
         r'resumator-job-location-column">\s*([^<]*?)\s*</td>', re.S)
 
+    # Il SECONDO template di JazzHR (bacheca «list-group»): ogni offerta e'
+    # un <li class="list-group-item"> con il link nell'h3 e la sede dopo
+    # l'icona della mappa. Circa 1.400 tenant lo usano, e con il solo
+    # template a tabella l'adapter rispondeva «zero offerte» a pagine da
+    # 60 annunci: il runner scriveva job_count = 0, e tre giorni dopo la
+    # regola di presenza ha scadute 33.344 offerte VIVE (06/09/2026, 8
+    # pagine su 8 controllate online). Un adapter che tace non e' una
+    # bacheca vuota.
+    _LINK_LISTA = re.compile(
+        r'<a href="(https?://[^"]*\.applytojob\.com/apply/([A-Za-z0-9]+)/[^"]*)"[^>]*>(.*?)</a>', re.S)
+    _SEDE_LISTA = re.compile(r"fa-map-marker[^>]*></i>\s*([^<]*?)\s*</li>")
+
+    def _righe_lista(self, testo: str) -> list[tuple]:
+        """Un blocco per offerta, tagliato sul <li>: la sede si cerca
+        dentro il blocco, cosi' non si sconfina nell'annuncio dopo."""
+        out = []
+        for blocco in testo.split('<li class="list-group-item">')[1:]:
+            m = self._LINK_LISTA.search(blocco)
+            if not m:
+                continue
+            ms = self._SEDE_LISTA.search(blocco)
+            out.append((m.group(1), m.group(2), m.group(3), ms.group(1) if ms else ""))
+        return out
+
     def jobs(self, slug: str) -> list[AtsJob]:
         r = self.client.get(f"https://{slug}.applytojob.com/")
         if r.status_code != 200:
             return []
         out: list[AtsJob] = []
         visti: set[str] = set()
-        for url, code, txt, loc in self._RIGA.findall(r.text):
+        righe = self._RIGA.findall(r.text)
+        if not righe:
+            righe = self._righe_lista(r.text)
+        for url, code, txt, loc in righe:
             if code in visti:
                 continue
             visti.add(code)
-            titolo = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", txt)).strip()
+            import html as html_mod
+            titolo = html_mod.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", txt)).strip())
             if not titolo:
                 continue
-            sede = re.sub(r"\s+", " ", loc).strip() or None
+            sede = html_mod.unescape(re.sub(r"\s+", " ", loc).strip()) or None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=code, title=titolo, url=url,

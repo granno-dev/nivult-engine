@@ -251,6 +251,31 @@ def _controlli() -> list[Condizione]:
                     c.append(Condizione("n5 caldo", "avviso", "N5 troppo caldo", f"{t_} °C: abbassare i core (operaio-n5.sh --cpus)"))
     except Exception:                                 # noqa: BLE001
         pass
+    # scadenze di massa per VOLUME, a prescindere da quando furono viste:
+    # il controllo «viste di recente» qui sopra non puo' vedere un lotto
+    # scaricato 3 giorni fa e mai rivisto (JazzHR, 33.344 in un'ora, 06/09)
+    try:
+        with _db() as db:
+            att_, m15 = db.execute("""SELECT count(*) FILTER (WHERE expired_at IS NULL),
+                count(*) FILTER (WHERE expired_at > now()-interval '15 minutes') FROM ats_jobs""").fetchone()
+            if att_ and m15 > max(2000, att_ * 0.005):
+                c.append(Condizione("scadenze di massa", "avviso", "scadenze di massa negli ultimi 15 minuti",
+                                    f"{m15:,} scadute ({100.0*m15/att_:.1f}% delle attive) — le pagine sono vive?".replace(",", ".")))
+    except Exception:                                 # noqa: BLE001
+        pass
+    # scadenze di massa RIFIUTATE da expira (adapter muto su una piattaforma):
+    # il file lo scrive mantenimento.expira e lo toglie quando il rifiuto cessa
+    try:
+        rf = "/opt/nivult/expira-rifiutata.json"
+        if time.time() - os.path.getmtime(rf) < 1800:
+            d_ = json.load(open(rf))
+            pz = ", ".join(f"{p['piattaforma']} ({p['scadrebbero']:,} di {p['attive']:,})".replace(",", ".")
+                           for p in d_.get("piattaforme", []))
+            c.append(Condizione("scadenze rifiutate", "avviso", "scadenze di massa rifiutate: adapter muto?",
+                                f"{pz} — le pagine sono vive? l'adapter legge ancora il template?"))
+    except (OSError, ValueError, KeyError):
+        pass
+
     # errori 5xx dell'API negli ultimi 15 minuti
     try:
         out = subprocess.run(["journalctl", "-u", "nivult-api", "--since", "-15min", "--no-pager", "-q"],

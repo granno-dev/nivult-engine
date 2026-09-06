@@ -68,20 +68,78 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     presenza sulla pagina e' l'UNICA verita' sulla scadenza; la
     freschezza per il digest la applica il ponte (30 giorni), non
     questa funzione. Il parametro `giorni` e' la sola regola.
+
+    ⚠ L'INTERRUTTORE (2026-09-06, sera). La regola di presenza si fida
+    dello scraper: se un adapter smette di leggere una bacheca — JazzHR
+    ha cambiato template su 1.442 tenant e l'adapter rispondeva «zero
+    offerte» a pagine da 60 annunci — il runner scrive job_count = 0 e
+    tre giorni dopo questa funzione scade 33.344 offerte VIVE in un
+    colpo. Quindi: una scadenza di massa non si esegue, si RIFIUTA e si
+    segnala. Per piattaforma, sopra il 30% delle sue attive (e almeno
+    500), la piattaforma resta fuori dal giro; il rifiuto finisce in
+    RIFIUTO_FILE, che la sentinella legge e trasforma in incidente. Le
+    altre piattaforme scadono regolarmente: un adapter rotto non deve
+    congelare le scadenze oneste degli altri.
     """
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            cur.execute("""
+                WITH cand AS (
+                    SELECT platform_id, count(*) AS n FROM ats_jobs
+                     WHERE expired_at IS NULL
+                       AND fetched_at < now() - make_interval(days => %s)
+                     GROUP BY 1),
+                att AS (
+                    SELECT platform_id, count(*) AS tot FROM ats_jobs
+                     WHERE expired_at IS NULL GROUP BY 1)
+                SELECT cand.platform_id, cand.n, att.tot
+                  FROM cand JOIN att USING (platform_id)
+                 WHERE cand.n >= %s AND cand.n > att.tot * %s
+            """, (giorni, RIFIUTO_MINIMO, RIFIUTO_QUOTA))
+            rifiutate = cur.fetchall()
+            escluse = [r[0] for r in rifiutate]
             cur.execute("""
                 UPDATE ats_jobs
                    SET expired_at = now()
                  WHERE expired_at IS NULL
                    AND fetched_at < now() - make_interval(days => %s)
+                   AND NOT (platform_id = ANY(%s))
                 RETURNING id
-            """, (giorni,))
+            """, (giorni, escluse))
             n = cur.rowcount
         conn.commit()
+    _segna_rifiuto(rifiutate)
     log.info("expira: %d offerte scadute (non viste o pubblicate da troppo)", n)
+    for pid, k, tot in rifiutate:
+        log.warning("expira: RIFIUTATA scadenza di massa su %s: %d di %d attive (%.0f%%) — adapter muto?",
+                    pid, k, tot, 100.0 * k / max(tot, 1))
     return n
+
+
+# Sopra questa quota delle attive di una piattaforma (e questo minimo)
+# la scadenza non e' una scadenza: e' un adapter che non legge piu'.
+RIFIUTO_QUOTA = 0.30
+RIFIUTO_MINIMO = 500
+RIFIUTO_FILE = "/opt/nivult/expira-rifiutata.json"
+
+
+def _segna_rifiuto(rifiutate: list) -> None:
+    """Il rifiuto lascia una traccia con l'ora: la sentinella apre un
+    incidente finche' la traccia e' recente (il volano ripete expira
+    ogni 10 minuti, quindi «recente» = il guasto e' ancora li')."""
+    import json
+    import os
+    import time
+    try:
+        if rifiutate:
+            with open(RIFIUTO_FILE, "w") as f:
+                json.dump({"at": time.time(),
+                           "piattaforme": [{"piattaforma": p, "scadrebbero": k, "attive": t}
+                                           for p, k, t in rifiutate]}, f)
+        elif os.path.exists(RIFIUTO_FILE):
+            os.remove(RIFIUTO_FILE)
+    except OSError:
+        pass
 
 
 # ── 2. NORMALIZZA ─────────────────────────────────────────────────

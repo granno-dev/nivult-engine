@@ -62,6 +62,7 @@ in italiano, numeri veri.
 | `ponte fermo` / `in ERRORE` | `log ponte-ats 40` | `ponte` |
 | `operaio n5 muto` | `sql "SELECT * FROM operaio_battiti"` | niente: segnala (N5 spento o Tailscale) |
 | `scadenze anomale` | `sql` sulle scadute 2h con `fetched_at` recente, per piattaforma | NON curare: segnala con i numeri |
+| `scadenze di massa` / `scadenze rifiutate` | `sql "SELECT platform_id, count(*) FROM ats_jobs WHERE expired_at > now()-interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"`; poi 3-4 URL a caso di quella piattaforma | NON curare. Quasi sempre è un adapter che non legge più il template (JazzHR il 06/09: 33.344 offerte vive). Segnala piattaforma, numeri, e se le pagine rispondono |
 | `memoria esaurita` | `stato` (chi è morto) | niente; se la vittima è postgres/uvicorn → urgente |
 | `disco quasi pieno` | `stato` | niente: segnala (i backup locali sono in /opt/nivult/backups) |
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
