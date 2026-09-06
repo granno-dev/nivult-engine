@@ -23,15 +23,33 @@ FAM = [r[0] for r in c0.execute("SELECT DISTINCT family FROM job_classifications
 VAL_SEN = {"intern","junior","mid","senior","lead","head"}
 VAL_ET = {"full_time","part_time","contract","temporary","internship"}
 VAL_REM = {"remote","hybrid","onsite"}
+# La RUBRICA (docs/rubrica-classificazione.md) nel prompt: le coppie ambigue
+# decise una volta, e niente indovinelli senza testo. Nata dall'audit del
+# 2026-09-06: gli errori di GLM erano tutti titoli ambigui senza descrizione.
+REGOLE = (
+ "RULES for family (the person's JOB, not the company's sector): "
+ "skilled manual work (carpenter, electrician, plumber, painter, welder, mechanic, installer, cleaner) -> Trades; "
+ "building-site roles (site manager, construction PM, mason) -> Construction; "
+ "in-store selling (cashier, clerk, sales associate, store staff) -> Retail; "
+ "selling to clients/companies (account manager, negotiator, business developer, real-estate agent) -> Sales; "
+ "tax/accounting/audit/credit/banking/insurance/treasury -> Finance & Accounting (never Consulting); "
+ "process/strategy/IT advisory for external clients -> Consulting; "
+ "kitchen, bar, bakery, restaurant, barback -> Food & Beverage; reception, events, hotel front-office, host -> Hospitality; "
+ "drivers, trucking, delivery -> Transportation; warehouse/supply chain -> Logistics; "
+ "software development/QA/product owner -> Software; IT infrastructure/support/networks/AV-IT installs -> Technology; "
+ "call center/help desk -> Customer Service & Support; "
+ "VP/director/head with P&L or people leadership as the core -> Management & Leadership, but 'Senior Manager Sales' -> Sales; "
+ "tutor/educator/mentoring/activity leader -> Education; sports/recreation instructor -> Sports & Recreation; "
+ "veterinary -> Healthcare; secretary/office facility supervisor -> Administrative. "
+ "If the TEXT is empty and the title is ambiguous, family MUST be unknown: never guess. "
+ "Seniority: INFER from responsibilities, years, autonomy, scope; unknown only with no signal. "
+ "employment_type: only if stated or strongly implied (per diem/CDD/befristet -> temporary; Ausbildung -> apprenticeship); never assume full_time. "
+ "remote: infer from arrangement. country: ISO2 from location, XX if none/Remote/Europe.")
 SYS = ("You label job postings. Reply ONLY compact JSON, no prose. Fields: "
-       "seniority(intern|junior|mid|senior|lead|head|unknown): INFER from "
-       "responsibilities, required years, autonomy and scope even if not "
-       "stated; use unknown only if the text gives no signal at all. "
-       "employment_type(full_time|part_time|contract|temporary|internship|unknown): "
-       "only if stated or strongly implied; do NOT guess full_time by default. "
-       "remote(remote|hybrid|onsite|unknown): infer from location/arrangement. "
-       "country(ISO2 or XX from the location). "
-       f"family(exactly one of: {', '.join(FAM)}).")
+       "seniority(intern|junior|mid|senior|lead|head|unknown), "
+       "employment_type(full_time|part_time|contract|temporary|internship|apprenticeship|unknown), "
+       "remote(remote|hybrid|onsite|unknown), country(ISO2 or XX), "
+       f"family(exactly one of: {', '.join(FAM)}, or unknown). " + REGOLE)
 
 cli = httpx.Client(timeout=45)
 
