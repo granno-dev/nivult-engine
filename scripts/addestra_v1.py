@@ -242,11 +242,25 @@ def main() -> int:
         opt, lambda s: min(1.0, (s + 1) / warm) * max(0.0, (tot_passi - s) / max(1, tot_passi - warm)))
     ckpt = os.path.join(a.out, "checkpoint.pt")
     epoca0, passo = 0, 0
+    # La FIRMA del dataset: righe + impronta del file. Un checkpoint di un
+    # altro dataset non si riprende — si mette da parte. E' successo il
+    # 07/09/2026: su Drive c'era il checkpoint dell'anteprima (58k righe,
+    # terza epoca finita), il dataset nuovo da 314k e' stato caricato,
+    # l'addestramento saltato per intero e l'esame fatto coi pesi vecchi.
+    import hashlib
+    with open(a.train, "rb") as fh:
+        firma = f"{len(train)}:{hashlib.sha1(fh.read(1 << 20)).hexdigest()[:12]}"
     if os.path.exists(ckpt):
         st = torch.load(ckpt, map_location=dev)
-        model.load_state_dict(st["model"]); opt.load_state_dict(st["opt"]); sched.load_state_dict(st["sched"])
-        epoca0, passo = st["epoca"] + 1, st["passo"]
-        print(f"ripresa dal checkpoint: epoca {epoca0}, passo {passo}", flush=True)
+        if st.get("firma") != firma:
+            vecchio = ckpt + ".altro-dataset"
+            os.replace(ckpt, vecchio)
+            print(f"CHECKPOINT DI UN ALTRO DATASET ({st.get('firma')!r} != {firma!r}): messo da parte in {vecchio}, "
+                  f"si parte da zero", flush=True)
+        else:
+            model.load_state_dict(st["model"]); opt.load_state_dict(st["opt"]); sched.load_state_dict(st["sched"])
+            epoca0, passo = st["epoca"] + 1, st["passo"]
+            print(f"ripresa dal checkpoint: epoca {epoca0}, passo {passo}", flush=True)
     usa_bf16 = dev.type == "cuda" and torch.cuda.is_bf16_supported()
     scaler = torch.amp.GradScaler("cuda", enabled=(dev.type == "cuda" and not usa_bf16))
 
@@ -271,7 +285,7 @@ def main() -> int:
                 print(f"  ep {ep} passo {passo} loss {somma/n:.4f} {(time.time()-t0)/60:.1f} min", flush=True)
         print(f"epoca {ep}: loss media {somma/max(1,n):.4f} in {(time.time()-t0)/60:.1f} min", flush=True)
         torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-                    "epoca": ep, "passo": passo}, ckpt)
+                    "epoca": ep, "passo": passo, "firma": firma}, ckpt)
         if a.max_passi and passo >= a.max_passi:
             break
 
@@ -292,7 +306,12 @@ def main() -> int:
             tp += len(vere & viste); fp += len(viste - vere); fn += len(vere - viste)
     rapporto["lingue"] = {"precisione": round(tp / max(1, tp + fp), 3), "copertura": round(tp / max(1, tp + fn), 3)}
     fam_mano = rapporto["family"]["mano"].get("accuratezza")
-    rapporto["cancello"] = {"famiglia_mano": fam_mano, "passa": bool(fam_mano is not None and fam_mano >= 0.90)}
+    # il cancello controlla anche che l'addestramento sia stato fatto DAVVERO
+    # (passi >= 90% del previsto): un esame su pesi non addestrati non passa
+    completo = passo >= 0.9 * tot_passi
+    rapporto["passi_previsti"] = tot_passi; rapporto["epoche_fatte"] = a.epoche - epoca0; rapporto["firma_dataset"] = firma
+    rapporto["cancello"] = {"famiglia_mano": fam_mano, "addestramento_completo": completo,
+                            "passa": bool(fam_mano is not None and fam_mano >= 0.90 and completo)}
     json.dump(rapporto, open(os.path.join(a.out, "esame-v1.json"), "w"), indent=1, ensure_ascii=False)
     print(json.dumps({k: (v if k in ("cancello", "lingue") else {kk: vv.get("accuratezza") for kk, vv in v.items()})
                       for k, v in rapporto.items() if k in TESTE or k in ("cancello", "lingue")},
