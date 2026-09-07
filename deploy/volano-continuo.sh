@@ -29,9 +29,8 @@ while true; do
   "$PY" -m nivult.ats.detector --rileva --limite 800 --thread 20 2>&1 \
     | tail -1 || true
   "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
-  # le aziende senza ATS: sitemap delle offerte + JSON-LD (150 domini a giro,
-  # ~1.000 l'ora; i 38.000 «no_ats» in un giorno e mezzo, poi solo i nuovi)
-  "$PY" -m nivult.ats.jsonld --scopri --limite 150 2>&1 | tail -1 || true
+  # la scoperta jsonld e il ripasso del detector girano sul N5 (operaio-loop.sh):
+  # sono crawling a molti thread, e sul server a 4 vCPU hanno portato il carico a 33
   # NAV (Norvegia): feed di eventi dal cursore; le INACTIVE scadono subito,
   # come chiedono i termini d'uso
   "$PY" -m nivult.ats.servizi_pubblici --nav --limite 3000 2>&1 | tail -1 || true

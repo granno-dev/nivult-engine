@@ -58,6 +58,12 @@ while true; do
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
+  # La SCOPERTA sta qui, non sul server: crawling a molti thread verso
+  # migliaia di siti diversi, che sul server a 4 vCPU portava il carico a 33
+  # (07/09/2026). Il ripasso del detector rilegge i domini «no_ats» con le
+  # impronte nuove; la scoperta jsonld cerca sitemap + JobPosting.
+  nice -n 10 $PY -m nivult.ats.detector --ripassa --limite 600 --thread 24 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
+  nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite 300 --thread 16 2>&1 | tail -1 || true
   # Render detector (Chrome headless) una volta al giorno: sul server era il
   # piu' goloso di RAM (8 processi uccisi dal kernel il 05/09); qui ha 48 GB
   # e un IP residenziale che i career site bloccano meno.
