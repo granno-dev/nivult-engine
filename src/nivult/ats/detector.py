@@ -318,6 +318,21 @@ def _url_piattaforma_in_html(html: str) -> tuple[str, str, str] | None:
     return None
 
 
+def _connetti(dsn: str, tentativi: int = 5):
+    """Una connessione con ritentativo: il detector ne apre una per
+    dominio, e un solo timeout (07/09/2026, 308 domini su 2.000) ammazzava
+    l'intero giro. Cinque tentativi con attesa crescente, poi si alza."""
+    import time as _t
+    ultimo = None
+    for k in range(tentativi):
+        try:
+            return psycopg.connect(dsn, connect_timeout=15)
+        except psycopg.OperationalError as exc:
+            ultimo = exc
+            _t.sleep(2 * (k + 1))
+    raise ultimo
+
+
 def _registra_azienda(dsn: str, piattaforma: str, slug: str,
                       nome: str | None, paese: str | None,
                       url_piattaforma: str = "") -> None:
@@ -330,7 +345,7 @@ def _registra_azienda(dsn: str, piattaforma: str, slug: str,
         if m:
             wd_server = m.group(1)
             wd_instance = m.group(2)
-    with psycopg.connect(dsn) as conn:
+    with _connetti(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO ats_companies
@@ -376,6 +391,19 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
                 kind = "custom"
                 esito = "ats"
                 html_carriere = r.text
+                if not hit and not _url_piattaforma_in_html(r.text):
+                    # l'impronta c'e' (uno script Ashby in homepage) ma lo
+                    # slug no: sta un clic piu' in la', sulla pagina carriere
+                    # (2l.vc → /jobs → jobs.ashbyhq.com/revenuebase-inc)
+                    for url in _link_carriere(str(r.url), r.text)[:3]:
+                        try:
+                            rc = client.get(url)
+                        except httpx.HTTPError:
+                            continue
+                        if rc.status_code == 200 and _url_piattaforma_in_html(rc.text):
+                            html_carriere = rc.text
+                            careers_url = str(rc.url)
+                            break
             else:
                 # 2) segue il link carriere
                 link = _link_carriere(str(r.url), r.text)
@@ -570,15 +598,19 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
             else:
                 stats[esito if esito in stats else "error"] += 1
 
-            with psycopg.connect(dsn) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE company_domains SET status = %s,
-                          platform_id = %s, careers_url = %s,
-                          careers_kind = %s, checked_at = now()
-                        WHERE domain = %s
-                    """, (esito, piattaforma, careers_url, kind, dominio))
-                conn.commit()
+            try:
+                with _connetti(dsn) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE company_domains SET status = %s,
+                              platform_id = %s, careers_url = %s,
+                              careers_kind = %s, checked_at = now()
+                            WHERE domain = %s
+                        """, (esito, piattaforma, careers_url, kind, dominio))
+                    conn.commit()
+            except psycopg.OperationalError as exc:
+                log.warning("  %s: database non raggiungibile, salto (%s)", dominio, exc)
+                stats["error"] += 1
 
             if stats["visitati"] % 500 == 0:
                 log.info("  … %d visitati: %s", stats["visitati"], stats)
@@ -646,15 +678,19 @@ def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
             else:
                 stats[esito if esito in stats else "error"] += 1
 
-            with psycopg.connect(dsn) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE company_domains SET status = %s,
-                          platform_id = %s, careers_url = %s,
-                          careers_kind = %s, checked_at = now()
-                        WHERE domain = %s
-                    """, (esito, piattaforma, careers_url, kind, dominio))
-                conn.commit()
+            try:
+                with _connetti(dsn) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE company_domains SET status = %s,
+                              platform_id = %s, careers_url = %s,
+                              careers_kind = %s, checked_at = now()
+                            WHERE domain = %s
+                        """, (esito, piattaforma, careers_url, kind, dominio))
+                    conn.commit()
+            except psycopg.OperationalError as exc:
+                log.warning("  %s: database non raggiungibile, salto (%s)", dominio, exc)
+                stats["error"] += 1
             if stats["visitati"] % 50 == 0:
                 log.info("  … %d renderizzati: %s", stats["visitati"], stats)
     return stats
