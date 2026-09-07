@@ -470,19 +470,26 @@ def arricchisci_da_azienda(dsn: str) -> dict:
 
         aggiorna: list[tuple] = [(ev, jid) for jid, _, ev in con_evidenza]
         for jid, chiave, paese, pid in senza:
-            voluto = dominante.get(chiave)
-            if paese is not None and pid in PIATTAFORME_RAW_PAESE:
-                # Un paese gia' scritto su queste piattaforme puo' venire
-                # dal raw: e' evidenza, non timbro. Non si tocca.
+            if paese is not None:
+                # Un paese gia' scritto su una riga SENZA localita' non
+                # puo' venire dal testo: viene dal raw dell'adapter, dall'URL
+                # (Phenom /gb/en/job/), dal servizio nazionale. E' evidenza,
+                # non timbro — e il «timbro dalla sede» che questo ramo
+                # doveva cancellare non esiste piu' da settimane. Il
+                # 07/09/2026 questo azzeramento ha cancellato 37.321 paesi
+                # buoni in una notte (15.009 Phenom appena ricavati
+                # dall'URL) e le offerte senza paese sono SALITE da 150k a
+                # 172k. Non si azzera mai: al massimo si riempie.
                 continue
-            if voluto != paese:
+            voluto = dominante.get(chiave)
+            if voluto is not None:
                 aggiorna.append((voluto, jid))
 
         _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
 
     da_evidenza = len(con_evidenza)
-    riempiti = sum(1 for v, _ in aggiorna if v is not None) - da_evidenza
-    azzerati = sum(1 for v, _ in aggiorna if v is None)
+    riempiti = len(aggiorna) - da_evidenza
+    azzerati = 0
     log.info("da_azienda: %d da evidenza diretta, %d col dominante "
              "dell'azienda, %d senza evidenza azzerati (aziende con "
              "dominante: %d)", da_evidenza, riempiti, azzerati, len(dominante))
