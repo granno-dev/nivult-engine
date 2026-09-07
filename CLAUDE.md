@@ -964,6 +964,7 @@ python scripts/check_modules.py          # lo strato Python committa davvero? (s
 python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
 python scripts/check_oauth.py            # OAuth: state, claim, collegamento (solo db _test/_dev)
 python scripts/delete_user.py --user-id <uuid>
+python -m nivult.ats.runner --schema      # applica schema.sql dell'ATS (una volta a notte; MAI a ogni lotto: lock esclusivi, 47 deadlock/giorno il 07/09)
 python scripts/ponte_ats.py --dry-run     # travaso ATS -> funnel, senza scrivere
 python scripts/ponte_ats.py               # travasa
 python scripts/purge_jobs.py --dry-run    # retention offerte morte
