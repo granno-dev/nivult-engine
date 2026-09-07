@@ -26,6 +26,40 @@ from datetime import datetime
 import httpx
 import psycopg
 
+
+def _scrivi_a_lotti(conn, sql: str, righe: list, lotto: int = 200, tentativi: int = 6) -> int:
+    """Gli UPDATE su ats_jobs a lotti PICCOLI, in ordine di id, con
+    ritentativo sui deadlock.
+
+    Un executemany da migliaia di righe in una transazione sola tiene
+    lock di riga in ordine sparso per secondi, mentre lo sprint e lo
+    scraper aggiornano le stesse righe nel loro ordine: e' un deadlock
+    garantito (07/09/2026: «arricchisci paese» fallito quattro notti di
+    fila). Lotti da 200 in ordine di id chiudono in millisecondi, e se
+    il kernel di Postgres sceglie noi come vittima si riprova quel lotto
+    e basta, senza perdere il lavoro dei precedenti.
+    """
+    if not righe:
+        return 0
+    righe = sorted(righe, key=lambda r: str(r[-1]))
+    fatte = 0
+    for i in range(0, len(righe), lotto):
+        parte = righe[i:i + lotto]
+        for k in range(tentativi):
+            try:
+                with conn.cursor() as cur:
+                    cur.executemany(sql, parte)
+                conn.commit()
+                fatte += len(parte)
+                break
+            except psycopg.errors.DeadlockDetected:
+                conn.rollback()
+                if k == tentativi - 1:
+                    raise
+                import time as _t
+                _t.sleep(0.5 * (k + 1))
+    return fatte
+
 log = logging.getLogger("nivult.ats.arricchisci")
 
 ATS_DSN = os.environ.get(
@@ -134,9 +168,7 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                 log.info("  … %d lette: %s", i + 1, stats)
 
     with psycopg.connect(dsn) as conn:
-        for jid, dati in risultati:
-            with conn.cursor() as cur:
-                cur.execute("""
+        _scrivi_a_lotti(conn, """
                     UPDATE ats_jobs
                        SET country = COALESCE(country, %s),
                            city = COALESCE(city, %s),
@@ -146,10 +178,8 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                                  ELSE jsonb_set(raw, '{description}',
                                       to_jsonb(%s::text), true) END
                      WHERE id = %s
-                """, (dati.get("country"), dati.get("city"),
-                      dati.get("city"), dati.get("posted_at"),
-                      dati.get("description") or "", jid))
-        conn.commit()
+                """, [(dati.get("country"), dati.get("city"), dati.get("city"), dati.get("posted_at"),
+                       dati.get("description") or "", jid) for jid, dati in risultati], lotto=50)
     return stats
 
 
@@ -254,10 +284,7 @@ def arricchisci_da_localita(dsn: str) -> dict:
                     riempiti += 1
                 else:
                     corretti += 1
-        with conn.cursor() as cur:
-            cur.executemany(
-                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
-        conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
     log.info("da_localita: %d riempiti, %d corretti dal testo",
              riempiti, corretti)
     return {"riempiti": riempiti, "corretti": corretti}
@@ -364,10 +391,7 @@ def arricchisci_da_azienda(dsn: str) -> dict:
             if voluto != paese:
                 aggiorna.append((voluto, jid))
 
-        with conn.cursor() as cur:
-            cur.executemany(
-                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
-        conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
 
     da_evidenza = len(con_evidenza)
     riempiti = sum(1 for v, _ in aggiorna if v is not None) - da_evidenza
@@ -410,15 +434,7 @@ def arricchisci_da_geonames(dsn: str, limite: int = 100_000) -> dict:
             iso = paese_da_localita(loc) or paese_da_localita(city)
             if iso:
                 aggiorna.append((iso, jid))
-        # a blocchi: l'arretrato e' grande, un unico executemany va bene
-        # ma il commit periodico protegge il lavoro se il giro si spezza
-        with conn.cursor() as cur:
-            for i in range(0, len(aggiorna), 5000):
-                cur.executemany(
-                    "UPDATE ats_jobs SET country = %s WHERE id = %s",
-                    aggiorna[i:i + 5000])
-                conn.commit()
-        riempiti = len(aggiorna)
+        riempiti = _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
     log.info("da_geonames: %d offerte geocodificate su %d senza paese",
              riempiti, len(righe))
     return {"riempiti": riempiti, "esaminate": len(righe)}
@@ -484,11 +500,7 @@ def arricchisci_francetravail(dsn: str) -> dict:
                     riempiti += 1
                 else:
                     corretti += 1
-        with conn.cursor() as cur:
-            for i in range(0, len(aggiorna), 5000):
-                cur.executemany("UPDATE ats_jobs SET country=%s WHERE id=%s",
-                                aggiorna[i:i + 5000])
-                conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country=%s WHERE id=%s", aggiorna)
     log.info("francetravail: %d riempiti, %d corretti dal codice dipartimento",
              riempiti, corretti)
     return {"riempiti": riempiti, "corretti": corretti}
@@ -554,16 +566,8 @@ def arricchisci_workday(dsn: str, limite: int = 100_000) -> dict:
                 sede = _loc_da_path_workday(ep)
                 if sede:
                     agg_loc.append((sede, jid))
-        with conn.cursor() as cur:
-            for i in range(0, len(agg_paese), 5000):
-                cur.executemany("UPDATE ats_jobs SET country=%s WHERE id=%s",
-                                agg_paese[i:i + 5000])
-                conn.commit()
-            for i in range(0, len(agg_loc), 5000):
-                cur.executemany("UPDATE ats_jobs SET location=%s WHERE id=%s",
-                                agg_loc[i:i + 5000])
-                conn.commit()
-        loc_migliorate = len(agg_loc)
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country=%s WHERE id=%s", agg_paese)
+        loc_migliorate = _scrivi_a_lotti(conn, "UPDATE ats_jobs SET location=%s WHERE id=%s", agg_loc)
     log.info("workday: %d riempiti, %d corretti, %d localita' «N Locations» "
              "sostituite, su %d esaminate", riempiti, corretti,
              loc_migliorate, len(righe))
