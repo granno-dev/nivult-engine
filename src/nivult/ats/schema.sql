@@ -244,3 +244,6 @@ ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS jsonld_checked_at TIMESTAMP
 -- nivult-v1 (07/09/2026): marcatore proprio, separato da locale_at di v0, cosi' v1 rivede tutto.
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS locale_v1_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS ats_jobs_locale_v1_idx ON ats_jobs (posted_at DESC) WHERE expired_at IS NULL AND locale_v1_at IS NULL;
+-- campi dichiarati dall'ATS (07/09/2026): marcatore del passo nivult.ats.dichiarati
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS dichiarati_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS ats_jobs_dichiarati_idx ON ats_jobs (fetched_at DESC) WHERE expired_at IS NULL AND dichiarati_at IS NULL;

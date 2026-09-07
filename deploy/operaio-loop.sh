@@ -64,6 +64,9 @@ while true; do
     nohup nice -n 5 $PY -m nivult.ats.classifica_v1 --continuo >> /opt/nivult/engine/logs/classifica-v1.log 2>&1 &
     echo "-- nivult-v1 avviato come demone"
   fi
+  # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
+  # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
+  nice -n 10 $PY -m nivult.ats.dichiarati --limite 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
