@@ -34,6 +34,10 @@ while true; do
   # NAV (Norvegia): feed di eventi dal cursore; le INACTIVE scadono subito,
   # come chiedono i termini d'uso
   "$PY" -m nivult.ats.servizi_pubblici --nav --limite 3000 2>&1 | tail -1 || true
+  # Il rubinetto SmartRecruiters: la vetrina del fornitore mostra sempre le
+  # ~96 offerte piu' recenti del mondo con l'identificativo del tenant.
+  # Letta ogni giro, enumera nel tempo chi pubblica (07/09/2026).
+  "$PY" scripts/censimento_smartrecruiters.py 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \
