@@ -32,6 +32,9 @@ while true; do
   # le aziende senza ATS: sitemap delle offerte + JSON-LD (150 domini a giro,
   # ~1.000 l'ora; i 38.000 «no_ats» in un giorno e mezzo, poi solo i nuovi)
   "$PY" -m nivult.ats.jsonld --scopri --limite 150 2>&1 | tail -1 || true
+  # NAV (Norvegia): feed di eventi dal cursore; le INACTIVE scadono subito,
+  # come chiedono i termini d'uso
+  "$PY" -m nivult.ats.servizi_pubblici --nav --limite 3000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \

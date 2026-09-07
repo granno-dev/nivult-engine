@@ -468,6 +468,149 @@ def scarica_francetravail_rome(dsn: str, limite_per_rome: int = 3000) -> dict:
 
 # ── STATISTICHE ────────────────────────────────────────────────────
 
+# ── NAV / ARBEIDSPLASSEN (Norvegia) ────────────────────────────────
+
+NAV_FEED = "https://pam-stilling-feed.nav.no/api/v1/feed"
+NAV_TOKEN = "https://pam-stilling-feed.nav.no/api/publicToken"
+NAV_CURSORE = "/opt/nivult/nav-cursore.txt"
+# engagementtype/extent di NAV -> il nostro vocabolario dei contratti
+_NAV_TIPO = {"fast": "full_time", "vikariat": "temporary", "engasjement": "contract",
+             "prosjekt": "contract", "sesong": "temporary", "lærling": "apprenticeship",
+             "trainee": "internship", "selvstendig": "contract", "åremål": "contract",
+             "annet": None}
+
+
+def _nav_token(client: httpx.Client) -> str | None:
+    """Il token PUBBLICO di prova (ruota senza preavviso). Quello privato
+    si chiede a nav.team.arbeidsplassen@nav.no accettando i termini:
+    NAV_TOKEN_PRIVATO nell'ambiente ha la precedenza."""
+    priv = os.environ.get("NAV_TOKEN_PRIVATO")
+    if priv:
+        return priv.strip()
+    try:
+        r = client.get(NAV_TOKEN)
+        m = re.search(r"eyJ[A-Za-z0-9._-]+", r.text)
+        return m.group(0) if m else None
+    except httpx.HTTPError:
+        return None
+
+
+def scarica_nav(dsn: str, limite: int = 2000) -> dict:
+    """NAV Job Vacancy Feed — il pubblico impiego norvegese, gratis.
+
+    Un feed di EVENTI (JSON Feed, 1000 per pagina, `next_url`): ogni voce
+    e' «l'annuncio X e' ACTIVE/INACTIVE da quest'ora». Si legge da dove
+    si era rimasti (If-Modified-Since dal cursore), per le voci ACTIVE si
+    scarica il dettaglio (`/api/v1/feedentry/{uuid}`: titolo, testo,
+    datore, sede, date, ESCO, e spesso l'URL di candidatura sull'ATS del
+    datore), per le INACTIVE si marca scaduta — i termini d'uso lo
+    chiedono («rimuovere subito gli annunci non piu' attivi»), e per noi
+    e' una scadenza dichiarata dalla fonte, la piu' onesta che ci sia.
+    Termini: repubblicazione consentita con link alla candidatura
+    originale (link_kind national_agency); rivendita non contemplata —
+    fuori dal dataset in vendita finche' non lo chiediamo.
+    """
+    stats = {"eventi": 0, "attive": 0, "nuove": 0, "aggiornate": 0, "scadute": 0, "errori": 0}
+    try:
+        da = open(NAV_CURSORE).read().strip()
+    except OSError:
+        da = (datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=26)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    with httpx.Client(timeout=30, headers={"User-Agent": "nivult-ats/0.1 (+https://nivult.com)"},
+                      follow_redirects=True) as c:
+        token = _nav_token(c)
+        if not token:
+            log.warning("NAV: nessun token"); stats["errori"] += 1; return stats
+        c.headers["Authorization"] = f"Bearer {token}"
+        url = NAV_FEED
+        intest = {"If-Modified-Since": da}
+        ultimo_visto = None
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            conn.execute("""INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+                            VALUES ('nav', 'NAV Arbeidsplassen (Norvegia)', true, 'json',
+                                    'feed pubblico di eventi + dettaglio; scadenze dichiarate dalla fonte')
+                            ON CONFLICT (id) DO NOTHING""")
+            while url and stats["eventi"] < limite:
+                try:
+                    r = c.get(url, headers=intest)
+                except httpx.HTTPError as exc:
+                    log.warning("NAV feed: %s", exc); stats["errori"] += 1; break
+                if r.status_code == 304:
+                    break
+                if r.status_code != 200:
+                    log.warning("NAV feed HTTP %d", r.status_code); stats["errori"] += 1; break
+                d = r.json()
+                voci = d.get("items") or []
+                if not voci:
+                    break
+                for v in voci:
+                    fe = v.get("_feed_entry") or {}
+                    uuid, stato = fe.get("uuid"), fe.get("status")
+                    if not uuid:
+                        continue
+                    stats["eventi"] += 1
+                    ultimo_visto = v.get("date_modified") or ultimo_visto
+                    if stato != "ACTIVE":
+                        n = conn.execute("UPDATE ats_jobs SET expired_at = now() WHERE platform_id='nav' AND external_id=%s "
+                                         "AND expired_at IS NULL", (uuid,)).rowcount
+                        stats["scadute"] += n
+                        continue
+                    stats["attive"] += 1
+                    try:
+                        rd = c.get(f"https://pam-stilling-feed.nav.no{v.get('url') or '/api/v1/feedentry/' + uuid}")
+                        ad = (rd.json() or {}).get("ad_content") if rd.status_code == 200 else None
+                    except (httpx.HTTPError, ValueError):
+                        ad = None
+                    if not ad or not (ad.get("title") or "").strip():
+                        stats["errori"] += 1
+                        continue
+                    sede = (ad.get("workLocations") or [{}])[0] or {}
+                    citta = (sede.get("city") or sede.get("municipal") or "").title() or None
+                    paese = "NO" if (sede.get("country") or "NORGE").upper() in ("NORGE", "NORWAY", "NO") else None
+                    tipo = _NAV_TIPO.get((ad.get("engagementtype") or "").strip().lower())
+                    if tipo == "full_time" and (ad.get("extent") or "").lower().startswith("deltid"):
+                        tipo = "part_time"
+                    try:
+                        pub = datetime.fromisoformat(str(ad.get("published")).replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pub = None
+                    datore = (ad.get("employer") or {}).get("name") if isinstance(ad.get("employer"), dict) else None
+                    raw = {k: ad.get(k) for k in ("title", "description", "published", "expires", "updated", "employer",
+                                                  "workLocations", "engagementtype", "extent", "positioncount",
+                                                  "sector", "categoryList", "applicationUrl", "link", "source",
+                                                  "jobtitle", "applicationDue")}
+                    if datore:
+                        raw["company"] = {"name": datore}
+                    r2 = conn.execute("""
+                        INSERT INTO ats_jobs (platform_id, slug, external_id, title, url, location, country, city,
+                                              posted_at, employment_type, raw)
+                        VALUES ('nav', 'arbeidsplassen', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                          title = EXCLUDED.title, url = EXCLUDED.url, location = EXCLUDED.location,
+                          city = EXCLUDED.city, posted_at = COALESCE(EXCLUDED.posted_at, ats_jobs.posted_at),
+                          employment_type = COALESCE(EXCLUDED.employment_type, ats_jobs.employment_type),
+                          raw = EXCLUDED.raw, expired_at = NULL, fetched_at = now()
+                        RETURNING (xmax = 0) AS is_new
+                    """, (uuid, (ad.get("title") or "")[:300],
+                          (ad.get("applicationUrl") or ad.get("link") or f"https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}")[:1000],
+                          citta, paese, citta, pub, tipo, psycopg.types.json.Json(senza_nulli(raw)))).fetchone()
+                    if r2 and r2[0]:
+                        stats["nuove"] += 1
+                    else:
+                        stats["aggiornate"] += 1
+                nxt = d.get("next_url")
+                url = ("https://pam-stilling-feed.nav.no" + nxt) if nxt and nxt.startswith("/") else nxt
+                intest = {}   # dalla seconda pagina in poi si segue next_url, senza If-Modified-Since
+        if ultimo_visto:
+            try:
+                dt = datetime.fromisoformat(ultimo_visto)
+                with open(NAV_CURSORE, "w") as f:
+                    f.write(dt.astimezone(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT"))
+            except (ValueError, OSError):
+                pass
+    log.info("NAV: %s", stats)
+    return stats
+
+
 def stats(dsn: str) -> None:
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -614,6 +757,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="scarica FT per codeROME (25+ famiglie, fino a 75k)")
     ap.add_argument("--eures", action="store_true",
                     help="EURES, il portale UE: la fonte che copre l'Italia")
+    ap.add_argument("--nav", action="store_true",
+                    help="NAV Arbeidsplassen (Norvegia): feed di eventi + dettaglio, scadenze dalla fonte")
     ap.add_argument("--paesi", default="IT",
                     help="paesi per --eures, separati da virgola")
     ap.add_argument("--limite", type=int, default=1000)
@@ -636,11 +781,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.bundesanstellung:
         s = scarica_bundesagentur(ATS_DSN, args.limite)
         print(f"\nBundesagentur: {s}")
+    if args.nav:
+        s = scarica_nav(ATS_DSN, args.limite)
+        print(f"\nNAV: {s}")
     if args.stats:
         stats(ATS_DSN)
     if not (args.arbetsformedlingen or args.francetravail
             or args.bundesanstellung or args.francetravail_rome
-            or args.stats or args.eures):
+            or args.stats or args.eures or args.nav):
         ap.print_help()
     return 0
 
