@@ -26,10 +26,8 @@ while true; do
   if [ $((i % 6)) -eq 0 ]; then
     "$PY" -m nivult.ats.riscoperta 2>&1 | tail -1 || true
   fi
-  "$PY" -m nivult.ats.detector --rileva --limite 800 --thread 20 2>&1 \
-    | tail -1 || true
   "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
-  # la scoperta jsonld e il ripasso del detector girano sul N5 (operaio-loop.sh):
+  # il detector (pending e ripasso) e la scoperta jsonld girano sul N5 (operaio-loop.sh):
   # sono crawling a molti thread, e sul server a 4 vCPU hanno portato il carico a 33
   # NAV (Norvegia): feed di eventi dal cursore; le INACTIVE scadono subito,
   # come chiedono i termini d'uso

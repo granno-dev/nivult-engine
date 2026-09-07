@@ -62,6 +62,10 @@ while true; do
   # migliaia di siti diversi, che sul server a 4 vCPU portava il carico a 33
   # (07/09/2026). Il ripasso del detector rilegge i domini «no_ats» con le
   # impronte nuove; la scoperta jsonld cerca sitemap + JobPosting.
+  # I domini nuovi (pending: censimento CC, bacheche dei fornitori, certificati)
+  # prima, poi il ripasso dei no_ats. Stava nel volano del server (800 ogni
+  # 10 min): col censimento europeo da centomila domini serve il N5.
+  nice -n 10 $PY -m nivult.ats.detector --rileva --limite 1500 --thread 24 2>&1 | grep -E "Detector|visitati|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.detector --ripassa --limite 600 --thread 24 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
   nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite 300 --thread 16 2>&1 | tail -1 || true
   # Il paese delle offerte, ogni 6 ore e non solo di notte: dal testo
