@@ -146,6 +146,7 @@ def _controlli() -> list[Condizione]:
                                         f"ultimo battito {int(eta_s//3600)}h fa: N5 spento, Tailscale giu' o ciclo bloccato"))
             # lo sprint: unita' giu' con coda piena e non per fine/credito
             if sub(["systemctl", "is-active", "nivult-sprint"]) != "active" \
+                    and not os.path.exists("/opt/nivult/glm-corpus.spento") \
                     and db.execute("SELECT to_regclass('sprint_coda')").fetchone()[0]:
                 n = db.execute("SELECT count(*) FROM sprint_coda").fetchone()[0]
                 coda = open("/opt/nivult/engine/logs/sprint-glm.log", errors="replace").read()[-1500:]

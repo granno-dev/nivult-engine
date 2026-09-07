@@ -263,10 +263,12 @@ echo "── classificatore a livelli (tetto 400 chiamate GLM)"
 # dal kernel alle 04:20 del 2026-09-06 insieme all'estrai_extra delle 04:30.
 # Il loop continuo gira a 60k senza problemi. E finché lo sprint GLM lavora
 # (classifica gia' tutto, con la rubrica), qui non c'e' niente da fare.
+GLM_LIVELLI=400
+[ -f /opt/nivult/glm-corpus.spento ] && GLM_LIVELLI=0    # interruttore: solo dizionario, zero chiamate
 if ps -eo cmd | grep -q "[.]venv/bin/python /opt/nivult/sprint_glm[.]py"; then
   echo "   saltato: lo sprint GLM sta classificando tutto"
 else
-  "$PY" -m nivult.ats.classificatore_livelli --limite 60000 --glm-max 400 \
+  "$PY" -m nivult.ats.classificatore_livelli --limite 60000 --glm-max "$GLM_LIVELLI" \
     >> "$LOG_DIR/ats-nightly.log" 2>&1 \
     && echo "   ok" || echo "   FALLITO"
 fi

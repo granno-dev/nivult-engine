@@ -79,7 +79,7 @@ def cura(problemi: list[str]) -> list[str]:
         if p.startswith("scrape fermo") and "scrape" not in gia:
             gia.add("scrape")
             fatte.append(_riavvia("nivult-scrape")); fatte.append(_riavvia("nivult-scrape-veloce")); continue
-        if p.startswith("sprint fermo") and "sprint" not in gia:
+        if p.startswith("sprint fermo") and "sprint" not in gia and not os.path.exists("/opt/nivult/glm-corpus.spento"):
             gia.add("sprint")
             rc, out = _sh([f"{BASE}/deploy/sprint.sh", "start"], timeout=30)
             fatte.append(f"sprint rilanciato: {out.splitlines()[-1] if out else rc}"); continue

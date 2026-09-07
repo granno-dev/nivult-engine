@@ -13,6 +13,7 @@ BASE=/opt/nivult/engine
 case "${1:-status}" in
   start)
     if systemctl is-active --quiet "$UNIT"; then echo "gia' in esecuzione"; exit 0; fi
+    if [ -f /opt/nivult/glm-corpus.spento ]; then echo "GLM sul corpus e' spento (/opt/nivult/glm-corpus.spento): sprint non avviato"; exit 0; fi
     PW=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
     GLM=$(grep -E '^GLM_API_KEY=' "$BASE/.env" | cut -d= -f2-)
     systemd-run --unit="$UNIT" --collect --quiet \
