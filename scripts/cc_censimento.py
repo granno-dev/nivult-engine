@@ -9,9 +9,12 @@ con=duckdb.connect(); con.execute("INSTALL httpfs; LOAD httpfs; SET threads=8;")
 TLD = "('it','fr','de','es','nl','be','at','ch','pt','pl','se','dk','no','fi','ie','uk','lu','cz','hu','ro','gr')"
 PAROLE = ["lavora-con-noi","lavora_con_noi","lavoraconnoi","posizioni-aperte","/carriere","/careers","/career/","/jobs","/job-","/candidati","opportunita-di-lavoro","entra-in-","recrutement","nous-rejoindre","rejoignez","offres-d-emploi","/carrieres","/emplois","karriere","stellenangebote","/stellen","jobs-und-karriere","trabaja-con-nosotros","/empleo","ofertas-de-empleo","unete","werken-bij","/vacatures","kariera","/praca","ledige-stillinger","/jobb","lediga-jobb","avoimet-tyopaikat","tyopaikat","/vacancies","join-us","joinus","/hiring"]
 where_path = " OR ".join(f"url_path ILIKE '%{p}%'" for p in PAROLE)
-out = open("/opt/nivult/cc_carriere.csv", "w", newline=""); w = csv.writer(out)
+INIZIO = int(sys.argv[2]) if len(sys.argv) > 2 else 0     # ripresa dopo un'interruzione
+out = open("/opt/nivult/cc_carriere.csv", "a" if INIZIO else "w", newline=""); w = csv.writer(out)
 t0=time.time(); tot=0
 for i, f in enumerate(paths):
+    if i < INIZIO:
+        continue
     t=time.time()
     try:
         rows=con.execute(f"""SELECT DISTINCT url_host_registered_domain, url_host_tld, url_host_name, url_path
