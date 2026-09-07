@@ -80,34 +80,37 @@ def main() -> int:
             if punti < d["punti"]:
                 d["punti"] = punti
                 d["url"] = f"https://{host}{path}"
-    print(f"righe {n}, domini {len(per_dominio)}")
+    print(f"righe {n}, domini {len(per_dominio)}", flush=True)
     per_tld = collections.Counter(d["tld"] for d in per_dominio.values())
-    print("per TLD:", dict(per_tld.most_common(12)))
+    print("per TLD:", dict(per_tld.most_common(12)), flush=True)
 
     righe = [(dom, PAESE_TLD.get(d["tld"], d["tld"].upper()), d["url"])
              for dom, d in per_dominio.items() if d["n"] >= a.min_url]
     dsn = os.environ["ATS_DATABASE_URL"]
-    with psycopg.connect(dsn) as conn:
-        stats = {"nuovi": 0, "arricchiti": 0}
-        with conn.cursor() as cur:
-            for i in range(0, len(righe), 1000):
-                parte = righe[i:i + 1000]
-                cur.executemany("""
-                    INSERT INTO company_domains (domain, country, careers_url, source, status)
-                    VALUES (%s, %s, %s, 'cc_carriere', 'pending')
-                    ON CONFLICT (domain) DO UPDATE SET
-                      country = COALESCE(company_domains.country, EXCLUDED.country),
-                      careers_url = COALESCE(company_domains.careers_url, EXCLUDED.careers_url)
-                """, parte)
-            cur.execute("SELECT count(*) FROM company_domains WHERE source = 'cc_carriere'")
-            stats["nuovi"] = cur.fetchone()[0]
-            cur.execute("SELECT count(*) FROM company_domains WHERE source <> 'cc_carriere' AND country IS NOT NULL "
-                        "AND domain = ANY(%s)", ([r[0] for r in righe],))
-            stats["arricchiti"] = cur.fetchone()[0]
-        if a.dry_run:
-            conn.rollback()
-        else:
+    # Una COPY in una tabella temporanea e UN solo INSERT … ON CONFLICT: a
+    # lotti di executemany sulla Tailscale (N5 → Hetzner) 300k righe non
+    # finivano in 25 minuti; cosi' in due.
+    with psycopg.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute("CREATE TEMP TABLE cc_tmp (domain text, country text, careers_url text)")
+        with cur.copy("COPY cc_tmp FROM STDIN") as cp:
+            for r in righe:
+                cp.write_row(r)
+        cur.execute("SELECT count(*) FROM cc_tmp t WHERE NOT EXISTS (SELECT 1 FROM company_domains c WHERE c.domain = t.domain)")
+        nuovi = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM cc_tmp t JOIN company_domains c ON c.domain = t.domain WHERE c.country IS NULL")
+        senza_paese = cur.fetchone()[0]
+        stats = {"domini": len(righe), "nuovi": nuovi, "gia_censiti_senza_paese": senza_paese}
+        print("prima di scrivere:", stats, flush=True)
+        if not a.dry_run:
+            cur.execute("""
+                INSERT INTO company_domains (domain, country, careers_url, source, status)
+                SELECT DISTINCT ON (domain) domain, country, careers_url, 'cc_carriere', 'pending' FROM cc_tmp
+                ON CONFLICT (domain) DO UPDATE SET
+                  country = COALESCE(company_domains.country, EXCLUDED.country),
+                  careers_url = COALESCE(company_domains.careers_url, EXCLUDED.careers_url)""")
             conn.commit()
+        else:
+            conn.rollback()
     print("Censimento CC carriere:", stats, "(dry-run)" if a.dry_run else "")
     return 0
 
