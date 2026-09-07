@@ -243,7 +243,7 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
     with psycopg.connect(dsn) as conn:
         _scrivi_a_lotti(conn, """
                     UPDATE ats_jobs
-                       SET country = COALESCE(country, %s),
+                       SET country = COALESCE(%s, country),   -- la pagina vince sull'URL: Arla mette /gb/en/ anche su Utrecht (1,3%% dei casi, misurato)
                            city = COALESCE(city, %s),
                            location = COALESCE(location, %s),
                            posted_at = COALESCE(posted_at, %s),
