@@ -27,6 +27,10 @@ import psycopg
 from nivult.ats.modello_v1 import ModelloV1, testo
 
 SOGLIA_RIPIEGO = float(os.environ.get("SOGLIA_RIPIEGO_V1", "0.85"))
+# Il contratto e' la testa piu' debole (83,9% all'esame) e sbaglia in modo
+# vistoso: «Lead Product Engineer» → internship con confidenza sopra 0,85
+# (campione del 07/09/2026 sera). Per scriverlo si pretende molto di piu'.
+SOGLIA_CONTRATTO = float(os.environ.get("SOGLIA_CONTRATTO_V1", "0.97"))
 LOTTO = int(os.environ.get("LOTTO_V1", "32"))
 
 
@@ -68,7 +72,7 @@ def main() -> int:
                             st["incerte"] += 1
                     if sen is None and p["seniority"][1] >= SOGLIA_RIPIEGO:
                         sen_rows.append((p["seniority"][0], jid))
-                    if con is None and p["employment_type"][1] >= SOGLIA_RIPIEGO:
+                    if con is None and p["employment_type"][1] >= SOGLIA_CONTRATTO:
                         con_rows.append((p["employment_type"][0], jid))
                     if rem is None and p["remote"][1] >= SOGLIA_RIPIEGO:
                         rem_rows.append((p["remote"][0], jid))
