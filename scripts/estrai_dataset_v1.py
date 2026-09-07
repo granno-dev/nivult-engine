@@ -86,6 +86,9 @@ def main() -> int:
     ap.add_argument("--dopo", default="2026-09-06T08:30:00+00:00")
     ap.add_argument("--escludi-piattaforme", default="",
                     help="piattaforme da tenere FUORI (virgole): per quelle il cui testo non e' affidabile")
+    ap.add_argument("--escludi-chimere", default="icims,workday,cornerstone,eploy,traffit,pinpoint,vincere",
+                    help="piattaforme con id PER TENANT: una riga il cui URL non contiene lo slug e' una chimera "
+                         "(titolo/URL di un tenant, testo di un altro: chiave (piattaforma, external_id) in collisione)")
     ap.add_argument("--golden-mano", default=None)
     ap.add_argument("--out", default="/opt/nivult/v1")
     a = ap.parse_args()
@@ -107,6 +110,17 @@ def main() -> int:
         # ARRAY[...] e non '{...}': SEL passa da .format(), e le graffe lo rompono
         SEL += " AND NOT (j.platform_id = ANY(ARRAY[" + ",".join("'%s'" % p.replace("'", "") for p in escluse) + "]))"
         print(f"  piattaforme escluse: {escluse}", flush=True)
+    # Le CHIMERE (07/09/2026): su iCIMS, Workday e simili l'id dell'annuncio
+    # e' unico per TENANT, ma la chiave dell'archivio e' (piattaforma, id):
+    # il job 14145 di un tenant sovrascrive titolo e URL del 14145 di un
+    # altro e il testo resta quello vecchio. Misurato: iCIMS 33%, Workday
+    # 7% delle attive con URL di un altro tenant. Fuori dal dataset finche'
+    # la chiave non diventa (piattaforma, tenant, id).
+    chimere = [p.strip() for p in a.escludi_chimere.split(",") if p.strip() and p.strip() not in escluse]
+    if chimere:
+        SEL += (" AND NOT (j.platform_id = ANY(ARRAY[" + ",".join("'%s'" % p.replace("'", "") for p in chimere)
+                + "]) AND j.url NOT ILIKE '%%' || j.slug || '%%')")
+        print(f"  chimere escluse (URL senza slug) su: {chimere}", flush=True)
     print("estrazione rubrica...", flush=True)
     rubrica = c.execute(SEL.format(modello="x.model = 'glm-5.3-flash'") + " AND j.sprint_at >= %s",
                         (a.dopo,)).fetchall()
