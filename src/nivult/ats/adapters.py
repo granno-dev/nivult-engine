@@ -165,9 +165,10 @@ class BaseAdapter:
             raise LetturaFallita(r.status_code, str(r.url))
         if r.status_code == 200:
             r.read()
-            ct = r.headers.get("content-type", "")
-            if "html" in ct or "json" in ct or "xml" in ct or not ct:
-                self.ultima_pagina = r.text
+            # qualunque content-type: e' il ripiego e l'officina a decidere
+            # se ci si capisce qualcosa (una pagina «vuota» per un
+            # content-type strano aveva lasciato l'officina senza campione)
+            self.ultima_pagina = r.text
 
     def close(self):
         self.client.close()

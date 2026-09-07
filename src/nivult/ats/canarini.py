@@ -148,7 +148,18 @@ def controlla(dsn: str, solo: str | None = None) -> dict:
                               "canarini": [{"slug": s, "attese": a, "campione": c} for s, a, t, c in esiti]})
             elif esiti and not riuscite:
                 bloccate.append({"piattaforma": pid, "canarini": len(esiti)})
+    # «Rotta» per l'officina solo se lo era ANCHE al giro prima: un vuoto
+    # transitorio del portale (crelate, 07/09/2026 03:35: SPA a 200 senza
+    # GUID su tutti e tre i canarini, tutto a posto alle 04:05) apriva
+    # l'officina per niente. Due ore a zero non sono un'ondina.
+    prima = set()
+    if solo is None:
+        try:
+            prima = {r["piattaforma"] for r in json.load(open(ESITO_FILE)).get("rotte", [])}
+        except (OSError, ValueError):
+            pass
     out = {"at": time.time(), "rotte": rotte, "bloccate": bloccate,
+           "rotte_confermate": [r for r in rotte if r["piattaforma"] in prima],
            "piattaforme": len(per_pid), "canarini": len(can), "vivi": vivi, "letti": letti}
     if solo is None:
         try:
@@ -181,7 +192,8 @@ def main(argv=None) -> int:
     if a.controlla:
         r = controlla(dsn, a.piattaforma)
         print(f"canarini: {r['canarini']} su {r['piattaforme']} piattaforme — VIVI {r['vivi']}/{r['letti']} — "
-              f"ROTTE: {', '.join(x['piattaforma'] for x in r['rotte']) or 'nessuna'} — "
+              f"a zero: {', '.join(x['piattaforma'] for x in r['rotte']) or 'nessuna'} — "
+              f"ROTTE (due giri): {', '.join(x['piattaforma'] for x in r.get('rotte_confermate', [])) or 'nessuna'} — "
               f"bloccate: {', '.join(x['piattaforma'] for x in r['bloccate']) or 'nessuna'}")
     if a.stato:
         for pid, slug, at, trovate, attese in stato(dsn):

@@ -268,11 +268,19 @@ def _controlli() -> list[Condizione]:
     try:
         cf = "/opt/nivult/canarini.json"
         if time.time() - os.path.getmtime(cf) < 2 * 3600:
-            for r_ in json.load(open(cf)).get("rotte", []):
+            d_ = json.load(open(cf))
+            confermate = {r["piattaforma"] for r in d_.get("rotte_confermate", [])}
+            for r_ in d_.get("rotte", []):
                 pid = r_["piattaforma"]
                 att = ", ".join(f"{k['slug']} (attese {k['attese']})" for k in r_["canarini"][:3])
-                c.append(Condizione(f"adapter rotto {pid}", "avviso", f"adapter rotto: {pid}",
-                                    f"tutti i canarini a zero: {att}"))
+                if pid in confermate:
+                    # due giri orari a zero: l'officina si apre (pronto soccorso)
+                    c.append(Condizione(f"adapter rotto {pid}", "avviso", f"adapter rotto: {pid}",
+                                        f"canarini a zero da due giri: {att}"))
+                else:
+                    # un giro solo: si segna, si aspetta il prossimo (info = solo cruscotto)
+                    c.append(Condizione(f"adapter a zero {pid}", "info", f"adapter a zero: {pid}",
+                                        f"canarini a zero in questo giro: {att} — se persiste, officina"))
     except (OSError, ValueError, KeyError):
         pass
     # ADAPTER MUTO: nell'ultima ora l'adapter ha detto «zero» su tenant le

@@ -117,19 +117,21 @@ def dossier(pid: str, slug: str | None = None, campione_dato: str | None = None)
             # di taglia media (10-300 offerte) che il piu' grosso: una
             # bacheca da 3.000 annunci non entra nel campione, e gli
             # esempi finirebbero fuori (successo alla prima prova).
-            if not slug:
-                r = db.execute("""SELECT slug FROM canarini WHERE platform_id=%s
-                                  ORDER BY (attese BETWEEN 10 AND 300) DESC, attese ASC LIMIT 1""", (pid,)).fetchone()
-                slug = r[0] if r else None
-            if not slug:
+            candidati = [slug] if slug else [s for (s,) in db.execute(
+                """SELECT slug FROM canarini WHERE platform_id=%s
+                   ORDER BY (attese BETWEEN 10 AND 300) DESC, attese ASC LIMIT 3""", (pid,)).fetchall()]
+            if not candidati:
                 raise SystemExit(f"{pid}: nessun campione e nessun canarino da cui scaricarlo")
-            with ADAPTERS[pid]() as a:
-                try:
-                    a.jobs(slug)
-                except Exception:  # noqa: BLE001
-                    pass
-                pagina = a.ultima_pagina or ""
-            origine = "scaricata adesso"
+            for cand in candidati:      # il primo che risponde con una pagina vera
+                with ADAPTERS[pid]() as a:
+                    try:
+                        a.jobs(cand)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    if a.ultima_pagina and len(a.ultima_pagina) > 200:
+                        pagina, slug, origine = a.ultima_pagina, cand, f"scaricata adesso da {cand}"
+                        break
+                time.sleep(2)
         if not pagina:
             raise SystemExit(f"{pid}/{slug}: pagina vuota, niente da riparare")
         attive = db.execute("SELECT count(*) FROM ats_jobs WHERE platform_id=%s AND slug=%s AND expired_at IS NULL",
