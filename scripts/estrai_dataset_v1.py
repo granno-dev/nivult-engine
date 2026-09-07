@@ -59,7 +59,23 @@ def pulisci(t: str | None, n: int = 1000) -> str:
     intero come &lt;p&gt;), poi i tag, poi gli spazi. Misurato il 06/09
     sulla prima versione: il 54% delle righe portava &nbsp;/&lt; nel testo."""
     import html
-    t = html.unescape(html.unescape(t or ""))
+    t = t or ""
+    # Arbetsförmedlingen (e qualche Ashby/Workable) salvano la descrizione
+    # come JSON serializzato: {"text": "…"} o {"description": …}. Il modello
+    # non deve imparare le graffe (3.891 righe, misurato il 07/09).
+    s = t.lstrip()
+    if s[:1] in "{[":
+        try:
+            d = json.loads(s)
+            if isinstance(d, dict):
+                t = str(d.get("text") or d.get("description") or d.get("descriptionPlain") or "")
+                if not t:
+                    t = " ".join(str(v) for v in d.values() if isinstance(v, str))
+            elif isinstance(d, list):
+                t = " ".join(str(x) for x in d if isinstance(x, str))
+        except ValueError:
+            pass
+    t = html.unescape(html.unescape(t))
     t = _TAG.sub(" ", t).replace("\xa0", " ")
     return re.sub(r"\s+", " ", t).strip()[:n]
 
