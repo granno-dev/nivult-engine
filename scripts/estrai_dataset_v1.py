@@ -142,6 +142,7 @@ def main() -> int:
     # --- esame a mano: autorita'; le sue aziende vanno tutte al lato esame
     escludi_id: set[str] = set()
     aziende_esame: set[str] = set()
+    grandi: set[str] = set()
     golden: list[dict] = []
     if a.golden_mano:
         for g in json.load(open(a.golden_mano)):
@@ -238,7 +239,9 @@ def main() -> int:
     fuga_id = sum(1 for g in golden if g["id"] in id_train)
     az_gold = set(a_ for a_ in (az_mano.values() if a.golden_mano else []))
     az_gold |= {g["azienda"] for g in golden if g.get("azienda")}
-    fuga_az = len(az_gold & az_train)
+    # le aziende GRANDI dell'esame a mano stanno nel training per scelta
+    # (vedi sopra): la fuga per azienda si misura sulle altre
+    fuga_az = len((az_gold - grandi) & az_train)
     assert fuga_id == 0, f"FUGA: {fuga_id} id dell'esame nel training"
     assert fuga_az == 0, f"FUGA: {fuga_az} aziende dell'esame nel training"
 
