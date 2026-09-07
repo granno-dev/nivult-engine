@@ -274,6 +274,49 @@ scoperta. Prima di dedurre «poche aziende», guardare
 `ats_companies.job_count = 0` per piattaforma e verificare a mano le
 pagine pubbliche: il 07/09 su 54 tenant «a zero» 53 erano vuoti davvero.
 
+### nivult-v1 in linea sul N5
+
+Il classificatore locale a cinque teste (mmBERT-base: famiglia,
+seniority, contratto, remoto, lingue richieste) è in produzione dal
+07/09/2026: `nivult.ats.modello_v1` ricostruisce la rete **identica** a
+quella di `addestra_v1.py` e formatta il testo come in addestramento;
+`nivult.ats.classifica_v1` gira nel ciclo dell'operaio N5 (GPU ROCm, 26
+offerte/s misurate) con il suo marcatore `locale_v1_at`. Esame a mano:
+famiglia 90,1% (passa il cancello del 90%), seniority 83,9%, contratto
+83,9%, remoto 94,1%, lingue precisione 87,5%.
+
+**Scrive solo dove è sicuro.** La famiglia sopra la soglia del 95% di
+precisione (`soglie_95.family` = 0,75 in `config-v1.json`), e solo dove
+non c'è; seniority, contratto e remoto **solo dove la colonna è vuota** e
+sopra 0,85 — per quelle teste nessuna soglia raggiunge il 95%, quindi
+riempiono, non sovrascrivono mai la fonte o GLM. Il modello sta in
+`/opt/nivult/modelli/nivult-v1/` sul N5 (pesi, tokenizer, `config-v1.json`,
+`esame-v1.json`); l'addestramento su Colab con `addestra_v1.py`, che
+rifiuta un checkpoint di un altro dataset (è così che l'anteprima è
+stata spacciata per addestramento una volta).
+
+### La scoperta dei datori: i metodi che funzionano
+
+- **Indice colonnare di Common Crawl con DuckDB**, sul N5
+  (`scripts/cc_censimento.py` + `scripts/censimento_cc_carriere.py`):
+  niente AWS, parquet via https in predicate pushdown sui TLD europei,
+  path filtrati coi vocabolari delle lingue. Il 07/09/2026: 1,3 milioni
+  di URL di pagine carriere, **301.678 domini** con paese dal TLD
+  (DE 109k, UK 32k, NL 31k, FR 23k, PL 20k, IT 12k), 287.630 mai visti.
+- **Indice CDX per host** (`index.commoncrawl.org/…-index?url=*.jobs.personio.de`)
+  per i tenant hostati: 548 softgarden.io che mancavano.
+- **Le vetrine dei fornitori**, che non sono aggregatori: jobs.workable.com
+  (API paginata, datori col sito → detector) e jobs.smartrecruiters.com
+  (`sr-jobs/search` ignora ogni filtro ma dà sempre le ~96 offerte più
+  recenti del mondo con l'identificativo del tenant: letto ogni giro dal
+  volano, `scripts/censimento_smartrecruiters.py`).
+- **Chiusi o deboli:** Rapid7 FDNS (CNAME → vanity) non accetta nuovi
+  utenti dal 2022; HTTP Archive/Wappalyzer non riconosce Teamtailor,
+  SuccessFactors, Softgarden; GLEIF inventa i domini.
+
+Il detector dei domini `pending` e il ripasso girano sul N5
+(`operaio-loop.sh`), non sul server.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
