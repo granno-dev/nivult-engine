@@ -104,7 +104,8 @@ def main() -> int:
     # tenendo il solo titolo.
     escluse = [p.strip() for p in a.escludi_piattaforme.split(",") if p.strip()]
     if escluse:
-        SEL += " AND NOT (j.platform_id = ANY(%s))" % ("'{" + ",".join(escluse) + "}'::text[]",)
+        # ARRAY[...] e non '{...}': SEL passa da .format(), e le graffe lo rompono
+        SEL += " AND NOT (j.platform_id = ANY(ARRAY[" + ",".join("'%s'" % p.replace("'", "") for p in escluse) + "]))"
         print(f"  piattaforme escluse: {escluse}", flush=True)
     print("estrazione rubrica...", flush=True)
     rubrica = c.execute(SEL.format(modello="x.model = 'glm-5.3-flash'") + " AND j.sprint_at >= %s",
