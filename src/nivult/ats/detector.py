@@ -101,7 +101,10 @@ FINGERPRINT: dict[str, list[str]] = {
     "recruitcrm": ["recruitcrm.io"],
     "jobscore": ["jobscore.com"],
     "softgarden": ["softgarden"],
-    "rippling": ["rippling-ats", "rippling.com/careers"],
+    # Ashby e Rippling: senza impronta il detector lasciava «no_ats» 276
+    # e 71 aziende su 2.000 censite il 07/09/2026, con l'adapter gia' pronto
+    "ashby": ["ashbyhq.com"],
+    "rippling": ["rippling-ats", "rippling.com/careers", "ats.rippling.com", "ats.us1.rippling.com"],
     "apply2jobs": ["apply2jobs.com"],
     "paylocity": ["paylocity.com/careers", "recruiting.paylocity.com"],
     "paycom": ["paycom.com/careers", "paycomsoftware.net"],
@@ -363,9 +366,13 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
         else:
             # 1) l'ATS può già dichiararsi in homepage
             impronte = _trova_impronte(r.text)
-            if impronte:
-                piattaforma = impronte[0]
-                careers_url = str(r.url)
+            hit = None if impronte else _url_piattaforma_in_html(r.text)
+            if impronte or hit:
+                # o un'impronta, o un URL di piattaforma del registro
+                # (jobs.ashbyhq.com/acme) nella pagina: senza questo secondo
+                # ramo, 276 tenant Ashby su 2.000 finivano «no_ats» (07/09)
+                piattaforma = impronte[0] if impronte else hit[0]
+                careers_url = hit[2] if hit else str(r.url)
                 kind = "custom"
                 esito = "ats"
                 html_carriere = r.text
@@ -378,9 +385,10 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
                         if rc.status_code != 200 or len(rc.text) < 300:
                             continue
                         impronte = _trova_impronte(rc.text)
-                        if impronte:
-                            piattaforma = impronte[0]
-                            careers_url = str(rc.url)
+                        hit = None if impronte else _url_piattaforma_in_html(rc.text)
+                        if impronte or hit:
+                            piattaforma = impronte[0] if impronte else hit[0]
+                            careers_url = hit[2] if hit else str(rc.url)
                             kind = "custom"
                             esito = "ats"
                             html_carriere = rc.text
@@ -494,7 +502,7 @@ def _renderizza_e_analizza(dominio: str) -> tuple:
 
 
 def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
-           thread: int = 16) -> dict:
+           thread: int = 16, stato: str = "pending") -> dict:
     """Il giro di riconoscimento sui domini in attesa.
 
     I domini sono tutti siti diversi: connessioni simultanee verso
@@ -505,12 +513,16 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
              "dead": 0, "error": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # stato='no_ats' = RIPASSO: i domini gia' visti senza impronta,
+            # da rifare quando il detector impara a riconoscere qualcosa
             sql = ("SELECT domain, company_name, country, employees "
-                   "FROM company_domains WHERE status = 'pending'")
+                   f"FROM company_domains WHERE status = '{stato}'")
             if solo_grandi:
                 sql += " AND employees >= 500"
-            sql += (" ORDER BY employees DESC NULLS LAST, domain "
-                    f"LIMIT {int(limite)}")
+            if stato != "pending":
+                sql += " AND (checked_at IS NULL OR checked_at < now() - interval '2 days')"
+            sql += (" ORDER BY (country IN ('IT','DE','FR','ES','NL','BE','AT','CH','GB')) DESC, "
+                    f"employees DESC NULLS LAST, domain LIMIT {int(limite)}")
             cur.execute(sql)
             domini = cur.fetchall()
 
@@ -683,6 +695,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Wikidata con classi extra (company, quotata): giro settimanale")
     ap.add_argument("--produzione", action="store_true",
                     help="carica i domini dal DB del motore")
+    ap.add_argument("--ripassa", action="store_true",
+                    help="rifa' il giro HTTP sui domini 'no_ats' (dopo un'impronta nuova)")
     ap.add_argument("--rileva", action="store_true",
                     help="gira il riconoscimento sui domini in attesa")
     ap.add_argument("--solo-grandi", action="store_true",
@@ -709,7 +723,10 @@ def main(argv: list[str] | None = None) -> int:
         carica_produzione(ATS_DSN, dsn_prod)
     if args.rileva:
         s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread)
-        print(f"\nDetector: {s}")
+        print("Detector:", s)
+    if args.ripassa:
+        s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread, stato="no_ats")
+        print("Ripasso no_ats:", s)
     if args.render:
         s = rileva_render(ATS_DSN, args.limite, args.dip_minimi,
                           min(args.thread, 4))
