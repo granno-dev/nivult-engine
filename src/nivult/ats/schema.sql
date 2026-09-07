@@ -241,3 +241,6 @@ GRANT SELECT ON letture_sospette, canarini, canarini_esiti, officina_riparazioni
 -- provato quel dominio (si riprova dopo 30 giorni).
 ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS sorgente_url TEXT;
 ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS jsonld_checked_at TIMESTAMPTZ;
+-- nivult-v1 (07/09/2026): marcatore proprio, separato da locale_at di v0, cosi' v1 rivede tutto.
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS locale_v1_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS ats_jobs_locale_v1_idx ON ats_jobs (posted_at DESC) WHERE expired_at IS NULL AND locale_v1_at IS NULL;

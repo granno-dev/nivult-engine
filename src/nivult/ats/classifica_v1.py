@@ -1,6 +1,7 @@
 """nivult-v1 in linea, sul N5: famiglia, seniority, contratto, remoto, lingue.
 
-Legge le offerte non ancora passate dal modello (marcatore `locale_at`,
+Legge le offerte non ancora passate dal modello (marcatore `locale_v1_at`:
+`locale_at` e' di nivult-v0, e le offerte gia' viste da v0 vanno riviste da v1 —
 prima le piu' recenti con data di fonte) e SCRIVE solo dove e' sicuro:
 
   - famiglia in job_classifications (model='nivult-v1', confidence) se
@@ -46,7 +47,7 @@ def main() -> int:
                        j.seniority, j.employment_type, j.remote, j.languages_required,
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j
-                 WHERE j.expired_at IS NULL AND j.locale_at IS NULL
+                 WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
                  ORDER BY (NOT coalesce(j.posted_at_estimated, false)) DESC,
                           j.posted_at DESC NULLS LAST
                  LIMIT 512""").fetchall()
@@ -95,7 +96,7 @@ def main() -> int:
                 scrivi("UPDATE ats_jobs SET employment_type = coalesce(employment_type, %s) WHERE id = %s", con_rows, lambda r: r[1])
                 scrivi("UPDATE ats_jobs SET remote = coalesce(remote, %s) WHERE id = %s", rem_rows, lambda r: r[1])
                 scrivi("UPDATE ats_jobs SET languages_required = coalesce(languages_required, %s) WHERE id = %s", lin_rows, lambda r: r[1])
-                scrivi("UPDATE ats_jobs SET locale_at = now() WHERE id = %s", [(j,) for j in marcati], lambda r: r[0])
+                scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = %s", [(j,) for j in marcati], lambda r: r[0])
             st["famiglie"] += len(fam_rows); st["seniority"] += len(sen_rows)
             st["contratto"] += len(con_rows); st["remoto"] += len(rem_rows); st["lingue"] += len(lin_rows)
             dt = time.time() - t0
