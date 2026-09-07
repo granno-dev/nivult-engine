@@ -45,6 +45,7 @@ TETTO_FAM = 20000
 PAVIMENTO_FAM = 3000
 QUOTA_SENZA_TESTO = 0.20
 QUOTA_ESAME_AZIENDE = 0.05        # 5% delle aziende va all'esame/validazione
+AZIENDA_GRANDE = 300              # sopra questi annunci un'azienda dell'esame a mano NON viene riservata per intero
 AMBIGUE = {"Trades", "Construction", "Retail", "Sales", "Finance & Accounting",
            "Consulting", "Food & Beverage", "Hospitality", "Transportation",
            "Logistics", "Software", "Technology", "Management & Leadership",
@@ -151,8 +152,19 @@ def main() -> int:
             ([g["id"] for g in golden],)).fetchall()}
         for g in golden:
             g["azienda"] = az_mano.get(g["id"])
-        aziende_esame |= set(az_mano.values())
-        print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame)")
+        # Le aziende dell'esame a mano vanno tutte al lato esame — ma solo
+        # se PICCOLE. Le agenzie per il lavoro italiane (Gi Group, Manpower,
+        # Umana…) hanno migliaia di annunci ciascuna: riservarle all'esame
+        # per 3-4 casi giudicati a mano toglieva dal training 25.000 delle
+        # 34.000 righe italiane (07/09/2026: l'Italia era all'1%). Per le
+        # grandi bastano le difese di riga: id esclusi e testo-fotocopia.
+        conte = {r[0]: r[1] for r in c.execute(
+            "SELECT platform_id || '/' || slug, count(*) FROM ats_jobs WHERE platform_id || '/' || slug = ANY(%s) "
+            "GROUP BY 1", (list(set(az_mano.values())),)).fetchall()}
+        grandi = {az for az, n in conte.items() if n >= AZIENDA_GRANDE}
+        aziende_esame |= set(az_mano.values()) - grandi
+        print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame; "
+              f"{len(grandi)} grandi lasciate al training: {sorted(grandi)[:6]}…)")
 
     # --- dedup + divisione per azienda
     visti_dup: set[str] = set()
