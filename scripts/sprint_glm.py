@@ -113,8 +113,36 @@ def label(jid, tit, luo, desc):
     except Exception:
         return jid, None, 0, 0, 0
 
+STATO = "/opt/nivult/sprint-stato.json"
+
+
+def _carica_stato():
+    """La spesa sopravvive a un riavvio. Prima no: il riavvio automatico
+    delle 04:00 del 07/09 ha rilanciato lo sprint a $0.00 dopo $20.07
+    spesi, e il tetto di 35 sarebbe diventato 55 senza che nessuno lo
+    avesse deciso. Il file si azzera a mano quando si vuole uno sprint
+    nuovo (rm), non da solo."""
+    try:
+        d = json.load(open(STATO))
+        return float(d.get("speso", 0)), int(d.get("fatte", 0)), int(d.get("fam_scritte", 0))
+    except (OSError, ValueError):
+        return 0.0, 0, 0
+
+
+def _salva_stato(speso, fatte, fam_scritte):
+    try:
+        with open(STATO + ".tmp", "w") as f:
+            json.dump({"speso": round(speso, 4), "fatte": fatte, "fam_scritte": fam_scritte,
+                       "aggiornato": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, f)
+        os.replace(STATO + ".tmp", STATO)
+    except OSError:
+        pass
+
+
 def main():
-    speso = 0.0; fatte = 0; fam_scritte = 0
+    speso, fatte, fam_scritte = _carica_stato()
+    if speso:
+        print(f"riprendo: spesi ${speso:.2f}/{TETTO}, {fatte} offerte gia' fatte", flush=True)
     with psycopg.connect(DSN, autocommit=True) as c:
         _colonna(c)
         # LA CODA. Scegliere la pagina ordinando ogni volta le 900k righe
@@ -234,6 +262,7 @@ def main():
             fatte += len(agg_job); fam_scritte += len(fam_ord)
             print(f"{fatte} offerte, {fam_scritte} famiglie, spesi ${speso:.2f}/{TETTO}"
                   + (f", {fallite} fallite (429?)" if fallite else "") + f" [{time.strftime('%H:%M')}]", flush=True)
+            _salva_stato(speso, fatte, fam_scritte)
             if fallite > len(righe) // 2:
                 time.sleep(60)     # GLM sta rifiutando: aspettare costa meno che martellare
     print(f"FINE: {fatte} offerte arricchite, {fam_scritte} classificate, spesa totale ${speso:.2f}", flush=True)

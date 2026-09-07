@@ -418,12 +418,26 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limite", type=int, default=None,
                     help="scarica solo le prime N aziende per priorita' "
                          "(per il demone a lotti; vuoto = tutte)")
+    ap.add_argument("--schema", action="store_true",
+                    help="applica schema.sql (idempotente) e registra le piattaforme; poi esce se non c'e' altro")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
     dsn = ATS_DSN
-    setup(dsn)
+    # Lo schema si applica SOLO su richiesta (--schema, o con --semina).
+    # Prima girava a ogni invocazione — ogni 30 secondi con lo scraper
+    # continuo — e schema.sql contiene ALTER TABLE … ADD COLUMN IF NOT
+    # EXISTS e DROP/CREATE TRIGGER, che prendono un AccessExclusiveLock su
+    # ats_jobs anche quando non c'e' nulla da cambiare: 47 deadlock in 24
+    # ore (misurato il 07/09/2026), «arricchisci paese» fallito ogni
+    # notte, lo sprint costretto a riprovare. Il notturno lo applica una
+    # volta; dopo un cambio di schema si lancia a mano `runner --schema`.
+    if args.schema or args.semina:
+        setup(dsn)
+        if args.schema and not args.semina:
+            print("schema applicato")
+            return 0
     print(f"database ATS: {dsn}")
 
     if args.semina:
