@@ -183,7 +183,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
-                   "       ac.wd_server, ac.wd_instance, ac.pub_key "
+                   "       ac.wd_server, ac.wd_instance, ac.pub_key, ac.sorgente_url "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -237,6 +237,8 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
                     elif az["platform_id"] == "inrecruiting":
                         jobs = adapter.jobs(az["slug"], az["pub_key"])
+                    elif az["platform_id"] == "jsonld":
+                        jobs = adapter.jobs(az["slug"], az.get("sorgente_url"))
                     else:
                         jobs = adapter.jobs(az["slug"])
                     return az, jobs, (adapter.ultima_pagina if not jobs else None)

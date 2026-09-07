@@ -43,7 +43,7 @@ CAMPIONI_DIR = "/opt/nivult/campioni"
 #    dalle offerte («textron.taleo.net») era senza «#», l'adapter
 #    rispondeva zero per costruzione, e alle 07:40 del 07/09 si e' aperta
 #    un'officina per un guasto che non esisteva.
-FUORI = {"workday", "inrecruiting", "werecruit", "icims",
+FUORI = {"workday", "inrecruiting", "werecruit", "icims", "jsonld",
          "taleo", "welcometothejungle", "welcomekit", "carerix"}
 PER_PIATTAFORMA = 3
 MINIMO_ATTESE = 5

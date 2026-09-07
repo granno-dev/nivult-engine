@@ -29,6 +29,9 @@ while true; do
   "$PY" -m nivult.ats.detector --rileva --limite 800 --thread 20 2>&1 \
     | tail -1 || true
   "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
+  # le aziende senza ATS: sitemap delle offerte + JSON-LD (150 domini a giro,
+  # ~1.000 l'ora; i 38.000 «no_ats» in un giorno e mezzo, poi solo i nuovi)
+  "$PY" -m nivult.ats.jsonld --scopri --limite 150 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \

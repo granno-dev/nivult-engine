@@ -1894,6 +1894,74 @@ class JazzHR(BaseAdapter):
 ADAPTERS["jazzhr"] = JazzHR
 
 
+class JsonLd(BaseAdapter):
+    """Le career page delle aziende SENZA ATS: sitemap delle offerte (o
+    pagina carriere) + JobPosting JSON-LD su ogni annuncio — il canale
+    che i siti espongono a Google for Jobs. Lo slug e' il dominio, la
+    sorgente la trova `nivult.ats.jsonld` e sta in
+    ats_companies.sorgente_url. Fino a 200 pagine per visita: e' un
+    lettore per PMI, non per le agenzie (quelle hanno `agenzie.py`,
+    che sa quali pagine ha gia' visto).
+    """
+    platform_id = "jsonld"
+    MASSIMO_PAGINE = 200
+
+    def jobs(self, slug: str, sorgente_url: str | None = None) -> list[AtsJob]:
+        from urllib.parse import urlparse
+        from .jobposting import _estrai_ld, _luogo, _data, _testo, _sitemap_urls
+        if not sorgente_url:
+            return []
+        dominio = slug.lower().removeprefix("www.")
+
+        def mio(u: str) -> bool:
+            h = urlparse(u).netloc.lower()
+            return h == dominio or h.endswith("." + dominio)
+
+        r = self.client.get(sorgente_url)
+        if r.status_code != 200:
+            return []
+        if "<urlset" in r.text[:3000] or "<sitemapindex" in r.text[:3000]:
+            urls = sorted(u for u in _sitemap_urls(self.client, [sorgente_url], massimo=5000) if mio(u))
+        else:
+            from .jsonld import PATH_ANNUNCIO
+            link = {urljoin(str(r.url), g) for g in re.findall(r'href="([^"#]+)"', r.text)}
+            urls = sorted(u for u in link if mio(u) and PATH_ANNUNCIO.search(urlparse(u).path)
+                          and u.rstrip("/") != str(r.url).rstrip("/"))
+        out: list[AtsJob] = []
+        for u in urls[:self.MASSIMO_PAGINE]:
+            try:
+                p = self.client.get(u)
+            except httpx.HTTPError:
+                continue
+            if p.status_code != 200:
+                continue
+            jp = _estrai_ld(p.text)
+            if not jp:
+                continue
+            titolo = re.sub(r"\s+", " ", str(jp.get("title") or "")).strip()
+            if not titolo:
+                continue
+            citta, paese = _luogo(jp)
+            org = jp.get("hiringOrganization") or {}
+            raw = dict(jp)
+            if isinstance(org, dict) and org.get("name"):
+                raw.setdefault("company", {"name": org["name"]})
+            if _testo(jp):
+                raw["description"] = _testo(jp)
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                # l'URL senza schema e senza query: stabile, e unico anche
+                # fra tenant (niente collisioni di id numerici)
+                external_id=re.sub(r"^https?://", "", str(p.url).split("?", 1)[0]).rstrip("/")[:500],
+                title=titolo[:300], url=str(p.url),
+                location=citta, city=citta, country=paese, posted_at=_data(jp),
+                raw=raw))
+        return out
+
+
+ADAPTERS["jsonld"] = JsonLd
+
+
 class Homerun(BaseAdapter):
     """homerun.co — offerte in un attributo Vue v-bind nell'HTML.
 

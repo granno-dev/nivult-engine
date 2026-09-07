@@ -234,3 +234,10 @@ CREATE TABLE IF NOT EXISTS officina_riparazioni (
     durata_s      INTEGER
 );
 GRANT SELECT ON letture_sospette, canarini, canarini_esiti, officina_riparazioni TO nivult_app;
+
+-- ── Career page senza ATS (piattaforma «jsonld», 07/09/2026) ─────────
+-- sorgente_url: la sitemap delle offerte o la pagina carriere da cui
+-- l'adapter jsonld legge; jsonld_checked_at: quando la scoperta ha
+-- provato quel dominio (si riprova dopo 30 giorni).
+ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS sorgente_url TEXT;
+ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS jsonld_checked_at TIMESTAMPTZ;
