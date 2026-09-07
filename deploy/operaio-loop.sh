@@ -58,7 +58,12 @@ while true; do
   # nivult-v1 (mmBERT, 5 teste) sulla GPU: 26 offerte/s misurate il 07/09.
   # Famiglia solo sopra la soglia del 95% (0.75); seniority/contratto/remoto
   # solo dove mancano; lingue richieste dove mancano.
-  nice -n 5 $PY -m nivult.ats.classifica_v1 12000 2>&1 | grep -E "^FINE|Traceback|Error" | tail -1 || true
+  # nivult-v1 gira come DEMONE a parte (--continuo), non dentro il giro:
+  # cosi' non aspetta gli altri passi e la GPU lavora sempre.
+  if ! pgrep -f "nivult.ats.classifica_v1 --continuo" >/dev/null; then
+    nohup nice -n 5 $PY -m nivult.ats.classifica_v1 --continuo >> /opt/nivult/engine/logs/classifica-v1.log 2>&1 &
+    echo "-- nivult-v1 avviato come demone"
+  fi
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true

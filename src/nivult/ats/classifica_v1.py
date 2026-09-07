@@ -31,13 +31,14 @@ SOGLIA_RIPIEGO = float(os.environ.get("SOGLIA_RIPIEGO_V1", "0.85"))
 # vistoso: «Lead Product Engineer» → internship con confidenza sopra 0,85
 # (campione del 07/09/2026 sera). Per scriverlo si pretende molto di piu'.
 SOGLIA_CONTRATTO = float(os.environ.get("SOGLIA_CONTRATTO_V1", "0.97"))
-LOTTO = int(os.environ.get("LOTTO_V1", "32"))
+LOTTO = int(os.environ.get("LOTTO_V1", "64"))
 
 
 def main() -> int:
     argv = [a for a in sys.argv[1:] if not a.startswith("--")]
     dry = "--dry-run" in sys.argv
-    tetto = int(argv[0]) if argv else 20000
+    continuo = "--continuo" in sys.argv      # un demone: quando non c'e' niente, dorme un minuto
+    tetto = int(argv[0]) if argv else (10**12 if continuo else 20000)
     m = ModelloV1()
     soglia_fam = float(m.soglie_95.get("family") or 0.9)
     st = {"viste": 0, "famiglie": 0, "seniority": 0, "contratto": 0, "remoto": 0,
@@ -54,8 +55,11 @@ def main() -> int:
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
                  ORDER BY (NOT coalesce(j.posted_at_estimated, false)) DESC,
                           j.posted_at DESC NULLS LAST
-                 LIMIT 512""").fetchall()
+                 LIMIT 2048""").fetchall()
             if not righe:
+                if continuo:
+                    time.sleep(60)
+                    continue
                 break
             fam_rows, sen_rows, con_rows, rem_rows, lin_rows, marcati = [], [], [], [], [], []
             for i in range(0, len(righe), LOTTO):
@@ -81,26 +85,34 @@ def main() -> int:
                         if lingue:
                             lin_rows.append((lingue, jid))
 
-            def scrivi(sql, rows, key):
-                rows = sorted(rows, key=key)
-                for k in range(0, len(rows), 300):
-                    for _ in range(3):
-                        try:
-                            with c.cursor() as cc:
-                                cc.executemany(sql, rows[k:k + 300])
-                            break
-                        except psycopg.errors.DeadlockDetected:
-                            time.sleep(1)
+            def scrivi(sql, params):
+                """UNA istruzione per tabella, con array unnest: 6 round trip per
+                lotto. Con executemany erano migliaia, e sulla Tailscale N5 →
+                Hetzner (30 ms l'uno) il modello aspettava il database: 3
+                offerte/s contro le 26 della GPU (misurato il 07/09/2026)."""
+                for _ in range(3):
+                    try:
+                        c.execute(sql, params)
+                        break
+                    except psycopg.errors.DeadlockDetected:
+                        time.sleep(1)
 
             if not dry:
-                scrivi("INSERT INTO job_classifications (job_id, family, confidence, model, classified_at) "
-                       "VALUES (%s, %s, %s, 'nivult-v1', now()) ON CONFLICT (job_id) DO NOTHING",
-                       fam_rows, lambda r: r[0])
-                scrivi("UPDATE ats_jobs SET seniority = coalesce(seniority, %s) WHERE id = %s", sen_rows, lambda r: r[1])
-                scrivi("UPDATE ats_jobs SET employment_type = coalesce(employment_type, %s) WHERE id = %s", con_rows, lambda r: r[1])
-                scrivi("UPDATE ats_jobs SET remote = coalesce(remote, %s) WHERE id = %s", rem_rows, lambda r: r[1])
-                scrivi("UPDATE ats_jobs SET languages_required = coalesce(languages_required, %s) WHERE id = %s", lin_rows, lambda r: r[1])
-                scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = %s", [(j,) for j in marcati], lambda r: r[0])
+                if fam_rows:
+                    scrivi("INSERT INTO job_classifications (job_id, family, confidence, model, classified_at) "
+                           "SELECT * FROM unnest(%s::uuid[], %s::text[], %s::real[]), (SELECT 'nivult-v1', now()) m "
+                           "ON CONFLICT (job_id) DO NOTHING",
+                           ([r[0] for r in fam_rows], [r[1] for r in fam_rows], [r[2] for r in fam_rows]))
+                for col, rows in (("seniority", sen_rows), ("employment_type", con_rows), ("remote", rem_rows)):
+                    if rows:
+                        scrivi(f"UPDATE ats_jobs j SET {col} = coalesce(j.{col}, v.val) "
+                               f"FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
+                               ([r[1] for r in rows], [r[0] for r in rows]))
+                if lin_rows:
+                    scrivi("UPDATE ats_jobs j SET languages_required = coalesce(j.languages_required, string_to_array(v.val, ',')) "
+                           "FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
+                           ([r[1] for r in lin_rows], [",".join(r[0]) for r in lin_rows]))
+                scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = ANY(%s::uuid[])", (marcati,))
             st["famiglie"] += len(fam_rows); st["seniority"] += len(sen_rows)
             st["contratto"] += len(con_rows); st["remoto"] += len(rem_rows); st["lingue"] += len(lin_rows)
             dt = time.time() - t0
@@ -109,6 +121,9 @@ def main() -> int:
                   f"incerte {st['incerte']} | {st['viste'] / max(dt, 1):.1f}/s", flush=True)
             if dry:
                 break
+            if continuo and st["viste"] % 20480 < 2048:
+                st["ore"] = round((time.time() - t0) / 3600, 2)
+                print(f"BATTITO {st}", flush=True)
     print(f"FINE {st} in {time.time() - t0:.0f}s")
     return 0
 
