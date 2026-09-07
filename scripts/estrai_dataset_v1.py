@@ -84,6 +84,8 @@ def lato_azienda(azienda: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dopo", default="2026-09-06T08:30:00+00:00")
+    ap.add_argument("--escludi-piattaforme", default="",
+                    help="piattaforme da tenere FUORI (virgole): per quelle il cui testo non e' affidabile")
     ap.add_argument("--golden-mano", default=None)
     ap.add_argument("--out", default="/opt/nivult/v1")
     a = ap.parse_args()
@@ -96,6 +98,14 @@ def main() -> int:
                     j.platform_id || '/' || j.slug
                FROM ats_jobs j JOIN job_classifications x ON x.job_id = j.id
               WHERE j.title IS NOT NULL AND length(j.title) > 2 AND {modello}"""
+    # Piattaforme escluse per intero: se il testo e' di un altro annuncio
+    # (iCIMS, 07/09/2026: 0 su 25 testi salvati stavano nella pagina viva),
+    # anche l'etichetta GLM e' presa da quel testo, e non si salva niente
+    # tenendo il solo titolo.
+    escluse = [p.strip() for p in a.escludi_piattaforme.split(",") if p.strip()]
+    if escluse:
+        SEL += " AND NOT (j.platform_id = ANY(%s))" % ("'{" + ",".join(escluse) + "}'::text[]",)
+        print(f"  piattaforme escluse: {escluse}", flush=True)
     print("estrazione rubrica...", flush=True)
     rubrica = c.execute(SEL.format(modello="x.model = 'glm-5.3-flash'") + " AND j.sprint_at >= %s",
                         (a.dopo,)).fetchall()
