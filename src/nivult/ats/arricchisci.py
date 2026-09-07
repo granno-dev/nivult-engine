@@ -88,8 +88,66 @@ def _iso(nome: str | None) -> str | None:
     return _NOMI_PAESI.get(n)
 
 
+def _testo_pulito(frammento: str | None) -> str | None:
+    """HTML → testo: via <style>/<script>, via i tag, entita' sciolte.
+    Le pagine SuccessFactors mettono un <style> dentro il blocco
+    dell'annuncio, e Phenom consegna la descrizione gia' codificata
+    (&lt;p&gt;…): senza questa pulizia il modello leggeva CSS."""
+    if not frammento:
+        return None
+    import html as html_mod
+    t = str(frammento)
+    for _ in range(2):                      # &lt;p&gt; → <p> → via
+        t = html_mod.unescape(t)
+        t = re.sub(r"<(style|script)[^>]*>.*?</\1>", " ", t, flags=re.S | re.I)
+        t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:30000] or None
+
+
+def _estrai_microdata(html: str) -> dict:
+    """Il JobPosting in MICRODATA (itemprop), come lo scrive SuccessFactors:
+    <meta itemprop="addressCountry" content="US">, <meta itemprop=
+    "datePosted" content="Fri Sep 04 00:00:00 UTC 2026">, oppure il solo
+    <meta itemprop="streetAddress" content="Milano, IT">."""
+    if "schema.org/JobPosting" not in html:
+        return {}
+    import html as html_mod
+
+    def meta(prop: str) -> str | None:
+        m = re.search(r'itemprop="%s"[^>]*\scontent="([^"]*)"' % prop, html)
+        return html_mod.unescape(m.group(1)).strip() if m and m.group(1).strip() else None
+
+    paese = _iso(meta("addressCountry"))
+    citta = meta("addressLocality")
+    via = meta("streetAddress")
+    if via and (not paese or not citta):
+        pezzi = [p.strip() for p in via.split(",") if p.strip()]
+        if not paese:
+            sigle = [p for p in pezzi if re.fullmatch(r"[A-Z]{2}", p)]
+            paese = _iso(sigle[-1]) if sigle else None
+        if not citta and pezzi and not re.fullmatch(r"[A-Z]{2}|\d+", pezzi[0]):
+            citta = pezzi[0]
+    dt = None
+    data = meta("datePosted")
+    if data:
+        for fmt in ("%a %b %d %H:%M:%S %Z %Y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                dt = datetime.strptime(data.replace("UTC", "UTC"), fmt)
+                break
+            except ValueError:
+                continue
+    descr = None
+    m = re.search(r'<div class="job">(.*?)<div class="(?:jobDetailsFooter|applylink|share|jobDisplayShell-footer)', html, re.S)
+    if m:
+        descr = _testo_pulito(m.group(1))
+    if paese or citta or dt or descr:
+        return {"country": paese, "city": citta, "posted_at": dt, "description": descr}
+    return {}
+
+
 def _estrai_jsonld(html: str) -> dict:
-    """Il JSON-LD JobPosting dalla pagina, se c'è."""
+    """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata)."""
     for m in re.finditer(
             r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
         try:
@@ -108,31 +166,44 @@ def _estrai_jsonld(html: str) -> dict:
                     dt = None
                 # la descrizione viaggia nello stesso JSON-LD: buttarla
                 # e' stata la differenza fra 0% e 90% su phenom
-                descr = d.get("description")
-                descr = str(descr)[:30000] if descr else None
+                descr = _testo_pulito(d.get("description"))
                 if paese or citta or dt or descr:
                     return {"country": paese, "city": citta,
                             "posted_at": dt, "description": descr}
         except (json.JSONDecodeError, KeyError):
             continue
-    return {}
+    return _estrai_microdata(html)
+
+
+# Le piattaforme il cui elenco NON porta sede/data/descrizione, e la
+# pagina dell'annuncio si': Phenom (sitemap), SuccessFactors (sitemap e
+# tile senza sede). La lettura di dettaglio e' cara — una richiesta per
+# offerta — e va fatta una volta sola per offerta.
+PIATTAFORME_DETTAGLIO = ("phenom", "successfactors")
 
 
 def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
-    """Legge le pagine di dettaglio delle offerte Phenom senza paese."""
+    return arricchisci_dettaglio(dsn, ("phenom",), limite, thread)
+
+
+def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
+                          limite: int = 5000, thread: int = 10) -> dict:
+    """Legge le pagine di dettaglio (JSON-LD o microdata JobPosting) delle
+    offerte senza paese o senza descrizione, prima le piu' recenti."""
     stats = {"viste": 0, "paesi": 0, "citta": 0, "date": 0, "errori": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, url FROM ats_jobs
-                 WHERE platform_id = 'phenom' AND expired_at IS NULL
+                 WHERE platform_id = ANY(%s) AND expired_at IS NULL
                    AND (country IS NULL OR NOT (raw ? 'description'))
-                 ORDER BY id
+                   AND NOT (raw ? 'dettaglio_letto')
+                 ORDER BY fetched_at DESC
                  LIMIT %s
-            """, (limite,))
+            """, (list(piattaforme), limite))
             righe = cur.fetchall()
 
-    log.info("phenom: %d pagine da leggere (%d thread)", len(righe), thread)
+    log.info("dettaglio %s: %d pagine da leggere (%d thread)", ",".join(piattaforme), len(righe), thread)
     if not righe:
         return stats
 
@@ -155,6 +226,8 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
             try:
                 jid, dati = fut.result()
                 stats["viste"] += 1
+                if not dati:
+                    risultati.append((jid, {}))   # letta e muta: non si riprova
                 if dati:
                     stats["paesi"] += 1 if dati.get("country") else 0
                     stats["citta"] += 1 if dati.get("city") else 0
@@ -174,12 +247,14 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                            city = COALESCE(city, %s),
                            location = COALESCE(location, %s),
                            posted_at = COALESCE(posted_at, %s),
-                           raw = CASE WHEN raw ? 'description' THEN raw
-                                 ELSE jsonb_set(raw, '{description}',
-                                      to_jsonb(%s::text), true) END
+                           raw = (CASE WHEN raw ? 'description' OR %s = '' THEN raw
+                                  ELSE jsonb_set(raw, '{description}',
+                                       to_jsonb(%s::text), true) END)
+                                 || '{"dettaglio_letto": true}'::jsonb
                      WHERE id = %s
                 """, [(dati.get("country"), dati.get("city"), dati.get("city"), dati.get("posted_at"),
-                       dati.get("description") or "", jid) for jid, dati in risultati], lotto=50)
+                       dati.get("description") or "", dati.get("description") or "", jid)
+                      for jid, dati in risultati], lotto=50)
     return stats
 
 
@@ -275,6 +350,12 @@ def arricchisci_da_localita(dsn: str) -> dict:
                    AND (location IS NOT NULL OR city IS NOT NULL)
             """)
             righe = cur.fetchall()
+        # La SELECT ha preso AccessShareLock su ats_jobs e lo terrebbe fino
+        # al primo commit: un DDL notturno (AccessExclusive) si metteva in
+        # coda dietro di noi, e i nostri UPDATE dietro di lui — deadlock,
+        # 6 ritentativi inutili, notte persa (07/09/2026). Si chiude la
+        # transazione di lettura PRIMA di scrivere.
+        conn.commit()
         aggiorna = []
         for jid, testo, attuale in righe:
             iso = _paese_dal_testo(testo.lower())
@@ -347,6 +428,12 @@ def arricchisci_da_azienda(dsn: str) -> dict:
                  WHERE expired_at IS NULL
             """)
             righe = cur.fetchall()
+        # La SELECT ha preso AccessShareLock su ats_jobs e lo terrebbe fino
+        # al primo commit: un DDL notturno (AccessExclusive) si metteva in
+        # coda dietro di noi, e i nostri UPDATE dietro di lui — deadlock,
+        # 6 ritentativi inutili, notte persa (07/09/2026). Si chiude la
+        # transazione di lettura PRIMA di scrivere.
+        conn.commit()
 
         evidenze: dict[tuple, dict] = {}
         con_evidenza: list[tuple] = []   # (id, paese_attuale, evidenza)
@@ -581,7 +668,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.arricchisci",
                                  description=__doc__)
     ap.add_argument("--phenom", action="store_true",
-                    help="legge le pagine di dettaglio Phenom (JSON-LD)")
+                    help="(alias) legge le pagine di dettaglio Phenom")
+    ap.add_argument("--dettaglio", action="store_true",
+                    help="pagine di dettaglio (JSON-LD o microdata) di Phenom e SuccessFactors")
     ap.add_argument("--da-localita", action="store_true",
                     help="paese letto dal testo di location/city: riempie e corregge")
     ap.add_argument("--da-azienda", action="store_true",
@@ -596,7 +685,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--thread", type=int, default=10)
     args = ap.parse_args(argv)
 
-    if args.phenom:
+    if args.dettaglio:
+        s = arricchisci_dettaglio(ATS_DSN, PIATTAFORME_DETTAGLIO, args.limite, args.thread)
+        print(f"\nDettaglio: {s}")
+    elif args.phenom:
         s = arricchisci_phenom(ATS_DSN, args.limite, args.thread)
         print(f"\nPhenom: {s}")
     if args.da_localita:
@@ -614,7 +706,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.francetravail:
         esito_ft = arricchisci_francetravail(ATS_DSN)
         print(f"\nFrance Travail dal dipartimento: {esito_ft}")
-    if not (args.phenom or args.da_azienda or args.da_localita
+    if not (args.phenom or args.dettaglio or args.da_azienda or args.da_localita
             or args.da_geonames or args.workday or args.francetravail):
         ap.print_help()
     return 0

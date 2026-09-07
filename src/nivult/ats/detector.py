@@ -318,6 +318,51 @@ def _url_piattaforma_in_html(html: str) -> tuple[str, str, str] | None:
     return None
 
 
+_RX_SF_VIVO = re.compile(r'class="data-row"|jobTitle-link|tile-search-results|Results\.init\(')
+_RX_SF_MARCA = re.compile(r'jobs2web|successfactors|rmk_|csod-|jobDisplayShell', re.I)
+_RX_HOST_CARRIERE = re.compile(
+    r'https?://((?:jobs?|careers?|karriere|carriere|carrieres|stellen|lavoraconnoi|'
+    r'recrutement|empleo|jobsuche|talent|work|join)[a-z0-9-]*\.[a-z0-9.-]+)', re.I)
+
+
+def _host_sf(client: httpx.Client | None, careers_url: str | None, html: str) -> str | None:
+    """L'host del sito carriere SuccessFactors, VERIFICATO.
+
+    L'impronta «successfactors» scatta anche su una homepage che linka
+    il login dei dipendenti (performancemanager5.successfactors.eu): il
+    07/09/2026, 312 tenant su 400 «SuccessFactors a zero» erano cosi',
+    registrati con lo slug della homepage (crh.com) che l'adapter non
+    puo' leggere. Qui si prova ogni host candidato — quello della pagina
+    carriere e i sottodomini jobs./careers./karriere. citati nella
+    pagina — e si accetta solo chi risponde su /search/ con l'elenco
+    (tabella, o l'API delle tile) e un marcatore SAP. L'adapter lavora
+    su https://{slug}/: lo slug deve essere questo host, non un altro.
+    """
+    candidati: list[str] = []
+    if careers_url:
+        candidati.append(urlparse(careers_url).netloc.lower())
+    candidati += [h.lower() for h in _RX_HOST_CARRIERE.findall(html or "")]
+    candidati = [h for h in dict.fromkeys(candidati)
+                 if h and "successfactors" not in h and "sapsf" not in h
+                 and "jobs2web" not in h][:5]
+    proprio = client is None
+    if proprio:
+        client = httpx.Client(timeout=12, follow_redirects=True,
+                              headers={"User-Agent": "nivult-ats/0.1"})
+    try:
+        for h in candidati:
+            try:
+                r = client.get(f"https://{h}/search/?q=&startrow=0")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and _RX_SF_VIVO.search(r.text) and _RX_SF_MARCA.search(r.text):
+                return str(r.url.host or h).lower()
+    finally:
+        if proprio:
+            client.close()
+    return None
+
+
 def _connetti(dsn: str, tentativi: int = 5):
     """Una connessione con ritentativo: il detector ne apre una per
     dominio, e un solo timeout (07/09/2026, 308 domini su 2.000) ammazzava
@@ -584,8 +629,14 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
                 stats["ats"] += 1
                 # se l'URL carriere o uno dentro la pagina è di piattaforma
                 # (pattern del registro), l'azienda è subito scrapeable
-                hit = (_pattern_registro(careers_url or "")
-                       or _url_piattaforma_in_html(html_carriere))
+                if piattaforma == "successfactors":
+                    # mai dal registro (career5.sapsf.com darebbe «career5»):
+                    # lo slug e' l'host carriere verificato, o niente
+                    host_sf = _host_sf(None, careers_url, html_carriere)
+                    hit = ("successfactors", host_sf, f"https://{host_sf}/") if host_sf else None
+                else:
+                    hit = (_pattern_registro(careers_url or "")
+                           or _url_piattaforma_in_html(html_carriere))
                 if hit:
                     pid, slug = hit[0], hit[1]
                     url_p = hit[2] if len(hit) > 2 else careers_url
@@ -664,8 +715,14 @@ def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
             stats["visitati"] += 1
             if esito == "ats" and piattaforma:
                 stats["ats"] += 1
-                hit = (_pattern_registro(careers_url or "")
-                       or _url_piattaforma_in_html(html_carriere))
+                if piattaforma == "successfactors":
+                    # mai dal registro (career5.sapsf.com darebbe «career5»):
+                    # lo slug e' l'host carriere verificato, o niente
+                    host_sf = _host_sf(None, careers_url, html_carriere)
+                    hit = ("successfactors", host_sf, f"https://{host_sf}/") if host_sf else None
+                else:
+                    hit = (_pattern_registro(careers_url or "")
+                           or _url_piattaforma_in_html(html_carriere))
                 if hit:
                     pid, slug = hit[0], hit[1]
                     url_p = hit[2] if len(hit) > 2 else careers_url

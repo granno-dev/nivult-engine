@@ -31,6 +31,10 @@ RATE_PER_SECOND = {
     # ashby: 1.0 era prudenza del primo giorno; settimane a 0 fallite
     # (e 6k tenant attivi da tenere freschi) giustificano 2.0.
     "ashby": 2.0,
+    # apply.workable.com e' un host condiviso da 15.000 tenant: senza
+    # ritmo, 10.293 letture al giorno su 15.058 finivano in 429 e due
+    # tenant su tre non venivano MAI letti (misurato il 07/09/2026).
+    "workable": 1.5,
 }
 
 
@@ -2129,6 +2133,20 @@ class Phenom(BaseAdapter):
     platform_id = "phenom"
     MAX_SITEMAP = 12
     RX_OFFERTA = re.compile(r'/job/([A-Za-z0-9]+)/([^/]+)/?$')
+    # Il paese sta nell'URL stesso: careers.kbr.com/us/en/job/…,
+    # careers.royalmailgroup.com/gb/en/job/…. Senza questa regola il 95%
+    # delle offerte Phenom (37.770 su 39.748 il 07/09/2026) restava senza
+    # paese e fuori da ogni cluster, in attesa di una lettura di dettaglio
+    # da 5.000 pagine a notte.
+    RX_PAESE_URL = re.compile(r'^https?://[^/]+/([a-z]{2})/[a-z]{2}(?:-[a-z]{2})?/job/', re.I)
+
+    @classmethod
+    def paese_da_url(cls, url: str) -> str | None:
+        m = cls.RX_PAESE_URL.match(url or "")
+        if not m:
+            return None
+        cc = m.group(1).upper()
+        return cc if cc != "UK" else "GB"
 
     def jobs(self, slug: str) -> list[AtsJob]:
         base = f"https://{slug}"
@@ -2159,7 +2177,7 @@ class Phenom(BaseAdapter):
                     platform_id=self.platform_id, slug=slug,
                     external_id=m.group(1),
                     title=unquote(m.group(2)).replace("-", " ").strip(),
-                    url=loc,
+                    url=loc, country=self.paese_da_url(loc),
                     raw={"sitemap": fs}))
         return out
 
@@ -2168,90 +2186,251 @@ ADAPTERS["phenom"] = Phenom
 
 
 class SuccessFactors(BaseAdapter):
-    """SAP SuccessFactors — portali /go/{nome}/{id} server-rendered.
+    """SAP SuccessFactors — il sito carriere «Career Site Builder».
 
     Lo slug è il hostname del sito carriere (careers.grunenthal.com).
-    Dalla homepage si trovano i link /go/… (le bacheche), che elencano
-    le offerte come /job/{luogo-titolo}/{id}/ paginando con l'offset
-    come segmento di percorso: /go/{nome}/{id}/25/, /50/, …
-    I feed RSS /services/rss/ esistono ma restituiscono 10 elementi.
+    Tre forme di elenco, lette in quest'ordine e FUSE per id:
+
+      1. `/sitemap.xml`: TUTTE le offerte come /job/{luogo-titolo}/{id}/,
+         una richiesta sola. E' la fonte della completezza (Scania: 743
+         offerte in un colpo). Da sola non dice sede ne' data certa.
+      2. `/search/?q=&startrow=N`: la tabella server-rendered
+         (`<tr class="data-row">`), 25 per pagina, con titolo e sede
+         («Monroe, LA, US, 71203»). Sui siti nuovi la tabella e' resa
+         da JavaScript e la pagina dichiara `Results.init({apiEndpoint:
+         "tile-search-results", jobRecordsPerPage, jobRecordsFound})`:
+         allora si legge quell'endpoint, che risponde con le «tile»
+         (titolo, sede, reparto, data) a frammenti HTML.
+      3. le bacheche `/go/{nome}/{id}/` con l'offset a segmento di
+         percorso — il template vecchio, tenuto come ultimo ripiego.
+
+    Fino al 07/09/2026 l'adapter leggeva SOLO le bacheche /go/, e prime
+    tre per giunta: su ATM Milano la prima era «Eventi» (vuota), Scania
+    ne ha sedici e le prime tre non erano di offerte, Flint non ne ha.
+    Risultato: 1.029 tenant su 1.107 a zero con HTTP 200, e i canarini
+    muti perche' i tre di riferimento erano della variante che
+    funzionava. Fantastic vedeva 10.463 offerte SuccessFactors a
+    settimana in Germania; noi 434.
     """
     platform_id = "successfactors"
-    MAX_PAGINE = 30
-    MAX_BACHECHE = 3
-    # ogni offerta: il link /job/.../id/ seguito, nel blocco telefono, da
-    # reparto (jobFacility) e sede (jobLocation, «Citta, CC, CAP»)
-    _RIGA = re.compile(
-        r'href="(/job/[^"]+/(\d+)/)"[^>]*>.*?</a>\s*</span>'
-        r'(?:\s*<span class="jobFacility[^"]*"[^>]*>(.*?)</span>)?'
-        r'\s*<span class="jobLocation[^"]*"[^>]*>\s*<span[^>]*>\s*'
-        r'(.*?)\s*</span>', re.S)
+    MAX_PAGINE = 60          # 60 x 25 = 1.500 righe con sede; oltre, la sitemap
+    MAX_BACHECHE = 6
+    _RX_JOB = re.compile(r'/job/([^"\'<>\s]+?)/(\d+)/?(?=["\'<\s?#])')
+    _RX_RIGA = re.compile(r'<tr class="data-row".*?</tr>', re.S)
+    _RX_TILE = re.compile(r'<li class="job-tile.*?</li>', re.S)
+    _RX_INIT = re.compile(
+        r'Results\.init\(\{(.*?)\}\)', re.S)
+
+    @staticmethod
+    def _testo(frammento: str | None) -> str | None:
+        if not frammento:
+            return None
+        import html as html_mod
+        t = re.sub(r"<[^>]+>", " ", frammento)
+        t = html_mod.unescape(re.sub(r"\s+", " ", t)).strip()
+        return t or None
+
+    @staticmethod
+    def _paese(sede: str | None) -> str | None:
+        """Il paese dalla sede «Citta, ST, CC, CAP»: l'ULTIMA sigla a due
+        lettere, non la prima — «Monroe, LA, US, 71203» e' negli Stati
+        Uniti, non in Laos. Una sigla sola che sia uno stato USA
+        («Monroe, LA») resta ambigua e si lascia decidere a valle."""
+        if not sede:
+            return None
+        sigle = [p.strip() for p in sede.split(",")
+                 if re.fullmatch(r"[A-Z]{2}", p.strip())]
+        if not sigle:
+            return None
+        if len(sigle) == 1 and sigle[0] in _STATI_USA:
+            # «Monroe, LA» / «Hannover, DE»: Louisiana o Laos, Delaware o
+            # Germania? Il CAP non aiuta (anche i tedeschi hanno 5 cifre).
+            # Decide il runner con il parser geografico, dalla citta'.
+            return None
+        return _iso(sigle[-1])
+
+    @staticmethod
+    def _data(testo: str | None):
+        if not testo:
+            return None
+        t = testo.strip()
+        for fmt in ("%b %d, %Y", "%d %b %Y", "%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(t, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        return None
+
+    def _offerta(self, slug: str, base: str, path: str, id_offerta: str,
+                 titolo: str | None, sede: str | None, reparto: str | None,
+                 data, fonte: str) -> AtsJob:
+        import html as html_mod
+        # href «/job/…&amp;apos;…/» doppiamente codificato: si scioglie
+        # finche' non cambia piu'
+        while True:
+            sciolto = html_mod.unescape(path)
+            if sciolto == path:
+                break
+            path = sciolto
+        titolo_slug = path.rstrip("/").split("/")[-2] if path.count("/") >= 3 else ""
+        titolo = titolo or unquote(titolo_slug).replace("-", " ").strip()
+        citta = None
+        if sede:
+            primo = sede.split(",")[0].strip()
+            citta = primo if not re.fullmatch(r"[A-Z]{2}|\d+", primo) else None
+        return AtsJob(
+            platform_id=self.platform_id, slug=slug, external_id=id_offerta,
+            title=titolo, url=urljoin(base, path), location=sede, city=citta,
+            country=self._paese(sede), department=reparto, posted_at=data,
+            raw={"path": path, "location": sede, "fonte": fonte})
+
+    def _righe_tabella(self, slug: str, base: str, html: str,
+                       visti: set, out: list) -> int:
+        """Le righe `data-row` di una pagina tabellare. Ritorna quante nuove."""
+        nuove = 0
+        for riga in self._RX_RIGA.findall(html):
+            m = self._RX_JOB.search(riga)
+            if not m:
+                continue
+            id_offerta = m.group(2)
+            path = f"/job/{m.group(1)}/{id_offerta}/"
+            titolo = self._testo(next(iter(re.findall(
+                r'<a[^>]*class="jobTitle-link"[^>]*>(.*?)</a>', riga, re.S)), None))
+            if not titolo:
+                titolo = self._testo(next(iter(re.findall(
+                    r'<a[^>]*href="/job/[^"]+"[^>]*>(.*?)</a>', riga, re.S)), None))
+            sede = self._testo(next(iter(re.findall(
+                r'<span class="jobLocation">(.*?)</span>', riga, re.S)), None))
+            reparto = self._testo(next(iter(re.findall(
+                r'<span class="jobFacility[^"]*"[^>]*>(.*?)</span>', riga, re.S)), None))
+            if reparto and "no-department" in reparto:
+                reparto = None
+            data = self._data(self._testo(next(iter(re.findall(
+                r'<span class="jobDate[^"]*"[^>]*>(.*?)</span>', riga, re.S)), None)))
+            if id_offerta in visti:
+                continue
+            visti.add(id_offerta)
+            nuove += 1
+            out.append(self._offerta(slug, base, path, id_offerta, titolo,
+                                     sede, reparto, data, "tabella"))
+        return nuove
+
+    def _tile(self, slug: str, base: str, html: str, visti: set, out: list) -> int:
+        nuove = 0
+        for tile in self._RX_TILE.findall(html):
+            m = self._RX_JOB.search(tile)
+            if not m:
+                continue
+            id_offerta = m.group(2)
+            path = f"/job/{m.group(1)}/{id_offerta}/"
+            titolo = self._testo(next(iter(re.findall(
+                r'<a[^>]*class="jobTitle-link[^"]*"[^>]*>(.*?)</a>', tile, re.S)), None))
+            # I campi della tile: id «-section-location-value» sui siti
+            # standard, «-section-customfield1-value» con l'etichetta a
+            # fianco («Sede», «Business Unit») su quelli personalizzati
+            # (ATM Milano). Si leggono entrambi: prima per nome, poi per
+            # etichetta.
+            campo: dict[str, str | None] = {}
+            etichette: dict[str, str] = {}
+            for nome, valore in re.findall(
+                    r'id="job-\d+-desktop-section-([a-z0-9]+)-value"[^>]*>(.*?)</div>', tile, re.S):
+                campo[nome] = self._testo(valore)
+            for nome, testo in re.findall(
+                    r'id="job-\d+-desktop-section-([a-z0-9]+)-label"[^>]*>(.*?)</span>', tile, re.S):
+                etichette[nome] = (self._testo(testo) or "").lower()
+
+            def _per(nomi: tuple, rx: str) -> str | None:
+                for n in nomi:
+                    if campo.get(n):
+                        return campo[n]
+                for n, et in etichette.items():
+                    if re.search(rx, et) and campo.get(n):
+                        return campo[n]
+                return None
+
+            sede = _per(("location",), r"sede|location|standort|lieu|ubicaci|localit|\bort\b|city|citt|luogo")
+            reparto = _per(("department", "dept"), r"department|dept|reparto|abteilung|business unit|work area|funzione|area")
+            data = self._data(_per(("date",), r"date|data|datum"))
+            if id_offerta in visti:
+                continue
+            visti.add(id_offerta)
+            nuove += 1
+            out.append(self._offerta(slug, base, path, id_offerta, titolo,
+                                     sede, reparto, data, "tile"))
+        return nuove
+
+    def _get(self, url: str):
+        try:
+            r = self.client.get(url)
+        except httpx.HTTPError:
+            return None
+        return r if r.status_code == 200 else None
 
     def jobs(self, slug: str) -> list[AtsJob]:
         import html as html_mod
         base = f"https://{slug}"
-        try:
-            r = self.client.get(f"{base}/")
-        except httpx.HTTPError:
-            return []
-        if r.status_code != 200:
-            return []
-        # le bacheche /go/ linkate dalla homepage (con entità HTML da
-        # scodare: '/go/R&amp;D-Scientists/…'); finiscono in /{id}/ ma
-        # NON sono offset: l'offset è un segmento in più
-        bacheche = [html_mod.unescape(b)
-                    for b in re.findall(r'href="(/go/[^"]+)"', r.text)]
-        bacheche = [b for b in bacheche
-                    if len(b.rstrip("/").split("/")) == 4]
-        bacheche = list(dict.fromkeys(bacheche))[:self.MAX_BACHECHE]
-
         out: list[AtsJob] = []
         visti: set[str] = set()
-        elenco = bacheche or ["/"]
-        for bacheca in elenco:
+
+        # 1. la pagina di ricerca: tabella, oppure la dichiarazione dell'API
+        r = self._get(f"{base}/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=0")
+        if r is not None and self._righe_tabella(slug, base, r.text, visti, out):
+            for pagina in range(1, self.MAX_PAGINE):
+                rp = self._get(f"{base}/search/?q=&sortColumn=referencedate"
+                               f"&sortDirection=desc&startrow={pagina * 25}")
+                if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
+                    break
+        elif r is not None and "tile-search-results" in r.text:
+            m = self._RX_INIT.search(r.text)
+            cfg = m.group(1) if m else ""
+            per_pagina = int((re.search(r'jobRecordsPerPage:\s*parseInt\("(\d+)"\)', cfg)
+                              or [None, "15"])[1])
+            trovate = int((re.search(r'jobRecordsFound:\s*parseInt\("(\d+)"\)', cfg)
+                           or [None, "0"])[1])
+            per_pagina = max(per_pagina, 1)
             for pagina in range(self.MAX_PAGINE):
-                url = f"{base}{bacheca}" + (f"{pagina * 25}/" if pagina else "")
-                try:
-                    rp = self.client.get(url)
-                except httpx.HTTPError:
+                inizio = pagina * per_pagina
+                if trovate and inizio >= trovate:
                     break
-                if rp.status_code != 200:
+                rt = self._get(f"{base}/tile-search-results/?q=&sortColumn=referencedate"
+                               f"&sortDirection=desc&startrow={inizio}")
+                if rt is None or not self._tile(slug, base, rt.text, visti, out):
                     break
-                nuove = 0
-                for m in self._RIGA.finditer(rp.text):
-                    path, id_offerta = m.group(1), m.group(2)
-                    if id_offerta in visti:
-                        continue
-                    visti.add(id_offerta)
-                    nuove += 1
-                    reparto = re.sub(r"<[^>]+>", "",
-                                     m.group(3) or "").strip() or None
-                    if reparto and "no-department" in (m.group(3) or ""):
-                        reparto = None
-                    # via l'eventuale coda HTML «<small>+1 meer…</small>»
-                    sede = re.sub(r"<[^>]+>.*$", "", m.group(4) or "")
-                    sede = re.sub(r"\s+", " ", sede).strip() or None
-                    # la sede e' «Citta, CC, CAP»: il codice a due lettere
-                    # e' il paese
-                    paese = None
-                    if sede:
-                        cc = next((p.strip() for p in sede.split(",")
-                                   if re.fullmatch(r"[A-Z]{2}", p.strip())),
-                                  None)
-                        paese = _iso(cc)
-                    titolo_slug = path.rstrip("/").split("/")[-2]
-                    out.append(AtsJob(
-                        platform_id=self.platform_id, slug=slug,
-                        external_id=id_offerta,
-                        title=unquote(titolo_slug).replace("-", " ").strip(),
-                        url=urljoin(base, path),
-                        location=sede, city=(sede.split(",")[0].strip()
-                                             if sede else None),
-                        country=paese, department=reparto,
-                        raw={"path": path, "location": sede}))
-                if nuove == 0:
-                    break
+        else:
+            # 3. il template vecchio: le bacheche /go/ dalla homepage
+            rh = self._get(f"{base}/")
+            if rh is not None:
+                bacheche = [html_mod.unescape(b)
+                            for b in re.findall(r'href="(/go/[^"]+)"', rh.text)]
+                bacheche = [b for b in bacheche if len(b.rstrip("/").split("/")) == 4]
+                for bacheca in list(dict.fromkeys(bacheche))[:self.MAX_BACHECHE]:
+                    for pagina in range(self.MAX_PAGINE):
+                        rp = self._get(f"{base}{bacheca}" + (f"{pagina * 25}/" if pagina else ""))
+                        if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
+                            break
+
+        # 2. la sitemap: cio' che gli elenchi non hanno raggiunto (tenant
+        # grandi oltre MAX_PAGINE, bacheche non linkate). Titolo dallo
+        # slug dell'URL, sede sconosciuta: la riempie la lettura di
+        # dettaglio (arricchisci --dettaglio), che legge il microdata
+        # JobPosting della pagina.
+        rs = self._get(f"{base}/sitemap.xml")
+        if rs is not None and "<loc>" in rs.text:
+            for loc in re.findall(r'<loc>([^<]+)</loc>', rs.text):
+                m = self._RX_JOB.search(loc + " ")
+                if not m or m.group(2) in visti:
+                    continue
+                visti.add(m.group(2))
+                out.append(self._offerta(slug, base, f"/job/{m.group(1)}/{m.group(2)}/",
+                                         m.group(2), None, None, None, None, "sitemap"))
         return out
+
+
+_STATI_USA = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
+    "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT",
+    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+    "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC", "PR"}
 
 
 ADAPTERS["successfactors"] = SuccessFactors

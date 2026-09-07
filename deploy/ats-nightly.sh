@@ -185,8 +185,8 @@ PYEOF
 echo "   ok"
 
 # ── 5b. Arricchimento: paese/data dalle pagine di dettaglio ──────
-echo "── arricchisci (phenom 1000)"
-"$PY" -m nivult.ats.arricchisci --phenom --limite 1000 --thread 8 \
+echo "── arricchisci (dettaglio phenom + successfactors, 3000)"
+"$PY" -m nivult.ats.arricchisci --dettaglio --limite 3000 --thread 8 \
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 

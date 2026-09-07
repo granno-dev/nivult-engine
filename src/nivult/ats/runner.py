@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND
+from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND, LetturaFallita
 from nivult.ats.enrichment import cerca_wikidata
 
 log = logging.getLogger("nivult.ats.runner")
@@ -49,6 +49,37 @@ def _rate_gate(platform_id: str) -> None:
         _rate_next[platform_id] = (prossimo if prossimo > ora else ora) + intervallo
     if attesa > 0:
         time.sleep(attesa)
+
+
+def _rate_penalizza(platform_id: str, secondi: float = 20.0) -> None:
+    """Un 429 sposta in avanti il prossimo turno di TUTTA la piattaforma:
+    e' il server che dice «troppo», e insistere con gli altri thread
+    trasforma un limite in un ban."""
+    with _rate_lock:
+        ora = time.monotonic()
+        _rate_next[platform_id] = max(_rate_next.get(platform_id, 0.0), ora) + secondi
+
+
+def _paese_all_ingresso(j) -> str | None:
+    """Il paese dalla localita', al momento della scrittura.
+
+    Prima veniva assegnato SOLO dal passo notturno «arricchisci paese»:
+    se quello falliva (deadlock, 07/09/2026) le offerte del giorno —
+    57.927 JazzHR con «Atlanta, GA» e simili — restavano senza paese e
+    fuori da ogni cluster. Stesse regole del passo notturno, che resta
+    come correzione e ripiego (paese dominante dell'azienda)."""
+    if j.country:
+        return j.country
+    testo = ((j.location or "") + " " + (j.city or "")).strip()
+    if not testo:
+        return None
+    try:
+        from .arricchisci import _paese_dal_testo
+        from .geografia import paese_da_localita
+    except Exception:  # noqa: BLE001 — geonamescache assente: si resta senza
+        return None
+    return (_paese_dal_testo(testo.lower()) or paese_da_localita(j.location)
+            or paese_da_localita(j.city))
 
 ATS_DSN = os.environ.get(
     "ATS_DATABASE_URL",
@@ -242,6 +273,12 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     else:
                         jobs = adapter.jobs(az["slug"])
                     return az, jobs, (adapter.ultima_pagina if not jobs else None)
+            except LetturaFallita as exc:
+                if exc.status == 429:
+                    _rate_penalizza(az["platform_id"])
+                log.warning("%s/%s: fetch fallita: %s",
+                            az["platform_id"], az["slug"], exc)
+                return az, None, None
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s/%s: fetch fallita: %s",
                             az["platform_id"], az["slug"], exc)
@@ -291,6 +328,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         continue
 
                 for j in jobs:
+                    j.country = _paese_all_ingresso(j)
                     with conn.cursor() as cur:
                         cur.execute("""
                             INSERT INTO ats_jobs (platform_id, slug, external_id, title,

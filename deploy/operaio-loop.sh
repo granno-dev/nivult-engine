@@ -64,6 +64,18 @@ while true; do
   # impronte nuove; la scoperta jsonld cerca sitemap + JobPosting.
   nice -n 10 $PY -m nivult.ats.detector --ripassa --limite 600 --thread 24 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
   nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite 300 --thread 16 2>&1 | tail -1 || true
+  # Il paese delle offerte, ogni 6 ore e non solo di notte: dal testo
+  # della localita' (riempie e corregge) e, per chi non ce l'ha, il
+  # dominante dell'azienda. Stanotte 07/09/2026 il passo notturno e'
+  # morto per un deadlock e 150.000 offerte sono rimaste fuori dai
+  # cluster fino a sera: qui si recupera entro sei ore, sempre.
+  TIMBRO_PAESE=/opt/nivult/engine/logs/.paese.timbro
+  if [ ! -f "$TIMBRO_PAESE" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO_PAESE") )) -gt 21600 ]; then
+    echo "-- arricchisci paese (da-localita, da-azienda)"
+    nice -n 10 $PY -m nivult.ats.arricchisci --da-localita 2>&1 | grep -E "Da localita|Traceback|Error" | tail -2 || true
+    nice -n 10 $PY -m nivult.ats.arricchisci --da-azienda 2>&1 | grep -E "Da azienda|Traceback|Error" | tail -2 || true
+    touch "$TIMBRO_PAESE"
+  fi
   # Render detector (Chrome headless) una volta al giorno: sul server era il
   # piu' goloso di RAM (8 processi uccisi dal kernel il 05/09); qui ha 48 GB
   # e un IP residenziale che i career site bloccano meno.
