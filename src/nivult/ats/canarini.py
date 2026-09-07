@@ -34,7 +34,17 @@ from .adapters import ADAPTERS, LetturaFallita
 log = logging.getLogger("nivult.ats.canarini")
 ESITO_FILE = "/opt/nivult/canarini.json"
 CAMPIONI_DIR = "/opt/nivult/campioni"
-FUORI = {"workday", "inrecruiting", "icims"}
+# Fuori dai canarini: chi non si legge con `jobs(slug)` e basta.
+#  - argomenti extra (server/istanza, chiave di pubblicazione): workday,
+#    inrecruiting, werecruit;
+#  - browser headless (Playwright): taleo, welcometothejungle, welcomekit,
+#    carerix — e icims, che passa dal headless_runner;
+#  - taleo ha anche lo slug composto «host#sezione»: il canarino scelto
+#    dalle offerte («textron.taleo.net») era senza «#», l'adapter
+#    rispondeva zero per costruzione, e alle 07:40 del 07/09 si e' aperta
+#    un'officina per un guasto che non esisteva.
+FUORI = {"workday", "inrecruiting", "werecruit", "icims",
+         "taleo", "welcometothejungle", "welcomekit", "carerix"}
 PER_PIATTAFORMA = 3
 MINIMO_ATTESE = 5
 
