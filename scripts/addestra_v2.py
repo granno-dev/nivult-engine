@@ -88,19 +88,32 @@ def main() -> int:
     ds = Dataset.from_dict({"messages": righe}).shuffle(seed=7)
 
     def formatta(batch):
-        return {"text": [tok.apply_chat_template(m, tokenize=False, add_generation_prompt=False, enable_thinking=False)
-                         for m in batch["messages"]]}
+        out = []
+        for m in batch["messages"]:
+            try:
+                out.append(tok.apply_chat_template(m, tokenize=False, add_generation_prompt=False, enable_thinking=False))
+            except TypeError:   # template senza il parametro enable_thinking
+                out.append(tok.apply_chat_template(m, tokenize=False, add_generation_prompt=False))
+        return {"text": out}
     ds = ds.map(formatta, batched=True, remove_columns=["messages"])
 
     passi_per_epoca = len(ds) // (a.bs * a.accumulo)
     passi_previsti = int(passi_per_epoca * a.epoche)
     json.dump({"firma": firma, "modello": a.modello, "passi_previsti": passi_previsti, "righe": len(ds)},
               open(meta_path, "w"))
-    cfg = SFTConfig(output_dir=ckpt_dir, per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accumulo,
-                    num_train_epochs=a.epoche, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
-                    logging_steps=25, save_steps=500, save_total_limit=2, bf16=True, optim="adamw_8bit",
-                    dataset_text_field="text", max_length=a.max_len, packing=False, report_to="none", seed=7)
-    trainer = SFTTrainer(model=model, tokenizer=tok, train_dataset=ds, args=cfg)
+    base = dict(output_dir=ckpt_dir, per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accumulo,
+                num_train_epochs=a.epoche, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
+                logging_steps=25, save_steps=500, save_total_limit=2, bf16=True, optim="adamw_8bit",
+                dataset_text_field="text", packing=False, report_to="none", seed=7)
+    # trl cambia nome ai parametri fra versioni: si prova il nuovo, poi il vecchio
+    try:
+        cfg = SFTConfig(max_length=a.max_len, **base)
+    except TypeError:
+        cfg = SFTConfig(max_seq_length=a.max_len, **base)
+    try:
+        trainer = SFTTrainer(model=model, processing_class=tok, train_dataset=ds, args=cfg)
+    except TypeError:
+        trainer = SFTTrainer(model=model, tokenizer=tok, train_dataset=ds, args=cfg)
     t0 = time.time()
     esito = trainer.train(resume_from_checkpoint=riprendi)
     passi_fatti = int(trainer.state.global_step)
