@@ -179,7 +179,10 @@ def _estrai_jsonld(html: str) -> dict:
 # pagina dell'annuncio si': Phenom (sitemap), SuccessFactors (sitemap e
 # tile senza sede). La lettura di dettaglio e' cara — una richiesta per
 # offerta — e va fatta una volta sola per offerta.
-PIATTAFORME_DETTAGLIO = ("phenom", "successfactors")
+# 08/09/2026: anche chi arriva dall'elenco senza testo (JazzHR dal ripiego,
+# CATSone, Recruiterbox, Cornerstone, Zoho): la pagina dell'annuncio porta
+# il JSON-LD JobPosting, si legge una volta sola.
+PIATTAFORME_DETTAGLIO = ("phenom", "successfactors", "jazzhr", "catsone", "recruiterbox", "cornerstone", "zohorecruit")
 
 
 def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
