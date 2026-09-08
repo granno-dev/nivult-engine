@@ -85,6 +85,20 @@ log "claude rc=$rc: $(printf %s "$ESITO" | tail -c 600 | tr '\n' ' ')"
 # --- 4. la verifica a macchina --------------------------------------------
 VER=$(cd "$BASE" && "$PY" -m nivult.ats.officina verifica "$PID" 2>&1); vrc=$?
 log "verifica rc=$vrc: $(printf %s "$VER" | tr '\n' ' ' | cut -c1-600)"
+if [ $vrc -eq 3 ]; then
+  # Non c'era niente da riparare: il canarino aveva visto un vuoto
+  # passeggero del portale (taleez, 08/09/2026: tre canarini a zero alle
+  # 20:38, tutti pieni alle 21:36). Si chiude in pace, senza chiamare
+  # nessuno: un allarme che grida al lupo insegna a ignorare gli allarmi.
+  sudo -u $UT git -C "$REPO" checkout -q -- . 2>/dev/null
+  telegram "🔧 Officina su $PID: FALSO ALLARME, l'adapter legge.
+$(printf %s "$VER" | tail -4 | cut -c1-160)
+Niente da riparare, niente deployato."
+  diario "$MOTIVO" "FALSO ALLARME (l'adapter legge, nessuna modifica)
+--- verifica:
+$VER"
+  exit 0
+fi
 if [ $vrc -ne 0 ]; then
   cd "$BASE" && "$PY" -m nivult.ats.officina bocciata "$PID" "$MOTIVO" "$VER" >/dev/null 2>&1
   sudo -u $UT git -C "$REPO" checkout -q -- . 2>/dev/null

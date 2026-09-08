@@ -158,18 +158,31 @@ def controlla(dsn: str, solo: str | None = None) -> dict:
                               "canarini": [{"slug": s, "attese": a, "campione": c} for s, a, t, c in esiti]})
             elif esiti and not riuscite:
                 bloccate.append({"piattaforma": pid, "canarini": len(esiti)})
-    # «Rotta» per l'officina solo se lo era ANCHE al giro prima: un vuoto
-    # transitorio del portale (crelate, 07/09/2026 03:35: SPA a 200 senza
-    # GUID su tutti e tre i canarini, tutto a posto alle 04:05) apriva
-    # l'officina per niente. Due ore a zero non sono un'ondina.
-    prima = set()
+    # «Rotta» per l'officina solo dopo TRE giri di fila a zero. Un vuoto
+    # passeggero del portale non e' un adapter rotto, e capita: crelate
+    # il 07/09/2026 alle 03:35 (SPA a 200 senza GUID su tutti e tre i
+    # canarini, tutto a posto alle 04:05) e taleez l'08/09 alle 20:38
+    # (tre canarini a zero, 375/765/593 offerte alle 21:36). Con due giri
+    # taleez ha aperto un'officina per un guasto che non esisteva; con
+    # tre, un'ora di silenzio non basta piu'. Il prezzo e' un'ora di
+    # ritardo sul guasto vero, e la scadenza per assenza chiede comunque
+    # una rilettura riuscita: nessuna offerta muore nel frattempo.
+    storia = []
     if solo is None:
         try:
-            prima = {r["piattaforma"] for r in json.load(open(ESITO_FILE)).get("rotte", [])}
+            vecchio_esito = json.load(open(ESITO_FILE))
+            storia = vecchio_esito.get("storia_rotte", [])
+            if not storia:                       # primo giro col nuovo formato
+                storia = [[r["piattaforma"] for r in vecchio_esito.get("rotte", [])]]
         except (OSError, ValueError):
             pass
+    ora = [r["piattaforma"] for r in rotte]
+    storia = (storia + [ora])[-3:]
+    confermate = [r for r in rotte
+                  if len(storia) >= 3 and all(r["piattaforma"] in g for g in storia)]
     out = {"at": time.time(), "rotte": rotte, "bloccate": bloccate,
-           "rotte_confermate": [r for r in rotte if r["piattaforma"] in prima],
+           "storia_rotte": storia,
+           "rotte_confermate": confermate,
            "piattaforme": len(per_pid), "canarini": len(can), "vivi": vivi, "letti": letti}
     if solo is None:
         try:

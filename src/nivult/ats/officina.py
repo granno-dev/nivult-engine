@@ -239,11 +239,36 @@ def _resto(src: str) -> list[str]:
     return [ast.get_source_segment(src, n) for n in tree.body if not isinstance(n, ast.ClassDef)]
 
 
-def verifica(pid: str) -> tuple[bool, str]:
+def _banco(pid: str) -> tuple[bool, list[str]]:
+    """Il banco di prova dal vivo, sul clone dell'officina."""
+    d = f"{OFFICINA}/{pid}"
+    r = subprocess.run(["timeout", "240", PY, f"{REPO}/scripts/prova_adapter.py", pid, "--repo", REPO,
+                        "--campione", f"{d}/campione.html", "--attese", f"{d}/attese.json", "--vivo"],
+                       capture_output=True, text=True, timeout=300)
+    esito = (r.stdout + r.stderr).strip().splitlines()
+    return r.returncode == 0 and any(l.startswith("PROVA: OK") for l in esito), esito
+
+
+def verifica(pid: str) -> tuple[bool | None, str]:
+    """True = riparato e nel perimetro, False = bocciato, None = non serviva.
+
+    Il terzo esito non e' un dettaglio di stile: l'08/09/2026 taleez e'
+    stata muta un'ora (tutti e tre i canarini a zero alle 20:38, tutti e
+    tre pieni alle 21:36), l'officina si e' aperta, e Claude ha
+    correttamente NON toccato niente — il banco leggeva 375 offerte.
+    Chiamarla «BOCCIATA, serve una mano umana» insegna a ignorare gli
+    avvisi, che e' peggio di non averli."""
     righe = []
     cambiati = [r[3:] for r in _git("status", "--porcelain").splitlines() if r.strip()]
+    if not cambiati:
+        ok, esito = _banco(pid)
+        if ok:
+            return None, "\n".join(["nessun file toccato e il banco passa lo stesso: "
+                                    "l'adapter legge, non c'era niente da riparare"] + esito[-6:])
+        return False, "\n".join([f"nessun file toccato e il banco NON passa: la riparazione non e' avvenuta"]
+                                + esito[-6:])
     if cambiati != [FILE_ADAPTER]:
-        return False, f"file toccati: {cambiati or 'nessuno'} — ammesso solo {FILE_ADAPTER}"
+        return False, f"file toccati: {cambiati} — ammesso solo {FILE_ADAPTER}"
     vecchio = _git("show", f"HEAD:{FILE_ADAPTER}")
     nuovo = open(f"{REPO}/{FILE_ADAPTER}").read()
     try:
@@ -269,14 +294,8 @@ def verifica(pid: str) -> tuple[bool, str]:
         if v:
             return False, f"riga aggiunta fuori perimetro («{v.group(0)}»): {l.strip()[:100]}"
     righe.append(f"perimetro ok: solo {classe}, {len(aggiunte)} righe nuove")
-    # il banco
-    d = f"{OFFICINA}/{pid}"
-    r = subprocess.run(["timeout", "240", PY, f"{REPO}/scripts/prova_adapter.py", pid, "--repo", REPO,
-                        "--campione", f"{d}/campione.html", "--attese", f"{d}/attese.json", "--vivo"],
-                       capture_output=True, text=True, timeout=300)
-    esito = (r.stdout + r.stderr).strip().splitlines()
+    ok, esito = _banco(pid)
     righe += esito[-8:]
-    ok = r.returncode == 0 and any(l.startswith("PROVA: OK") for l in esito)
     return ok, "\n".join(righe)
 
 
@@ -364,8 +383,9 @@ def main(argv=None) -> int:
         return 0
     if cmd == "verifica":
         ok, rep = verifica(pid)
-        print(rep); print("VERIFICA:", "OK" if ok else "BOCCIATA")
-        return 0 if ok else 1
+        print(rep)
+        print("VERIFICA:", "OK" if ok else ("NON SERVIVA" if ok is None else "BOCCIATA"))
+        return 0 if ok else (3 if ok is None else 1)
     if cmd == "deploy":
         ok, rep = deploy(pid, argv[2] if len(argv) > 2 else "riparazione")
         print(rep); print("DEPLOY:", "OK" if ok else "ROLLBACK")
