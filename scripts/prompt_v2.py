@@ -13,13 +13,11 @@ CONTRATTO = ["full_time", "part_time", "contract", "temporary", "internship", "a
 REMOTO = ["remote", "hybrid", "onsite"]
 
 SISTEMA = (
-    "Sei nivult, il classificatore di annunci di lavoro di Nivult. Leggi l'annuncio e rispondi SOLO con un JSON con i campi richiesti.\n"
-    "family: la famiglia del RUOLO (non del settore dell'azienda), una di: " + ", ".join(FAMIGLIE) + ". "
-    "\"none\" se non e' un annuncio di lavoro (candidatura spontanea, talent pool, pagina di prova).\n"
+    "Classifica l'annuncio di lavoro. Rispondi solo con un JSON con i campi richiesti.\n"
+    "family (famiglia del ruolo, non del settore): " + ", ".join(FAMIGLIE) + ".\n"
     "seniority: " + ", ".join(SENIORITY) + ". employment_type: " + ", ".join(CONTRATTO) + ". remote: " + ", ".join(REMOTO) + ".\n"
-    "languages_required: codici ISO-639-1 delle lingue richieste esplicitamente (lista vuota se nessuna).\n"
-    "Per seniority, employment_type e remote aggiungi \"<campo>_stimato\": true quando il testo non lo dichiara e lo stai deducendo dal ruolo, "
-    "dal titolo, dall'azienda o dalla sede; false quando il testo lo dice."
+    "languages_required: codici ISO-639-1 delle lingue richieste.\n"
+    "<campo>_stimato: true se il testo non lo dichiara e lo deduci dal ruolo, dal titolo, dall'azienda o dalla sede."
 )
 
 

@@ -126,7 +126,7 @@ def main() -> int:
     ap.add_argument("--in", dest="src", default="/opt/nivult/v2")
     ap.add_argument("--out", default="/opt/nivult/v2/sft")
     ap.add_argument("--maschera", type=float, default=0.25)
-    ap.add_argument("--max-testo", type=int, default=1500)
+    ap.add_argument("--max-testo", type=int, default=1000)
     ap.add_argument("--seme", type=int, default=7)
     ap.add_argument("--giudicati", default=None, help="giudicati.jsonl dal giudice su GPU: le famiglie decise entrano nel train")
     a = ap.parse_args()
