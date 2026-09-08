@@ -67,6 +67,11 @@ while true; do
   # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
   # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
   nice -n 10 $PY -m nivult.ats.dichiarati --limite 200000 2>&1 | tail -1 || true
+  # La lettura di dettaglio SUBITO, non di notte: SuccessFactors, Rippling,
+  # Breezy, Oracle entrano dall'elenco senza testo, e senza testo nessun
+  # campo si legge ne' si stima (08/09/2026: 0% di testo sulle SF nuove).
+  # 5.000 pagine per giro, le piu' recenti prima.
+  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite 5000 --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
