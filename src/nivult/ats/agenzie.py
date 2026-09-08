@@ -211,7 +211,7 @@ def raccogli(dsn: str, quali: list[str] | None, limite: int,
                            employment_type, raw)
                         VALUES ('agenzie', %s, %s, %s, %s,
                                 %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                        ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                           title = EXCLUDED.title,
                           city = EXCLUDED.city, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                           -- COALESCE, non assegnazione secca: un paese

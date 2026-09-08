@@ -158,7 +158,7 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
                                     INSERT INTO ats_jobs (platform_id, slug, external_id,
                                       title, url, raw)
                                     VALUES (%s, %s, %s, %s, %s, %s)
-                                    ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                                    ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                                       title = EXCLUDED.title, url = EXCLUDED.url,
                                       fetched_at = now()
                                     RETURNING (xmax = 0) AS is_new

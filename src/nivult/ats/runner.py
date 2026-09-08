@@ -334,7 +334,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
                             INSERT INTO ats_jobs (platform_id, slug, external_id, title,
                               url, location, country, city, posted_at, department, raw)
                             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location,
                               country = COALESCE(EXCLUDED.country, ats_jobs.country),

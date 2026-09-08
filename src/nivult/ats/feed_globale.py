@@ -128,7 +128,7 @@ def smartrecruiters(dsn: str, paesi: set[str] | None = None,
                            location, country, city, posted_at, raw)
                         VALUES ('smartrecruiters', %s, %s, %s, %s,
                                 %s, %s, %s, %s, %s)
-                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                        ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                           title = EXCLUDED.title, url = EXCLUDED.url,
                           city = EXCLUDED.city,
                           country = COALESCE(EXCLUDED.country,

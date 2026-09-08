@@ -110,7 +110,7 @@ def scarica_arbetsformedlingen(dsn: str, limite: int = 1000) -> dict:
                                location, country, city, posted_at, raw)
                             VALUES ('arbetsformedlingen', 'platsbanken', %s, %s, %s,
                                     %s, 'SE', %s, %s, %s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
                               posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
@@ -226,7 +226,7 @@ def scarica_francetravail(dsn: str, limite: int = 1000) -> dict:
                                location, country, city, posted_at, raw)
                             VALUES ('francetravail', 'pole-emploi', %s, %s, %s,
                                     %s, 'FR', %s, %s, %s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
                               posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
@@ -334,7 +334,7 @@ def scarica_bundesagentur(dsn: str, limite: int = 2000) -> dict:
                                location, country, city, posted_at, raw)
                             VALUES ('bundesanstellung', 'jobboerse', %s, %s, %s,
                                     %s, 'DE', %s, %s, %s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location, city = EXCLUDED.city,
                               posted_at = EXCLUDED.posted_at, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
@@ -443,7 +443,7 @@ def scarica_francetravail_rome(dsn: str, limite_per_rome: int = 3000) -> dict:
                                        location, country, city, posted_at, raw)
                                     VALUES ('francetravail', 'pole-emploi', %s, %s, %s,
                                             %s, 'FR', %s, %s, %s)
-                                    ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                                    ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                                       title = EXCLUDED.title, url = EXCLUDED.url,
                                       fetched_at = now()
                                     RETURNING (xmax = 0) AS is_new
@@ -585,7 +585,7 @@ def scarica_nav(dsn: str, limite: int = 2000) -> dict:
                         INSERT INTO ats_jobs (platform_id, slug, external_id, title, url, location, country, city,
                                               posted_at, employment_type, raw)
                         VALUES ('nav', 'arbeidsplassen', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                        ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                           title = EXCLUDED.title, url = EXCLUDED.url, location = EXCLUDED.location,
                           city = EXCLUDED.city, posted_at = COALESCE(EXCLUDED.posted_at, ats_jobs.posted_at),
                           employment_type = COALESCE(EXCLUDED.employment_type, ats_jobs.employment_type),
@@ -722,7 +722,7 @@ def eures(dsn: str, limite: int = 2000, paesi: str = "IT") -> dict:
                                    location, country, city, posted_at, raw)
                                 VALUES ('eures', %s, %s, %s, %s,
                                         %s, %s, %s, %s, %s)
-                                ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                                ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                                   title = EXCLUDED.title, url = EXCLUDED.url,
                                   location = EXCLUDED.location, city = EXCLUDED.city,
                                   country = COALESCE(EXCLUDED.country, ats_jobs.country),

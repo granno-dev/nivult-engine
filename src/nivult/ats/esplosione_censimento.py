@@ -358,7 +358,7 @@ def raccogli_schema_org(dsn: str, paese: str = "IT",
                               (platform_id, slug, external_id, title, url,
                                location, country, city, posted_at, raw)
                             VALUES ('schemaorg', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, posted_at = EXCLUDED.posted_at,
                               raw = EXCLUDED.raw, fetched_at = now()
                             RETURNING (xmax = 0) AS is_new

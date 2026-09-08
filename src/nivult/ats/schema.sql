@@ -247,3 +247,22 @@ CREATE INDEX IF NOT EXISTS ats_jobs_locale_v1_idx ON ats_jobs (posted_at DESC) W
 -- campi dichiarati dall'ATS (07/09/2026): marcatore del passo nivult.ats.dichiarati
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS dichiarati_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS ats_jobs_dichiarati_idx ON ats_jobs (fetched_at DESC) WHERE expired_at IS NULL AND dichiarati_at IS NULL;
+-- Le CHIMERE (07-08/09/2026): su iCIMS, Workday, Cornerstone, Eploy, Traffit,
+-- Pinpoint, Vincere l'id dell'annuncio e' unico PER TENANT, ma la chiave era
+-- (piattaforma, id): il 14145 di un tenant sovrascriveva titolo e URL del
+-- 14145 di un altro. Misurato: iCIMS 30%, Cornerstone 36%, Eploy 57% delle
+-- attive con l'URL di un altro tenant. La chiave giusta e' (piattaforma,
+-- tenant, id). L'indice si costruisce fuori transazione (CONCURRENTLY) in
+-- deploy/chimere.sh; qui si dichiara il vincolo se manca.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ats_jobs_platform_slug_external_key') THEN
+    IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ats_jobs_platform_slug_external_idx') THEN
+      ALTER TABLE ats_jobs ADD CONSTRAINT ats_jobs_platform_slug_external_key UNIQUE USING INDEX ats_jobs_platform_slug_external_idx;
+    ELSE
+      ALTER TABLE ats_jobs ADD CONSTRAINT ats_jobs_platform_slug_external_key UNIQUE (platform_id, slug, external_id);
+    END IF;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ats_jobs_platform_id_external_id_key') THEN
+    ALTER TABLE ats_jobs DROP CONSTRAINT ats_jobs_platform_id_external_id_key;
+  END IF;
+END $$;
