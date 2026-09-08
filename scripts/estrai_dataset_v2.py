@@ -44,6 +44,7 @@ import psycopg
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from nivult.ats.tassonomie import famiglia_da_isco, famiglia_da_rome, famiglia_da_ssyk  # noqa: E402
 from nivult.ats.dichiarati import contratto, remoto, seniority  # noqa: E402
+from prompt_v2 import menziona  # noqa: E402
 
 QUOTA_ESAME_AZIENDE = 0.06
 _TAG = re.compile(r"<[^>]+>")
@@ -75,38 +76,6 @@ RX_NONE = re.compile(
     r"candidature\s+spontan|initiativbewerbung|autocandidatura|talent\s+(?:pool|community|network)|"
     r"join\s+our\s+talent|future\s+opportunit|keep\s+in\s+touch|expression\s+of\s+interest|"
     r"^\s*(?:test|prova|dummy|sample)\b|^\s*application\s*$|^\s*apply\s*$|^\s*careers?\s*$", re.I)
-
-
-# la menzione nel testo: se c'e', e' estrazione; se manca, e' stima
-MENZIONE = {
-    "employment_type": {
-        "full_time": r"\b(full[- ]?time|tempo pieno|temps plein|vollzeit|cdi|indeterminato|permanent|unbefristet|tillsvidare|heltid|fast stilling)\b",
-        "part_time": r"\b(part[- ]?time|tempo parziale|temps partiel|teilzeit|deltid|\d{1,2}\s?h(?:/sem|eures)?)\b",
-        "temporary": r"\b(temporary|cdd|determinato|fixed[- ]term|befristet|intérim|interim|saisonnier|stagionale|vikariat|tidsbegränsad|contract to hire)\b",
-        "contract": r"\b(freelance|contractor|contract|p\.?iva|libéral|selbstständig)\b",
-        "internship": r"\b(intern(ship)?|stage|stagiaire|tirocin|praktik)\w*",
-        "apprenticeship": r"\b(apprenti|apprendist|ausbildung|alternance|azubi|lehrling)\w*",
-    },
-    "seniority": {
-        "intern": r"\b(intern|stage|stagiaire|tirocin|praktik|student)\w*",
-        "junior": r"\b(junior|entry[- ]level|débutant|debutant|einsteiger|neolaureat|graduate|0-2 (years|anni|ans))\w*",
-        "mid": r"\b(mid[- ]level|intermediate|confirmé|[2-4] (years|anni|ans|jahre))\b",
-        "senior": r"\b(senior|experienced|expérimenté|erfahren|[5-9]\+? (years|anni|ans|jahre)|\d{2}\+? (years|anni|ans|jahre))\b",
-        "lead": r"\b(lead|team ?lead|coordinator|coordinatore|responsable d'équipe|teamleiter|supervisor)\b",
-        "head": r"\b(head of|director|direttore|directeur|direktor|chief|vp|vice president|c[a-z]o)\b",
-    },
-    "remote": {
-        "remote": r"\b(remote|da remoto|télétravail|teletravail|homeoffice|home office|distans|fully remote)\b",
-        "hybrid": r"\b(hybrid|ibrido|hybride|smart working|smartworking)\b",
-        "onsite": r"\b(on[- ]?site|in sede|sur site|vor ort|på plats|in presenza)\b",
-    },
-}
-_RX_MENZIONE = {c: {v: re.compile(rx, re.I) for v, rx in d.items()} for c, d in MENZIONE.items()}
-
-
-def menziona(campo: str, valore: str, testo: str) -> bool:
-    rx = _RX_MENZIONE.get(campo, {}).get(valore)
-    return bool(rx and rx.search(testo))
 
 
 def chiave_dup(titolo: str, azienda: str, luogo: str) -> str:

@@ -35,9 +35,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-from estrai_dataset_v2 import _RX_MENZIONE  # noqa: E402
 
-from prompt_v2 import FAMIGLIE, SENIORITY, CONTRATTO, REMOTO, SISTEMA, utente  # noqa: E402,F401
+from prompt_v2 import FAMIGLIE, SENIORITY, CONTRATTO, REMOTO, SISTEMA, utente, _RX_MENZIONE  # noqa: E402,F401
 
 
 def maschera(campo: str, valore: str, testo: str) -> str | None:
