@@ -163,7 +163,11 @@ def main() -> int:
                x.family, x.model, j.lang, j.languages_required,
                (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k) AS campi
           FROM ats_jobs j LEFT JOIN job_classifications x ON x.job_id = j.id
-         WHERE j.title IS NOT NULL AND length(j.title) > 2 AND j.expired_at IS NULL
+         WHERE j.title IS NOT NULL AND length(j.title) > 2
+           -- anche le SCADUTE, se portano un codice ufficiale o un campo dichiarato:
+           -- per il dataset l'etichetta umana vale uguale (la prima versione, 08/09,
+           -- prendeva solo le attive: 5.278 ROME invece di 66.000)
+           AND (j.expired_at IS NULL OR j.platform_id = ANY(%s::text[]))
            AND NOT (j.platform_id = ANY(%s::text[]))
            AND NOT (j.platform_id = ANY(%s::text[]) AND j.url NOT ILIKE '%%' || j.slug || '%%')
     """
@@ -172,7 +176,9 @@ def main() -> int:
     conn = psycopg.connect(os.environ["ATS_DATABASE_URL"])
     cur = conn.cursor(name="v2")
     cur.itersize = 5000
-    cur.execute(sql, (list(RAW_CAMPI), escluse, chimere))
+    con_etichette_umane = ["francetravail", "arbetsformedlingen", "eures", "nav", "smartrecruiters", "recruitee",
+                           "workable", "ashby", "personio", "lever"]
+    cur.execute(sql, (list(RAW_CAMPI), con_etichette_umane, escluse, chimere))
 
     st = collections.Counter()
     prov = collections.Counter()
