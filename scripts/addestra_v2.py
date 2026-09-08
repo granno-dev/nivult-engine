@@ -62,14 +62,30 @@ def main() -> int:
     ckpt_dir = os.path.join(a.out, "checkpoint")
     meta_path = os.path.join(a.out, "meta.json")
     riprendi = None
+
+    def _ultimo_checkpoint(cartella: str) -> str | None:
+        """L'ultimo checkpoint-N COMPLETO (con trainer_state.json), o None."""
+        if not os.path.isdir(cartella):
+            return None
+        cand = []
+        for nome in os.listdir(cartella):
+            if nome.startswith("checkpoint-") and nome.split("-")[-1].isdigit() \
+                    and os.path.exists(os.path.join(cartella, nome, "trainer_state.json")):
+                cand.append((int(nome.split("-")[-1]), os.path.join(cartella, nome)))
+        return max(cand)[1] if cand else None
+
     if os.path.exists(meta_path) and os.path.isdir(ckpt_dir):
         meta = json.load(open(meta_path))
         if meta.get("firma") == firma and meta.get("modello") == a.modello:
-            riprendi = ckpt_dir
-            print("riprendo dal checkpoint", ckpt_dir, flush=True)
+            riprendi = _ultimo_checkpoint(ckpt_dir)
+            print("riprendo dal checkpoint", riprendi or "(nessuno completo: da zero)", flush=True)
         else:
             print(f"CHECKPOINT DI UN ALTRO DATASET/MODELLO ({meta.get('firma')} vs {firma}): si parte da zero", flush=True)
             os.rename(ckpt_dir, ckpt_dir + ".altro-dataset-" + str(int(time.time())))
+    # il rapporto di un giro precedente non deve mai passare per quello di questo
+    for vecchio in ("rapporto-addestramento.json",):
+        if os.path.exists(os.path.join(a.out, vecchio)):
+            os.remove(os.path.join(a.out, vecchio))
 
     model, tok = FastLanguageModel.from_pretrained(model_name=a.modello, max_seq_length=a.max_len,
                                                    load_in_4bit=False, dtype=None)
