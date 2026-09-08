@@ -53,7 +53,12 @@ def main() -> int:
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
-                 ORDER BY (NOT coalesce(j.posted_at_estimated, false)) DESC,
+                 -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
+                 -- speso 295k letture per scriverne 22k, perche' rileggeva
+                 -- offerte gia' classificate mentre l'arretrato senza famiglia
+                 -- cresceva (325k -> 339k)
+                 ORDER BY EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) ASC,
+                          (NOT coalesce(j.posted_at_estimated, false)) DESC,
                           j.posted_at DESC NULLS LAST
                  LIMIT 2048""").fetchall()
             if not righe:
