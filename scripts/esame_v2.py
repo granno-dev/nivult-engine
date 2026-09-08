@@ -27,7 +27,6 @@ import time
 
 import torch
 
-SISTEMA = None   # caricato da formatta_v2 per essere identico all'addestramento
 
 
 def _carica(modello: str, adapter: str | None):
@@ -53,8 +52,12 @@ def predici(tok, m, righe: list[dict], campi: list[str], bs: int = 16) -> list[d
         b = righe[i:i + bs]
         msgs = [[{"role": "system", "content": SISTEMA},
                  {"role": "user", "content": utente(r, campi, (r.get("text") or "")[:1000])}] for r in b]
-        enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", padding=True,
-                                      return_dict=True, enable_thinking=False).to(m.device)
+        try:
+            enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", padding=True,
+                                          return_dict=True, enable_thinking=False).to(m.device)
+        except TypeError:   # template senza enable_thinking
+            enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", padding=True,
+                                          return_dict=True).to(m.device)
         gen = m.generate(**enc, max_new_tokens=120, do_sample=False)
         for k in range(len(b)):
             testo = tok.decode(gen[k][enc["input_ids"].shape[1]:], skip_special_tokens=True)
