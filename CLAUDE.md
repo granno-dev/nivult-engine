@@ -1132,6 +1132,33 @@ sudo deploy/cron.sh                       # installa i lavori periodici (idempot
 sudo deploy/cron.sh --check               # verifica che ci siano tutti, esce 1 se no
 ```
 
+### Il deploy aggiorna i file, NON riavvia niente
+
+`git push server main` e `git push n5 main` fanno solo il checkout: i
+processi già in esecuzione tengono in memoria il codice con cui sono
+partiti, e continuano a girare con quello finché non li si riavvia. È
+un errore che non dà segnale: nessun log, nessun allarme, e il
+comportamento vecchio che sembra un guasto nuovo.
+
+**Misurato l'08/09/2026:** il cruscotto segnalava `jsonld` come
+piattaforma «in coda di collegamento» pur avendo il suo adapter dal
+giorno prima. `nivult-api` era partita alle 07:21, l'adapter era stato
+aggiunto alle 14:35, e Python teneva `adapters.py` in `sys.modules`.
+Nello stesso giro tre demoni giravano ancora col codice del 7.
+
+**Dopo ogni push, riavviare ciò che tocca:**
+
+| Cosa hai cambiato | Cosa riavviare |
+|---|---|
+| `api/`, `adapters.py` | `systemctl restart nivult-api` |
+| `ats/runner.py`, adapter, `mantenimento.py` | `nivult-scrape`, `nivult-scrape-veloce`, `nivult-profonda`, `nivult-volano` |
+| `deploy/operaio-loop.sh` o i moduli del N5 | `docker restart nivult-operaio` (bash tiene in memoria il ciclo) |
+| `matching/`, `delivery/` | niente: il worker parte dal cron a ogni giro |
+| `deploy/cron.sh` | `sudo deploy/cron.sh` sul server |
+
+Il modo più veloce per accorgersene: `systemctl show <unità> -p
+ActiveEnterTimestamp --value` e confrontarlo con l'ora del commit.
+
 Le migrazioni sono file SQL numerati in `migrations/`, applicati in ordine da un
 runner minimo. Niente Alembic: lo schema è pesantemente specifico di Postgres e
 ogni migrazione sarebbe comunque `op.execute()` di SQL grezzo.
