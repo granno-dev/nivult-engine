@@ -47,7 +47,7 @@ def _carica(modello: str, adapter: str | None):
 def predici(tok, m, righe: list[dict], campi: list[str], bs: int = 16) -> list[dict]:
     import sys, os
     sys.path.insert(0, os.path.dirname(__file__))
-    from formatta_v2 import SISTEMA, utente
+    from prompt_v2 import SISTEMA, utente
     out = []
     for i in range(0, len(righe), bs):
         b = righe[i:i + bs]
