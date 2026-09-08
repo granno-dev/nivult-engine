@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Il giudice sui casi dubbi, su GPU (Colab/RunPod) con vLLM.
+"""Il giudice sui casi dubbi, via Ollama (Colab o qualunque GPU).
 
 Input: da_giudicare.jsonl (le righe dove GLM e v1 non concordano o v1 e'
 incerto). Il giudice (Qwen3.6-35B-A3B, prompt con le definizioni delle 33
@@ -9,17 +9,25 @@ da' il suo parere. La regola di decisione e' PRUDENTE:
   - giudice = GLM  oppure  giudice = v1   → la famiglia entra (due su tre)
   - tre pareri diversi                    → resta fuori: va in chat (per titolo)
 
-    python scripts/giudica_v2.py --in da_giudicare.jsonl --out giudicati.jsonl [--modello Qwen/Qwen3.6-35B-A3B]
+    python scripts/giudica_v2.py --in da_giudicare.jsonl --out giudicati.jsonl \\
+        [--url http://127.0.0.1:11434] [--modello qwen3.6:35b-a3b] [--parallele 8]
 
-Sul N5 sarebbero tre giorni (8 s/annuncio); su una H100 con vLLM ~1 ora.
+Ollama si installa con uno script e porta con se' la CUDA giusta: e' la via
+che su Colab funziona al primo colpo (vLLM l'08/09 ha rotto l'ambiente
+con i conflitti di cuda-python). E' riprendibile: le righe gia' in --out
+non si rifanno.
 """
 from __future__ import annotations
 
 import argparse
 import collections
+import concurrent.futures as cf
 import json
+import os
 import sys
 import time
+
+import httpx
 
 FAMIGLIE = ['Administrative', 'Agriculture', 'Art & Design', 'Construction', 'Consulting', 'Creative & Media',
             'Customer Service & Support', 'Data & Analytics', 'Education', 'Energy', 'Engineering',
@@ -76,40 +84,56 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="src", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--modello", default="Qwen/Qwen3.6-35B-A3B")
+    ap.add_argument("--url", default=os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"))
+    ap.add_argument("--modello", default="qwen3.6:35b-a3b")
+    ap.add_argument("--parallele", type=int, default=8)
     ap.add_argument("--max", type=int, default=None)
     a = ap.parse_args()
-    from vllm import LLM, SamplingParams
-    from vllm.sampling_params import GuidedDecodingParams
     righe = [json.loads(l) for l in open(a.src)]
     if a.max:
         righe = righe[:a.max]
-    print(f"{len(righe)} casi da giudicare con {a.modello}", flush=True)
-    llm = LLM(model=a.modello, max_model_len=4096, gpu_memory_utilization=0.92, enable_prefix_caching=True)
-    tok = llm.get_tokenizer()
-    prompts = []
-    for r in righe:
-        u = f"Titolo: {r['title']}\nSede: {r.get('location') or ''}\nAzienda: {(r.get('azienda') or '').split('/')[-1]}\n\n{(r.get('text') or '')[:2500]}"
-        prompts.append(tok.apply_chat_template([{"role": "system", "content": SYS}, {"role": "user", "content": u}],
-                                               tokenize=False, add_generation_prompt=True, enable_thinking=False))
-    sp = SamplingParams(temperature=0, max_tokens=40, guided_decoding=GuidedDecodingParams(json=SCHEMA))
-    t0 = time.time()
-    esiti = llm.generate(prompts, sp)
-    st = collections.Counter()
-    with open(a.out, "w") as f:
-        for r, e in zip(righe, esiti):
+    fatti: dict[str, dict] = {}
+    if os.path.exists(a.out):
+        for l in open(a.out):
+            d = json.loads(l)
+            fatti[d["id"]] = d
+    da_fare = [r for r in righe if r["id"] not in fatti]
+    print(f"{len(righe)} casi, {len(fatti)} gia' fatti, {len(da_fare)} da giudicare con {a.modello}", flush=True)
+    cli = httpx.Client(timeout=600)
+
+    def uno(r: dict) -> dict:
+        u = (f"Titolo: {r['title']}\nSede: {r.get('location') or ''}\nAzienda: {(r.get('azienda') or '').split('/')[-1]}"
+             f"\n\n{(r.get('text') or '')[:2500]}")
+        body = {"model": a.modello, "stream": False, "think": False, "format": SCHEMA,
+                "options": {"temperature": 0, "num_predict": 40, "num_ctx": 4096},
+                "messages": [{"role": "system", "content": SYS}, {"role": "user", "content": u}]}
+        fam = None
+        for tentativo in range(3):
             try:
-                fam = json.loads(e.outputs[0].text)["family"]
+                x = cli.post(a.url + "/api/chat", json=body)
+                if x.status_code == 200:
+                    fam = json.loads(x.json()["message"]["content"]).get("family")
+                    break
             except Exception:  # noqa: BLE001
-                fam = None
-            if fam and fam == r.get("glm"):
-                decisione, fonte = fam, "giudice+glm"
-            elif fam and fam == r.get("v1"):
-                decisione, fonte = fam, "giudice+v1"
-            else:
-                decisione, fonte = None, "tre_pareri"
-            st[fonte] += 1
-            f.write(json.dumps({**r, "giudice": fam, "family": decisione, "family_prov": fonte}, ensure_ascii=False) + "\n")
+                time.sleep(2 * (tentativo + 1))
+        if fam and fam == r.get("glm"):
+            dec, fonte = fam, "giudice+glm"
+        elif fam and fam == r.get("v1"):
+            dec, fonte = fam, "giudice+v1"
+        else:
+            dec, fonte = None, "tre_pareri" if fam else "senza_risposta"
+        return {**r, "giudice": fam, "family": dec, "family_prov": fonte}
+
+    st = collections.Counter(d["family_prov"] for d in fatti.values())
+    t0 = time.time()
+    with open(a.out, "a") as f, cf.ThreadPoolExecutor(max_workers=a.parallele) as pool:
+        for i, d in enumerate(pool.map(uno, da_fare)):
+            f.write(json.dumps(d, ensure_ascii=False) + "\n")
+            st[d["family_prov"]] += 1
+            if (i + 1) % 500 == 0:
+                f.flush()
+                v = (i + 1) / (time.time() - t0)
+                print(f"  {i+1}/{len(da_fare)} {dict(st)} {v:.1f}/s, restano ~{int((len(da_fare)-i-1)/max(v,0.01)/60)} min", flush=True)
     print(f"FINE {dict(st)} in {int(time.time()-t0)}s", flush=True)
     return 0
 
