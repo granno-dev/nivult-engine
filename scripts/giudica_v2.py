@@ -87,6 +87,8 @@ def main() -> int:
     ap.add_argument("--url", default=os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434"))
     ap.add_argument("--modello", default="qwen3.6:35b-a3b")
     ap.add_argument("--parallele", type=int, default=8)
+    ap.add_argument("--api", choices=["ollama", "llama"], default="ollama",
+                    help="ollama (/api/chat) oppure llama-server (/v1/chat/completions, sul N5)")
     ap.add_argument("--max", type=int, default=None)
     a = ap.parse_args()
     righe = [json.loads(l) for l in open(a.src)]
@@ -104,15 +106,22 @@ def main() -> int:
     def uno(r: dict) -> dict:
         u = (f"Titolo: {r['title']}\nSede: {r.get('location') or ''}\nAzienda: {(r.get('azienda') or '').split('/')[-1]}"
              f"\n\n{(r.get('text') or '')[:2500]}")
-        body = {"model": a.modello, "stream": False, "think": False, "format": SCHEMA,
-                "options": {"temperature": 0, "num_predict": 40, "num_ctx": 4096},
-                "messages": [{"role": "system", "content": SYS}, {"role": "user", "content": u}]}
+        msgs = [{"role": "system", "content": SYS}, {"role": "user", "content": u}]
+        if a.api == "ollama":
+            body = {"model": a.modello, "stream": False, "think": False, "format": SCHEMA,
+                    "options": {"temperature": 0, "num_predict": 40, "num_ctx": 4096}, "messages": msgs}
+            via, leggi = "/api/chat", lambda j: j["message"]["content"]
+        else:
+            body = {"model": a.modello, "messages": msgs, "temperature": 0, "max_tokens": 40,
+                    "response_format": {"type": "json_schema", "json_schema": {"name": "f", "schema": SCHEMA}},
+                    "chat_template_kwargs": {"enable_thinking": False}}
+            via, leggi = "/v1/chat/completions", lambda j: j["choices"][0]["message"]["content"]
         fam = None
         for tentativo in range(3):
             try:
-                x = cli.post(a.url + "/api/chat", json=body)
+                x = cli.post(a.url + via, json=body)
                 if x.status_code == 200:
-                    fam = json.loads(x.json()["message"]["content"]).get("family")
+                    fam = json.loads(leggi(x.json())).get("family")
                     break
             except Exception:  # noqa: BLE001
                 time.sleep(2 * (tentativo + 1))
