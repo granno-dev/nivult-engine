@@ -84,7 +84,7 @@ _EMAIL_NO = re.compile(r"noreply|no-reply|donotreply|example|sentry|"
 
 _DESCR = ("COALESCE(raw->>'description', raw->>'externalDescription', "
           "raw->>'descriptionHtml', raw->>'jobDescription', "
-          "raw->>'job_description', raw->>'content', '')")
+          "raw->>'job_description', raw->>'content', raw->>'descriptionPlain', raw->>'Job_Description', raw->>'body', '')")
 
 
 def _tipo_da_raw(raw: dict) -> str | None:

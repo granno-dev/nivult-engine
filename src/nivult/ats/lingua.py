@@ -117,7 +117,7 @@ def estrai(titolo: str, descrizione: str) -> str | None:
 _DESCR_SQL = """COALESCE(raw->>'description', raw->>'externalDescription',
                 raw->>'descriptionHtml',
                 raw->>'jobDescription', raw->>'job_description',
-                raw->>'content', raw->>'descriptionPlain', '')"""
+                raw->>'content', raw->>'descriptionPlain', raw->>'Job_Description', raw->>'body', '')"""
 
 
 def arricchisci(dsn: str, limite: int = 100000) -> dict:

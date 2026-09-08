@@ -196,7 +196,7 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
             cur.execute("""
                 SELECT id, url FROM ats_jobs
                  WHERE platform_id = ANY(%s) AND expired_at IS NULL
-                   AND (country IS NULL OR NOT (raw ? 'description'))
+                   AND (country IS NULL OR NOT (raw ?| array['description','content','descriptionHtml','descriptionPlain','jobDescription','Job_Description','body']))
                    AND NOT (raw ? 'dettaglio_letto')
                  ORDER BY fetched_at DESC
                  LIMIT %s
