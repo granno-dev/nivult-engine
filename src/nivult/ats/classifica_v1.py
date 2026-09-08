@@ -33,6 +33,29 @@ SOGLIA_RIPIEGO = float(os.environ.get("SOGLIA_RIPIEGO_V1", "0.85"))
 SOGLIA_CONTRATTO = float(os.environ.get("SOGLIA_CONTRATTO_V1", "0.97"))
 LOTTO = int(os.environ.get("LOTTO_V1", "64"))
 
+# ── La fascia silenziosa ─────────────────────────────────────────────
+# Il N5 sta in casa, non in sala macchine: a piena velocita' la GPU lo
+# tiene a 76 °C e la ventola si sente di notte. Misurato l'08/09/2026:
+# v1 fa 92.000 offerte l'ora e ne entrano 9.700 — nove volte il
+# fabbisogno. Fra NOTTE_DA e NOTTE_A (ora di Roma) il demone lavora
+# quindi a scatti: un lotto, poi riposa NOTTE_RIPOSO secondi. Restano
+# ~22.000 l'ora, il doppio delle nuove, e l'arretrato cala lo stesso.
+# NOTTE_DA uguale a NOTTE_A spegne la fascia.
+NOTTE_DA = os.environ.get("NOTTE_DA", "23:30")
+NOTTE_A = os.environ.get("NOTTE_A", "07:00")
+NOTTE_RIPOSO = float(os.environ.get("NOTTE_RIPOSO", "8"))
+
+
+def e_notte() -> bool:
+    if NOTTE_DA == NOTTE_A:
+        return False
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    ora = datetime.now(ZoneInfo("Europe/Rome")).strftime("%H:%M")
+    if NOTTE_DA <= NOTTE_A:
+        return NOTTE_DA <= ora < NOTTE_A
+    return ora >= NOTTE_DA or ora < NOTTE_A      # a cavallo di mezzanotte
+
 
 def main() -> int:
     argv = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -43,6 +66,7 @@ def main() -> int:
     soglia_fam = float(m.soglie_95.get("family") or 0.9)
     st = {"viste": 0, "famiglie": 0, "seniority": 0, "contratto": 0, "remoto": 0,
           "lingue": 0, "incerte": 0, "device": m.device}
+    notte_detta = False
     t0 = time.time()
     with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry) as c:
         while st["viste"] < tetto:
@@ -69,6 +93,15 @@ def main() -> int:
             fam_rows, sen_rows, con_rows, rem_rows, lin_rows, marcati = [], [], [], [], [], []
             for i in range(0, len(righe), LOTTO):
                 b = righe[i:i + LOTTO]
+                if continuo and e_notte():
+                    if not notte_detta:
+                        print(f"-- fascia silenziosa {NOTTE_DA}-{NOTTE_A}: riposo "
+                              f"{NOTTE_RIPOSO}s per lotto", flush=True)
+                        notte_detta = True
+                    time.sleep(NOTTE_RIPOSO)
+                elif notte_detta:
+                    print("-- fascia silenziosa finita: piena velocita'", flush=True)
+                    notte_detta = False
                 pred = m.predici([testo(t, l, d) for _, t, l, d, *_ in b])
                 for (jid, _, _, _, sen, con, rem, lin, ha_fam), p in zip(b, pred):
                     st["viste"] += 1

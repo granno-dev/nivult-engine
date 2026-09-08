@@ -37,9 +37,20 @@ with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=True) as c:
               (json.dumps(nota),))
 EOF
 }
+# La fascia silenziosa: il N5 sta in casa e la ventola si sente. Fra le
+# 23:30 e le 7:00 (ora di Roma) il detector scende da 24 thread a 6, il
+# render non parte e i lotti si accorciano; nivult-v1 rallenta per conto
+# suo (NOTTE_RIPOSO in classifica_v1.py). Costo misurato l'08/09/2026:
+# l'arretrato del modello si smaltisce in due giorni invece di uno, e le
+# offerte nuove restano coperte comunque — ne entrano 9.700 l'ora contro
+# le 22.000 che v1 fa anche al minimo.
+notte() { local h=$(TZ=Europe/Rome date +%H%M); [ $((10#$h)) -ge 2330 ] || [ $((10#$h)) -lt 700 ]; }
+
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
   battito "inizio giro"
+  if notte; then THREAD=6; RILEVA=400; RIPASSA=150; JSONLD=60; DETTAGLIO=1000
+             else THREAD=24; RILEVA=1500; RIPASSA=600; JSONLD=300; DETTAGLIO=5000; fi
   # Il classificatore a dizionario e' sequenziale (un core) e sull'arretrato
   # trova poco (1.032 famiglie in 10 minuti il 06/09: quei casi li copre lo
   # sprint GLM). Lotti piccoli e pause lunghe: un core in boost a 77 °C
@@ -71,7 +82,7 @@ while true; do
   # Breezy, Oracle entrano dall'elenco senza testo, e senza testo nessun
   # campo si legge ne' si stima (08/09/2026: 0% di testo sulle SF nuove).
   # 5.000 pagine per giro, le piu' recenti prima.
-  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite 5000 --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
+  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
@@ -82,9 +93,9 @@ while true; do
   # I domini nuovi (pending: censimento CC, bacheche dei fornitori, certificati)
   # prima, poi il ripasso dei no_ats. Stava nel volano del server (800 ogni
   # 10 min): col censimento europeo da centomila domini serve il N5.
-  nice -n 10 $PY -m nivult.ats.detector --rileva --limite 1500 --thread 24 2>&1 | grep -E "Detector|visitati|Traceback" | tail -1 || true
-  nice -n 10 $PY -m nivult.ats.detector --ripassa --limite 600 --thread 24 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
-  nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite 300 --thread 16 2>&1 | tail -1 || true
+  nice -n 10 $PY -m nivult.ats.detector --rileva --limite $RILEVA --thread $THREAD 2>&1 | grep -E "Detector|visitati|Traceback" | tail -1 || true
+  nice -n 10 $PY -m nivult.ats.detector --ripassa --limite $RIPASSA --thread $THREAD 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
+  nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite $JSONLD --thread $THREAD 2>&1 | tail -1 || true
   # Il paese delle offerte, ogni 6 ore e non solo di notte: dal testo
   # della localita' (riempie e corregge) e, per chi non ce l'ha, il
   # dominante dell'azienda. Stanotte 07/09/2026 il passo notturno e'
@@ -101,7 +112,7 @@ while true; do
   # piu' goloso di RAM (8 processi uccisi dal kernel il 05/09); qui ha 48 GB
   # e un IP residenziale che i career site bloccano meno.
   TIMBRO=/opt/nivult/engine/logs/.render-detector.timbro
-  if [ ! -f "$TIMBRO" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO") )) -gt 82800 ]; then
+  if ! notte && { [ ! -f "$TIMBRO" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO") )) -gt 82800 ]; }; then
     echo "-- render detector (60 grandi)"
     nice -n 10 $PY -m nivult.ats.detector --render --limite 60 --dip-minimi 3000 --thread 2 2>&1 | tail -2 || true
     touch "$TIMBRO"
