@@ -104,7 +104,10 @@ def main() -> int:
     base = dict(output_dir=ckpt_dir, per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accumulo,
                 num_train_epochs=a.epoche, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
                 logging_steps=25, save_steps=500, save_total_limit=2, bf16=True, optim="adamw_8bit",
-                dataset_text_field="text", packing=False, report_to="none", seed=7)
+                dataset_text_field="text", packing=True, report_to="none", seed=7)
+    # packing=True: piu' esempi corti nella stessa sequenza. Sulla A100 a
+    # lotti riempiti di padding la prova dell'08/09 faceva 1,4 esempi/s
+    # (8 giorni per due epoche); impacchettati sono 3-4 volte tanto.
     # trl cambia nome ai parametri fra versioni: si prova il nuovo, poi il vecchio
     try:
         cfg = SFTConfig(max_length=a.max_len, **base)
