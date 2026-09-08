@@ -182,7 +182,9 @@ def _estrai_jsonld(html: str) -> dict:
 # 08/09/2026: anche chi arriva dall'elenco senza testo (JazzHR dal ripiego,
 # CATSone, Recruiterbox, Cornerstone, Zoho): la pagina dell'annuncio porta
 # il JSON-LD JobPosting, si legge una volta sola.
-PIATTAFORME_DETTAGLIO = ("phenom", "successfactors", "jazzhr", "catsone", "recruiterbox", "cornerstone", "zohorecruit")
+PIATTAFORME_DETTAGLIO = ("phenom", "successfactors", "jazzhr", "catsone", "recruiterbox", "cornerstone", "zohorecruit",
+                         "breezy", "workday", "smartrecruiters", "oracle", "crelate", "traffit", "eploy", "taleez",
+                         "rippling", "radancy", "bamboohr", "vincere", "hiringthing", "teamtailor", "pinpoint")
 
 
 def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
@@ -197,7 +199,7 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, url FROM ats_jobs
+                SELECT id, url, platform_id FROM ats_jobs
                  WHERE platform_id = ANY(%s) AND expired_at IS NULL
                    AND (country IS NULL OR (SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1) IS NULL)
                    AND NOT (raw ? 'dettaglio_letto')
@@ -207,19 +209,27 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
             righe = cur.fetchall()
 
     log.info("dettaglio %s: %d pagine da leggere (%d thread)", ",".join(piattaforme), len(righe), thread)
+    stats["per_piattaforma"] = per_piatt
     if not righe:
         return stats
 
+    per_piatt: dict = {}
+
     def leggi(riga):
-        jid, url = riga
+        jid, url, pid = riga[0], riga[1], (riga[2] if len(riga) > 2 else "?")
         try:
             with httpx.Client(timeout=15, follow_redirects=True,
                               headers={"User-Agent": "nivult-ats/0.1"}) as c:
                 r = c.get(url)
                 if r.status_code == 200:
-                    return jid, _estrai_jsonld(r.text)
+                    d = _estrai_jsonld(r.text)
+                    st_p = per_piatt.setdefault(pid, {"lette": 0, "testo": 0})
+                    st_p["lette"] += 1
+                    st_p["testo"] += 1 if d.get("description") else 0
+                    return jid, d
         except httpx.HTTPError:
             pass
+        per_piatt.setdefault(pid, {"lette": 0, "testo": 0})["lette"] += 1
         return jid, {}
 
     risultati = []
