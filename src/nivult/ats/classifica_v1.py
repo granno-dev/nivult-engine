@@ -48,7 +48,7 @@ def main() -> int:
         while st["viste"] < tetto:
             righe = c.execute("""
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
-                       left(COALESCE(j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', ''), 4000),
+                       left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 4000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j

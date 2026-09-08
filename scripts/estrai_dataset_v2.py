@@ -128,7 +128,7 @@ def main() -> int:
     chimere = [p.strip() for p in a.escludi_chimere.split(",") if p.strip() and p.strip() not in escluse]
     sql = """
         SELECT j.id::text, j.platform_id, j.slug, j.title, coalesce(j.location, j.city, ''), j.country,
-               COALESCE(j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', ''),
+               coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''),
                x.family, x.model, j.lang, j.languages_required,
                (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k) AS campi
           FROM ats_jobs j LEFT JOIN job_classifications x ON x.job_id = j.id

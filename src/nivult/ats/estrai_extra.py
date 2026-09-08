@@ -82,9 +82,7 @@ _EMAIL_NO = re.compile(r"noreply|no-reply|donotreply|example|sentry|"
                        r"@.*\.(png|jpg|gif|css|js)$|privacy@|dpo@|"
                        r"unsubscribe|webmaster@", re.I)
 
-_DESCR = ("COALESCE(raw->>'description', raw->>'externalDescription', "
-          "raw->>'descriptionHtml', raw->>'jobDescription', "
-          "raw->>'job_description', raw->>'content', raw->>'descriptionPlain', raw->>'Job_Description', raw->>'body', '')")
+_DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
 
 def _tipo_da_raw(raw: dict) -> str | None:

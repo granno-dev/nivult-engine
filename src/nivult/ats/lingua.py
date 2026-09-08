@@ -114,10 +114,7 @@ def estrai(titolo: str, descrizione: str) -> str | None:
     return lingua
 
 
-_DESCR_SQL = """COALESCE(raw->>'description', raw->>'externalDescription',
-                raw->>'descriptionHtml',
-                raw->>'jobDescription', raw->>'job_description',
-                raw->>'content', raw->>'descriptionPlain', raw->>'Job_Description', raw->>'body', '')"""
+_DESCR_SQL = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
 
 def arricchisci(dsn: str, limite: int = 100000) -> dict:
