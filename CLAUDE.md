@@ -317,6 +317,64 @@ stata spacciata per addestramento una volta).
 Il detector dei domini `pending` e il ripasso girano sul N5
 (`operaio-loop.sh`), non sul server.
 
+### Le chimere: l'id di un'offerta è per tenant, non per piattaforma
+
+Fino all'08/09/2026 `ats_jobs` era `UNIQUE (platform_id, external_id)`.
+Su iCIMS, Workday, Cornerstone, Eploy, Traffit, Pinpoint, Vincere e
+HiringThing gli id ripartono da 1 **per tenant**: il secondo tenant con
+lo stesso numero sovrascriveva titolo e URL del primo, il testo e la
+famiglia restavano del primo. «Journeyman Plumber» col testo di
+un'insegnante d'asilo — iCIMS 33% delle attive, Cornerstone 36%, Eploy
+57%. Scoperto leggendo a occhio 100 righe del dataset v1.
+
+Ora la chiave è `(platform_id, slug, external_id)` (schema e gli 11
+`ON CONFLICT`); `deploy/chimere.sh` ha scambiato il vincolo e cancellato
+lo storico incoerente: **51.163 righe** dove l'URL non conteneva il
+tenant. La cancellazione va fatta **a lotti e coi runner fermi**: in un
+colpo solo si è incastrata in deadlock con `nivult-scrape`. Le 648
+righe iCIMS/Eploy rimaste sono alias di tenant rinominati
+(`careers-mhpm` → `careers-colliersprojects`), non chimere. Le offerte
+cancellate rientrano da sole al giro successivo, ciascuna col suo testo.
+
+### ESCO: le competenze si riconoscono, ma con tre guardie
+
+`nivult.ats.esco` cerca in un passaggio (Aho-Corasick) le 13.466
+competenze ESCO in 28 lingue e restituisce l'etichetta inglese
+canonica: «saldatura», «Schweißen» e «welding» sono la stessa voce.
+Senza guardie era rumore: «avec» → *mobile device management* nel 22%
+degli annunci francesi, «data» → *statistics*, «lead» → *lead others*,
+«paris» → *betting*. Misurato l'08/09/2026 su 400 annunci a caso.
+
+1. **Un alias di una parola vale solo se è etichetta preferita**: le
+   alternative monoparola («term», «plan», «access») sono la quasi
+   totalità delle trappole. 6.614 scartate.
+2. **Una parola sola scatta solo nella sua lingua**: «lassen» è saldare
+   in olandese e un verbo in tedesco. La lingua la dà `lingua.rileva`;
+   se non si sbilancia, le monoparola non scattano.
+3. **La lista nera è per concentrazione, non per frequenza.** «python»
+   e «source» stanno entrambi nel 5% degli annunci, ma il primo è
+   nell'80% degli annunci IT e il secondo ovunque nella proporzione del
+   corpus. `esco_calibra` misura il *lift* sulla famiglia più
+   rappresentata: «pregnancy» 2,0, «history» 1,8, «source» 2,7 contro
+   «python» 6,6, «accounting» 11,8, «logistics» 6,5. Sotto **3,0**
+   l'alias non distingue nessun mestiere e va in lista nera. Le lingue
+   sono esenti. Più una lista a mano con la ragione accanto (i
+   boilerplate pari opportunità: *pregnancy*, *genetics*, *childbirth*;
+   gli alias ESCO sbagliati: «and procedures», «regulatory requirements»).
+
+Resta un residuo di competenze trasversali vere ma vuote («attend
+meetings», «meet deadlines», «show responsibility»): ESCO le tiene in
+un ramo suo, e il passo successivo è farlo scrivere a `esco_scarica`
+per escluderle alla radice invece che una per una.
+
+Il cancello di produzione (`/opt/nivult/esco-attivo`, letto da
+`profilo.py`) lo apre **solo** `esco_calibra --apri`, dopo aver letto il
+campione stampato dal rapporto. Una calibrazione senza `--apri` lo
+chiude: i numeri vecchi non valgono più. La prima calibrazione (07/09)
+aveva aperto il cancello contando le etichette canoniche invece degli
+alias, e «avec» passava perché in inglese la stessa competenza non
+scattava mai.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,

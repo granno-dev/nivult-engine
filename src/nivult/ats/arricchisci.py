@@ -209,11 +209,10 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
             righe = cur.fetchall()
 
     log.info("dettaglio %s: %d pagine da leggere (%d thread)", ",".join(piattaforme), len(righe), thread)
+    per_piatt: dict = {}
     stats["per_piattaforma"] = per_piatt
     if not righe:
         return stats
-
-    per_piatt: dict = {}
 
     def leggi(riga):
         jid, url, pid = riga[0], riga[1], (riga[2] if len(riga) > 2 else "?")
