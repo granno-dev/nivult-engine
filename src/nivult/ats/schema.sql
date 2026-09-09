@@ -86,6 +86,22 @@ ALTER TABLE job_classifications ADD COLUMN IF NOT EXISTS v1_conf REAL;
 CREATE INDEX IF NOT EXISTS job_classifications_accordo_idx
     ON job_classifications (family) WHERE v1_family IS NOT NULL AND v1_family = family;
 
+-- Il salario letto nel TESTO dell'annuncio, dove la fonte non lo dichiara.
+-- `salary_da` dice da dove viene, e non e' un dettaglio: il campo
+-- dichiarato dalla fonte e' esatto, il testo lo legge un lettore a regole
+-- che sbaglia una volta su quattordici (92,8% misurato il 10/09/2026 sul
+-- campo strutturato usato come verita' gratis). Chi mostrera' il salario
+-- nel digest, e chi addestrera' un modello sopra, devono poterli
+-- distinguere invece di trovarseli mescolati.
+-- `salary_testo_at` marca l'offerta ANCHE quando non si trova niente: piu'
+-- di un milione di annunci nominano lo stipendio senza scrivere una cifra,
+-- e senza il marcatore ogni giro li rileggerebbe tutti.
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_da TEXT;
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_testo_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS ats_jobs_salario_da_leggere_idx
+    ON ats_jobs (id)
+ WHERE expired_at IS NULL AND salary_min IS NULL AND salary_testo_at IS NULL;
+
 -- Il censimento dei domini aziendali per il detector.
 -- Fonti: Wikidata (aziende con sito ufficiale), DB di produzione
 -- (domain_derived). Il detector visita la homepage, segue il link
