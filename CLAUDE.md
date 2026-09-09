@@ -375,6 +375,80 @@ aveva aperto il cancello contando le etichette canoniche invece degli
 alias, e «avec» passava perché in inglese la stessa competenza non
 scattava mai.
 
+### Il salario si legge anche nel testo, e si dice da dove viene
+
+Il campo strutturato della fonte c'è sul **4,5%** delle offerte attive
+(85.417 su 1.890.734). Nel testo il salario è scritto molto più spesso, e
+un lettore a regole (`nivult.ats.salari`, `--testo`) lo recupera dove la
+fonte tace.
+
+**La precisione non è stimata, e non è costata un'etichetta.** Le offerte
+che hanno *entrambe* le cose sono una verità gratis: si legge il testo e
+si confronta col campo dichiarato. Su un campione **fisso** di 13.066
+offerte distinte (misurato il 10/09/2026):
+
+| | |
+|---|---|
+| precisione severa (tutto ciò che non combacia è errore) | **96,4%** |
+| precisione sostanziale | 97,5% |
+| copertura sulle offerte col campo strutturato | 24,8% |
+
+La «sostanziale» perdona due cose che errori non sono: la stessa paga
+detta in un'altra unità (2.300 €/mese contro 31.000 €/anno) e la valuta
+dove a sbagliare è **la fonte**, che scrive USD su un annuncio canadese in
+dollari canadesi.
+
+> **Il campione dev'essere fisso, non `random()`.** Finché la query
+> ordinava a caso, due versioni del lettore non erano confrontabili: la
+> differenza fra 91,9% e 92,8% era il sorteggio, non il codice. Ora è
+> `ORDER BY md5(id::text)`.
+
+Due banchi, entrambi da riga di comando:
+
+```bash
+python scripts/prova_salari.py     # 17 casi a mano, nessun database
+python scripts/valida_salari.py    # la misura sul campo, campione fisso
+python -m nivult.ats.salari --testo --limite 5000 --dry-run
+```
+
+**Da 67% a 96,4% non è stato un modello, sono stati cinque difetti**, e
+nessuno si vedeva senza il banco:
+
+1. fra la cifra e il periodo l'annuncio infila una parola — «12,02 €
+   **brut** de l'heure», «45.000 € **lordi** all'anno». Quelle offerte non
+   venivano lette affatto, e al loro posto vinceva il premio più avanti
+   nel testo: 16 €. Era l'errore più frequente, 120 su 165;
+2. il connettore del range cambia lingua: senza `and`, `und`, `en` il
+   range si spezzava e restava **sempre l'estremo alto**;
+3. «USD $16.10 - USD $19.25» porta due marcatori di valuta sul secondo
+   estremo, e uno solo era ammesso;
+4. «35 000 **kr** per månad» perdeva la corona, perché la «k» di «45k» si
+   mangiava la k di «kr»; e «annually» lo catturava il regex ma non lo
+   conosceva il dizionario dei periodi;
+5. la ricerca girava su tutto l'annuncio, e `finditer` **non restituisce
+   agganci sovrapposti**: un numero qualunque incontrato prima (un
+   telefono, un anno) si mangiava il pezzo in cui stava il salario e lo
+   rendeva invisibile. Cercando solo attorno alle parole-salario le
+   trovate sono passate da 1.830 a 3.234 **e** la precisione da 92,6% a
+   96,4%. Era nata come ottimizzazione: costava ~24 ms a offerta, cioè
+   dodici ore per il corpus.
+
+**Le due regole di prudenza restano, perché un salario sbagliato si vede
+nel digest e una casella vuota no:** fra due cifre della stessa valuta e
+dello stesso periodo vince **la più bassa** — la base, non la base più i
+premi — e se l'annuncio dichiara **due periodi diversi** non si sceglie,
+si tace.
+
+**`salary_da` dice la provenienza, e non è un dettaglio.** `dichiarato` è
+esatto, `testo` sbaglia una volta su ventotto. Il digest e il dataset di
+v2 devono poterli distinguere invece di trovarseli mescolati.
+`salary_testo_at` marca l'offerta **anche quando non si trova niente**: più
+di un milione di annunci nominano lo stipendio senza scrivere una cifra, e
+senza il marcatore ogni giro li rileggerebbe tutti.
+
+In cron alle **05:00** fra i passi diurni. Dopo il recupero iniziale resta
+il lavoro sulle nuove: pochi minuti.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
