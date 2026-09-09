@@ -70,6 +70,10 @@ RIGHE=$(cat <<'EOF'
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
+# Il salario letto nel testo, dove la fonte non lo dichiara. Solo le
+# offerte mai guardate (salary_testo_at IS NULL), quindi dopo il recupero
+# iniziale resta il passo sulle nuove: qualche minuto.
+0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 200000
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
 50 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --mix
 30 6 * * * /opt/nivult/engine/deploy/passo-diurno.sh domini nivult.ats.domini_datori --limite 2000

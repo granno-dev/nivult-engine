@@ -73,7 +73,11 @@ for mn, mx, cur, per, paese, testo in c.execute(q, (int(os.environ.get("N", "600
     if len(esempi[k]) < 4:
         esempi[k].append((f"{mn}-{mx} {cur}/{per}", f"{tmn}-{tmx} {tcur}/{tper}", frase[:120]))
 
-print(f"campione: {sum(st.values())} offerte DISTINTE col salario strutturato")
+# NON sum(st.values()): dentro st ci sono anche GIUSTO e diverso, che sono
+# un dettaglio di «trovato». Sommandoli il campione risultava piu' grande
+# del LIMIT della query, che e' impossibile e si vedeva.
+tot = st["non trovato nel testo"] + st["trovato"]
+print(f"campione: {tot} offerte DISTINTE col salario strutturato")
 for k, v in st.most_common():
     print(f"  {k:34s} {v}")
 tr = st["trovato"]
@@ -86,7 +90,7 @@ if tr:
           f"valuta che sbaglia la FONTE non contano): "
           f"{100 * (st['GIUSTO'] + indulgenti) / tr:.1f}%")
     print(f"copertura sulle offerte col salario strutturato: "
-          f"{100 * tr / max(sum(st.values()), 1):.1f}%")
+          f"{100 * tr / max(tot, 1):.1f}%")
 print("\ndove sbaglia:")
 for k, v in classi.most_common():
     print(f"\n  {k}  —  {v} su {st['diverso']}")
