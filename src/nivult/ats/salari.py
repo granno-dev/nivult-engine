@@ -165,8 +165,9 @@ _RX_SOLDI = re.compile(
     # il «e» del range cambia lingua: und, en, tot, och, og, til, y.
     # Senza il tedesco e l'olandese il range si spezzava e restava il
     # secondo estremo, cioe' sempre il numero piu' alto.
-    rf"(?:\s*(?:-|–|—|/|\bto\b|\bbis\b|\bund\b|\ben\b|\btot\b|\boch\b|\bog\b|"
-    rf"\btil\b|\ba\b|\bà\b|\be\b|\by\b)\s*(?:{_SIMBOLO})?\s*(?:{_SIMBOLO})?\s*"
+    rf"(?:\s*(?:-|–|—|/|\bto\b|\band\b|\bbis\b|\bund\b|\ben\b|\btot\b|\boch\b|"
+    rf"\bog\b|\btil\b|\bet\b|\ba\b|\bà\b|\be\b|\by\b)\s*"
+    rf"(?:{_SIMBOLO})?\s*(?:{_SIMBOLO})?\s*"
     rf"(?P<b>{_IMPORTO})\s*(?:{_SIMBOLO})?)?",
     re.I)
 _RX_PERIODO = re.compile(
@@ -305,7 +306,13 @@ def parse_testo(testo: str, paese: str | None = None):
             continue
         mn, mx = (min(a, b), max(a, b)) if b else (a, a)
         if not _plausibile(mn, mx, per):
-            continue
+            # «$50.000 and 3 years of experience»: il connettore ha unito
+            # due numeri che non c'entrano. Prima di buttare via tutto si
+            # riprova con la sola prima cifra, che spesso e' buona.
+            if b is not None and _plausibile(a, a, per):
+                mn = mx = a
+            else:
+                continue
         val = _valuta(sym, paese)
         if not val:
             continue
