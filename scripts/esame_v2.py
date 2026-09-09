@@ -58,10 +58,14 @@ def predici(tok, m, righe: list[dict], campi: list[str], bs: int = 16) -> list[d
         except TypeError:   # template senza enable_thinking
             enc = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt", padding=True,
                                           return_dict=True).to(m.device)
-        gen = m.generate(**enc, max_new_tokens=120, do_sample=False)
+        # si ferma a <|im_end|> (fine del turno) oltre che all'eos del modello base:
+        # il tokenizer del base ha eos <|endoftext|>, e dopo <|im_end|> il modello
+        # puo' continuare a scrivere finche' non lo raggiunge (visto il 09/09)
+        fine = [i for i in (tok.convert_tokens_to_ids("<|im_end|>"), tok.eos_token_id) if i is not None]
+        gen = m.generate(**enc, max_new_tokens=160, do_sample=False, eos_token_id=fine)
         for k in range(len(b)):
             testo = tok.decode(gen[k][enc["input_ids"].shape[1]:], skip_special_tokens=True)
-            mm = re.search(r"\{.*\}", testo, re.S)
+            mm = re.search(r"\{.*?\}", testo, re.S)
             try:
                 out.append(json.loads(mm.group(0)) if mm else {})
             except json.JSONDecodeError:

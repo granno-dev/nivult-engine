@@ -103,15 +103,35 @@ def main() -> int:
     print("righe di addestramento:", len(righe), "firma", firma, flush=True)
     ds = Dataset.from_dict({"messages": righe}).shuffle(seed=7)
 
+    # La PERDITA SI CALCOLA SOLO SULLA RISPOSTA. Il primo addestramento
+    # (08-09/09/2026) passava l'intera conversazione come «text»: la
+    # risposta JSON era il 3,8% dei caratteri e il 96% del gradiente andava
+    # a imparare a scrivere annunci. Esito: perdita ferma a 0,57, famiglia
+    # al 67,5% sulle 280 a mano contro il 90% di v1. Con un dataset
+    # prompt/completion trl maschera il prompt e conta solo la risposta.
+    # Il prompt e' ESATTAMENTE la stringa che l'esame passa al modello
+    # (add_generation_prompt=True, enable_thinking=False): il completion e'
+    # cio' che il template aggiunge dopo, calcolato per differenza cosi'
+    # da non dipendere da come il template scrive il turno dell'assistente.
     def formatta(batch):
-        out = []
+        prompts, completions = [], []
         for m in batch["messages"]:
+            kw = {"tokenize": False}
             try:
-                out.append(tok.apply_chat_template(m, tokenize=False, add_generation_prompt=False, enable_thinking=False))
+                pieno = tok.apply_chat_template(m, add_generation_prompt=False, enable_thinking=False, **kw)
+                prompt = tok.apply_chat_template(m[:-1], add_generation_prompt=True, enable_thinking=False, **kw)
             except TypeError:   # template senza il parametro enable_thinking
-                out.append(tok.apply_chat_template(m, tokenize=False, add_generation_prompt=False))
-        return {"text": out}
+                pieno = tok.apply_chat_template(m, add_generation_prompt=False, **kw)
+                prompt = tok.apply_chat_template(m[:-1], add_generation_prompt=True, **kw)
+            if not pieno.startswith(prompt):
+                raise SystemExit("il template non e' un prefisso di se stesso: prompt e completion non separabili")
+            prompts.append(prompt)
+            completions.append(pieno[len(prompt):].rstrip("\n"))
+        return {"prompt": prompts, "completion": completions}
     ds = ds.map(formatta, batched=True, remove_columns=["messages"])
+    es = ds[0]
+    print("ESEMPIO prompt (coda):", repr(es["prompt"][-160:]), flush=True)
+    print("ESEMPIO completion:", repr(es["completion"][:200]), flush=True)
 
     passi_per_epoca = len(ds) // (a.bs * a.accumulo)
     passi_previsti = int(passi_per_epoca * a.epoche)
@@ -120,10 +140,9 @@ def main() -> int:
     base = dict(output_dir=ckpt_dir, per_device_train_batch_size=a.bs, gradient_accumulation_steps=a.accumulo,
                 num_train_epochs=a.epoche, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
                 logging_steps=25, save_steps=500, save_total_limit=2, bf16=True, optim="adamw_8bit",
-                dataset_text_field="text", packing=True, report_to="none", seed=7)
-    # packing=True: piu' esempi corti nella stessa sequenza. Sulla A100 a
-    # lotti riempiti di padding la prova dell'08/09 faceva 1,4 esempi/s
-    # (8 giorni per due epoche); impacchettati sono 3-4 volte tanto.
+                completion_only_loss=True, packing=False, report_to="none", seed=7)
+    # packing=False: su questo modello (processor-based) trl lo ignorava
+    # comunque, e con la perdita sul solo completion e' meglio esplicito.
     # trl cambia nome ai parametri fra versioni: si prova il nuovo, poi il vecchio
     try:
         cfg = SFTConfig(max_length=a.max_len, **base)

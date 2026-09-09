@@ -61,20 +61,27 @@ def contratto(pid: str, r: dict) -> str | None:
             return "full_time"
         return None
     if pid == "smartrecruiters":
-        return {"Full-time": "full_time", "Part-time": "part_time", "Contract": "contract",
+        # «Contract» negli ATS anglosassoni e' AMBIGUO: a volte un contractor
+        # (autonomo), a volte un tempo determinato. Misurato il 09/09/2026 sul
+        # dataset v2: negli annunci che dicono CDD/temporary il dato dichiarato
+        # diceva temporary 193 volte e contract 197. Un'etichetta che non
+        # distingue non insegna niente: «Contract» resta NULL e lo decide il
+        # modello dal testo. `contract` vale solo dove la fonte dice autonomo
+        # (France Travail LIB/FRA/CCE/REP, Recruitee e Personio «freelance»).
+        return {"Full-time": "full_time", "Part-time": "part_time",
                 "Temporary": "temporary", "Intern": "internship", "Internship": "internship",
                 "Apprenticeship": "apprenticeship"}.get((r.get("typeOfEmployment") or {}).get("label"))
     if pid == "recruitee":
         c = r.get("employment_type_code") or ""
         return {"fulltime_permanent": "full_time", "fulltime": "full_time", "fulltime_fixed_term": "temporary",
                 "parttime_permanent": "part_time", "parttime_fixed_term": "part_time", "parttime": "part_time",
-                "freelance": "contract", "contract": "contract", "internship": "internship",
+                "freelance": "contract", "internship": "internship",
                 "apprenticeship": "apprenticeship", "traineeship": "internship"}.get(c)
     if pid == "workable":
-        return {"Full-time": "full_time", "Part-time": "part_time", "Contract": "contract",
+        return {"Full-time": "full_time", "Part-time": "part_time",
                 "Temporary": "temporary", "Internship": "internship"}.get(r.get("employment_type"))
     if pid == "ashby":
-        return {"FullTime": "full_time", "PartTime": "part_time", "Contract": "contract",
+        return {"FullTime": "full_time", "PartTime": "part_time",
                 "Temporary": "temporary", "Intern": "internship"}.get(r.get("employmentType"))
     if pid == "personio":
         return {"permanent": "full_time", "intern": "internship", "temporary": "temporary",
