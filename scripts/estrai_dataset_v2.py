@@ -110,6 +110,9 @@ def main() -> int:
     os.makedirs(a.out, exist_ok=True)
 
     accordo: dict[str, dict] = {}
+    # Dal 09/09/2026 l'accordo GLM+v1 sta nel database (job_classifications.
+    # v1_family, scritta dal giro normale di v1): il file audit resta come
+    # ripiego per lo storico, ma non serve piu' rigenerarlo a mano.
     if a.audit:
         for l in open(a.audit):
             d = json.loads(l)
@@ -129,7 +132,7 @@ def main() -> int:
     sql = """
         SELECT j.id::text, j.platform_id, j.slug, j.title, coalesce(j.location, j.city, ''), j.country,
                coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''),
-               x.family, x.model, j.lang, j.languages_required,
+               x.family, x.model, j.lang, j.languages_required, x.v1_family, x.v1_conf,
                (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k) AS campi
           FROM ats_jobs j LEFT JOIN job_classifications x ON x.job_id = j.id
          WHERE j.title IS NOT NULL AND length(j.title) > 2
@@ -156,7 +159,7 @@ def main() -> int:
     f_train = gzip.open(os.path.join(a.out, "dataset-train-v2.jsonl.gz"), "wt")
     f_esame = gzip.open(os.path.join(a.out, "dataset-esame-v2.jsonl.gz"), "wt")
     f_giud = open(os.path.join(a.out, "da_giudicare.jsonl"), "w")
-    for (jid, pid, slug, tit, loc, ctry, desc, fam_glm, mod_glm, lang, lingue, campi) in cur:
+    for (jid, pid, slug, tit, loc, ctry, desc, fam_glm, mod_glm, lang, lingue, v1_fam, v1_conf, campi) in cur:
         st["lette"] += 1
         campi = campi or {}
         testo = pulisci(desc)
@@ -190,6 +193,8 @@ def main() -> int:
             fam, fam_prov = "none", "regola"
         if fam is None and fam_glm and mod_glm and (mod_glm.startswith("glm") or mod_glm == "nivult-v1"):
             au = accordo.get(jid)
+            if au is None and v1_fam:            # il parere di v1 dal database
+                au = {"accordo": v1_fam == fam_glm and (v1_conf or 0) >= 0.75}
             if au is None:
                 fam, fam_prov = (fam_glm, "glm") if mod_glm.startswith("glm") else (None, None)
                 if fam_prov == "glm":

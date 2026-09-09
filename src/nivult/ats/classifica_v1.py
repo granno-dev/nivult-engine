@@ -61,6 +61,10 @@ def main() -> int:
     argv = [a for a in sys.argv[1:] if not a.startswith("--")]
     dry = "--dry-run" in sys.argv
     continuo = "--continuo" in sys.argv      # un demone: quando non c'e' niente, dorme un minuto
+    # --pareri: il RIPASSO delle offerte gia' viste, per raccogliere il parere
+    # di v1 dove la famiglia c'era gia'. Serve una volta sola sull'arretrato:
+    # da li' in poi il giro normale lo salva da se'.
+    pareri = "--pareri" in sys.argv
     tetto = int(argv[0]) if argv else (10**12 if continuo else 20000)
     m = ModelloV1()
     soglia_fam = float(m.soglie_95.get("family") or 0.9)
@@ -70,13 +74,15 @@ def main() -> int:
     t0 = time.time()
     with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry) as c:
         while st["viste"] < tetto:
-            righe = c.execute("""
+            filtro = ("EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id "
+                      "AND x.v1_family IS NULL)" if pareri else "j.locale_v1_at IS NULL")
+            righe = c.execute(f"""
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 4000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j
-                 WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
+                 WHERE j.expired_at IS NULL AND {filtro}
                  -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
                  -- speso 295k letture per scriverne 22k, perche' rileggeva
                  -- offerte gia' classificate mentre l'arretrato senza famiglia
@@ -91,6 +97,7 @@ def main() -> int:
                     continue
                 break
             fam_rows, sen_rows, con_rows, rem_rows, lin_rows, marcati = [], [], [], [], [], []
+            par_rows = []          # il parere di v1 dove la famiglia c'e' gia'
             for i in range(0, len(righe), LOTTO):
                 b = righe[i:i + LOTTO]
                 if continuo and e_notte():
@@ -112,6 +119,12 @@ def main() -> int:
                             fam_rows.append((jid, fam, round(cf, 3)))
                         else:
                             st["incerte"] += 1
+                    else:
+                        # la famiglia c'e' gia' (GLM): il parere di v1 si SALVA
+                        # lo stesso, ed e' l'accordo che rende affidabile
+                        # l'etichetta di GLM nel dataset. Prima si buttava, e
+                        # ricostruirlo costava tre ore di GPU (09/09/2026).
+                        par_rows.append((jid, fam, round(cf, 3)))
                     if sen is None and p["seniority"][1] >= SOGLIA_RIPIEGO:
                         sen_rows.append((p["seniority"][0], jid))
                     if con is None and p["employment_type"][1] >= SOGLIA_CONTRATTO:
@@ -150,8 +163,14 @@ def main() -> int:
                     scrivi("UPDATE ats_jobs j SET languages_required = coalesce(j.languages_required, string_to_array(v.val, ',')) "
                            "FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
                            ([r[1] for r in lin_rows], [",".join(r[0]) for r in lin_rows]))
+                if par_rows:
+                    scrivi("UPDATE job_classifications c SET v1_family = v.fam, v1_conf = v.cf "
+                           "FROM unnest(%s::uuid[], %s::text[], %s::real[]) AS v(id, fam, cf) "
+                           "WHERE c.job_id = v.id AND c.v1_family IS DISTINCT FROM v.fam",
+                           ([r[0] for r in par_rows], [r[1] for r in par_rows], [r[2] for r in par_rows]))
                 scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = ANY(%s::uuid[])", (marcati,))
-            st["famiglie"] += len(fam_rows); st["seniority"] += len(sen_rows)
+            st["famiglie"] += len(fam_rows); st["pareri"] = st.get("pareri", 0) + len(par_rows)
+            st["seniority"] += len(sen_rows)
             st["contratto"] += len(con_rows); st["remoto"] += len(rem_rows); st["lingue"] += len(lin_rows)
             dt = time.time() - t0
             print(f"{st['viste']} viste | famiglie {st['famiglie']} | seniority {st['seniority']} | "

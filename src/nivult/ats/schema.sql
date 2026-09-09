@@ -75,6 +75,17 @@ CREATE TABLE IF NOT EXISTS job_classifications (
 
 CREATE INDEX IF NOT EXISTS job_classifications_family_idx ON job_classifications(family);
 
+-- Il PARERE DI v1 anche dove la famiglia c'e' gia'. v1 la calcola comunque
+-- per ogni annuncio che legge; buttarla via quando GLM ha gia' etichettato
+-- costava un audit da tre ore ogni volta che serviva sapere se fidarsi di
+-- GLM (09/09/2026: l'audit era fermo all'08 e il 41% delle famiglie del
+-- dataset v2 e' rimasto senza contro-verifica). Salvarla costa due colonne
+-- e rende l'accordo GLM+v1 sempre aggiornato e gratuito.
+ALTER TABLE job_classifications ADD COLUMN IF NOT EXISTS v1_family TEXT;
+ALTER TABLE job_classifications ADD COLUMN IF NOT EXISTS v1_conf REAL;
+CREATE INDEX IF NOT EXISTS job_classifications_accordo_idx
+    ON job_classifications (family) WHERE v1_family IS NOT NULL AND v1_family = family;
+
 -- Il censimento dei domini aziendali per il detector.
 -- Fonti: Wikidata (aziende con sito ufficiale), DB di produzione
 -- (domain_derived). Il detector visita la homepage, segue il link
