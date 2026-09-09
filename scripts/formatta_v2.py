@@ -76,7 +76,8 @@ def riga_sft(r: dict, testo: str, mascherato: bool, rnd: random.Random) -> dict 
                          {"role": "assistant", "content": json.dumps(risposta, ensure_ascii=False)}]}
 
 
-def converti(src: str, dst: str, quota_maschera: float, rnd: random.Random, max_testo: int) -> dict:
+def converti(src: str, dst: str, quota_maschera: float, rnd: random.Random, max_testo: int,
+             tieni_sporche: bool = False) -> dict:
     st = collections.Counter()
     h = hashlib.sha1()
     with gzip.open(src, "rt") as f, gzip.open(dst, "wt") as out:
@@ -84,9 +85,17 @@ def converti(src: str, dst: str, quota_maschera: float, rnd: random.Random, max_
             r = json.loads(l)
             testo = (r.get("text") or "")[:max_testo]
             if r.get("family_prov") == "glm_senza_audit":
-                # GLM senza il controllo di v1: si tiene solo se conferma un campo dichiarato
-                # (la famiglia resta, ma pesa meno: e' la parte piu' sporca del dataset)
+                # GLM senza il controllo incrociato di v1 e' la parte piu' sporca del
+                # dataset. Il 09/09/2026, col corpus cresciuto di 300k offerte e
+                # l'audit fermo all'08, era salita dal 16% al 41% delle famiglie:
+                # addestrare il cancello piu' alto (famiglia >= 92%) su quelle
+                # etichette e' un autogol. Si toglie SOLO la famiglia; i campi
+                # dichiarati dal datore restano, perche' sono verita' della fonte
+                # e non dipendono da GLM. Con --tieni-glm-senza-audit tornano.
                 st["glm_senza_audit"] += 1
+                if not tieni_sporche:
+                    r = dict(r)
+                    r["family"] = None
             x = riga_sft(r, testo, False, rnd)
             if x:
                 s = json.dumps(x, ensure_ascii=False)
@@ -128,6 +137,8 @@ def main() -> int:
     ap.add_argument("--maschera", type=float, default=0.25)
     ap.add_argument("--max-testo", type=int, default=1000)
     ap.add_argument("--seme", type=int, default=7)
+    ap.add_argument("--tieni-glm-senza-audit", action="store_true",
+                    help="tiene la famiglia anche dove GLM non e' stato verificato da v1")
     ap.add_argument("--giudicati", default=None, help="giudicati.jsonl dal giudice su GPU: le famiglie decise entrano nel train")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -150,7 +161,8 @@ def main() -> int:
     for nome in ("train", "esame"):
         src = os.path.join(a.src, f"dataset-{nome}-v2.jsonl.gz")
         dst = os.path.join(a.out, f"sft-{nome}.jsonl.gz")
-        rapporto[nome] = converti(src, dst, a.maschera if nome == "train" else 0.0, rnd, a.max_testo)
+        rapporto[nome] = converti(src, dst, a.maschera if nome == "train" else 0.0, rnd, a.max_testo,
+                                  a.tieni_glm_senza_audit)
         print(nome, json.dumps(rapporto[nome], indent=1), flush=True)
     json.dump(rapporto, open(os.path.join(a.out, "rapporto-sft.json"), "w"), indent=1)
     return 0
