@@ -81,10 +81,13 @@ def acc(pred: list[dict], righe: list[dict], campo: str) -> dict:
         if v in (None, "None", ""):
             continue
         n += 1
-        if p.get(campo) == v:
+        got = p.get(campo)
+        if got == v:
             ok += 1
         else:
-            conf[(v, p.get(campo))] += 1
+            # la chiave della confusione deve essere hashabile: il 09/09 il modello
+            # ha risposto con un dict per un campo e l'esame e' morto a meta'
+            conf[(v, got if isinstance(got, (str, int, bool, type(None))) else json.dumps(got, ensure_ascii=False)[:40])] += 1
     return {"n": n, "accuratezza": round(ok / n, 4) if n else None, "errori": conf.most_common(6)}
 
 
