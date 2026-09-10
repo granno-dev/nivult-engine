@@ -85,6 +85,10 @@ ALTER TABLE job_classifications ADD COLUMN IF NOT EXISTS v1_family TEXT;
 ALTER TABLE job_classifications ADD COLUMN IF NOT EXISTS v1_conf REAL;
 CREATE INDEX IF NOT EXISTS job_classifications_accordo_idx
     ON job_classifications (family) WHERE v1_family IS NOT NULL AND v1_family = family;
+-- il ripasso dei pareri (`classifica_v1 --pareri`) pesca da qui: senza
+-- indice ogni lotto scandiva 1,86 milioni di righe
+CREATE INDEX IF NOT EXISTS job_classifications_senza_parere_idx
+    ON job_classifications (job_id) WHERE v1_family IS NULL;
 
 -- Il salario letto nel TESTO dell'annuncio, dove la fonte non lo dichiara.
 -- `salary_da` dice da dove viene, e non e' un dettaglio: il campo

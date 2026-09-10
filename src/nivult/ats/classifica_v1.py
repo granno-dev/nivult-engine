@@ -73,16 +73,29 @@ def main() -> int:
     notte_detta = False
     t0 = time.time()
     with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry) as c:
-        while st["viste"] < tetto:
-            filtro = ("EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id "
-                      "AND x.v1_family IS NULL)" if pareri else "j.locale_v1_at IS NULL")
-            righe = c.execute(f"""
+        # Il RIPASSO ha una query sua. Con quella del giro normale faceva 9
+        # offerte al secondo invece di 27 (misurato il 10/09/2026), e la GPU
+        # non c'entrava: l'ORDER BY riordinava 1,65 milioni di righe a ogni
+        # lotto per mettere davanti quelle senza famiglia, che in questa
+        # modalita' sono zero per definizione — si ripassano proprio quelle
+        # che la famiglia ce l'hanno. Qui si parte da job_classifications e
+        # non si ordina niente, perche' l'ordine non conta: vanno viste tutte.
+        SQL_PARERI = f"""
+                SELECT j.id, j.title, coalesce(j.location, j.city, ''),
+                       left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 4000),
+                       j.seniority, j.employment_type, j.remote, j.languages_required,
+                       true AS ha_famiglia
+                  FROM job_classifications x
+                  JOIN ats_jobs j ON j.id = x.job_id
+                 WHERE x.v1_family IS NULL AND j.expired_at IS NULL
+                 LIMIT 2048"""
+        SQL_NORMALE = f"""
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 4000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j
-                 WHERE j.expired_at IS NULL AND {filtro}
+                 WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
                  -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
                  -- speso 295k letture per scriverne 22k, perche' rileggeva
                  -- offerte gia' classificate mentre l'arretrato senza famiglia
@@ -90,7 +103,9 @@ def main() -> int:
                  ORDER BY EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) ASC,
                           (NOT coalesce(j.posted_at_estimated, false)) DESC,
                           j.posted_at DESC NULLS LAST
-                 LIMIT 2048""").fetchall()
+                 LIMIT 2048"""
+        while st["viste"] < tetto:
+            righe = c.execute(SQL_PARERI if pareri else SQL_NORMALE).fetchall()
             if not righe:
                 if continuo:
                     time.sleep(60)
@@ -100,7 +115,9 @@ def main() -> int:
             par_rows = []          # il parere di v1 dove la famiglia c'e' gia'
             for i in range(0, len(righe), LOTTO):
                 b = righe[i:i + LOTTO]
-                if continuo and e_notte():
+                # anche il ripasso rispetta la fascia silenziosa: dura ore e
+                # il N5 sta in camera da letto
+                if (continuo or pareri) and e_notte():
                     if not notte_detta:
                         print(f"-- fascia silenziosa {NOTTE_DA}-{NOTTE_A}: riposo "
                               f"{NOTTE_RIPOSO}s per lotto", flush=True)
