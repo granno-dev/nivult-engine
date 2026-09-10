@@ -441,6 +441,14 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
     # ── freschezza del codone: ogni tenant va rivisitato entro la soglia
     # (spazzino a 12h in runner.py); se le fasce lontane si gonfiano, lo
     # scraping si sta affamando.
+    #
+    # SOLO i tenant che hanno offerte (`job_count > 0`). Senza quel filtro il
+    # pannello contava anche i ~135.000 tenant scoperti e VUOTI, che di
+    # rileggersi spesso non hanno motivo: dava 41,1% e 100.907 «oltre 12h»
+    # mentre le aziende con offerte erano al 100% entro 12 ore e al 95,9%
+    # entro sei (misurato il 10/09/2026). Un allarme che suona sempre non
+    # avvisa di niente. `codone_vuoti` tiene il conto degli esclusi, cosi'
+    # l'informazione non si perde.
     _fresh = _righe(ats_dsn, """
         SELECT
           count(*),
@@ -457,9 +465,14 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
           count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '12 hours'
                               AND ac.last_fetch_at >= now()-interval '24 hours')
           FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
-         WHERE ac.is_active AND ap.is_active""")
+         WHERE ac.is_active AND ap.is_active AND ac.job_count > 0""")
     _tot, _fre, _o12, _o24, b0, b1, b2, b3, b4 = \
         _fresh[0] if _fresh else (0,) * 9
+    _vuoti = _righe(ats_dsn, """
+        SELECT count(*) FROM ats_companies ac
+          JOIN ats_platforms ap ON ap.id = ac.platform_id
+         WHERE ac.is_active AND ap.is_active AND coalesce(ac.job_count, 0) = 0""")
+    d["salute"]["codone_vuoti"] = _vuoti[0][0] if _vuoti else 0
     d["salute"]["codone_totale"] = _tot
     d["salute"]["codone_oltre_12h"] = _o12
     d["salute"]["codone_oltre_24h"] = _o24
@@ -1257,7 +1270,7 @@ async function tick(){
  +'<div class="sect"><h2>Salute del dato</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
  +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte senza categoria',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende riviste entro 12 ore',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende CON OFFERTE riviste entro 12h',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h · '+IT(h.codone_vuoti)+' tenant vuoti esclusi')
  +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">piattaforme da collegare</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende trovate ma non ancora leggibili</div>`:'<div class="sub">leggiamo tutte le piattaforme trovate</div>'}</div>`
  +'</div>'
 
