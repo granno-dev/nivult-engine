@@ -20,7 +20,16 @@
 set -euo pipefail
 
 CONTAINER="${CONTAINER:-nivult-db-1}"
-TABELLE=(ats_jobs job_classifications ats_companies)
+# `nivult_app` serve DUE cose, non una: il ponte e il cruscotto. Le prime
+# tre tabelle sono quelle che legge il ponte. Le altre le legge solo il
+# cruscotto, e senza il permesso i suoi indicatori del «magazzino»
+# mostravano un trattino: `_forse()` in cruscotto.py inghiottiva l'errore
+# di permesso e restituiva None, quindi il pannello taceva invece di
+# protestare (scoperto il 10/09/2026 — azienda_skill ha 1,16 milioni di
+# righe e sul cruscotto risultava vuota da sempre).
+TABELLE=(ats_jobs job_classifications ats_companies
+         azienda_skill azienda_paese stipendi_benchmark
+         company_domains iso_paesi organizations)
 
 psql_ats() { docker exec -i "$CONTAINER" psql -U nivult -d nivult_ats -tAc "$1"; }
 

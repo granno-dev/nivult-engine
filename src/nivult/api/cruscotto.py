@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import time
@@ -27,6 +28,8 @@ import httpx
 import psycopg
 
 from nivult import oauth as _oauth
+
+log = logging.getLogger("nivult.cruscotto")
 
 OPERATORE = os.environ.get("CRUSCOTTO_EMAIL", "g.ranno@outlook.com").lower()
 # Venti minuti, non otto ore: un cookie rubato vale poco se muore in
@@ -610,9 +613,16 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
 
     # ── il magazzino da vendere: le grandezze che crescono da sole ──
     def _forse(sql):
+        """Una voce che puo' non esserci ancora: se manca, il pannello mostra
+        un trattino invece di rompersi. Ma l'errore si SCRIVE nel log: per
+        mesi tre voci del magazzino sono state vuote perche' `nivult_app`
+        non aveva il permesso di leggere le loro tabelle, e tacendo il
+        cruscotto non lo diceva a nessuno (10/09/2026)."""
         try:
             return _uno(ats_dsn, sql)
-        except Exception:                            # noqa: BLE001
+        except Exception as e:                       # noqa: BLE001
+            log.warning("cruscotto: voce del magazzino non leggibile (%s): %s",
+                        type(e).__name__, str(e).splitlines()[0][:120])
             return None
     d["magazzino"] = {
         "coppie_tecnografiche": _forse(
