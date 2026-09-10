@@ -328,13 +328,21 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','jobDescription','job_description',
                    'content','externalDescription','descriptionPlain']),
-               count(employment_type), count(contact_email)
+               count(employment_type), count(contact_email),
+               -- la lingua dell'annuncio e' un filtro VENDUTO (piano Pro):
+               -- la sua copertura va sorvegliata come le altre, o se un
+               -- giorno si rompe non se ne accorge nessuno
+               count(lang),
+               count(*) FILTER (WHERE languages_required IS NOT NULL
+                                  AND array_length(languages_required, 1) > 0)
           FROM ats_jobs WHERE expired_at IS NULL""")[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
           FROM ats_companies WHERE is_active AND job_count > 0""")[0]
-    campi = [("paese", r[0]), ("descrizione", r[5]), ("seniority", r[2]),
+    campi = [("paese", r[0]), ("descrizione", r[5]),
+             ("lingua dell'annuncio", r[8]), ("lingue richieste", r[9]),
+             ("seniority", r[2]),
              ("lavoro remoto", r[3]), ("competenze", r[4]),
              ("tipo di contratto", r[6]), ("contatto nell'annuncio", r[7]),
              ("salario", r[1])]
