@@ -23,11 +23,18 @@ import psycopg
 log = logging.getLogger("nivult.ats.dichiarati")
 
 PIATTAFORME = ("francetravail", "arbetsformedlingen", "nav", "smartrecruiters", "recruitee",
-               "workable", "ashby", "personio", "lever")
+               "workable", "ashby", "personio", "lever",
+               # aggiunte il 10/09/2026 per orario/durata: dichiarano il dato
+               # e non lo leggevamo. iCIMS (309.422 offerte) NON e' qui: il suo
+               # campo mescola anche la seniority («Experienced», «RN») e valori
+               # sanitari americani (PRN, Per Diem), va mappato con calma.
+               "bamboohr", "breezy", "zohorecruit", "pinpoint",
+               "recruiterbox", "vincere", "jsonld")
 RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employment_type",
              "working_hours_type", "workplace_model", "experience_required", "extent", "engagementtype",
              "experienceLevel", "typeOfEmployment", "location", "employment_type_code", "experience_code",
-             "remote", "hybrid", "workplace", "experience", "workplaceType", "isRemote", "employmentType")
+             "remote", "hybrid", "workplace", "experience", "workplaceType", "isRemote", "employmentType",
+             "employmentStatusLabel", "type", "Job_Type", "positionType")
 
 
 # ── contratto: dai campi dichiarati al vocabolario di Nivult ─────────
@@ -108,6 +115,26 @@ def contratto(pid: str, r: dict) -> str | None:
 # dire «impiego normale» e non dichiara la durata) restano NULL e li
 # decidera' il lettore del testo. Valori misurati sul database il 10/09/2026.
 
+def _jsonld_tipo(v) -> str | None:
+    """schema.org mette `employmentType` a volte come stringa, a volte come
+    lista (`["FULL_TIME"]`) e a volte con piu' valori insieme
+    (`["FULL_TIME", "PART_TIME"]`): con due valori non si sceglie, si tace."""
+    if isinstance(v, str):
+        v = v.strip()
+        if v.startswith("["):
+            import json as _json
+            try:
+                v = _json.loads(v)
+            except Exception:                        # noqa: BLE001
+                return None
+        else:
+            return v.upper().replace(" ", "_").replace("-", "_")
+    if isinstance(v, list):
+        vals = {str(x).upper().replace(" ", "_").replace("-", "_") for x in v if x}
+        return vals.pop() if len(vals) == 1 else None
+    return None
+
+
 def orario(pid: str, r: dict) -> str | None:
     """full_time / part_time: quante ore, e nient'altro."""
     if pid == "francetravail":
@@ -143,6 +170,39 @@ def orario(pid: str, r: dict) -> str | None:
     if pid == "personio":
         # «working_student» in Germania e' per definizione a ore ridotte
         return "part_time" if r.get("employmentType") == "working_student" else None
+    if pid == "bamboohr":
+        e = (r.get("employmentStatusLabel") or "").lower().replace("-", " ")
+        if "full time" in e:
+            return "full_time"
+        if "part time" in e:
+            return "part_time"
+        return None
+    if pid == "breezy":
+        # il nome e' tradotto («Vollzeit», «Temps plein»): si usa l'id, che
+        # non cambia lingua
+        return {"fullTime": "full_time", "partTime": "part_time"}.get(
+            (r.get("type") or {}).get("id") if isinstance(r.get("type"), dict) else None)
+    if pid == "zohorecruit":
+        j = (r.get("Job_Type") or "").lower()
+        if j in ("full time", "tiempo completo", "vollzeit", "temps plein",
+                 "voltijd", "tempo pieno", "heltid"):
+            return "full_time"
+        if j in ("part time", "tiempo parcial", "teilzeit", "temps partiel",
+                 "deeltijd", "tempo parziale", "deltid"):
+            return "part_time"
+        return None
+    if pid == "pinpoint":
+        e = r.get("employment_type") or ""
+        if e.endswith("full_time"):
+            return "full_time"
+        if e.endswith("part_time"):
+            return "part_time"
+        return None
+    if pid == "recruiterbox":
+        return {"full_time": "full_time", "part_time": "part_time"}.get(r.get("positionType"))
+    if pid == "jsonld":
+        v = _jsonld_tipo(r.get("employmentType"))
+        return {"FULL_TIME": "full_time", "PART_TIME": "part_time"}.get(v)
     return None
 
 
@@ -199,6 +259,46 @@ def durata(pid: str, r: dict) -> str | None:
                 "temporary": "fixed_term", "intern": "internship",
                 "trainee": "internship", "freelance": "freelance",
                 }.get(r.get("employmentType"))
+    if pid == "bamboohr":
+        e = (r.get("employmentStatusLabel") or "").lower()
+        if "permanent" in e:
+            return "permanent"
+        if "seasonal" in e or "temporary" in e:
+            return "fixed_term"
+        if "intern" in e:
+            return "internship"
+        if "contractor" in e:
+            return "freelance"
+        return None
+    if pid == "breezy":
+        # «contract» resta NULL: stessa ambiguita' dell'inglese
+        return {"temporary": "fixed_term"}.get(
+            (r.get("type") or {}).get("id") if isinstance(r.get("type"), dict) else None)
+    if pid == "zohorecruit":
+        return {"permanent": "permanent", "festanstellung": "permanent",
+                "temporary": "fixed_term", "internship": "internship",
+                "stage": "internship", "apprentissage": "apprenticeship",
+                "alternance": "apprenticeship", "freelance": "freelance",
+                }.get((r.get("Job_Type") or "").lower())
+    if pid == "pinpoint":
+        e = r.get("employment_type") or ""
+        if e.startswith("permanent"):
+            return "permanent"
+        if e.startswith("fixed_term") or e == "temporary":
+            return "fixed_term"
+        return {"internship": "internship", "apprenticeship": "apprenticeship",
+                "freelance": "freelance"}.get(e)
+    if pid == "vincere":
+        # vocabolario delle agenzie: «Contract» e «Temp-To-Perm» restano NULL
+        return {"permanent": "permanent", "festanstellung": "permanent",
+                "permanent / fixed term (perm)": "permanent",
+                "temporary": "fixed_term", "locum": "fixed_term",
+                "interim / project consulting": "fixed_term",
+                }.get((r.get("type") or "").lower() if isinstance(r.get("type"), str) else None)
+    if pid == "jsonld":
+        return {"TEMPORARY": "fixed_term", "INTERN": "internship",
+                "CONTRACTOR": "freelance", "PER_DIEM": "fixed_term",
+                }.get(_jsonld_tipo(r.get("employmentType")))
     return None
 
 
