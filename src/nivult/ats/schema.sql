@@ -103,6 +103,16 @@ CREATE INDEX IF NOT EXISTS job_classifications_senza_parere_idx
 -- `livelli_at`: il classificatore a dizionario marca le offerte GUARDATE,
 -- non quelle riuscite. Il 64% dei titoli non e' classificabile col
 -- dizionario, e restando senza famiglia tornavano nel lotto ogni ora.
+-- `employment_type` mescolava due domande diverse: quante ore si lavora e
+-- che natura ha il rapporto. Da `full_time` non si ricava se il posto e'
+-- stabile, e «permanent» non esisteva fra i valori — il filtro «e' a tempo
+-- indeterminato?» non aveva risposta. Peggio: il dato arrivava e si
+-- buttava («CDI» diventava `full_time`). Due assi, due colonne.
+--   orario: full_time | part_time
+--   durata: permanent | fixed_term | internship | apprenticeship | freelance
+-- `employment_type` resta dov'e': non si rompe nulla a valle.
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS orario TEXT;
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS durata TEXT;
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS livelli_at TIMESTAMPTZ;
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_da TEXT;
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_testo_at TIMESTAMPTZ;
