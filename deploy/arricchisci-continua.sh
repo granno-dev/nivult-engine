@@ -38,7 +38,14 @@ while true; do
   "$PY" -m nivult.ats.arricchisci --phenom --limite 3000 --thread 10 2>&1 | tail -1 || true
   # loghi azienda per la board: consolida i logo per-offerta + og:image
   # della board (ashby/lever/workable/smartrecruiters/greenhouse), a lotti.
-  "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
+  # ...ma non a ogni giro: i loghi nuovi arrivano col ritmo delle aziende
+  # nuove, cioe' lento. Girava in continuazione e teneva il database
+  # occupato al 100% (misurato il 10/09/2026). Ora al massimo ogni ora.
+  T_LOGHI=/opt/nivult/engine/logs/.loghi-offerte.timbro
+  if [ ! -f "$T_LOGHI" ] || [ $(( $(date +%s) - $(stat -c %Y "$T_LOGHI") )) -gt 3600 ]; then
+    "$PY" -m nivult.ats.loghi --da-offerte 2>&1 | tail -1 || true
+    touch "$T_LOGHI"
+  fi
   "$PY" /opt/nivult/engine/deploy/timbra_prima_vista.py 2>&1 | tail -1 || true
   # descrizioni dal dettaglio, per chi non le mette in lista
   "$PY" -m nivult.ats.descrizioni --smartrecruiters --limite 400 2>&1 | tail -1 || true
