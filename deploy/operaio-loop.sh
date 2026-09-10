@@ -61,8 +61,17 @@ while true; do
   # leggere (misurato la notte del 06/09/2026, mentre GLM ne faceva
   # 28.000 l'ora). Con il file di pausa il passo si salta; si toglie
   # quando lo sprint GLM finisce o quando arriva nivult v1.
+  # Il classificatore a livelli era in pausa dal 07/09 perche' rendeva
+  # l'1,8% a giro e scaldava i 16 core: v1 aveva appena passato tutto e non
+  # restava niente da raccogliere. Rimisurato il 10/09: **7.209 famiglie su
+  # 20.000 viste, il 36%**. Il motivo era scaduto — le 306.000 offerte senza
+  # famiglia sono quelle su cui v1 ha visto ma non era sicuro, e il
+  # dizionario le prende. Senza famiglia un'offerta non arriva a nessuno.
+  # Resta fuori dalla fascia silenziosa: e' lui che scalda i core, non la GPU.
   if [ -f /opt/nivult/engine/logs/.classificatore-pausa ]; then
     echo "-- classificatore a livelli in pausa (logs/.classificatore-pausa)"
+  elif notte; then
+    echo "-- classificatore a livelli: fermo di notte (scalda i 16 core)"
   else
     nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
   fi
