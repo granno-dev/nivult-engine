@@ -100,6 +100,10 @@ CREATE INDEX IF NOT EXISTS job_classifications_senza_parere_idx
 -- `salary_testo_at` marca l'offerta ANCHE quando non si trova niente: piu'
 -- di un milione di annunci nominano lo stipendio senza scrivere una cifra,
 -- e senza il marcatore ogni giro li rileggerebbe tutti.
+-- `livelli_at`: il classificatore a dizionario marca le offerte GUARDATE,
+-- non quelle riuscite. Il 64% dei titoli non e' classificabile col
+-- dizionario, e restando senza famiglia tornavano nel lotto ogni ora.
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS livelli_at TIMESTAMPTZ;
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_da TEXT;
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS salary_testo_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS ats_jobs_salario_da_leggere_idx
