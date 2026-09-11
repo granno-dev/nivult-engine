@@ -114,7 +114,16 @@ def contratto(pid: str, r: dict) -> str | None:
         return {"CDI": "full_time", "CDD": "temporary", "INTERIM": "temporary", "STAGE": "internship",
                 "ALTERNANCE": "apprenticeship", "FREELANCE": "contract"}.get((r.get("contract") or "").upper())
     if pid == "join":
-        return _generico(r.get("employmentType"))
+        # vocabolario suo, misurato l'11/09 su 1.702: Employee 1.395 (= assunto,
+        # cioe' tempo pieno), Contract 82, Working student 61, Internship 59,
+        # Side job 45, Freelance 40. `_generico` da solo leggeva 0% perche' non
+        # conosce «Employee». «Contract» resta NULL anche qui: la piattaforma ha
+        # gia' «Freelance» a parte, quindi non si sa se vuol dire determinato o
+        # autonomo — e nel dubbio non si insegna.
+        return {"Employee": "full_time", "Working student": "part_time",
+                "Side job": "part_time", "Internship": "internship",
+                "Freelance": "contract", "Apprenticeship": "apprenticeship",
+                "Temporary": "temporary"}.get((r.get("employmentType") or "").strip())
     if pid == "pinpoint":
         return _generico(r.get("employment_type") or r.get("employment_type_text"))
     return None
@@ -479,6 +488,19 @@ def remoto(pid: str, r: dict) -> str | None:
             return {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite"}.get(r.get("workplaceType"))
         t = ((r.get("categories") or {}).get("commitment") or "").strip().lower()
         return "remote" if t == "remote" else None
+    if pid == "join":
+        # dichiarato sul 100% delle offerte (1.702 su 1.702, misurato l'11/09):
+        # ONSITE 1.074, HYBRID 402, REMOTE 226. Era li' e non lo leggevamo.
+        return {"onsite": "onsite", "hybrid": "hybrid", "remote": "remote"}.get(
+            (r.get("workplaceType") or "").strip().lower())
+    if pid in ("jsonld", "agenzie", "softgarden"):
+        # schema.org: jobLocationType TELECOMMUTE e' l'unico valore previsto,
+        # e dice solo «remoto». L'assenza NON vuol dire in sede (lo decide
+        # «onsite per assenza» nel dataset, sul testo), quindi qui o remote o niente.
+        v = r.get("jobLocationType") or r.get("workplaceType")
+        if isinstance(v, list):
+            v = " ".join(str(x) for x in v)
+        return "remote" if isinstance(v, str) and "telecommute" in v.lower() else None
     return None
 
 
