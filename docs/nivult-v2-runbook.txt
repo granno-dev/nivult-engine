@@ -1,0 +1,250 @@
+nivult-v2 — addestramento su Colab (A100 80GB o H100)
+=====================================================
+Aggiornato: 11/09/2026 sera, dopo il PRIMO ESAME VALIDO (giro B).
+
+CORREZIONE DELL'11/09: IL PRIMO TENTATIVO NON ERA STATO BOCCIATO
+-----------------------------------------------------------------
+Non era stato giudicato. `esame_v2.py` caricava la base con
+AutoModelForCausalLM, ma Qwen3.5 si dichiara Qwen3_5ForConditionalGeneration
+e tiene lo stack di testo sotto `model.language_model`: nessuna delle 256
+chiavi del LoRA combaciava, peft lo diceva in un UserWarning che nessuno ha
+letto, e l'esame misurava Qwen NUDO. I «67,5 / 76,6 / 65,2 / 83,3» qui
+sotto sono i numeri del modello base, non del nostro. Scoperto perche' il
+giro B, col LoRA di nuovo non caricato, ha stampato gli stessi quattro
+numeri cifra per cifra.
+
+Sistemato in esame_v2.py: classe dal config, e CONTROLLO che lora_B non sia
+tutto zero (altrimenti SystemExit). Col caricamento giusto: 128 tensori,
+somma |B| = 282631.
+
+La causa 1 qui sotto (perdita su tutto il testo) era un difetto vero,
+trovato nel codice e confermato da 1,32 -> 0,12. Le cause 2 e 3 erano
+sensate in se' ma NON derivavano da una misura. La 2 ha aperto un buco:
+`contract` e' sceso allo 0,4% del train (8% nelle 280 a mano).
+
+ESAME VALIDO DEL GIRO B (11/09, 2.537 s)
+----------------------------------------
+  famiglia a mano   89,6%  (cancello 92)   -> 91,8% contando unknown==none
+  famiglia codici   72,5%  (cancello 92)   -> ma vedi sotto: il banco e' rotto
+  seniority estr.   64,5%  (cancello 88)   errori: mid->senior 383, junior->senior 215
+  contratto estr.   65,6%  (cancello 88)   errori: temporary->full_time 509
+  remoto estr.      98,0%  (cancello 90)   PASSA — ma 59,8% sulle 280 a mano
+  passa: NO
+
+Tre diagnosi, tutte misurate:
+ a) SQUILIBRIO DEL TRAIN. I campi dichiarati non mancano a caso: chi e' in
+    sede non lo scrive. Train vs 280 a mano: senior 41,7% vs 21,5%,
+    full_time 85,6% vs 60,9%, onsite 48% vs 80,5%. L'84% degli errori di
+    seniority e il 90% di quelli del contratto sono frecce verso la classe
+    maggioritaria. Non e' addestramento, e' campionamento.
+ b) IL BANCO DEI CODICI E' SOPRA L'ACCORDO FRA ANNOTATORI. Dove GLM e v1
+    concordano, la famiglia da codice ufficiale coincide col loro consenso
+    solo nel 67% (Construction->Trades 413, Manufacturing->Trades 334...).
+    Il nostro 72,5% sta sopra. Un cancello al 92% li' e' un muro.
+    In piu' ROME D11 e ISCO 751 (fornaio, macellaio) -> Trades mentre
+    512/513 (cuoco, cameriere) -> Food & Beverage: il modello li mette
+    insieme, 59 «errori» su 1.962.
+ c) IL LORA HA SALTATO 24 STRATI SU 32. Qwen3.5-9B e' ibrido (24 Gated
+    DeltaNet + 8 attenzione piena). q/k/v/o/gate/up/down agganciano MLP
+    ovunque e attenzione solo negli 8 strati pieni = 128 lora_B, esatti.
+    Mancano linear_attn.in_proj_qkv / in_proj_z / out_proj (nomi Axolotl).
+
+GIRO C — i punti 1-4 sono FATTI nel codice l'11/09 sera
+--------------------------------------------------------
+ 1. FATTO — tassonomia rivista contro il consenso GLM+v1 (non a occhio),
+    su 12.280 righe FR/SE/EURES dove GLM e v1 concordano fra loro:
+      ROME D11 + D1101-D1104 (fornaio, macellaio, pasticciere) -> Food & Beverage
+      ROME F16 (idraulico, elettricista, piastrellista)        -> Trades   (88%)
+      ISCO 751 -> Food & Beverage;  ISCO 722 (fabbri) -> Manufacturing     (97%)
+      SSYK 534, 266 -> Social Services (98%, 91%); SSYK 531 -> Education   (98%)
+      SSYK 821 (montatori) -> Trades                                       (77%)
+      SSYK/ISCO 311, SSYK 333, SSYK 242 -> None: davvero misti
+    Le eccezioni per codice intero vincono sul gruppo: se cambi un gruppo,
+    controlla che non ci sia un'eccezione che lo contraddice (D1101-D1104
+    dicevano ancora Trades dopo aver spostato D11: preso al volo).
+    unknown == none in esame_v2.acc (valeva 6 errori su 280).
+ 2. FATTO — esame_v2: il banco dei codici usa SOLO le righe dove codice e
+    consenso GLM+v1 coincidono (campo `family_consenso`, scritto da
+    estrai_dataset_v2). Se il file esame e' vecchio e non ce l'ha, torna al
+    banco intero e lo DICE nel rapporto.
+ 3. FATTO — dataset:
+    - estrai_dataset_v2: «onsite per assenza» (testo >= 300 char e nessuna
+      parola di remoto/ibrido in 20 lingue) con prov="assenza"; l'esame non
+      le usa mai perche' i suoi banchi filtrano prov=="dichiarato";
+    - formatta_v2: riequilibrio al prior delle 280 a mano. Verificato a
+      tavolino sui numeri veri del giro B: senior 41,7->21,5%,
+      full_time 85,6->60,9%, onsite 88,9->80,5%. Si toglie il CAMPO dalla
+      richiesta, non la riga dal dataset. `--senza-riequilibrio` per il confronto;
+    - dichiarati.py: `contract` recuperato da bamboohr, zohorecruit, taleez,
+      join, pinpoint, softgarden, jsonld/agenzie (schema.org distingue
+      CONTRACTOR da TEMPORARY per specifica). Il nudo «Contract» inglese
+      resta NULL, come deciso il 09/09.
+ 4. FATTO — addestra_v2: target_modules + in_proj_qkv, in_proj_z, out_proj,
+    e un controllo che MUORE se i mixer lineari non ricevono il LoRA.
+    Provato sulla macchina: 200 tensori lora_B (erano 128), di cui 72
+    sull'attenzione lineare, 80.216.064 parametri addestrabili.
+    Aspettarsi ~20% di tempo in piu'.
+
+DOVE SI RIGENERA IL DATASET (ricostruito l'11/09: non era scritto da nessuna
+parte, e sul server Hetzner c'e' solo una prova da 40.000 righe che inganna)
+-----------------------------------------------------------------------------
+Si fa sul N5, non su Hetzner: e' la macchina dei lotti pesanti, e legge il
+db di Hetzner via Tailscale. La cartella e' /opt/nivult/v2 DENTRO il
+container `nivult-operaio`.
+
+  ssh root@100.119.200.7
+  docker exec -it nivult-operaio sh
+  cd /opt/nivult/engine
+
+  1) .venv/bin/python scripts/estrai_dataset_v2.py \
+       --out /opt/nivult/v2 \
+       --golden-mano /opt/nivult/llama/dataset-golden-v1.jsonl.gz
+     (274.909 byte: e' lo stesso golden che sta sul Mac. Gli altri due sul
+     N5 sono vecchi e piu' piccoli — controllare la dimensione, non il nome.)
+     NIENTE --audit: dal 09/09 l'accordo GLM+v1 si legge da
+     job_classifications.v1_family, che e' piu' aggiornato del file.
+     ~35-60 minuti, 1,7 milioni di righe lette.
+
+  2) .venv/bin/python scripts/formatta_v2.py \
+       --in /opt/nivult/v2 --out /opt/nivult/v2/sft \
+       --giudicati /opt/nivult/v2/giudicati.jsonl
+
+  3) IL PASSO CHE NON ERA SCRITTO: il file che si addestra e' la
+     CONCATENAZIONE dei due (gzip si concatena e resta valido):
+       cat /opt/nivult/v2/sft/sft-train.jsonl.gz \
+           /opt/nivult/v2/sft/sft-giudicati.jsonl.gz > /opt/nivult/v2/sft-train-completo.jsonl.gz
+     Il giro B: 593.003 + 21.671 = 614.674 righe, firma 614674:7eeb20693ead,
+     225.163.956 byte. Se la firma nel meta.json non e' quella, si e'
+     addestrato sul file sbagliato.
+
+DA FARE, in quest'ordine:
+ 5. rigenerare il dataset coi tre passi qui sopra e CONTROLLARE nel
+    rapporto: `remote:assenza` presente, `riequilibrio.tieni` con tre voci,
+    `classe:*` alle proporzioni volute, `contract` risalito sopra l'1%.
+ 6. caricare su Drive i file nuovi (sft-train, dataset-esame) e addestrare.
+ 7. esame. Il cancello sui codici ora e' confrontabile: prima misurava un
+    confine dove due etichettatori concordano al 67%.
+ 8. solo se il 9B passa: 35B-A3B su B200 a noleggio.
+
+--- da qui in giu' il testo del 09/09, conservato com'era ---
+Aggiornato: 09/09/2026 sera, dopo il PRIMO tentativo BOCCIATO.
+
+COSA ERA ANDATO STORTO (primo giro, 33.301 passi, esame del 09/09)
+------------------------------------------------------------------
+Famiglia 67,5% sulle 280 a mano (cancello 92%), codici 61,2%,
+seniority 76,6%, contratto 65,2%, remoto 83,3%. Zero risposte
+illeggibili: il modello rispondeva bene e sbagliava davvero.
+
+Tre cause, tutte corrette:
+ 1. LA PERDITA SI CALCOLAVA SU TUTTO IL TESTO. La risposta JSON era il
+    3,8% dei caratteri: il 96% del gradiente imparava a scrivere
+    annunci. Ora il dataset e' prompt/completion e trl conta solo la
+    risposta (completion_only_loss). Misurato sulle stesse 300 righe:
+    perdita 1,32 -> 0,12.
+ 2. IL CONTRATTO ERA AMBIGUO NEI DATI. Negli annunci che dicono CDD o
+    temporary il dato dichiarato diceva temporary 193 volte e contract
+    197: «Contract» negli ATS anglosassoni vale sia autonomo sia
+    determinato. Ora quel valore resta NULL (dichiarati.py).
+ 3. LE FAMIGLIE NON VERIFICATE. Col corpus cresciuto e l'audit fermo
+    all'08/09, il 41% delle famiglie veniva da GLM senza contro-verifica
+    di v1 (era il 16%). Ora quelle righe entrano senza la famiglia, e
+    v1 salva il suo parere in job_classifications.v1_family a ogni giro
+    (`classifica_v1 --pareri` per il ripasso dell'arretrato).
+
+IL DATASET DI STASERA
+---------------------
+sft-train.jsonl.gz     614.674 righe, firma 614674:7eeb20693ead
+                       famiglia 234.412 (tutte verificate), contratto
+                       258.870, seniority 175.777, remoto 140.771
+dataset-esame-v2.jsonl.gz  il lato esame, mai visto in addestramento
+I file del primo giro sono accanto, rinominati *.VECCHIO-0809.*
+
+FILE DA CARICARE NELLA CELLA 2
+------------------------------
+  prompt_v2.py               il prompt, identico ovunque
+  addestra_v2.py             perdita sulla sola risposta
+  esame_v2.py                si ferma a <|im_end|>, confusione hashabile
+  sft-train.jsonl.gz         il dataset nuovo
+  dataset-esame-v2.jsonl.gz  il lato esame
+  dataset-golden-v1.jsonl.gz le 280 a mano
+Tutti da questa cartella. Su Drive, in nivult-v2/file/, ci sono gia'
+sft-train.jsonl.gz e addestra_v2.py: se la macchina cade, il rilancio
+li ripesca da li' senza ricaricare niente.
+
+COME SI LANCIA (senza celle, dal terminale o da una cella qualunque)
+--------------------------------------------------------------------
+  !nohup python /content/addestra_v2.py --modello Qwen/Qwen3.5-9B \
+      --train /content/sft-train.jsonl.gz \
+      --out /content/drive/MyDrive/nivult-v2/qwen3.5-9b-b \
+      --epoche 1 --bs 8 --accumulo 2 --max-len 1024 \
+      > /content/addestra-b.log 2>&1 &
+
+Il log deve stampare «ESEMPIO completion:» con il solo JSON: se dentro
+c'e' anche il testo dell'annuncio, la perdita e' di nuovo sbagliata.
+La perdita dopo 500 passi deve stare sotto 0,2.
+
+IL SECONDO GIRO VA 5 VOLTE PIU' PIANO, E SI SA PERCHE'
+------------------------------------------------------
+Misurato il 09/09 alle 21:52 UTC, a giro avviato: 1.708/38.418 passi,
+**2,65 s per passo**, cioe' 6 esempi/s. Il primo giro ne faceva 29,24
+(0,55 s per passo). La differenza e' una riga sola: il primo giro aveva
+`packing=True` (commit cf5b3a5, messo apposta perche' «1,4 esempi/s a
+lotti con padding = 8 giorni»), questo ha `packing=False`, che serve a
+far contare la perdita sulla sola risposta.
+
+**Non si rimette il packing adesso, ed e' una scelta.** Il primo giro e'
+stato bocciato AVENDO il packing; se lo si rimettesse insieme alla
+correzione della perdita, un secondo esame fallito non direbbe piu' quale
+delle due cose non ha funzionato. Si cambia una variabile per volta. Il
+prezzo e' tempo, non qualita', ed e' il verso giusto in cui sbagliare.
+Se il 9B passa il cancello, ALLORA si prova `packing=True` sul 35B e si
+verifica con la prova a 300 righe che la perdita finale resti ~0,12: se
+risale verso 1,3 il packing sta buttando via la maschera e va tolto.
+
+LA MACCHINA MUORE PRIMA DELLA FINE: COME SI RIPRENDE
+----------------------------------------------------
+Conti del 09/09 21:52 UTC:
+  la VM Colab e' accesa dalle 12:31 UTC -> muore alle **12:31 UTC del 10/09**
+  l'addestramento e' partito alle 20:20:09 UTC del 09/09
+  38.418 passi x 2,65 s = 28 h 15 m -> alla morte della VM sara' al ~57%
+Quindi il giro NON finisce in una sessione, e non e' un guasto.
+
+Il checkpoint sta su Drive (`save_steps=500`, `save_total_limit=2`):
+una morte improvvisa costa al massimo 500 passi, cioe' 22 minuti.
+
+Alle 12:31 UTC del 10/09 (14:31 a Roma) serve una mano umana, perche'
+quando cade la VM cadono anche i cron di guardia che stanno dentro:
+  1. riaprire il notebook e collegare una A100 (Runtime > Cambia tipo);
+  2. rimontare Drive (cella 1) e ricaricare i file (cella 2);
+  3. rilanciare **lo stesso identico comando** del lancio qui sotto:
+     riprende da solo dall'ultimo checkpoint-N su Drive, non riparte da zero.
+Restano ~16.400 passi, cioe' ~12 ore: fine attesa verso l'01:00 UTC dell'11/09.
+
+Come si controlla che sia vivo, dal Terminale di Colab:
+  pgrep -af addestra_v2 | head -3
+  tail -c 300 /content/addestra-b.log
+  ls /content/drive/MyDrive/nivult-v2/qwen3.5-9b-b/checkpoint/
+Le righe della perdita nel log arrivano a blocchi e in ritardo: con
+`nohup > file` lo stdout di Python e' a blocchi, mentre la barra di
+avanzamento e' su stderr e si vede subito. Un log senza `'loss':` dopo
+mille passi non e' un guasto.
+
+L'ESAME
+-------
+  !python /content/esame_v2.py --modello Qwen/Qwen3.5-9B \
+      --adapter /content/drive/MyDrive/nivult-v2/qwen3.5-9b-b/lora \
+      --golden /content/dataset-golden-v1.jsonl.gz \
+      --esame /content/dataset-esame-v2.jsonl.gz \
+      --out /content/drive/MyDrive/nivult-v2/qwen3.5-9b-b/esame-v2.json --bs 16
+
+IL CANCELLO (deciso il 07/09/2026)
+----------------------------------
+famiglia >= 92% sulle 280 a mano E sui codici ufficiali; seniority e
+contratto >= 88% in estrazione; remoto >= 90%. La stima si legge a
+parte: e' il numero che dice se pubblicarla, non un cancello.
+
+DOPO
+----
+Se il 9B passa, stessa ricetta sul 35B-A3B (serve una H100 da 80 GB) e
+export GGUF per il N5. Se non passa, guardare prima gli errori campo
+per campo nel file esame-v2.json.
