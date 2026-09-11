@@ -10,6 +10,7 @@ scartano — meglio un salario mancante che uno sbagliato.
 """
 from __future__ import annotations
 
+import html
 import logging
 import os
 import re
@@ -91,7 +92,112 @@ def _sano(v) -> float | None:
     return v if 0 < v < 10_000_000 else None
 
 
-def estrai(raw: dict):
+# ── schema.org `baseSalary`: 94.465 offerte jsonld + 35.915 agenzie ──
+# Forma: {"@type":"MonetaryAmount","value":{"minValue":N,"maxValue":N,
+#         "unitText":"YEAR"},"currency":"EUR"}
+# Misurato il 11/09/2026 su 4.000: 39% ha importi numerici, 32% ha una
+# stringa libera («£48.226- £51.356 per annum», che sa leggere
+# `parse_stringa`), il resto e' vuoto.
+#
+# Due trappole:
+#  - l'unita' e' multilingue: YEAR, Annuale, Annui, mensile, HOUR;
+#  - la valuta a volte dichiara USD su importi in sterline. Quando
+#    contraddice il paese, si rinuncia alla riga invece di inventare: erano
+#    ~l'1% del campione.
+_UNITA_SCHEMA = {
+    "year": "year", "annual": "year", "annuale": "year", "annui": "year",
+    "annuo": "year", "yearly": "year", "anno": "year", "an": "year",
+    "month": "month", "mensile": "month", "mese": "month", "monthly": "month",
+    "week": "week", "settimanale": "week", "weekly": "week",
+    "day": "day", "giornaliero": "day", "daily": "day",
+    "hour": "hour", "oraria": "hour", "orario": "hour", "hourly": "hour", "ora": "hour",
+}
+# la valuta che ci si aspetta in un paese: serve solo a smascherare le
+# contraddizioni, non a riempire da sola
+_ATTESA = {"US": "USD", "GB": "GBP", "CA": "CAD", "AU": "AUD", "NZ": "NZD",
+           "CH": "CHF", "SE": "SEK", "NO": "NOK", "DK": "DKK", "PL": "PLN",
+           "CZ": "CZK", "HU": "HUF", "RO": "RON", "IN": "INR", "AE": "AED",
+           "IT": "EUR", "FR": "EUR", "DE": "EUR", "ES": "EUR", "NL": "EUR",
+           "BE": "EUR", "PT": "EUR", "IE": "EUR", "AT": "EUR", "FI": "EUR"}
+
+
+_SIMBOLO_VALUTA = {"€": "EUR", "£": "GBP", "$": "USD", "₹": "INR", "¥": "JPY",
+                   "CHF": "CHF", "zł": "PLN", "kr": None}
+
+
+def _valuta_schema(cur):
+    """La valuta di un MonetaryAmount: stringa, simbolo, entita' HTML o oggetto."""
+    if isinstance(cur, dict):     # a volte e' un oggetto e non una stringa
+        cur = next((v for v in cur.values()
+                    if isinstance(v, str) and len(v) <= 6), "")
+    if not isinstance(cur, str):
+        return None
+    cur = html.unescape(html.unescape(cur)).strip()   # «&amp;#36;» -> «$»
+    cur = _SIMBOLO_VALUTA.get(cur, cur.upper())
+    if not cur or len(cur) != 3 or not cur.isalpha():
+        return None
+    return cur
+
+
+def _num_schema(v) -> float | None:
+    """Un importo che schema.org scrive tanto come numero quanto come stringa."""
+    if isinstance(v, str):
+        v = v.strip().replace(" ", "").replace(" ", "")
+        if not v:
+            return None
+        # «22.000» all'italiana vale ventiduemila, non ventidue: il punto e'
+        # un separatore di migliaia quando lo seguono esattamente tre cifre
+        if re.fullmatch(r"\d{1,3}(?:\.\d{3})+", v):
+            v = v.replace(".", "")
+        elif re.fullmatch(r"\d{1,3}(?:\.\d{3})+,\d{1,2}", v):
+            v = v.replace(".", "").replace(",", ".")
+        else:
+            v = v.replace(",", "")
+        try:
+            v = float(v)
+        except ValueError:
+            return None
+    return _sano(v)
+
+
+def da_base_salary(bs, paese: str | None):
+    """(min, max, valuta, periodo) da uno schema.org MonetaryAmount, o None."""
+    if not isinstance(bs, dict):
+        return None
+    cur = _valuta_schema(bs.get("currency"))
+    attesa = _ATTESA.get((paese or "").upper())
+    if cur and attesa and cur != attesa:
+        return None                  # la fonte si contraddice: non si indovina
+    cur = cur or attesa
+    if not cur:
+        return None
+    # gli importi stanno dentro `value`, ma un quarto delle fonti li mette
+    # direttamente sul MonetaryAmount: si guarda in entrambi i posti
+    val = bs.get("value")
+    dentro = val if isinstance(val, dict) else bs
+    per = _UNITA_SCHEMA.get(
+        str(dentro.get("unitText") or bs.get("unitText") or "").strip().lower())
+    mn = _num_schema(dentro.get("minValue"))
+    mx = _num_schema(dentro.get("maxValue"))
+    if mn or mx:
+        return (mn or mx), (mx or mn), cur, per
+    se = dentro.get("value") if isinstance(val, dict) else val
+    if isinstance(se, list):         # «"value": ["51500", "71912"]»
+        nn = [x for x in (_num_schema(x) for x in se) if x]
+        if nn:
+            return min(nn), max(nn), cur, per
+        return None
+    v = _num_schema(se)
+    if v:
+        return v, v, cur, per
+    if isinstance(se, str) and se.strip():
+        r = parse_stringa(se)        # «Up to £30.500 per annum»
+        if r:
+            return r[0], r[1], r[2] or cur, r[3] or per
+    return None
+
+
+def estrai(raw: dict, paese: str | None = None):
     """Dal raw di un'offerta ritorna (min, max, valuta, periodo) o None."""
     if not isinstance(raw, dict):
         return None
@@ -125,7 +231,8 @@ def estrai(raw: dict):
     comp = raw.get("compensation")
     if isinstance(comp, str):
         return parse_stringa(comp)
-    return None
+    # 5) schema.org baseSalary (jsonld, agenzie)
+    return da_base_salary(raw.get("baseSalary"), paese)
 
 
 # ── Il salario scritto NEL TESTO dell'annuncio ──────────────────────
@@ -381,15 +488,16 @@ def arricchisci_salari(dsn: str, limite: int = 50000) -> dict:
     stats = {"esaminate": 0, "riempite": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
         righe = c.execute("""
-            SELECT id, raw FROM ats_jobs
+            SELECT id, raw, country FROM ats_jobs
              WHERE salary_min IS NULL AND expired_at IS NULL
                AND salary_checked_at IS NULL
                AND (raw ? 'salary' OR raw ? 'salaryRange'
-                    OR raw ? 'salary_range' OR raw ? 'compensation')
+                    OR raw ? 'salary_range' OR raw ? 'compensation'
+                    OR raw ? 'baseSalary')
              LIMIT %s""", (limite,)).fetchall()
-        for jid, raw in righe:
+        for jid, raw, paese in righe:
             stats["esaminate"] += 1
-            r = estrai(raw)
+            r = estrai(raw, paese)
             if not r:
                 # imparsabile («competitive salary»): si MARCA comunque,
                 # o ogni ciclo lo ri-esaminava per niente (spreco noto).
