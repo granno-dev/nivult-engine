@@ -29,12 +29,13 @@ PIATTAFORME = ("francetravail", "arbetsformedlingen", "nav", "smartrecruiters", 
                # campo mescola anche la seniority («Experienced», «RN») e valori
                # sanitari americani (PRN, Per Diem), va mappato con calma.
                "bamboohr", "breezy", "zohorecruit", "pinpoint",
-               "recruiterbox", "vincere", "jsonld")
+               "recruiterbox", "vincere", "jsonld", "icims")
 RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employment_type",
              "working_hours_type", "workplace_model", "experience_required", "extent", "engagementtype",
              "experienceLevel", "typeOfEmployment", "location", "employment_type_code", "experience_code",
              "remote", "hybrid", "workplace", "experience", "workplaceType", "isRemote", "employmentType",
-             "employmentStatusLabel", "type", "Job_Type", "positionType")
+             "employmentStatusLabel", "type", "Job_Type", "positionType",
+             "Position Type", "Employment Type", "Location Type")
 
 
 # ── contratto: dai campi dichiarati al vocabolario di Nivult ─────────
@@ -135,6 +136,16 @@ def _jsonld_tipo(v) -> str | None:
     return None
 
 
+def _icims_tipo(r: dict) -> str:
+    """iCIMS mette il tipo di impiego in due campi diversi a seconda del
+    cliente: «Position Type» (23% delle offerte) e «Employment Type» (2%).
+    Nello STESSO campo alcuni datori scrivono anche la seniority («RN»,
+    «Experienced») o la reperibilita' sanitaria americana («PRN», «Per
+    Diem»): quelli non sono tipi di impiego e restano fuori."""
+    v = r.get("Position Type") or r.get("Employment Type") or ""
+    return v.strip().lower().replace("-", " ") if isinstance(v, str) else ""
+
+
 def orario(pid: str, r: dict) -> str | None:
     """full_time / part_time: quante ore, e nient'altro."""
     if pid == "francetravail":
@@ -203,6 +214,13 @@ def orario(pid: str, r: dict) -> str | None:
     if pid == "jsonld":
         v = _jsonld_tipo(r.get("employmentType"))
         return {"FULL_TIME": "full_time", "PART_TIME": "part_time"}.get(v)
+    if pid == "icims":
+        t = _icims_tipo(r)
+        if "full time" in t:
+            return "full_time"
+        if "part time" in t:
+            return "part_time"
+        return None
     return None
 
 
@@ -299,6 +317,19 @@ def durata(pid: str, r: dict) -> str | None:
         return {"TEMPORARY": "fixed_term", "INTERN": "internship",
                 "CONTRACTOR": "freelance", "PER_DIEM": "fixed_term",
                 }.get(_jsonld_tipo(r.get("employmentType")))
+    if pid == "icims":
+        t = _icims_tipo(r)
+        # «Regular» nel vocabolario HR americano vuol dire rapporto
+        # continuativo, in opposizione a «Temporary»/«Contingent»
+        if t.startswith("regular"):
+            return "permanent"
+        if "temporary" in t or "seasonal" in t:
+            return "fixed_term"
+        if "intern" in t:
+            return "internship"
+        # «PRN», «Per Diem», «Flex/Per Diem» sono turni a chiamata: dicono
+        # come si lavora, non per quanto. Restano senza.
+        return None
     return None
 
 
@@ -342,6 +373,10 @@ def remoto(pid: str, r: dict) -> str | None:
     if pid == "arbetsformedlingen":
         lab = (r.get("workplace_model") or {}).get("label", "")
         return "onsite" if "på plats" in lab else ("remote" if "distans" in lab.lower() else None)
+    if pid == "icims":
+        # «Regional» non dice se si sta in sede: resta fuori
+        return {"onsite": "onsite", "on site": "onsite", "remote": "remote",
+                "hybrid": "hybrid"}.get((r.get("Location Type") or "").strip().lower())
     return None
 
 
