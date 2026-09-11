@@ -29,13 +29,15 @@ PIATTAFORME = ("francetravail", "arbetsformedlingen", "nav", "smartrecruiters", 
                # campo mescola anche la seniority («Experienced», «RN») e valori
                # sanitari americani (PRN, Per Diem), va mappato con calma.
                "bamboohr", "breezy", "zohorecruit", "pinpoint",
-               "recruiterbox", "vincere", "jsonld", "icims")
+               "recruiterbox", "vincere", "jsonld", "icims", "greenhouse", "werecruit")
 RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employment_type",
              "working_hours_type", "workplace_model", "experience_required", "extent", "engagementtype",
              "experienceLevel", "typeOfEmployment", "location", "employment_type_code", "experience_code",
              "remote", "hybrid", "workplace", "experience", "workplaceType", "isRemote", "employmentType",
              "employmentStatusLabel", "type", "Job_Type", "positionType",
-             "Position Type", "Employment Type", "Location Type")
+             "Position Type", "Employment Type", "Location Type",
+             "categories", "Remote_Job", "workplace_type", "language",
+             "DefaultLanguage")
 
 
 # ── contratto: dai campi dichiarati al vocabolario di Nivult ─────────
@@ -221,6 +223,17 @@ def orario(pid: str, r: dict) -> str | None:
         if "part time" in t:
             return "part_time"
         return None
+    if pid == "lever":
+        # `categories.commitment` e' scritto a mano dal recruiter: «Full-time»,
+        # «Full Time», «Contract Full time»... si normalizza e si guarda
+        # dentro. «Remote» compare qui ma e' un luogo, non un orario: lo
+        # prende `remoto()`.
+        t = ((r.get("categories") or {}).get("commitment") or "").lower().replace("-", " ")
+        if "full time" in t:
+            return "full_time"
+        if "part time" in t:
+            return "part_time"
+        return None
     return None
 
 
@@ -333,6 +346,36 @@ def durata(pid: str, r: dict) -> str | None:
     return None
 
 
+# ── lingua dell'annuncio, DICHIARATA ────────────────────────────────
+# La lingua la ricavavamo dal testo e arrivavamo al 75%. Tre piattaforme
+# ce la dichiarano — greenhouse (202.471 offerte), smartrecruiters
+# (168.973) e werecruit (25.467) — e la dichiarano su quasi il 100% dei
+# loro annunci: esatta, gratis, e su un filtro che vendiamo nel piano Pro.
+# `lingua.py` non entra in conflitto: la sua query pretende `lang IS NULL`.
+_LINGUE_NOTE = {
+    "en", "fr", "de", "it", "es", "pt", "nl", "sv", "da", "no", "nb", "nn",
+    "fi", "pl", "cs", "sk", "hu", "ro", "bg", "el", "hr", "sl", "et", "lv",
+    "lt", "ga", "mt", "tr", "ru", "uk", "ja", "zh", "ko", "ar", "he", "is",
+}
+
+
+def lingua_dichiarata(pid: str, r: dict) -> str | None:
+    """Il codice ISO a due lettere, senza la regione: «en-GB» e «fr-fr»
+    restano «en» e «fr» — la variante regionale qui non serve e il resto
+    del sistema usa due lettere."""
+    v = None
+    if pid == "greenhouse":
+        v = r.get("language")
+    elif pid == "smartrecruiters":
+        v = (r.get("language") or {}).get("code") if isinstance(r.get("language"), dict) else None
+    elif pid == "werecruit":
+        v = r.get("DefaultLanguage")
+    if not isinstance(v, str):
+        return None
+    cod = v.strip().lower().replace("_", "-").split("-")[0]
+    return cod if cod in _LINGUE_NOTE else None
+
+
 # ── seniority dichiarata ────────────────────────────────────────────
 def seniority(pid: str, r: dict) -> str | None:
     if pid == "francetravail":
@@ -359,8 +402,6 @@ def seniority(pid: str, r: dict) -> str | None:
 
 # ── remoto dichiarato ───────────────────────────────────────────────
 def remoto(pid: str, r: dict) -> str | None:
-    if pid == "lever":
-        return {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite"}.get(r.get("workplaceType") or "")
     if pid == "ashby":
         return {"Remote": "remote", "Hybrid": "hybrid", "OnSite": "onsite"}.get(r.get("workplaceType") or "")
     if pid == "recruitee":
@@ -377,6 +418,23 @@ def remoto(pid: str, r: dict) -> str | None:
         # «Regional» non dice se si sta in sede: resta fuori
         return {"onsite": "onsite", "on site": "onsite", "remote": "remote",
                 "hybrid": "hybrid"}.get((r.get("Location Type") or "").strip().lower())
+    if pid == "pinpoint":
+        return {"onsite": "onsite", "hybrid": "hybrid", "remote": "remote"}.get(
+            (r.get("workplace_type") or "").strip().lower())
+    if pid == "zohorecruit":
+        v = r.get("Remote_Job")
+        if v is True or str(v).lower() == "true":
+            return "remote"
+        if v is False or str(v).lower() == "false":
+            return "onsite"
+        return None
+    if pid == "lever":
+        # gia' gestito sopra via workplaceType; qui il ripiego: alcuni
+        # recruiter scrivono «Remote» nel campo dell'impegno
+        if r.get("workplaceType"):
+            return {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite"}.get(r.get("workplaceType"))
+        t = ((r.get("categories") or {}).get("commitment") or "").strip().lower()
+        return "remote" if t == "remote" else None
     return None
 
 
@@ -385,7 +443,7 @@ def remoto(pid: str, r: dict) -> str | None:
 def applica(dsn: str, limite: int = 200_000) -> dict:
     """Riempie le colonne vuote dai campi dichiarati, a lotti, con unnest."""
     st = {"viste": 0, "seniority": 0, "employment_type": 0, "remote": 0,
-          "orario": 0, "durata": 0}
+          "orario": 0, "durata": 0, "lang": 0}
     t0 = time.time()
     with psycopg.connect(dsn) as conn:
         while st["viste"] < limite:
@@ -393,15 +451,15 @@ def applica(dsn: str, limite: int = 200_000) -> dict:
                 SELECT j.id, j.platform_id,
                        (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k),
                        j.seniority, j.employment_type, j.remote,
-                       j.orario, j.durata
+                       j.orario, j.durata, j.lang
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.dichiarati_at IS NULL AND j.platform_id = ANY(%s::text[])
                  ORDER BY j.fetched_at DESC LIMIT 5000""", (list(RAW_CAMPI), list(PIATTAFORME))).fetchall()
             if not righe:
                 break
             sen, con, rem, ids = [], [], [], []
-            ora, dur = [], []
-            for jid, pid, campi, s0, c0, r0, o0, d0 in righe:
+            ora, dur, lin = [], [], []
+            for jid, pid, campi, s0, c0, r0, o0, d0, l0 in righe:
                 ids.append(jid)
                 campi = campi or {}
                 if s0 is None and (v := seniority(pid, campi)):
@@ -414,8 +472,11 @@ def applica(dsn: str, limite: int = 200_000) -> dict:
                     ora.append((jid, v))
                 if d0 is None and (v := durata(pid, campi)):
                     dur.append((jid, v))
+                if l0 is None and (v := lingua_dichiarata(pid, campi)):
+                    lin.append((jid, v))
             for col, rows in (("seniority", sen), ("employment_type", con),
-                              ("remote", rem), ("orario", ora), ("durata", dur)):
+                              ("remote", rem), ("orario", ora), ("durata", dur),
+                              ("lang", lin)):
                 if rows:
                     conn.execute(f"UPDATE ats_jobs j SET {col} = coalesce(j.{col}, v.val) "
                                  f"FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
