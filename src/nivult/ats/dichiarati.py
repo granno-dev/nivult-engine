@@ -112,7 +112,7 @@ def contratto(pid: str, r: dict) -> str | None:
         return _generico(r.get("Job_Type"))
     if pid == "taleez":
         return {"CDI": "full_time", "CDD": "temporary", "INTERIM": "temporary", "STAGE": "internship",
-                "ALTERNANCE": "apprenticeship", "FREELANCE": "contract"}.get((r.get("contract") or "").upper())
+                "ALTERNANCE": "apprenticeship", "FREELANCE": "contract"}.get(_testo(r.get("contract")).upper())
     if pid == "join":
         # vocabolario suo, misurato l'11/09 su 1.702: Employee 1.395 (= assunto,
         # cioe' tempo pieno), Contract 82, Working student 61, Internship 59,
@@ -120,13 +120,27 @@ def contratto(pid: str, r: dict) -> str | None:
         # conosce «Employee». «Contract» resta NULL anche qui: la piattaforma ha
         # gia' «Freelance» a parte, quindi non si sa se vuol dire determinato o
         # autonomo — e nel dubbio non si insegna.
-        return {"Employee": "full_time", "Working student": "part_time",
-                "Side job": "part_time", "Internship": "internship",
-                "Freelance": "contract", "Apprenticeship": "apprenticeship",
-                "Temporary": "temporary"}.get((r.get("employmentType") or "").strip())
+        return {"employee": "full_time", "working student": "part_time",
+                "side job": "part_time", "internship": "internship",
+                "freelance": "contract", "apprenticeship": "apprenticeship",
+                "temporary": "temporary"}.get(_testo(r.get("employmentType")).lower())
     if pid == "pinpoint":
         return _generico(r.get("employment_type") or r.get("employment_type_text"))
     return None
+
+
+def _testo(v) -> str:
+    """Il valore di un campo dichiarato, comunque la fonte abbia deciso di
+    scriverlo. La stessa chiave arriva come stringa, come {"label": ...} e
+    come lista: join scrive `employmentType` in entrambi i modi, e l'11/09
+    un `.strip()` diretto ha fermato la rigenerazione del dataset dopo pochi
+    secondi. E' la seconda volta in un giorno (l'altra era `baseSalary.currency`):
+    un campo che viene da mille ATS non si tocca senza passare di qui."""
+    if isinstance(v, dict):
+        v = v.get("label") or v.get("name") or v.get("id") or v.get("value") or ""
+    if isinstance(v, (list, tuple)):
+        v = " ".join(_testo(x) for x in v)
+    return v.strip() if isinstance(v, str) else ""
 
 
 _RX_CONTRATTO_GENERICO = (
@@ -492,15 +506,13 @@ def remoto(pid: str, r: dict) -> str | None:
         # dichiarato sul 100% delle offerte (1.702 su 1.702, misurato l'11/09):
         # ONSITE 1.074, HYBRID 402, REMOTE 226. Era li' e non lo leggevamo.
         return {"onsite": "onsite", "hybrid": "hybrid", "remote": "remote"}.get(
-            (r.get("workplaceType") or "").strip().lower())
+            _testo(r.get("workplaceType")).lower())
     if pid in ("jsonld", "agenzie", "softgarden"):
         # schema.org: jobLocationType TELECOMMUTE e' l'unico valore previsto,
         # e dice solo «remoto». L'assenza NON vuol dire in sede (lo decide
         # «onsite per assenza» nel dataset, sul testo), quindi qui o remote o niente.
-        v = r.get("jobLocationType") or r.get("workplaceType")
-        if isinstance(v, list):
-            v = " ".join(str(x) for x in v)
-        return "remote" if isinstance(v, str) and "telecommute" in v.lower() else None
+        v = _testo(r.get("jobLocationType") or r.get("workplaceType"))
+        return "remote" if "telecommute" in v.lower() else None
     return None
 
 
