@@ -117,10 +117,40 @@ container `nivult-operaio`.
      225.163.956 byte. Se la firma nel meta.json non e' quella, si e'
      addestrato sul file sbagliato.
 
-DA FARE, in quest'ordine:
- 5. rigenerare il dataset coi tre passi qui sopra e CONTROLLARE nel
-    rapporto: `remote:assenza` presente, `riequilibrio.tieni` con tre voci,
-    `classe:*` alle proporzioni volute, `contract` risalito sopra l'1%.
+IL DATASET DEL GIRO C — fatto l'11/09/2026 15:39 UTC
+-----------------------------------------------------
+  sft-train-completo.jsonl.gz   812.094 righe, firma 812094:a3c7d0a3b2c6
+                                315.110.103 byte  (giro B: 614.674)
+  dataset-esame-v2.jsonl.gz     195.974 righe, 87.103.528 byte
+  Il giro B e' in /opt/nivult/v2/giro-B-0909 sul N5 e in *.GIRO-B-0909.*
+  sul Mac. Non sovrascriverlo: e' l'unico dataset di cui conosciamo l'esame.
+
+Le tre proporzioni hanno colpito il bersaglio (voluto -> ottenuto):
+  senior     21,5% -> 21,6%      full_time  60,9% -> 61,0%
+  onsite     80,5% -> 80,5%
+La verifica che conta: righe di train la cui UNICA etichetta e' un onsite
+per assenza = 0 su 807.363. La correzione tiene.
+
+Perche' il dataset e' cresciuto del 33%: `employment_type:dichiarato` e'
+passato da 356.730 a 565.192 grazie alle fonti nuove (bamboohr,
+zohorecruit, taleez, join, pinpoint, softgarden, jsonld, agenzie). Righe
+che prima non avevano NESSUNA etichetta ora ne hanno una vera.
+
+DUE COSE DA SAPERE PRIMA DI LEGGERE IL PROSSIMO ESAME
+ a) `lead` e' ancora quasi assente: 612 righe su 138.581 (0,44%) mentre
+    nelle 280 a mano vale l'11,4%. Il riequilibrio sa solo TOGLIERE dalla
+    classe maggioritaria, non inventare esempi che non esistono. Quindi
+    (lead -> senior) restera' un errore sistematico anche stavolta, e vale
+    ~11 punti sulla seniority delle 280 a mano. Per sistemarlo serve una
+    fonte di `lead`, non un altro giro.
+ b) Il remoto e' ora per il 93% esempi di STIMA (347.841 su 374.008),
+    contro il 1:7 del giro B. E' voluto — in produzione il remoto va
+    quasi sempre stimato, e il prior sbagliato era IL difetto — ma se
+    nell'esame `remote:estrazione` scende sotto il 98% del giro B o
+    `dice_stimato` sale verso 1 anche in estrazione, la causa e' questa:
+    si cappano le righe `assenza` in formatta_v2 invece di tenerle tutte.
+
+ 6. caricare su Drive i file nuovi e addestrare.
  6. caricare su Drive i file nuovi (sft-train, dataset-esame) e addestrare.
  7. esame. Il cancello sui codici ora e' confrontabile: prima misurava un
     confine dove due etichettatori concordano al 67%.
