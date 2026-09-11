@@ -22,6 +22,7 @@ operaio → Manufacturing, autista → Transportation, elettricista/idraulico
 """
 from __future__ import annotations
 
+import html
 import re
 
 # ── ROME: gruppo a 3 caratteri → famiglia ───────────────────────────
@@ -174,3 +175,245 @@ def famiglia_da_ssyk(codice: str | None) -> str | None:
     if c in SSYK_ECCEZIONI:
         return SSYK_ECCEZIONI[c]
     return ISCO_MINORI.get(c)
+
+
+# ── La categoria che sceglie CHI PUBBLICA ───────────────────────────
+#
+# ATTENZIONE, misurato l'11/09/2026: questa categoria NON basta a timbrare
+# la famiglia di un'offerta, e non e' un difetto delle mappe qui sotto.
+#
+#   accordo col verdetto del modello, 27.696 righe   55%
+#   idem usando il titolo invece della categoria     69%
+#   famiglie che reggono l'80%: 4 su 32, l'8% del volume
+#   e il numero che decide: dove GLM e v1 CONCORDANO fra loro — il
+#   segnale piu' forte che abbiamo — la categoria dichiarata dice lo
+#   stesso solo nel 59% dei casi (29.074 righe). Un segnale informativo
+#   starebbe sopra l'85%.
+#
+# Il motivo e' strutturale, non di grafia: la categoria dell'ATS e' un
+# secchio piu' grosso delle nostre 33 famiglie. «information_technology»
+# non sa dire se e' Technology, Software o Data & Analytics; «sales» non
+# distingue Sales da Retail; «hospitality» non distingue Hospitality da
+# Food & Beverage. Dove noi tagliamo fine, lei sceglie la meta' sbagliata
+# circa una volta su tre.
+#
+# Percio': si usa come INDIZIO nel fascicolo del giudice esterno (v2), mai
+# per scrivere in job_classifications. Scriverla li' sarebbe peggio che
+# lasciarla vuota — i classificatori usano ON CONFLICT (job_id) DO NOTHING,
+# quindi una famiglia dichiarata sbagliata resterebbe li' per sempre e
+# impedirebbe al modello di rimediare.
+
+# Non e' un codice ufficiale, ma e' pur sempre un'etichetta umana, e
+# arriva gratis nel raw. Due forme molto diverse:
+#
+#  1. un VOCABOLARIO chiuso, quando l'ATS impone un elenco a tendina.
+#     smartrecruiters («information_technology») e workable («Information
+#     Technology») usano lo stesso elenco — le job function di LinkedIn —
+#     scritto in due modi; recruitee ha il suo, 44 voci. Qui la mappa e'
+#     esatta e si puo' fidare.
+#  2. TESTO LIBERO, quando l'ATS lascia scrivere al tenant: iCIMS
+#     («Heart Of House», «Kirkland's Home»), oracle, inrecruiting, hirehive.
+#     1.773 valori distinti su 20.000 righe iCIMS. Qui servono regole per
+#     parole, in ordine dal piu' specifico al piu' generico.
+#
+# In entrambi i casi: `None` dove la voce e' davvero mista («other»,
+# «general_business», «technical»). Una famiglia sbagliata e' peggio di
+# una mancante — finisce nei filtri del digest.
+
+
+def _norm(v: str | None) -> str:
+    """«Accounting &amp; Finance» -> «accounting & finance»."""
+    if not isinstance(v, str):
+        return ""
+    v = html.unescape(html.unescape(v))
+    return re.sub(r"\s+", " ", v.replace("\xa0", " ")).strip().lower()
+
+
+# le job function di LinkedIn, come le espongono smartrecruiters e workable
+FUNZIONI: dict[str, str | None] = {
+    "information technology": "Technology",
+    "sales": "Sales",
+    "engineering": "Engineering",
+    "health care provider": "Healthcare",
+    "customer service": "Customer Service & Support",
+    "consulting": "Consulting",
+    "production": "Manufacturing",
+    "manufacturing": "Manufacturing",
+    "administrative": "Administrative",
+    "finance": "Finance & Accounting",
+    "marketing": "Marketing",
+    "management": "Management & Leadership",
+    "education": "Education",
+    "business development": "Sales",
+    "human resources": "Human Resources",
+    "project management": "Management & Leadership",
+    "supply chain": "Logistics",
+    "accounting auditing": "Finance & Accounting",
+    "distribution": "Logistics",
+    "legal": "Legal",
+    "design": "Art & Design",
+    "research": "Science & Research",
+    "product management": "Management & Leadership",
+    "science": "Science & Research",
+    "art creative": "Art & Design",
+    "purchasing": "Logistics",
+    "strategy planning": "Management & Leadership",
+    "training": "Education",
+    "writing editing": "Creative & Media",
+    "advertising": "Marketing",
+    "public relations": "Marketing",
+    "data analyst": "Data & Analytics",
+    # miste per costruzione: si lasciano al modello
+    "other": None, "general business": None, "analyst": None,
+    "business analyst": None, "quality assurance": None,
+}
+
+# recruitee, 44 voci
+RECRUITEE: dict[str, str | None] = {
+    "information_technology": "Technology", "internet": "Technology",
+    "telecommunication": "Technology",
+    "healthcare": "Healthcare", "retail": "Retail", "engineering": "Engineering",
+    "hospitality": "Hospitality", "tourism": "Hospitality",
+    "sales": "Sales", "logistics": "Logistics", "procurement": "Logistics",
+    "consulting": "Consulting", "accountancy": "Finance & Accounting",
+    "finance": "Finance & Accounting", "banking": "Finance & Accounting",
+    "insurance": "Finance & Accounting",
+    "manufacturing": "Manufacturing", "construction": "Construction",
+    "administrative": "Administrative", "marketing_pr": "Marketing",
+    "advertising": "Marketing", "education": "Education",
+    "security": "Security & Safety", "recruitment_hr": "Human Resources",
+    "government_nonprofit": "Government & Public Sector",
+    "customer_service": "Customer Service & Support",
+    "legal_services": "Legal", "management": "Management & Leadership",
+    "design": "Art & Design", "architectural_services": "Art & Design",
+    "energy": "Energy", "publishing": "Creative & Media",
+    "arts_entertainment": "Creative & Media", "cleaning": "Trades",
+    "biotech_pharma": "Science & Research", "science": "Science & Research",
+    "agriculture": "Agriculture", "leisure": "Sports & Recreation",
+    # miste: «technical» sta tanto per mestieri quanto per ingegneria,
+    # «automotive» e «property» sono settori, non mestieri
+    "other": None, "technical": None, "automotive": None, "property": None,
+    "translation_services": None,
+}
+
+
+# Le regole per il testo libero. L'ORDINE E' LA REGOLA: la prima che
+# aggancia vince, quindi si va dal piu' specifico al piu' generico.
+# «Retail Banking Center» e' banca, non negozio; «Engineering-Software»
+# e' software, non ingegneria; «Retail Tax Leadership» e' fisco, non
+# negozio; «Food & Beverage Management» e' cucina, non direzione.
+_REGOLE: list[tuple[str, str]] = [
+    (r"\bbank|\bcredit union", "Finance & Accounting"),
+    (r"\btax\b|accounting|\bauditor|bookkeep", "Finance & Accounting"),
+    (r"software|developer|\bsap\b|\berp\b|programm|full.?stack|devops|"
+     r"web develop|mobile develop|\bqa engineer", "Software"),
+    # «IT:» e «Information Technology» prima dell'ingegneria, o
+    # «IT: … / Engineer» finirebbe fra gli ingegneri
+    (r"^it\b|\bit:|information technology|\binformation systems\b", "Technology"),
+    # e lo sport prima della scuola, o «Athletics & Coaching (School
+    # Based)» diventerebbe insegnamento
+    (r"athletic|\bsport|coaching|\bfitness|recreation|\bleisure|\bgym\b",
+     "Sports & Recreation"),
+    (r"\bengineer(ing|s)?\b|\bengineer\b", "Engineering"),
+    (r"merchandis", "Retail"),
+    (r"arborist|landscap|horticultur|\bfarm|agricultur|\bgrower", "Agriculture"),
+    (r"caregiv|\bcare ?giver", "Healthcare"),
+    (r"direct support|developmental disabilit|transitional housing|"
+     r"social work|social servic|case manage|\bshelter\b", "Social Services"),
+    (r"\bnurs|\brn\b|\blpn\b|\bcna\b|physician|\bdoctor|\bmedical\b|clinic|"
+     r"patient|\btherap|radiolog|pharmac|\bimaging\b|respiratory|\bdental|"
+     r"veterinar|allied health|health ?care|\bhealth\b|\bmidwif|hospice|"
+     r"surgic|\bicu\b|phlebotom|sonograph|optometr|chiropract|"
+     r"resident care|direct care|rehab|speech language|\bdialysis", "Healthcare"),
+    (r"culinar|kitchen|restaurant|\bcook\b|\bchef\b|food (service|&|and)|"
+     r"dining|barista|catering|banquet|dietary|\bbaker|beverage|"
+     r"front of house|heart of house|back of house|concession|"
+     r"\bwait(er|ress|staff)|\bbartend|\bdeli\b|\bbistro", "Food & Beverage"),
+    (r"hospitality|\bhotel|housekeep|\bguest\b|casino|resort|front desk|"
+     r"concierge|tourism|\bspa\b|\blodging", "Hospitality"),
+    (r"retail|\bstore(s)?\b|cashier|\bcass(a|iere)|sales associate|"
+     r"shop sales|\bboutique|store associate", "Retail"),
+    (r"teacher|\bschool|education|academic|\bfacult|\btutor|\bprofessor|"
+     r"instructor|childcare|\bdaycare|curriculum", "Education"),
+    (r"\blegal\b|attorney|\blawyer|paralegal|compliance counsel|"
+     r"paralegale|\bavvocat", "Legal"),
+    (r"security|\bguard\b|\bpolice|firefight|loss prevention|surveillance|"
+     r"\bsafety\b|\bpubblica sicurezza", "Security & Safety"),
+    (r"\bhvac\b|plumb|electrician|\belettricist|carpent|welder|weld\b|"
+     r"\bmason|painter|locksmith|janitor|custodial|cleaning|\bpulizi|"
+     r"maintenance|service technician|automotive|body technician|"
+     r"\bmechanic|field service|\bcraft\b|skilled trade|\belectrical\b|"
+     r"\brepair\b|groundskeep|\bfitter\b|\binstaller", "Trades"),
+    (r"construction|\bbuilding site|\bcantier|\broofing|\bscaffold|"
+     r"\bsurveyor|civil works", "Construction"),
+    (r"transport|\bdriver(s)?\b|\btrucking|\bchauffeur|\baviation|"
+     r"\bpilot\b|\bfleet\b|\bautist|\bcourier|\bdelivery driver", "Transportation"),
+    (r"logistic|warehouse|\bdistribution\b|supply chain|procurement|"
+     r"\bpurchasing|\bmagazzin|\binventory|\bforklift", "Logistics"),
+    (r"\bfinance\b|\bfinanci|treasur|\bpayroll|\bbilling|\bcredit\b|"
+     r"\binsurance|\bactuar", "Finance & Accounting"),
+    (r"human resources|\bhr\b|recruit|talent acquisition|\brisorse umane",
+     "Human Resources"),
+    (r"marketing|advertis|\bbrand\b|public relations|\bcommunications?\b|"
+     r"\bsocial media", "Marketing"),
+    (r"\bsales\b|business development|account (executive|manager)|"
+     r"\bcommercial(e|i)\b|\bvendit", "Sales"),
+    (r"customer (service|support|care|advisor|experience)|client service|"
+     r"call cent|contact cent|help ?desk|\bassistenza client", "Customer Service & Support"),
+    (r"information technology|\bit\b|\bit:|infrastructure|cyber|"
+     r"\bnetwork|systems admin|telecommunicat|\btechnology\b|\bhelpdesk|"
+     r"\bcloud\b|\binformatic", "Technology"),
+    (r"\bdata\b|analytics|business intelligence|data scien|\bstatistic",
+     "Data & Analytics"),
+    (r"manufactur|\bproduction\b|\bplant\b|assembly|machinist|\bfabricat|"
+     r"\bproduzione|\bmetalmeccanic|\bfoundry|\bmilling", "Manufacturing"),
+    (r"\bscience|research|laborator|\blab\b|\bchemist|\bbiolog|\bclinical trial",
+     "Science & Research"),
+    (r"\bdesign|graphic|\bcreative\b|\bart\b|architect|\bphotograph|"
+     r"\bvideo\b|\bux\b|\bui\b", "Art & Design"),
+    (r"athletic|\bsport|coaching|\bfitness|recreation|\bleisure|\bgym\b",
+     "Sports & Recreation"),
+    (r"\benergy|\boil (and|&) gas|\butilit|renewable|\bsolar\b|\bwind farm",
+     "Energy"),
+    (r"environment|sustainab|\brecycling|\bwaste manage", "Environmental & Sustainability"),
+    (r"government|public sector|\bmunicipal|\bcivil servic|\bpubblica amministr",
+     "Government & Public Sector"),
+    (r"consulting|consultant|\bconsulen", "Consulting"),
+    (r"journalis|\beditorial|\bwriting\b|\bcontent\b|\bpublish|\bbroadcast|"
+     r"\bmedia\b", "Creative & Media"),
+    (r"management|leadership|\bdirector\b|\bexecutive\b|general manager|"
+     r"\bdirezione\b|\bteam lead", "Management & Leadership"),
+    (r"administrat|clerical|receptionist|\boffice support|back office|"
+     r"\bsecretar|\bsegretari|\bdata entry\b|\badmin\b", "Administrative"),
+]
+REGOLE: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(rx, re.I), fam) for rx, fam in _REGOLE]
+
+
+def famiglia_da_funzione(v: str | None) -> str | None:
+    """Dal vocabolario chiuso di smartrecruiters/workable/recruitee.
+
+    La stessa voce arriva in tre grafie: «accounting_auditing» da
+    smartrecruiters, «Accounting/Auditing» da workable, «accountancy» da
+    recruitee. Underscore e barra diventano spazio prima del confronto.
+    """
+    k = _norm(v)
+    if not k:
+        return None
+    if k in RECRUITEE:                       # il vocabolario proprio
+        return RECRUITEE[k]
+    k = re.sub(r"[_/]+", " ", k).strip()
+    if k in RECRUITEE:
+        return RECRUITEE[k]
+    return FUNZIONI.get(k)
+
+
+def famiglia_da_categoria(v: str | None) -> str | None:
+    """Da una categoria scritta a mano dal tenant. None dove e' mista."""
+    t = _norm(v)
+    if not t or len(t) > 120:
+        return None
+    for rx, fam in REGOLE:
+        if rx.search(t):
+            return fam
+    return None

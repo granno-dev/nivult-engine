@@ -42,11 +42,33 @@ import sys
 import psycopg
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from nivult.ats.tassonomie import famiglia_da_isco, famiglia_da_rome, famiglia_da_ssyk  # noqa: E402
+from nivult.ats.tassonomie import (famiglia_da_categoria, famiglia_da_funzione,  # noqa: E402
+                                   famiglia_da_isco, famiglia_da_rome, famiglia_da_ssyk)
 from nivult.ats.dichiarati import contratto, remoto, seniority  # noqa: E402
 from prompt_v2 import menziona  # noqa: E402
 
 QUOTA_ESAME_AZIENDE = 0.06
+
+# da quale chiave del raw arriva la categoria, e con che vocabolario si legge
+_CATEGORIA = {"smartrecruiters": ("function", "voc"), "workable": ("function", "voc"),
+              "recruitee": ("category_code", "voc"), "icims": ("Category", "lib"),
+              "oracle": ("JobFamily", "lib"), "inrecruiting": ("function", "lib"),
+              "join": ("category", "lib"), "hirehive": ("category", "lib"),
+              "jsonld": ("occupationalCategory", "lib"),
+              "agenzie": ("occupationalCategory", "lib")}
+
+
+def categoria_dichiarata(pid: str, campi: dict) -> str | None:
+    """La famiglia che si ricava dalla categoria scelta dal datore, o None."""
+    fonte = _CATEGORIA.get(pid)
+    if not fonte:
+        return None
+    v = campi.get(fonte[0])
+    if isinstance(v, dict):                 # {"id": "sales"} / {"name": "Sales"}
+        v = v.get("id") or v.get("name")
+    if not isinstance(v, str):
+        return None
+    return (famiglia_da_funzione if fonte[1] == "voc" else famiglia_da_categoria)(v)
 _TAG = re.compile(r"<[^>]+>")
 
 
@@ -95,7 +117,11 @@ RAW_CAMPI = ("romeCode", "typeContrat", "dureeTravailLibelle", "experienceLibell
              "employment_type", "working_hours_type", "workplace_model", "experience_required", "extent",
              "engagementtype", "jobCategoriesCodes", "experienceLevel", "typeOfEmployment", "location",
              "employment_type_code", "experience_code", "remote", "hybrid", "workplace", "experience",
-             "workplaceType", "isRemote", "employmentType")
+             "workplaceType", "isRemote", "employmentType",
+             # la categoria scelta da chi pubblica: da sola vale poco (accordo
+             # col modello 55%, misurato l'11/09), ma rompe i pareggi
+             "function", "category_code", "category", "Category", "JobFamily",
+             "occupationalCategory")
 
 
 def main() -> int:
@@ -202,9 +228,17 @@ def main() -> int:
             elif au.get("accordo"):
                 fam, fam_prov = fam_glm, "glm+v1"
             else:
+                # La categoria scelta dal datore NON rompe il pareggio: dove
+                # GLM e v1 concordano, lei dice lo stesso solo nel 59% dei
+                # casi (misurato l'11/09 su 29.074 righe). Un segnale che
+                # conferma il consenso sei volte su dieci non e' un giudice;
+                # va nel fascicolo come indizio, e decide il giudice esterno.
+                v1_parere = au.get("v1") or v1_fam
                 f_giud.write(json.dumps({"id": jid, "title": tit, "location": loc, "azienda": azienda,
-                                         "text": testo[:600], "glm": fam_glm, "v1": au.get("v1"),
-                                         "conf_v1": au.get("conf")}, ensure_ascii=False) + "\n")
+                                         "text": testo[:600], "glm": fam_glm, "v1": v1_parere,
+                                         "conf_v1": au.get("conf"),
+                                         "dichiarato": categoria_dichiarata(pid, campi)},
+                                        ensure_ascii=False) + "\n")
                 st["da_giudicare"] += 1
         if fam_prov:
             prov[f"family:{fam_prov}"] += 1
