@@ -286,7 +286,16 @@ def main() -> int:
         # in nessuna lingua che conosciamo -> onsite, provenienza «assenza».
         # E' una stima per costruzione. Quante tenerne lo decide formatta_v2.py;
         # l'esame non le usa mai (i suoi banchi filtrano prov == dichiarato).
-        if riga["remote"] is None and len(testo) >= 300 and not RX_REMOTO_QUALSIASI.search(f"{tit} {loc} {testo}"):
+        #
+        # SOLO su righe che hanno gia' un'altra etichetta. Senza questo vincolo
+        # il silenzio sul remoto RISCATTEREBBE le righe che il controllo qui
+        # sotto scarta come «senza_etichette» — 507.286 nel giro B — e il
+        # dataset si riempirebbe di offerte il cui unico insegnamento e' un
+        # `onsite` indovinato. Il riequilibrio sistemerebbe la proporzione ma
+        # non il danno: un terzo del dataset a insegnare un campo solo, stimato.
+        ha_altra_etichetta = bool(fam) or any(riga[c] for c in ("employment_type", "seniority"))
+        if (ha_altra_etichetta and riga["remote"] is None and len(testo) >= 300
+                and not RX_REMOTO_QUALSIASI.search(f"{tit} {loc} {testo}")):
             riga["remote"] = "onsite"
             riga["remote_prov"] = "assenza"
             riga["remote_menzione"] = menziona("remote", "onsite", f"{tit} {testo}")

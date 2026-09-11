@@ -119,11 +119,14 @@ def calcola_tieni(conteggi: dict) -> dict:
         if campo == "remote":
             on_d = cnt.get(("onsite", "dichiarato"), 0)
             on_a = cnt.get(("onsite", "assenza"), 0)
-            altri = tot - on_d - on_a
+            altri = tot - on_d - on_a               # remote + hybrid
+            if not altri:                           # nessun contrasto: non si tocca niente
+                continue
             voluti = t / (1 - t) * altri            # onsite totali per stare a t
             if on_d >= voluti:                      # i dichiarati bastano gia': niente assenza
                 tieni[("remote", "onsite", "assenza")] = 0.0
-                tieni[("remote", "onsite", "dichiarato")] = round(voluti / on_d, 4)
+                if on_d:
+                    tieni[("remote", "onsite", "dichiarato")] = round(voluti / on_d, 4)
             else:
                 tieni[("remote", "onsite", "assenza")] = round(min(1.0, (voluti - on_d) / max(on_a, 1)), 4)
             continue
