@@ -36,12 +36,19 @@ ROME_GRUPPI: dict[str, str | None] = {
     "C11": "Finance & Accounting", "C12": "Finance & Accounting", "C13": "Finance & Accounting",
     "C14": "Finance & Accounting", "C15": "Sales",
     # D — commercio: D11 mestieri alimentari, D12 vendita in negozio, D13 telemarketing, D14 commerciale, D15 direzione negozio
-    "D11": "Trades", "D12": "Retail", "D13": "Sales", "D14": "Sales", "D15": "Retail",
+    # D11 (fornaio, macellaio, pescivendolo): era Trades. L'esame dell'11/09
+    # ha mostrato che il modello li mette con cuoco e cameriere (59 «errori»
+    # su 1.962), e ha ragione lui: chi cerca «Food & Beverage» nel digest si
+    # aspetta il fornaio. Coerente con ISCO 751.
+    "D11": "Food & Beverage", "D12": "Retail", "D13": "Sales", "D14": "Sales", "D15": "Retail",
     # E — comunicazione, media, multimedia
     "E11": "Marketing", "E12": "Art & Design", "E13": "Creative & Media", "E14": "Creative & Media",
     # F — edilizia: F11 architettura/studi, F12 ingegneria civile e conduzione lavori, F13-F17 cantiere
+    # F16 (second oeuvre: idraulico, elettricista, piastrellista, imbianchino) era
+    # Construction; il consenso GLM+v1 dice Trades nell'88% di 298 righe
+    # (misurato l'11/09), coerente con «elettricista/idraulico -> Trades».
     "F11": "Art & Design", "F12": "Construction", "F13": "Construction", "F14": "Construction",
-    "F15": "Construction", "F16": "Construction", "F17": "Construction",
+    "F15": "Construction", "F16": "Trades", "F17": "Construction",
     # G — alberghi, ristorazione, turismo, animazione
     "G11": "Hospitality", "G12": "Hospitality", "G13": "Hospitality", "G14": "Hospitality",
     "G15": "Hospitality", "G16": "Food & Beverage", "G17": "Food & Beverage", "G18": "Food & Beverage",
@@ -85,7 +92,12 @@ ROME_CODICI: dict[str, str | None] = {
     "K1303": "Social Services", "K2111": "Education", "K2105": "Education",
     "H2102": "Manufacturing", "H1502": "Manufacturing",
     "N4103": "Transportation", "N4101": "Transportation", "N4102": "Transportation",
-    "D1101": "Trades", "D1102": "Trades", "D1103": "Trades", "D1104": "Trades",   # boucher, boulanger, charcutier, pâtissier
+    # boucher, boulanger, charcutier, pâtissier: seguono il gruppo D11, spostato
+    # a Food & Beverage l'11/09 (vedi la nota li'). Restano scritti per esteso
+    # perche' l'eccezione vince sul gruppo: se cambia D11 e non questi, la mappa
+    # si contraddice in silenzio — ed e' quello che e' successo fino a oggi.
+    "D1101": "Food & Beverage", "D1102": "Food & Beverage",
+    "D1103": "Food & Beverage", "D1104": "Food & Beverage",
     "D1401": "Sales", "D1402": "Sales", "D1403": "Sales", "D1404": "Sales", "D1405": "Sales", "D1406": "Sales", "D1407": "Sales", "D1408": "Sales",
     "D1501": "Retail", "D1502": "Retail", "D1503": "Retail", "D1504": "Retail", "D1505": "Retail", "D1506": "Retail", "D1507": "Retail", "D1508": "Retail", "D1509": "Retail",
     "G1801": "Food & Beverage", "G1802": "Food & Beverage", "G1803": "Food & Beverage", "G1804": "Food & Beverage",
@@ -118,7 +130,7 @@ ISCO_MINORI: dict[str, str | None] = {
     "263": "Social Services", "264": "Creative & Media", "265": "Creative & Media",
     # 3 tecnici
     "311": "Engineering", "312": "Manufacturing", "313": "Manufacturing", "314": "Science & Research",
-    "315": "Transportation", "321": "Healthcare", "322": "Healthcare", "323": "Healthcare", "324": "Healthcare",
+    "315": "Transportation", "311": None, "321": "Healthcare", "322": "Healthcare", "323": "Healthcare", "324": "Healthcare",
     "325": "Healthcare", "331": "Finance & Accounting", "332": "Sales", "333": "Logistics", "334": "Administrative",
     "335": "Government & Public Sector", "341": "Social Services", "342": "Sports & Recreation",
     "343": "Creative & Media", "351": "Technology", "352": "Technology",
@@ -133,9 +145,13 @@ ISCO_MINORI: dict[str, str | None] = {
     "611": "Agriculture", "612": "Agriculture", "613": "Agriculture", "621": "Agriculture", "622": "Agriculture",
     "631": "Agriculture", "632": "Agriculture", "633": "Agriculture", "634": "Agriculture",
     # 7 artigiani e operai specializzati
-    "711": "Construction", "712": "Construction", "713": "Construction", "721": "Trades", "722": "Trades",
+    # 722 (fabbri, attrezzisti, regolatori di macchine utensili): il consenso dice
+    # Manufacturing nel 97% di 89 righe — lavorano in officina, non in cantiere
+    "711": "Construction", "712": "Construction", "713": "Construction", "721": "Trades", "722": "Manufacturing",
     "723": "Trades", "731": "Art & Design", "732": "Manufacturing", "741": "Trades", "742": "Trades",
-    "751": "Trades", "752": "Trades", "753": "Manufacturing", "754": "Trades",
+    # 751 (food processing trades: fornaio, macellaio) -> Food & Beverage come
+    # 512/513 (cuoco, cameriere) e ROME D11: vedi la nota su D11
+    "751": "Food & Beverage", "752": "Trades", "753": "Manufacturing", "754": "Trades",
     # 8 conduttori di impianti e macchinari
     "811": "Manufacturing", "812": "Manufacturing", "813": "Manufacturing", "814": "Manufacturing",
     "815": "Manufacturing", "816": "Manufacturing", "817": "Manufacturing", "818": "Manufacturing",
@@ -162,9 +178,18 @@ def famiglia_da_isco(codice: str | None) -> str | None:
 
 # SSYK 2012 = ISCO-08 con divergenze; le prime 3 cifre coincidono quasi sempre.
 # Eccezioni svedesi note (gruppi che SSYK numera diversamente).
-SSYK_ECCEZIONI: dict[str, str] = {
+SSYK_ECCEZIONI: dict[str, str | None] = {
     "159": "Management & Leadership", "179": "Management & Leadership",
     "911": "Trades",   # städare
+    # Misurato l'11/09/2026 contro il consenso GLM+v1 (dove i due concordano):
+    "534": "Social Services",   # vårdbiträden, personliga assistenter — 98% su 296 (era None)
+    "266": "Social Services",   # socialsekreterare, kuratorer — 91% su 64 (era None)
+    "531": "Education",         # barnskötare, elevassistenter — 98% su 61 (ISCO dice Social Services)
+    "821": "Trades",            # montörer: in Svezia anche VVS-/elmontör — 77% su 142 (era Manufacturing)
+    # davvero misti: meglio niente che un timbro
+    "333": None,                # arbetsförmedlare: Education 60%, il resto sparso
+    "311": None,                # tekniker: Construction 26 / Engineering 26 / Manufacturing 17
+    "242": None,                # HR e organizzazione: Human Resources 41%, il resto sparso
 }
 
 

@@ -89,10 +89,24 @@ def main() -> int:
 
     model, tok = FastLanguageModel.from_pretrained(model_name=a.modello, max_seq_length=a.max_len,
                                                    load_in_4bit=False, dtype=None)
+    # Qwen3.5-9B e' IBRIDO: 24 strati Gated DeltaNet (attenzione lineare) +
+    # 8 di attenzione piena. La lista classica q/k/v/o/gate/up/down aggancia
+    # gli MLP ovunque (96) e l'attenzione solo negli 8 strati pieni (32):
+    # 128 tensori lora_B, esattamente quelli del giro B, e i 24 mixer lineari
+    # senza adattatore. arXiv 2604.22127 misura che lasciarli scoperti degrada
+    # in modo significativo; Axolotl documenta i nomi. Da qui: +72 moduli.
+    target = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj",
+              "in_proj_qkv", "in_proj_z", "out_proj"]
     model = FastLanguageModel.get_peft_model(
         model, r=a.rango, lora_alpha=a.rango, lora_dropout=0.0, bias="none",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
-        use_gradient_checkpointing="unsloth", random_state=7)
+        target_modules=target, use_gradient_checkpointing="unsloth", random_state=7)
+    # e si VERIFICA, perche' Unsloth riscrive target_modules in una regex e
+    # potrebbe far cadere i nomi che non conosce senza dirlo
+    n_b = sum(1 for n, _ in model.named_parameters() if "lora_B" in n)
+    n_lin = sum(1 for n, _ in model.named_parameters() if "lora_B" in n and "linear_attn" in n)
+    print(f"LoRA: {n_b} tensori lora_B, di cui {n_lin} sull'attenzione lineare", flush=True)
+    if "in_proj_qkv" in target and n_lin == 0:
+        raise SystemExit("i moduli dell'attenzione lineare NON hanno ricevuto il LoRA: fermo qui")
 
     righe = []
     with gzip.open(a.train, "rt") as f:

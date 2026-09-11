@@ -29,7 +29,9 @@ PIATTAFORME = ("francetravail", "arbetsformedlingen", "nav", "smartrecruiters", 
                # campo mescola anche la seniority («Experienced», «RN») e valori
                # sanitari americani (PRN, Per Diem), va mappato con calma.
                "bamboohr", "breezy", "zohorecruit", "pinpoint",
-               "recruiterbox", "vincere", "jsonld", "icims", "greenhouse", "werecruit")
+               "recruiterbox", "vincere", "jsonld", "icims", "greenhouse", "werecruit",
+               # 11/09: contratto inequivoco (contractor/freelance) e schema.org
+               "agenzie", "taleez", "join", "softgarden")
 RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employment_type",
              "working_hours_type", "workplace_model", "experience_required", "extent", "engagementtype",
              "experienceLevel", "typeOfEmployment", "location", "employment_type_code", "experience_code",
@@ -37,7 +39,7 @@ RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employm
              "employmentStatusLabel", "type", "Job_Type", "positionType",
              "Position Type", "Employment Type", "Location Type",
              "categories", "Remote_Job", "workplace_type", "language",
-             "DefaultLanguage")
+             "DefaultLanguage", "contract", "employment_type_text")
 
 
 # ── contratto: dai campi dichiarati al vocabolario di Nivult ─────────
@@ -97,6 +99,48 @@ def contratto(pid: str, r: dict) -> str | None:
         return {"permanent": "full_time", "intern": "internship", "temporary": "temporary",
                 "trainee": "internship", "freelance": "contract", "working_student": "part_time",
                 "fixed_term": "temporary"}.get(r.get("employmentType"))
+    # Le fonti recuperate l'11/09/2026. Il vincolo resta lo stesso di
+    # smartrecruiters: `contract` SOLO dove la fonte dice autonomo senza
+    # equivoci (contractor, freelance, libero professionista, 1099); il nudo
+    # «Contract» anglosassone resta NULL. schema.org distingue per specifica
+    # CONTRACTOR da TEMPORARY, quindi jsonld e agenzie sono inequivoci.
+    if pid in ("jsonld", "agenzie", "softgarden"):
+        return _generico(r.get("employmentType"))
+    if pid == "bamboohr":
+        return _generico(r.get("employmentStatusLabel"))
+    if pid == "zohorecruit":
+        return _generico(r.get("Job_Type"))
+    if pid == "taleez":
+        return {"CDI": "full_time", "CDD": "temporary", "INTERIM": "temporary", "STAGE": "internship",
+                "ALTERNANCE": "apprenticeship", "FREELANCE": "contract"}.get((r.get("contract") or "").upper())
+    if pid == "join":
+        return _generico(r.get("employmentType"))
+    if pid == "pinpoint":
+        return _generico(r.get("employment_type") or r.get("employment_type_text"))
+    return None
+
+
+_RX_CONTRATTO_GENERICO = (
+    # l'ordine e' la priorita': un «Independent Contractor - Part-Time» e' contract
+    (re.compile(r"contractor|freelanc|self.?employ|1099|libero prof|autonom|independent", re.I), "contract"),
+    (re.compile(r"intern|stage|tirocin|praktik|trainee", re.I), "internship"),
+    (re.compile(r"apprenti|apprendist|alternance|ausbildung", re.I), "apprenticeship"),
+    (re.compile(r"temporary|\btemp\b|seasonal|stagional|interim|fixed.?term|determinato|cdd", re.I), "temporary"),
+    (re.compile(r"part.?time|tempo parziale|parttime", re.I), "part_time"),
+    (re.compile(r"full.?time|fulltime|tempo pieno|permanent|indeterminato|cdi", re.I), "full_time"),
+)
+
+
+def _generico(v) -> str | None:
+    """Un valore libero (stringa o lista schema.org) -> vocabolario di Nivult.
+    Il nudo «contract» non aggancia nessuna regola: resta None, com'e' giusto."""
+    if isinstance(v, list):
+        v = " ".join(str(x) for x in v)
+    if not isinstance(v, str) or not v.strip():
+        return None
+    for rx, esito in _RX_CONTRATTO_GENERICO:
+        if rx.search(v):
+            return esito
     return None
 
 

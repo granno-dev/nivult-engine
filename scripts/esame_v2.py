@@ -30,13 +30,48 @@ import torch
 
 
 def _carica(modello: str, adapter: str | None):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    """Carica base + LoRA, e SI RIFIUTA di proseguire se il LoRA non e' entrato.
+
+    Il buco che ci e' costato il primo tentativo (scoperto l'11/09/2026):
+    Qwen3.5 si dichiara `Qwen3_5ForConditionalGeneration` e tiene lo stack di
+    testo sotto `model.language_model.layers.*`. Unsloth ci aggancia il LoRA
+    li' e salva chiavi come
+
+        base_model.model.model.language_model.layers.0.mlp.gate_proj.lora_A
+
+    ma `AutoModelForCausalLM` costruisce un albero SENZA quel segmento, e peft
+    cerca `base_model.model.model.layers.0...`. Nessuna delle 256 chiavi
+    combacia: finiscono tutte in un UserWarning («Found missing adapter keys»)
+    che nessuno legge, il merge non fa niente, e l'esame misura il modello
+    base credendo di misurare il nostro. L'esame del 09/09 che ha «bocciato»
+    il primo tentativo con 67,5/76,6/65,2/83,3 e' esattamente questo.
+
+    Due difese, e la seconda vale piu' della prima perche' non si fida:
+     1. si istanzia la classe che il config DICHIARA, non quella comoda;
+     2. si guarda dentro i pesi. `lora_B` nasce a zero e solo l'addestramento
+        lo muove: se dopo il caricamento e' ancora tutto zero il LoRA non e'
+        entrato, e si muore invece di produrre un voto falso.
+    """
+    import transformers
+    from transformers import AutoConfig, AutoTokenizer
     tok = AutoTokenizer.from_pretrained(modello)
     tok.padding_side = "left"
-    m = AutoModelForCausalLM.from_pretrained(modello, torch_dtype=torch.bfloat16, device_map="auto")
+    cfg = AutoConfig.from_pretrained(modello)
+    cls = getattr(transformers, (cfg.architectures or [""])[0],
+                  transformers.AutoModelForCausalLM)
+    print(f"base: {cls.__name__}", flush=True)
+    m = cls.from_pretrained(modello, torch_dtype=torch.bfloat16, device_map="auto")
     if adapter:
         from peft import PeftModel
         m = PeftModel.from_pretrained(m, adapter)
+        quanti = sum(1 for n, _ in m.named_parameters() if "lora_B" in n)
+        somma = sum(float(p.abs().sum()) for n, p in m.named_parameters() if "lora_B" in n)
+        print(f"LoRA: {quanti} tensori lora_B, somma |B| = {somma:.4f}", flush=True)
+        if quanti == 0 or somma == 0.0:
+            raise SystemExit(
+                "LoRA NON caricato (lora_B tutto a zero): l'esame misurerebbe il "
+                "modello base. Serve la stessa classe base con cui e' stato "
+                "addestrato.")
         m = m.merge_and_unload()
     m.eval()
     return tok, m
@@ -73,6 +108,13 @@ def predici(tok, m, righe: list[dict], campi: list[str], bs: int = 16) -> list[d
     return out
 
 
+def _norma(v):
+    """`unknown` e `none` sono lo stesso concetto con due nomi: il golden a mano
+    scrive «unknown», il dataset (regola RX_NONE) e quindi il modello scrivono
+    «none». Il 11/09 questa differenza da sola valeva 6 errori su 280."""
+    return "none" if v in ("unknown", "none", "None") else v
+
+
 def acc(pred: list[dict], righe: list[dict], campo: str) -> dict:
     n = ok = 0
     conf = collections.Counter()
@@ -82,6 +124,8 @@ def acc(pred: list[dict], righe: list[dict], campo: str) -> dict:
             continue
         n += 1
         got = p.get(campo)
+        if campo == "family":
+            v, got = _norma(v), _norma(got) if isinstance(got, str) else got
         if got == v:
             ok += 1
         else:
@@ -117,11 +161,27 @@ def main() -> int:
 
     # 2 e 3. il lato esame del dataset v2
     esame = [json.loads(l) for l in gzip.open(a.esame, "rt")]
-    codici = [r for r in esame if r.get("family_prov") in ("rome", "ssyk", "isco")]
+    # Il banco dei codici, SOLO dove codice e consenso GLM+v1 coincidono.
+    # Misurato l'11/09: la famiglia da codice ufficiale coincide col consenso
+    # solo nel 67% (Construction->Trades 413, Manufacturing->Trades 334...);
+    # il nostro modello faceva 72,5%, cioe' SOPRA il consenso. Un cancello al
+    # 92% su un banco dove due etichettatori concordano al 67% misura il
+    # confine della tassonomia, non il modello. Le righe ambigue restano nella
+    # verita' del dataset: spariscono solo dal banco. Se il file esame e'
+    # vecchio e non ha `family_consenso`, si torna al banco intero e lo si dice.
+    codici_tutti = [r for r in esame if r.get("family_prov") in ("rome", "ssyk", "isco")]
+    con_consenso = [r for r in codici_tutti if "family_consenso" in r]
+    if con_consenso:
+        codici = [r for r in codici_tutti if r.get("family_consenso") and _norma(r["family_consenso"]) == _norma(r["family"])]
+        banco = f"codice+consenso ({len(codici)} su {len(codici_tutti)})"
+    else:
+        codici = codici_tutti
+        banco = f"SOLO codice, file esame senza family_consenso ({len(codici)})"
+    print("banco codici:", banco, flush=True)
     rnd.shuffle(codici)
     codici = codici[:a.per_campo]
     pred = predici(tok, m, codici, ["family"], a.bs)
-    rapporto["codici"] = {"family": acc(pred, codici, "family")}
+    rapporto["codici"] = {"family": acc(pred, codici, "family"), "banco": banco}
     print("codici:", rapporto["codici"]["family"]["accuratezza"], flush=True)
 
     rapporto["dichiarati"] = {}

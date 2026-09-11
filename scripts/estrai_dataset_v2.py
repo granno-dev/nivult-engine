@@ -69,7 +69,19 @@ def categoria_dichiarata(pid: str, campi: dict) -> str | None:
     if not isinstance(v, str):
         return None
     return (famiglia_da_funzione if fonte[1] == "voc" else famiglia_da_categoria)(v)
+
+
 _TAG = re.compile(r"<[^>]+>")
+
+# ogni modo che conosciamo di dire «remoto» o «ibrido»: se NESSUNO compare in
+# titolo, sede e testo, l'annuncio e' in sede per assenza. Piu' largo delle
+# regex di menzione di prompt_v2 apposta: qui un falso «silenzio» costa
+# un'etichetta sbagliata, un falso «rumore» costa solo una riga in meno.
+RX_REMOTO_QUALSIASI = re.compile(
+    r"remote|remoto|remota|télétravail|teletravail|teletrabajo|teletrabalho|home.?office|homeoffice|"
+    r"work(ing)? from home|\bwfh\b|home.?based|smart.?work|hybrid|ibrid|hybride|híbrido|hibrido|"
+    r"distans|thuiswerk|hjemmekontor|fjernarbeid|etätyö|zdaln|anywhere|fully flexible|"
+    r"flexible location|a distanza|da casa|desde casa|von zu hause|à distance", re.I)
 
 
 def pulisci(t: str | None, n: int = 1200) -> str:
@@ -118,6 +130,9 @@ RAW_CAMPI = ("romeCode", "typeContrat", "dureeTravailLibelle", "experienceLibell
              "engagementtype", "jobCategoriesCodes", "experienceLevel", "typeOfEmployment", "location",
              "employment_type_code", "experience_code", "remote", "hybrid", "workplace", "experience",
              "workplaceType", "isRemote", "employmentType",
+             # le fonti inequivoche di `contract` recuperate l'11/09: contractor,
+             # freelance, libero professionista — MAI il «Contract» inglese
+             "employmentStatusLabel", "Job_Type", "contract", "employment_type_text",
              # la categoria scelta da chi pubblica: da sola vale poco (accordo
              # col modello 55%, misurato l'11/09), ma rompe i pareggi
              "function", "category_code", "category", "Category", "JobFamily",
@@ -244,8 +259,15 @@ def main() -> int:
             prov[f"family:{fam_prov}"] += 1
 
         # ── campi dichiarati ──
+        # family_consenso: la famiglia su cui GLM e v1 CONCORDANO (conf >= 0,75),
+        # scritta sempre, anche quando la famiglia del dataset viene da un codice.
+        # Serve all'esame: il banco dei codici si limita alle righe dove codice e
+        # consenso coincidono, perche' dove litigano (33% delle righe, misurato
+        # l'11/09: Construction/Trades, Manufacturing/Trades...) il banco misura
+        # il confine della tassonomia, non il modello.
+        consenso = fam_glm if (fam_glm and v1_fam == fam_glm and (v1_conf or 0) >= 0.75) else None
         riga = {"id": jid, "title": tit, "location": loc, "country": ctry, "text": testo, "lang": lang,
-                "azienda": azienda, "family": fam, "family_prov": fam_prov,
+                "azienda": azienda, "family": fam, "family_prov": fam_prov, "family_consenso": consenso,
                 "languages_required": list(lingue) if lingue else None}
         for campo, fn in (("employment_type", contratto), ("seniority", seniority), ("remote", remoto)):
             v = fn(pid, campi) if campi else None
@@ -255,6 +277,20 @@ def main() -> int:
             if v:
                 prov[f"{campo}:dichiarato"] += 1
                 prov[f"{campo}:stima" if not riga[f"{campo}_menzione"] else f"{campo}:estrazione"] += 1
+        # ── «in sede per assenza» ──
+        # Il remoto dichiarato non manca a caso: chi assume in sede non lo scrive.
+        # Addestrare solo sulle righe dichiarate insegna 48% onsite dove il reale
+        # (280 a mano) e' 80,5%, e il modello risponde «remote» a chi tace (29
+        # errori su 102, esame dell'11/09). Qui il silenzio diventa un'etichetta:
+        # testo lungo, e nessuna traccia di remoto/ibrido in titolo, sede e testo,
+        # in nessuna lingua che conosciamo -> onsite, provenienza «assenza».
+        # E' una stima per costruzione. Quante tenerne lo decide formatta_v2.py;
+        # l'esame non le usa mai (i suoi banchi filtrano prov == dichiarato).
+        if riga["remote"] is None and len(testo) >= 300 and not RX_REMOTO_QUALSIASI.search(f"{tit} {loc} {testo}"):
+            riga["remote"] = "onsite"
+            riga["remote_prov"] = "assenza"
+            riga["remote_menzione"] = menziona("remote", "onsite", f"{tit} {testo}")
+            prov["remote:assenza"] += 1
         if not fam and not any(riga[c] for c in ("employment_type", "seniority", "remote")):
             st["senza_etichette"] += 1
             continue
