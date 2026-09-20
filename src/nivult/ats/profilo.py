@@ -264,13 +264,11 @@ def deterministico(titolo: str, luogo: str, raw: dict):
     descr = _descrizione(raw)
     campo_skill = f"{titolo}\n{descr}"
     skills = [s for s, rx in _SKILL_RX if rx.search(campo_skill)][:20]
-    # ESCO SPENTO (2026-09-06). Misurato sul corpus: «compile airport
-    # certification manuals» su 15.344 offerte (cassieri, ecografisti,
-    # carpentieri), «dental» la competenza piu' frequente in assoluto,
-    # «Georgian» e «Microsoft Access» su un paramedico. Il matcher a
-    # sottostringa sulle 13.485 etichette ESCO produce piu' rumore che
-    # segnale; le competenze le legge GLM nello sprint e poi il modellino
-    # v1. Si riaccende solo dopo una calibrazione misurata (esco.py).
+    # ESCO entra solo a cancello aperto (`esco_calibra --apri`), e il
+    # cancello e' il file /opt/nivult/esco-attivo. Il 06/09 era spento
+    # per rumore misurato («compile airport certification manuals» su
+    # 15.344 offerte, «Microsoft Access» su un paramedico); l'08/09 il
+    # riconoscitore ha preso le tre guardie descritte in esco.py.
     if ESCO_ATTIVO:
         try:
             from nivult.ats import esco as _esco
@@ -282,7 +280,7 @@ def deterministico(titolo: str, luogo: str, raw: dict):
     return seniority, remote, skills
 
 
-ESCO_ATTIVO = False
+ESCO_ATTIVO = os.path.exists("/opt/nivult/esco-attivo")
 
 
 # ── GLM-4.5-Flash: solo il residuo, gratuito, con tetto ─────────────

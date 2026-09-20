@@ -128,7 +128,7 @@ def smartrecruiters(dsn: str, paesi: set[str] | None = None,
                            location, country, city, posted_at, raw)
                         VALUES ('smartrecruiters', %s, %s, %s, %s,
                                 %s, %s, %s, %s, %s)
-                        ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                        ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                           title = EXCLUDED.title, url = EXCLUDED.url,
                           city = EXCLUDED.city,
                           country = COALESCE(EXCLUDED.country,
@@ -138,7 +138,7 @@ def smartrecruiters(dsn: str, paesi: set[str] | None = None,
                           -- (dettaglio /postings): non c'e' nel payload
                           -- della lista, e un raw=EXCLUDED.raw nudo la
                           -- cancellava a ogni ri-ingestione (misurato:
-                          -- SR fermo al 4%). La si ri-attacca.
+                          -- SR fermo al 4 per cento). La si ri-attacca.
                           raw = CASE
                             WHEN ats_jobs.raw ? 'description'
                                  AND NOT (EXCLUDED.raw ? 'description')

@@ -26,6 +26,40 @@ from datetime import datetime
 import httpx
 import psycopg
 
+
+def _scrivi_a_lotti(conn, sql: str, righe: list, lotto: int = 200, tentativi: int = 6) -> int:
+    """Gli UPDATE su ats_jobs a lotti PICCOLI, in ordine di id, con
+    ritentativo sui deadlock.
+
+    Un executemany da migliaia di righe in una transazione sola tiene
+    lock di riga in ordine sparso per secondi, mentre lo sprint e lo
+    scraper aggiornano le stesse righe nel loro ordine: e' un deadlock
+    garantito (07/09/2026: «arricchisci paese» fallito quattro notti di
+    fila). Lotti da 200 in ordine di id chiudono in millisecondi, e se
+    il kernel di Postgres sceglie noi come vittima si riprova quel lotto
+    e basta, senza perdere il lavoro dei precedenti.
+    """
+    if not righe:
+        return 0
+    righe = sorted(righe, key=lambda r: str(r[-1]))
+    fatte = 0
+    for i in range(0, len(righe), lotto):
+        parte = righe[i:i + lotto]
+        for k in range(tentativi):
+            try:
+                with conn.cursor() as cur:
+                    cur.executemany(sql, parte)
+                conn.commit()
+                fatte += len(parte)
+                break
+            except psycopg.errors.DeadlockDetected:
+                conn.rollback()
+                if k == tentativi - 1:
+                    raise
+                import time as _t
+                _t.sleep(0.5 * (k + 1))
+    return fatte
+
 log = logging.getLogger("nivult.ats.arricchisci")
 
 ATS_DSN = os.environ.get(
@@ -54,8 +88,66 @@ def _iso(nome: str | None) -> str | None:
     return _NOMI_PAESI.get(n)
 
 
+def _testo_pulito(frammento: str | None) -> str | None:
+    """HTML → testo: via <style>/<script>, via i tag, entita' sciolte.
+    Le pagine SuccessFactors mettono un <style> dentro il blocco
+    dell'annuncio, e Phenom consegna la descrizione gia' codificata
+    (&lt;p&gt;…): senza questa pulizia il modello leggeva CSS."""
+    if not frammento:
+        return None
+    import html as html_mod
+    t = str(frammento)
+    for _ in range(2):                      # &lt;p&gt; → <p> → via
+        t = html_mod.unescape(t)
+        t = re.sub(r"<(style|script)[^>]*>.*?</\1>", " ", t, flags=re.S | re.I)
+        t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:30000] or None
+
+
+def _estrai_microdata(html: str) -> dict:
+    """Il JobPosting in MICRODATA (itemprop), come lo scrive SuccessFactors:
+    <meta itemprop="addressCountry" content="US">, <meta itemprop=
+    "datePosted" content="Fri Sep 04 00:00:00 UTC 2026">, oppure il solo
+    <meta itemprop="streetAddress" content="Milano, IT">."""
+    if "schema.org/JobPosting" not in html:
+        return {}
+    import html as html_mod
+
+    def meta(prop: str) -> str | None:
+        m = re.search(r'itemprop="%s"[^>]*\scontent="([^"]*)"' % prop, html)
+        return html_mod.unescape(m.group(1)).strip() if m and m.group(1).strip() else None
+
+    paese = _iso(meta("addressCountry"))
+    citta = meta("addressLocality")
+    via = meta("streetAddress")
+    if via and (not paese or not citta):
+        pezzi = [p.strip() for p in via.split(",") if p.strip()]
+        if not paese:
+            sigle = [p for p in pezzi if re.fullmatch(r"[A-Z]{2}", p)]
+            paese = _iso(sigle[-1]) if sigle else None
+        if not citta and pezzi and not re.fullmatch(r"[A-Z]{2}|\d+", pezzi[0]):
+            citta = pezzi[0]
+    dt = None
+    data = meta("datePosted")
+    if data:
+        for fmt in ("%a %b %d %H:%M:%S %Z %Y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                dt = datetime.strptime(data.replace("UTC", "UTC"), fmt)
+                break
+            except ValueError:
+                continue
+    descr = None
+    m = re.search(r'<div class="job">(.*?)<div class="(?:jobDetailsFooter|applylink|share|jobDisplayShell-footer)', html, re.S)
+    if m:
+        descr = _testo_pulito(m.group(1))
+    if paese or citta or dt or descr:
+        return {"country": paese, "city": citta, "posted_at": dt, "description": descr}
+    return {}
+
+
 def _estrai_jsonld(html: str) -> dict:
-    """Il JSON-LD JobPosting dalla pagina, se c'è."""
+    """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata)."""
     for m in re.finditer(
             r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
         try:
@@ -74,44 +166,69 @@ def _estrai_jsonld(html: str) -> dict:
                     dt = None
                 # la descrizione viaggia nello stesso JSON-LD: buttarla
                 # e' stata la differenza fra 0% e 90% su phenom
-                descr = d.get("description")
-                descr = str(descr)[:30000] if descr else None
+                descr = _testo_pulito(d.get("description"))
                 if paese or citta or dt or descr:
                     return {"country": paese, "city": citta,
                             "posted_at": dt, "description": descr}
         except (json.JSONDecodeError, KeyError):
             continue
-    return {}
+    return _estrai_microdata(html)
+
+
+# Le piattaforme il cui elenco NON porta sede/data/descrizione, e la
+# pagina dell'annuncio si': Phenom (sitemap), SuccessFactors (sitemap e
+# tile senza sede). La lettura di dettaglio e' cara — una richiesta per
+# offerta — e va fatta una volta sola per offerta.
+# 08/09/2026: anche chi arriva dall'elenco senza testo (JazzHR dal ripiego,
+# CATSone, Recruiterbox, Cornerstone, Zoho): la pagina dell'annuncio porta
+# il JSON-LD JobPosting, si legge una volta sola.
+PIATTAFORME_DETTAGLIO = ("phenom", "successfactors", "jazzhr", "catsone", "recruiterbox", "cornerstone", "zohorecruit",
+                         "breezy", "workday", "smartrecruiters", "oracle", "crelate", "traffit", "eploy", "taleez",
+                         "rippling", "radancy", "bamboohr", "vincere", "hiringthing", "teamtailor", "pinpoint")
 
 
 def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
-    """Legge le pagine di dettaglio delle offerte Phenom senza paese."""
+    return arricchisci_dettaglio(dsn, ("phenom",), limite, thread)
+
+
+def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
+                          limite: int = 5000, thread: int = 10) -> dict:
+    """Legge le pagine di dettaglio (JSON-LD o microdata JobPosting) delle
+    offerte senza paese o senza descrizione, prima le piu' recenti."""
     stats = {"viste": 0, "paesi": 0, "citta": 0, "date": 0, "errori": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT id, url FROM ats_jobs
-                 WHERE platform_id = 'phenom' AND expired_at IS NULL
-                   AND (country IS NULL OR NOT (raw ? 'description'))
-                 ORDER BY id
+                SELECT id, url, platform_id FROM ats_jobs
+                 WHERE platform_id = ANY(%s) AND expired_at IS NULL
+                   AND (country IS NULL OR (SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1) IS NULL)
+                   AND NOT (raw ? 'dettaglio_letto')
+                 ORDER BY fetched_at DESC
                  LIMIT %s
-            """, (limite,))
+            """, (list(piattaforme), limite))
             righe = cur.fetchall()
 
-    log.info("phenom: %d pagine da leggere (%d thread)", len(righe), thread)
+    log.info("dettaglio %s: %d pagine da leggere (%d thread)", ",".join(piattaforme), len(righe), thread)
+    per_piatt: dict = {}
+    stats["per_piattaforma"] = per_piatt
     if not righe:
         return stats
 
     def leggi(riga):
-        jid, url = riga
+        jid, url, pid = riga[0], riga[1], (riga[2] if len(riga) > 2 else "?")
         try:
             with httpx.Client(timeout=15, follow_redirects=True,
                               headers={"User-Agent": "nivult-ats/0.1"}) as c:
                 r = c.get(url)
                 if r.status_code == 200:
-                    return jid, _estrai_jsonld(r.text)
+                    d = _estrai_jsonld(r.text)
+                    st_p = per_piatt.setdefault(pid, {"lette": 0, "testo": 0})
+                    st_p["lette"] += 1
+                    st_p["testo"] += 1 if d.get("description") else 0
+                    return jid, d
         except httpx.HTTPError:
             pass
+        per_piatt.setdefault(pid, {"lette": 0, "testo": 0})["lette"] += 1
         return jid, {}
 
     risultati = []
@@ -121,6 +238,8 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
             try:
                 jid, dati = fut.result()
                 stats["viste"] += 1
+                if not dati:
+                    risultati.append((jid, {}))   # letta e muta: non si riprova
                 if dati:
                     stats["paesi"] += 1 if dati.get("country") else 0
                     stats["citta"] += 1 if dati.get("city") else 0
@@ -134,22 +253,20 @@ def arricchisci_phenom(dsn: str, limite: int = 5000, thread: int = 10) -> dict:
                 log.info("  … %d lette: %s", i + 1, stats)
 
     with psycopg.connect(dsn) as conn:
-        for jid, dati in risultati:
-            with conn.cursor() as cur:
-                cur.execute("""
+        _scrivi_a_lotti(conn, """
                     UPDATE ats_jobs
-                       SET country = COALESCE(country, %s),
+                       SET country = COALESCE(%s, country),   -- la pagina vince sull'URL: Arla mette /gb/en/ anche su Utrecht (1,3%% dei casi, misurato)
                            city = COALESCE(city, %s),
                            location = COALESCE(location, %s),
                            posted_at = COALESCE(posted_at, %s),
-                           raw = CASE WHEN raw ? 'description' THEN raw
-                                 ELSE jsonb_set(raw, '{description}',
-                                      to_jsonb(%s::text), true) END
+                           raw = (CASE WHEN raw ? 'description' OR %s = '' THEN raw
+                                  ELSE jsonb_set(raw, '{description}',
+                                       to_jsonb(%s::text), true) END)
+                                 || '{"dettaglio_letto": true}'::jsonb
                      WHERE id = %s
-                """, (dati.get("country"), dati.get("city"),
-                      dati.get("city"), dati.get("posted_at"),
-                      dati.get("description") or "", jid))
-        conn.commit()
+                """, [(dati.get("country"), dati.get("city"), dati.get("city"), dati.get("posted_at"),
+                       dati.get("description") or "", dati.get("description") or "", jid)
+                      for jid, dati in risultati], lotto=50)
     return stats
 
 
@@ -245,6 +362,12 @@ def arricchisci_da_localita(dsn: str) -> dict:
                    AND (location IS NOT NULL OR city IS NOT NULL)
             """)
             righe = cur.fetchall()
+        # La SELECT ha preso AccessShareLock su ats_jobs e lo terrebbe fino
+        # al primo commit: un DDL notturno (AccessExclusive) si metteva in
+        # coda dietro di noi, e i nostri UPDATE dietro di lui — deadlock,
+        # 6 ritentativi inutili, notte persa (07/09/2026). Si chiude la
+        # transazione di lettura PRIMA di scrivere.
+        conn.commit()
         aggiorna = []
         for jid, testo, attuale in righe:
             iso = _paese_dal_testo(testo.lower())
@@ -254,10 +377,7 @@ def arricchisci_da_localita(dsn: str) -> dict:
                     riempiti += 1
                 else:
                     corretti += 1
-        with conn.cursor() as cur:
-            cur.executemany(
-                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
-        conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
     log.info("da_localita: %d riempiti, %d corretti dal testo",
              riempiti, corretti)
     return {"riempiti": riempiti, "corretti": corretti}
@@ -320,6 +440,12 @@ def arricchisci_da_azienda(dsn: str) -> dict:
                  WHERE expired_at IS NULL
             """)
             righe = cur.fetchall()
+        # La SELECT ha preso AccessShareLock su ats_jobs e lo terrebbe fino
+        # al primo commit: un DDL notturno (AccessExclusive) si metteva in
+        # coda dietro di noi, e i nostri UPDATE dietro di lui — deadlock,
+        # 6 ritentativi inutili, notte persa (07/09/2026). Si chiude la
+        # transazione di lettura PRIMA di scrivere.
+        conn.commit()
 
         evidenze: dict[tuple, dict] = {}
         con_evidenza: list[tuple] = []   # (id, paese_attuale, evidenza)
@@ -356,22 +482,26 @@ def arricchisci_da_azienda(dsn: str) -> dict:
 
         aggiorna: list[tuple] = [(ev, jid) for jid, _, ev in con_evidenza]
         for jid, chiave, paese, pid in senza:
-            voluto = dominante.get(chiave)
-            if paese is not None and pid in PIATTAFORME_RAW_PAESE:
-                # Un paese gia' scritto su queste piattaforme puo' venire
-                # dal raw: e' evidenza, non timbro. Non si tocca.
+            if paese is not None:
+                # Un paese gia' scritto su una riga SENZA localita' non
+                # puo' venire dal testo: viene dal raw dell'adapter, dall'URL
+                # (Phenom /gb/en/job/), dal servizio nazionale. E' evidenza,
+                # non timbro — e il «timbro dalla sede» che questo ramo
+                # doveva cancellare non esiste piu' da settimane. Il
+                # 07/09/2026 questo azzeramento ha cancellato 37.321 paesi
+                # buoni in una notte (15.009 Phenom appena ricavati
+                # dall'URL) e le offerte senza paese sono SALITE da 150k a
+                # 172k. Non si azzera mai: al massimo si riempie.
                 continue
-            if voluto != paese:
+            voluto = dominante.get(chiave)
+            if voluto is not None:
                 aggiorna.append((voluto, jid))
 
-        with conn.cursor() as cur:
-            cur.executemany(
-                "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
-        conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
 
     da_evidenza = len(con_evidenza)
-    riempiti = sum(1 for v, _ in aggiorna if v is not None) - da_evidenza
-    azzerati = sum(1 for v, _ in aggiorna if v is None)
+    riempiti = len(aggiorna) - da_evidenza
+    azzerati = 0
     log.info("da_azienda: %d da evidenza diretta, %d col dominante "
              "dell'azienda, %d senza evidenza azzerati (aziende con "
              "dominante: %d)", da_evidenza, riempiti, azzerati, len(dominante))
@@ -410,15 +540,7 @@ def arricchisci_da_geonames(dsn: str, limite: int = 100_000) -> dict:
             iso = paese_da_localita(loc) or paese_da_localita(city)
             if iso:
                 aggiorna.append((iso, jid))
-        # a blocchi: l'arretrato e' grande, un unico executemany va bene
-        # ma il commit periodico protegge il lavoro se il giro si spezza
-        with conn.cursor() as cur:
-            for i in range(0, len(aggiorna), 5000):
-                cur.executemany(
-                    "UPDATE ats_jobs SET country = %s WHERE id = %s",
-                    aggiorna[i:i + 5000])
-                conn.commit()
-        riempiti = len(aggiorna)
+        riempiti = _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
     log.info("da_geonames: %d offerte geocodificate su %d senza paese",
              riempiti, len(righe))
     return {"riempiti": riempiti, "esaminate": len(righe)}
@@ -484,11 +606,7 @@ def arricchisci_francetravail(dsn: str) -> dict:
                     riempiti += 1
                 else:
                     corretti += 1
-        with conn.cursor() as cur:
-            for i in range(0, len(aggiorna), 5000):
-                cur.executemany("UPDATE ats_jobs SET country=%s WHERE id=%s",
-                                aggiorna[i:i + 5000])
-                conn.commit()
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country=%s WHERE id=%s", aggiorna)
     log.info("francetravail: %d riempiti, %d corretti dal codice dipartimento",
              riempiti, corretti)
     return {"riempiti": riempiti, "corretti": corretti}
@@ -554,16 +672,8 @@ def arricchisci_workday(dsn: str, limite: int = 100_000) -> dict:
                 sede = _loc_da_path_workday(ep)
                 if sede:
                     agg_loc.append((sede, jid))
-        with conn.cursor() as cur:
-            for i in range(0, len(agg_paese), 5000):
-                cur.executemany("UPDATE ats_jobs SET country=%s WHERE id=%s",
-                                agg_paese[i:i + 5000])
-                conn.commit()
-            for i in range(0, len(agg_loc), 5000):
-                cur.executemany("UPDATE ats_jobs SET location=%s WHERE id=%s",
-                                agg_loc[i:i + 5000])
-                conn.commit()
-        loc_migliorate = len(agg_loc)
+        _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country=%s WHERE id=%s", agg_paese)
+        loc_migliorate = _scrivi_a_lotti(conn, "UPDATE ats_jobs SET location=%s WHERE id=%s", agg_loc)
     log.info("workday: %d riempiti, %d corretti, %d localita' «N Locations» "
              "sostituite, su %d esaminate", riempiti, corretti,
              loc_migliorate, len(righe))
@@ -577,7 +687,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.arricchisci",
                                  description=__doc__)
     ap.add_argument("--phenom", action="store_true",
-                    help="legge le pagine di dettaglio Phenom (JSON-LD)")
+                    help="(alias) legge le pagine di dettaglio Phenom")
+    ap.add_argument("--dettaglio", action="store_true",
+                    help="pagine di dettaglio (JSON-LD o microdata) di Phenom e SuccessFactors")
     ap.add_argument("--da-localita", action="store_true",
                     help="paese letto dal testo di location/city: riempie e corregge")
     ap.add_argument("--da-azienda", action="store_true",
@@ -592,7 +704,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--thread", type=int, default=10)
     args = ap.parse_args(argv)
 
-    if args.phenom:
+    if args.dettaglio:
+        s = arricchisci_dettaglio(ATS_DSN, PIATTAFORME_DETTAGLIO, args.limite, args.thread)
+        print(f"\nDettaglio: {s}")
+    elif args.phenom:
         s = arricchisci_phenom(ATS_DSN, args.limite, args.thread)
         print(f"\nPhenom: {s}")
     if args.da_localita:
@@ -610,7 +725,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.francetravail:
         esito_ft = arricchisci_francetravail(ATS_DSN)
         print(f"\nFrance Travail dal dipartimento: {esito_ft}")
-    if not (args.phenom or args.da_azienda or args.da_localita
+    if not (args.phenom or args.dettaglio or args.da_azienda or args.da_localita
             or args.da_geonames or args.workday or args.francetravail):
         ap.print_help()
     return 0

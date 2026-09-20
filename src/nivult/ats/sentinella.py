@@ -40,7 +40,8 @@ ESCALAZIONE_ORE = 6          # un critico ancora aperto dopo 6h: un solo richiam
 
 DEMONI = ["nivult-scrape", "nivult-scrape-veloce", "nivult-profonda",
           "nivult-scoperta", "nivult-arricchisci",
-          "nivult-volano", "nivult-certificati", "nivult-api"]
+          "nivult-volano", "nivult-certificati", "nivult-api",
+          "nivult-testi"]
 BOLLINO = {"critica": "🔴", "avviso": "🟠", "info": "⚪"}
 
 
@@ -127,6 +128,23 @@ def _controlli() -> list[Condizione]:
             if attive and anom * 1000 > attive * 3:        # oltre lo 0,3% in un quarto d'ora
                 c.append(Condizione("scadenze anomale", "critica", "scadenze anomale in corso",
                                     f"{anom} offerte viste di recente scadute negli ultimi 15 min ({100*anom/attive:.1f}% delle attive)"))
+            # 14/09/2026: scadenze precoci = lettura parziale dell'adapter (SmartRecruiters
+            # leggeva 100 offerte e faceva scadere il resto: mediana 7 giorni di vita).
+            # Un'offerta vera vive ~30 giorni: sotto i 10 per una piattaforma con
+            # almeno 500 scadenze in 6 ore, qualcosa legge a meta'.
+            for pid, n, med in db.execute("""SELECT platform_id, count(*),
+                    percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM expired_at-posted_at)/86400)
+                  FROM ats_jobs
+                 WHERE expired_at > now()-interval '6 hours' AND posted_at IS NOT NULL
+                   AND NOT coalesce(posted_at_estimated, false)
+                 GROUP BY 1 HAVING count(*) >= 500""").fetchall():
+                if med is not None and med < 10:
+                    c.append(Condizione(f"scadenze precoci {pid}", "avviso", f"scadenze precoci su {pid}",
+                                        f"{n} scadute in 6h con vita mediana {med:.0f} giorni: l'adapter legge tutto l'elenco?"))
+            parz = db.execute("""SELECT count(*) FROM ats_companies WHERE lettura_parziale AND job_count > 0""").fetchone()[0]
+            if parz > 300:
+                c.append(Condizione("letture parziali", "info", "tenant letti a meta'",
+                                    f"{parz} tenant toccano il tetto di pagine: le loro offerte non scadono, alzare il tetto"))
             # completezza delle nuove (info: si giudica al riepilogo, non di notte)
             tot, con_d, con_p = db.execute("""SELECT count(*),
                 count(*) FILTER (WHERE raw ?| array['description','descriptionHtml','descriptionPlain','jobDescription','job_description','content','externalDescription']),
@@ -136,6 +154,31 @@ def _controlli() -> list[Condizione]:
             if tot and tot >= 2000 and con_d * 100 < tot * 40:
                 c.append(Condizione("nuove senza descrizione", "info", "nuove offerte quasi senza descrizione",
                                     f"{100*con_d//tot}% su {tot} nelle 24h"))
+            # v1 RALLENTATO: la scheda del N5 si blocca (11/09 e 17/09/2026) e torch
+            # ripiega sulla CPU senza dirlo. Su GPU v1 vede ~40.000 offerte l'ora; se ne
+            # vede poche mentre la coda e' lunga, o e' sulla CPU o la scheda e' persa.
+            viste_ora, in_coda = db.execute("""SELECT
+                    count(*) FILTER (WHERE locale_v1_at > now() - interval '1 hour'),
+                    count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL)
+                FROM ats_jobs WHERE locale_v1_at > now() - interval '1 hour'
+                   OR (expired_at IS NULL AND locale_v1_at IS NULL)""").fetchone()
+            if in_coda > 5000 and viste_ora < 3000:
+                c.append(Condizione("v1 lento", "avviso", "nivult-v1 rallentato",
+                                    f"{viste_ora} offerte viste in un'ora con {in_coda} in coda: "
+                                    f"scheda del N5 bloccata o ripiego sulla CPU? Riavviare il N5"))
+            # Il MAGAZZINO senza testo, non solo il flusso. Il 16/09/2026 il 26% delle
+            # offerte attive non aveva descrizione e il controllo qui sotto non lo vedeva,
+            # perche' guarda solo le ultime 24 ore. Stima su un campione dell'1%: la conta
+            # esatta costa minuti e qui si passa ogni 5.
+            camp = db.execute("""SELECT count(*), count(*) FILTER (WHERE raw ?| array[
+                    'description','content','descriptionHtml','descriptionPlain','externalDescription',
+                    'jobDescription','job_description','body','text'])
+                FROM ats_jobs TABLESAMPLE SYSTEM (1) WHERE expired_at IS NULL""").fetchone()
+            if camp and camp[0] >= 3000 and camp[1] * 100 < camp[0] * 85:
+                senza = 100 - (100 * camp[1] // camp[0])
+                c.append(Condizione("magazzino senza testo", "avviso", "offerte attive senza descrizione",
+                                    f"~{senza}% delle attive non ha testo: senza testo non c'e' sintesi, "
+                                    f"tecnologie, salario ne' lingua. Guardare nivult-testi e arricchisci --dettaglio"))
             if tot and tot >= 2000 and con_p * 100 < tot * 70:
                 c.append(Condizione("nuove senza paese", "info", "nuove offerte quasi senza paese",
                                     f"{100*con_p//tot}% su {tot} nelle 24h"))
@@ -146,6 +189,7 @@ def _controlli() -> list[Condizione]:
                                         f"ultimo battito {int(eta_s//3600)}h fa: N5 spento, Tailscale giu' o ciclo bloccato"))
             # lo sprint: unita' giu' con coda piena e non per fine/credito
             if sub(["systemctl", "is-active", "nivult-sprint"]) != "active" \
+                    and not os.path.exists("/opt/nivult/glm-corpus.spento") \
                     and db.execute("SELECT to_regclass('sprint_coda')").fetchone()[0]:
                 n = db.execute("SELECT count(*) FROM sprint_coda").fetchone()[0]
                 coda = open("/opt/nivult/engine/logs/sprint-glm.log", errors="replace").read()[-1500:]
@@ -191,9 +235,12 @@ def _controlli() -> list[Condizione]:
         except OSError:
             c.append(Condizione(f"passo {nome_log}", "info", f"passo diurno {nome_log} mai partito", "log assente"))
 
-    # credito GLM
+    # credito GLM. Con /opt/nivult/glm.spento il credito a zero e' una SCELTA, non un
+    # guasto: senza utenti non ci sono digest da consegnare, e ricaricare sarebbe spesa
+    # inutile (17/09/2026). Il file si toglie il giorno in cui si ricarica.
+    glm_spento = os.path.exists("/opt/nivult/glm.spento")
     chiave = _env().get("GLM_API_KEY")
-    if chiave:
+    if chiave and not glm_spento:
         try:
             import httpx
             r = httpx.post("https://api.z.ai/api/paas/v4/chat/completions",
@@ -230,11 +277,13 @@ def _controlli() -> list[Condizione]:
                                     "certificato HTTPS in scadenza", f"api.nivult.com scade fra {int(giorni)} giorni"))
     except Exception:                                 # noqa: BLE001
         pass
-    # i digest del motore (il prodotto): falliti nelle ultime 24h
+    # i digest del motore (il prodotto): falliti nelle ultime 24h.
+    # Se GLM e' spento di proposito, i digest falliscono per quel motivo e basta:
+    # segnalarlo ogni cinque minuti e' rumore che copre gli allarmi veri.
     try:
         import psycopg
         url = _env().get("DATABASE_URL")
-        if url:
+        if url and not glm_spento:
             with psycopg.connect(url, connect_timeout=10) as m_:
                 falliti = m_.execute("SELECT count(*) FROM digests WHERE started_at > now()-interval '24 hours' AND status='failed'").fetchone()[0]
                 if falliti:
@@ -268,11 +317,19 @@ def _controlli() -> list[Condizione]:
     try:
         cf = "/opt/nivult/canarini.json"
         if time.time() - os.path.getmtime(cf) < 2 * 3600:
-            for r_ in json.load(open(cf)).get("rotte", []):
+            d_ = json.load(open(cf))
+            confermate = {r["piattaforma"] for r in d_.get("rotte_confermate", [])}
+            for r_ in d_.get("rotte", []):
                 pid = r_["piattaforma"]
                 att = ", ".join(f"{k['slug']} (attese {k['attese']})" for k in r_["canarini"][:3])
-                c.append(Condizione(f"adapter rotto {pid}", "avviso", f"adapter rotto: {pid}",
-                                    f"tutti i canarini a zero: {att}"))
+                if pid in confermate:
+                    # due giri orari a zero: l'officina si apre (pronto soccorso)
+                    c.append(Condizione(f"adapter rotto {pid}", "avviso", f"adapter rotto: {pid}",
+                                        f"canarini a zero da due giri: {att}"))
+                else:
+                    # un giro solo: si segna, si aspetta il prossimo (info = solo cruscotto)
+                    c.append(Condizione(f"adapter a zero {pid}", "info", f"adapter a zero: {pid}",
+                                        f"canarini a zero in questo giro: {att} — se persiste, officina"))
     except (OSError, ValueError, KeyError):
         pass
     # ADAPTER MUTO: nell'ultima ora l'adapter ha detto «zero» su tenant le

@@ -22,7 +22,14 @@ LOCAL_DIR="$BASE/backups"
 STATE="$BASE/backup-state"
 CONTAINER=nivult-db-1
 DB_SUPERUSER=nivult
-LOCAL_KEEP_DAYS=14
+# 3 giorni locali, non 14. Misurato il 13/09/2026: i backup pesano ~4,5 GB
+# e crescono di ~0,4 GB al giorno; a 14 giorni occupavano 24 GB su un disco
+# da 75 condiviso col database, arrivato al 98% con 1,5 GB liberi — meno di
+# un backup. Le copie esterne sono DUE e verificate: la Storage Box con
+# confronto sha256 fra i due lati (sotto), e il N5 che tira i file ogni
+# mattina alle 06:00 (deploy/copia-backup-n5.sh). Il ritardo massimo del N5
+# e' quindi tre ore: tre giorni locali coprono qualunque finestra di guasto.
+LOCAL_KEEP_DAYS=3
 REMOTE_KEEP_DAYS=90
 MIN_BYTES=500
 

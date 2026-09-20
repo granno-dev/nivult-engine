@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+"""Il dataset v2: etichette umane e dichiarate, non solo GLM.
+
+Ogni riga porta, per ogni campo, l'etichetta E la sua provenienza:
+
+  family          codice ufficiale (ROME / SSYK / ISCO, mappato in
+                  nivult.ats.tassonomie) > accordo GLM+v1 (dall'audit,
+                  confidenza >= 0.75) > «none» per i titoli che non sono
+                  annunci; le righe in disaccordo o incerte NON entrano:
+                  vanno in da_giudicare.jsonl per il giudice esterno.
+  employment_type dichiarato dal datore nei campi strutturati dell'ATS
+                  (typeContrat, employment_type_code, typeOfEmployment…)
+  seniority       dichiarato (experienceLibelle in anni, experienceLevel,
+                  experience_code, experience_required)
+  remote          dichiarato (workplaceType, isRemote, remote/hybrid,
+                  workplace, workplace_model)
+
+Per i campi dichiarati si annota anche `menzione`: se il testo dell'annuncio
+nomina il valore (es. «CDI», «senior», «remote»). Dove NON lo nomina, la riga
+e' per costruzione un esempio di STIMA: il modello deve ricavare il campo da
+titolo, ruolo, azienda e contesto, e siccome la verita' e' dichiarata dal
+datore, la precisione della stima si misura esattamente.
+
+    ATS_DATABASE_URL=... python scripts/estrai_dataset_v2.py --out /opt/nivult/v2 [--audit audit-v1.jsonl] [--limite N]
+
+Escluse come in v1: iCIMS per intero (testo di un altro annuncio) e le
+chimere delle piattaforme con id per tenant. Deduplica per titolo+azienda+
+luogo e per titolo+testo. Le aziende dell'esame a mano restano fuori dal
+train, per intero.
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import gzip
+import hashlib
+import json
+import os
+import re
+import sys
+
+import psycopg
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from nivult.ats.tassonomie import (famiglia_da_categoria, famiglia_da_funzione,  # noqa: E402
+                                   famiglia_da_isco, famiglia_da_rome, famiglia_da_ssyk)
+from nivult.ats.dichiarati import contratto, remoto, seniority  # noqa: E402
+from prompt_v2 import menziona  # noqa: E402
+
+QUOTA_ESAME_AZIENDE = 0.06
+
+# da quale chiave del raw arriva la categoria, e con che vocabolario si legge
+_CATEGORIA = {"smartrecruiters": ("function", "voc"), "workable": ("function", "voc"),
+              "recruitee": ("category_code", "voc"), "icims": ("Category", "lib"),
+              "oracle": ("JobFamily", "lib"), "inrecruiting": ("function", "lib"),
+              "join": ("category", "lib"), "hirehive": ("category", "lib"),
+              "jsonld": ("occupationalCategory", "lib"),
+              "agenzie": ("occupationalCategory", "lib")}
+
+
+def categoria_dichiarata(pid: str, campi: dict) -> str | None:
+    """La famiglia che si ricava dalla categoria scelta dal datore, o None."""
+    fonte = _CATEGORIA.get(pid)
+    if not fonte:
+        return None
+    v = campi.get(fonte[0])
+    if isinstance(v, dict):                 # {"id": "sales"} / {"name": "Sales"}
+        v = v.get("id") or v.get("name")
+    if not isinstance(v, str):
+        return None
+    return (famiglia_da_funzione if fonte[1] == "voc" else famiglia_da_categoria)(v)
+
+
+_TAG = re.compile(r"<[^>]+>")
+
+# ogni modo che conosciamo di dire «remoto» o «ibrido»: se NESSUNO compare in
+# titolo, sede e testo, l'annuncio e' in sede per assenza. Piu' largo delle
+# regex di menzione di prompt_v2 apposta: qui un falso «silenzio» costa
+# un'etichetta sbagliata, un falso «rumore» costa solo una riga in meno.
+RX_REMOTO_QUALSIASI = re.compile(
+    r"remote|remoto|remota|télétravail|teletravail|teletrabajo|teletrabalho|home.?office|homeoffice|"
+    r"work(ing)? from home|\bwfh\b|home.?based|smart.?work|hybrid|ibrid|hybride|híbrido|hibrido|"
+    r"distans|thuiswerk|hjemmekontor|fjernarbeid|etätyö|zdaln|anywhere|fully flexible|"
+    r"flexible location|a distanza|da casa|desde casa|von zu hause|à distance", re.I)
+
+
+def pulisci(t: str | None, n: int | None = None) -> str:
+    """NESSUN TAGLIO per difetto (era 1200 caratteri fino al 13/09/2026).
+
+    Misurato sul magazzino il 13/09: la mediana degli annunci e' **4.150**
+    caratteri, il 90esimo percentile 9.376, e l'89,5% supera i 1200. Il
+    vecchio valore predefinito buttava via il **77,5%** del testo scritto
+    dalle aziende — e non la coda inutile: requisiti, tipo di contratto,
+    lingue richieste e stack tecnico negli annunci stanno in fondo. Il
+    dataset di v2 e quello di v1 sono nati cosi', e il giro C e' stato
+    addestrato su annunci mutilati.
+
+    `n` resta disponibile per chi un tetto lo vuole davvero; `[:None]` in
+    Python restituisce la stringa intera, quindi la riga sotto non cambia."""
+    import html
+    t = t or ""
+    s = t.lstrip()
+    if s[:1] in "{[":
+        try:
+            d = json.loads(s)
+            if isinstance(d, dict):
+                t = str(d.get("text") or d.get("description") or d.get("descriptionPlain") or "")
+                if not t:
+                    t = " ".join(str(v) for v in d.values() if isinstance(v, str))
+            elif isinstance(d, list):
+                t = " ".join(str(x) for x in d if isinstance(x, str))
+        except ValueError:
+            pass
+    t = html.unescape(html.unescape(t))
+    t = _TAG.sub(" ", t).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", t).strip()[:n]
+
+
+# ── titoli che non sono annunci: la classe «none» ───────────────────
+RX_NONE = re.compile(
+    r"^\s*(?:general|spontaneous|open|unsolicited|internal|speculative)\s+application|candidatura\s+spontanea|"
+    r"candidature\s+spontan|initiativbewerbung|autocandidatura|talent\s+(?:pool|community|network)|"
+    r"join\s+our\s+talent|future\s+opportunit|keep\s+in\s+touch|expression\s+of\s+interest|"
+    r"^\s*(?:test|prova|dummy|sample)\b|^\s*application\s*$|^\s*apply\s*$|^\s*careers?\s*$", re.I)
+
+
+def chiave_dup(titolo: str, azienda: str, luogo: str) -> str:
+    return hashlib.sha1(f"{(titolo or '').lower().strip()}|{azienda}|{(luogo or '').lower().strip()}".encode()).hexdigest()[:16]
+
+
+def chiave_testo(titolo: str, testo: str) -> str:
+    return hashlib.sha1(f"{(titolo or '').lower().strip()}|{(testo or '')[:300].lower()}".encode()).hexdigest()[:16]
+
+
+def lato_azienda(azienda: str) -> str:
+    h = int(hashlib.sha1(azienda.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return "esame" if h < QUOTA_ESAME_AZIENDE else "train"
+
+
+RAW_CAMPI = ("romeCode", "typeContrat", "dureeTravailLibelle", "experienceLibelle", "occupation_group",
+             "employment_type", "working_hours_type", "workplace_model", "experience_required", "extent",
+             "engagementtype", "jobCategoriesCodes", "experienceLevel", "typeOfEmployment", "location",
+             "employment_type_code", "experience_code", "remote", "hybrid", "workplace", "experience",
+             "workplaceType", "isRemote", "employmentType",
+             # le fonti inequivoche di `contract` recuperate l'11/09: contractor,
+             # freelance, libero professionista — MAI il «Contract» inglese
+             "employmentStatusLabel", "Job_Type", "contract", "employment_type_text",
+             # la categoria scelta da chi pubblica: da sola vale poco (accordo
+             # col modello 55%, misurato l'11/09), ma rompe i pareggi
+             "function", "category_code", "category", "Category", "JobFamily",
+             "occupationalCategory")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", default="/opt/nivult/v2")
+    ap.add_argument("--audit", default=None, help="audit-v1.jsonl: accordo GLM+v1 per la famiglia")
+    ap.add_argument("--golden-mano", default=None, help="dataset-golden-v1.jsonl.gz: le sue aziende restano fuori dal train")
+    ap.add_argument("--limite", type=int, default=None)
+    ap.add_argument("--escludi-piattaforme", default="icims")
+    ap.add_argument("--escludi-chimere", default="workday,cornerstone,eploy,traffit,pinpoint,vincere")
+    ap.add_argument("--senza-etichette", default=None,
+                    help="file .jsonl.gz dove scrivere le righe senza nessuna etichetta (altrimenti si contano e basta)")
+    ap.add_argument("--solo-senza", action="store_true",
+                    help="estrae SOLO le righe senza classificazione (x.family IS NULL): giro breve, non riscrive train/esame")
+    a = ap.parse_args()
+    os.makedirs(a.out, exist_ok=True)
+    f_senza = gzip.open(a.senza_etichette, "wt") if a.senza_etichette else None
+
+    accordo: dict[str, dict] = {}
+    # Dal 09/09/2026 l'accordo GLM+v1 sta nel database (job_classifications.
+    # v1_family, scritta dal giro normale di v1): il file audit resta come
+    # ripiego per lo storico, ma non serve piu' rigenerarlo a mano.
+    if a.audit:
+        for l in open(a.audit):
+            d = json.loads(l)
+            accordo[d["id"]] = d
+        print(f"audit: {len(accordo)} righe", flush=True)
+    aziende_esame: set[str] = set()
+    id_esame: set[str] = set()
+    if a.golden_mano:
+        for l in gzip.open(a.golden_mano, "rt"):
+            g = json.loads(l)
+            id_esame.add(g["id"])
+            if g.get("azienda"):
+                aziende_esame.add(g["azienda"])
+
+    escluse = [p.strip() for p in a.escludi_piattaforme.split(",") if p.strip()]
+    chimere = [p.strip() for p in a.escludi_chimere.split(",") if p.strip() and p.strip() not in escluse]
+    sql = """
+        SELECT j.id::text, j.platform_id, j.slug, j.title, coalesce(j.location, j.city, ''), j.country,
+               coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''),
+               x.family, x.model, j.lang, j.languages_required, x.v1_family, x.v1_conf,
+               (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k) AS campi
+          FROM ats_jobs j LEFT JOIN job_classifications x ON x.job_id = j.id
+         WHERE j.title IS NOT NULL AND length(j.title) > 2
+           -- anche le SCADUTE, se portano un codice ufficiale o un campo dichiarato:
+           -- per il dataset l'etichetta umana vale uguale (la prima versione, 08/09,
+           -- prendeva solo le attive: 5.278 ROME invece di 66.000)
+           AND (j.expired_at IS NULL OR j.platform_id = ANY(%s::text[]))
+           AND NOT (j.platform_id = ANY(%s::text[]))
+           AND NOT (j.platform_id = ANY(%s::text[]) AND j.url NOT ILIKE '%%' || j.slug || '%%')
+    """
+    if a.solo_senza:
+        sql += " AND x.family IS NULL"
+    if a.limite:
+        sql += f" ORDER BY j.fetched_at DESC LIMIT {int(a.limite)}"
+    conn = psycopg.connect(os.environ["ATS_DATABASE_URL"])
+    cur = conn.cursor(name="v2")
+    cur.itersize = 5000
+    con_etichette_umane = ["francetravail", "arbetsformedlingen", "eures", "nav", "smartrecruiters", "recruitee",
+                           "workable", "ashby", "personio", "lever"]
+    cur.execute(sql, (list(RAW_CAMPI), con_etichette_umane, escluse, chimere))
+
+    st = collections.Counter()
+    prov = collections.Counter()
+    visti_dup: set[str] = set()
+    visti_testo: set[str] = set()
+    f_train = gzip.open(os.path.join(a.out, "dataset-train-v2.jsonl.gz"), "wt")
+    f_esame = gzip.open(os.path.join(a.out, "dataset-esame-v2.jsonl.gz"), "wt")
+    f_giud = open(os.path.join(a.out, "da_giudicare.jsonl"), "w")
+    for (jid, pid, slug, tit, loc, ctry, desc, fam_glm, mod_glm, lang, lingue, v1_fam, v1_conf, campi) in cur:
+        st["lette"] += 1
+        campi = campi or {}
+        testo = pulisci(desc)
+        if len(testo) < 80 and not campi:
+            st["senza_testo"] += 1
+            continue
+        azienda = f"{pid}/{slug}"
+        k1, k2 = chiave_dup(tit, azienda, loc), chiave_testo(tit, testo)
+        if k1 in visti_dup or (testo and k2 in visti_testo):
+            st["duplicate"] += 1
+            continue
+        visti_dup.add(k1)
+        visti_testo.add(k2)
+
+        # ── famiglia ──
+        fam, fam_prov = None, None
+        if pid == "francetravail":
+            fam, fam_prov = famiglia_da_rome(campi.get("romeCode")), "rome"
+        elif pid == "arbetsformedlingen":
+            fam, fam_prov = famiglia_da_ssyk((campi.get("occupation_group") or {}).get("legacy_ams_taxonomy_id")), "ssyk"
+        elif pid == "eures":
+            codici = campi.get("jobCategoriesCodes")
+            if isinstance(codici, str):
+                try:
+                    codici = json.loads(codici)
+                except ValueError:
+                    codici = []
+            isco = next((c for c in (codici or []) if "/isco/" in str(c)), None)
+            fam, fam_prov = famiglia_da_isco(isco), "isco"
+        if fam is None and RX_NONE.search(tit or ""):
+            fam, fam_prov = "none", "regola"
+        if fam is None and fam_glm and mod_glm and (mod_glm.startswith("glm") or mod_glm == "nivult-v1"):
+            au = accordo.get(jid)
+            if au is None and v1_fam:            # il parere di v1 dal database
+                au = {"accordo": v1_fam == fam_glm and (v1_conf or 0) >= 0.75}
+            if au is None:
+                fam, fam_prov = (fam_glm, "glm") if mod_glm.startswith("glm") else (None, None)
+                if fam_prov == "glm":
+                    fam_prov = "glm_senza_audit"
+            elif au.get("accordo"):
+                fam, fam_prov = fam_glm, "glm+v1"
+            else:
+                # La categoria scelta dal datore NON rompe il pareggio: dove
+                # GLM e v1 concordano, lei dice lo stesso solo nel 59% dei
+                # casi (misurato l'11/09 su 29.074 righe). Un segnale che
+                # conferma il consenso sei volte su dieci non e' un giudice;
+                # va nel fascicolo come indizio, e decide il giudice esterno.
+                v1_parere = au.get("v1") or v1_fam
+                f_giud.write(json.dumps({"id": jid, "title": tit, "location": loc, "azienda": azienda,
+                                         "text": testo[:600], "glm": fam_glm, "v1": v1_parere,
+                                         "conf_v1": au.get("conf"),
+                                         "dichiarato": categoria_dichiarata(pid, campi)},
+                                        ensure_ascii=False) + "\n")
+                st["da_giudicare"] += 1
+        if fam_prov:
+            prov[f"family:{fam_prov}"] += 1
+
+        # ── campi dichiarati ──
+        # family_consenso: la famiglia su cui GLM e v1 CONCORDANO (conf >= 0,75),
+        # scritta sempre, anche quando la famiglia del dataset viene da un codice.
+        # Serve all'esame: il banco dei codici si limita alle righe dove codice e
+        # consenso coincidono, perche' dove litigano (33% delle righe, misurato
+        # l'11/09: Construction/Trades, Manufacturing/Trades...) il banco misura
+        # il confine della tassonomia, non il modello.
+        consenso = fam_glm if (fam_glm and v1_fam == fam_glm and (v1_conf or 0) >= 0.75) else None
+        riga = {"id": jid, "title": tit, "location": loc, "country": ctry, "text": testo, "lang": lang,
+                "azienda": azienda, "family": fam, "family_prov": fam_prov, "family_consenso": consenso,
+                "languages_required": list(lingue) if lingue else None}
+        for campo, fn in (("employment_type", contratto), ("seniority", seniority), ("remote", remoto)):
+            v = fn(pid, campi) if campi else None
+            riga[campo] = v
+            riga[f"{campo}_prov"] = "dichiarato" if v else None
+            riga[f"{campo}_menzione"] = menziona(campo, v, f"{tit} {testo}") if v else None
+            if v:
+                prov[f"{campo}:dichiarato"] += 1
+                prov[f"{campo}:stima" if not riga[f"{campo}_menzione"] else f"{campo}:estrazione"] += 1
+        # ── «in sede per assenza» ──
+        # Il remoto dichiarato non manca a caso: chi assume in sede non lo scrive.
+        # Addestrare solo sulle righe dichiarate insegna 48% onsite dove il reale
+        # (280 a mano) e' 80,5%, e il modello risponde «remote» a chi tace (29
+        # errori su 102, esame dell'11/09). Qui il silenzio diventa un'etichetta:
+        # testo lungo, e nessuna traccia di remoto/ibrido in titolo, sede e testo,
+        # in nessuna lingua che conosciamo -> onsite, provenienza «assenza».
+        # E' una stima per costruzione. Quante tenerne lo decide formatta_v2.py;
+        # l'esame non le usa mai (i suoi banchi filtrano prov == dichiarato).
+        #
+        # SOLO su righe che hanno gia' un'altra etichetta. Senza questo vincolo
+        # il silenzio sul remoto RISCATTEREBBE le righe che il controllo qui
+        # sotto scarta come «senza_etichette» — 507.286 nel giro B — e il
+        # dataset si riempirebbe di offerte il cui unico insegnamento e' un
+        # `onsite` indovinato. Il riequilibrio sistemerebbe la proporzione ma
+        # non il danno: un terzo del dataset a insegnare un campo solo, stimato.
+        ha_altra_etichetta = bool(fam) or any(riga[c] for c in ("employment_type", "seniority"))
+        if (ha_altra_etichetta and riga["remote"] is None and len(testo) >= 300
+                and not RX_REMOTO_QUALSIASI.search(f"{tit} {loc} {testo}")):
+            riga["remote"] = "onsite"
+            riga["remote_prov"] = "assenza"
+            riga["remote_menzione"] = menziona("remote", "onsite", f"{tit} {testo}")
+            prov["remote:assenza"] += 1
+        if not fam and not any(riga[c] for c in ("employment_type", "seniority", "remote")):
+            st["senza_etichette"] += 1
+            # Dal 14/09/2026 queste righe NON si buttano: per il maestro
+            # (DeepSeek) sono le piu' preziose — dove nessuna fonte sa nulla,
+            # l'etichetta e' tutta guadagno. Vanno in un file a parte, che il
+            # selettore del campione legge insieme al train.
+            if f_senza is not None:
+                f_senza.write(json.dumps(riga, ensure_ascii=False) + "\n")
+            continue
+        if a.solo_senza:
+            continue
+        lato = "esame" if (jid in id_esame or azienda in aziende_esame or lato_azienda(azienda) == "esame") else "train"
+        (f_esame if lato == "esame" else f_train).write(json.dumps(riga, ensure_ascii=False) + "\n")
+        st[lato] += 1
+        if st["lette"] % 50000 == 0:
+            print(f"  {st['lette']} lette: {dict(st)}", flush=True)
+    for f in (f_train, f_esame, f_giud, f_senza):
+        if f is not None:
+            f.close()
+    print("\nRIGHE:", dict(st))
+    print("PROVENIENZE:", json.dumps(dict(sorted(prov.items())), indent=1))
+    json.dump({"righe": dict(st), "provenienze": dict(prov)}, open(os.path.join(a.out, "rapporto-v2.json"), "w"), indent=1)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

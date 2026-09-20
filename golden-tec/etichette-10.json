@@ -1,0 +1,120 @@
+{
+ "lotto": 10,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "#181 e' lo stesso annuncio del #108 pubblicato per un altro paese: due righe diverse, stesso testo. Buon controllo di coerenza sul golden, e un doppione vero nel magazzino.",
+  "Ultimo lotto: 14 offerte su 20 senza tecnologie, la quota piu' alta del golden. Il campione non e' ordinato, quindi e' solo il caso — ma serve a ricordare che l'esito «nessuna» e' la risposta piu' frequente."
+ ],
+ "offerte": [
+  {"n": 181, "id": "2405ba5d-c4c6-44cb-814a-00acecd7d24f", "titolo": "Japanese Sports Localization Specialist (Football) - IE",
+   "tecnologie": [],
+   "escluse": ["style guides, localization, fact-check (pratiche)", "giapponese (lingua)"],
+   "nota": "testo identico al #108: stesso annuncio ripubblicato per l'Irlanda"},
+
+  {"n": 182, "id": "14c2394f-0a4b-47e4-9602-d83c85ec2c7f", "titolo": "Overlege i nevrologi (Helse Fonna)",
+   "tecnologie": [],
+   "escluse": ["klinisk nevrofysiologi, slagbehandling (sottospecialita' cliniche)", "nevrofysiologisk laboratorium (reparto)", "Vitnemalsportalen (portale per caricare i diplomi, logistica di candidatura)", "norsk autorisasjon (abilitazione)"]},
+
+  {"n": 183, "id": "0c6d39af-0fae-483b-8aaf-c89e43550227", "titolo": "Kassierer (m/w/d) (ALDI)",
+   "tecnologie": [],
+   "escluse": ["Kasse (postazione)", "E-Learning-Angebote (formazione offerta)"]},
+
+  {"n": 184, "id": "8c14b009-2d66-4581-b9d7-52d89d7b7c3c", "titolo": "Addetto/a gestione clienti attiva nelle attivita operative",
+   "tecnologie": [],
+   "escluse": ["gestione richieste, supporto clienti (attivita')", "flussi organizzativi aziendali (generico)"]},
+
+  {"n": 185, "id": "924ba7ef-a10d-4cb8-87bf-bc91010b6a71", "titolo": "Tech Lead",
+   "tecnologie": [{"nome": "Docker", "ruolo": "usata"}, {"nome": "React.js", "ruolo": "gradita"},
+                  {"nome": "AWS", "ruolo": "gradita"}],
+   "escluse": ["CI/CD, DevOps, API-first, modular design, asynchronous communication patterns (pratiche e architetture)", "Agile, Lean principles (principi)", "LLM, agentic AI (categorie)", "GDPR (legge, nella nota privacy)"]},
+
+  {"n": 186, "id": "64875ab4-a16d-4075-8a1c-6b142bf93f07", "titolo": "Principal Civil Engineer (AFRY)",
+   "tecnologie": [{"nome": "Eurocodes", "ruolo": "usata"}, {"nome": "British Standards", "ruolo": "usata"},
+                  {"nome": "Revit", "ruolo": "gradita"}, {"nome": "AutoCAD", "ruolo": "gradita"},
+                  {"nome": "BIM", "ruolo": "gradita"}, {"nome": "CAD", "ruolo": "gradita"},
+                  {"nome": "onshore wind", "ruolo": "servizio"}, {"nome": "offshore wind", "ruolo": "servizio"},
+                  {"nome": "solar PV", "ruolo": "servizio"}, {"nome": "concentrated solar", "ruolo": "servizio"}],
+   "escluse": ["FEED, EPCM (modelli contrattuali di servizio)", "Chartered Engineer (stato professionale)", "2:1 degree (titolo)"]},
+
+  {"n": 187, "id": "bd9724e8-149d-4caf-845f-a53b07bcbbf0", "titolo": "Product Operations Analyst (MAJORITY)",
+   "tecnologie": [{"nome": "n8n", "ruolo": "usata"}, {"nome": "Looker", "ruolo": "usata"},
+                  {"nome": "Intercom", "ruolo": "usata"}, {"nome": "Datadog", "ruolo": "usata"},
+                  {"nome": "Jira", "ruolo": "usata"}, {"nome": "Python", "ruolo": "gradita"},
+                  {"nome": "stablecoin", "ruolo": "servizio"}, {"nome": "Visa", "ruolo": "servizio"}],
+   "escluse": ["FDIC-insured account (prodotto regolamentato)", "AI and automation tools (generico)", "CIP monitoring (procedura di conformita')", "bachelor's degree (titolo)"]},
+
+  {"n": 188, "id": "9cf3418e-7e76-428a-9eea-125dbe79a357", "titolo": "Assistant Manager of Resident Care (RPN)",
+   "tecnologie": [],
+   "escluse": ["RPN, CNO (abilitazione e ordine professionale)", "CQI (approccio generico al miglioramento)", "Infection Control, Quality Management, Wound Care (aree di formazione)", "VSS, TB 2 Step (controlli sanitari e sui precedenti)", "Applicant Tracking System (strumento di selezione del datore, non del ruolo)"]},
+
+  {"n": 189, "id": "6515b69f-2308-4e6c-90d5-4b0247876c00", "titolo": "Christmas Retail Associate (DCK)",
+   "tecnologie": [],
+   "escluse": ["quite a few apps (generico, nessun nome)", "visual merchandising guidelines (linee guida)", "driving licence (patente)"]},
+
+  {"n": 190, "id": "fe31d261-4de8-42a0-9a58-362891cec47b", "titolo": "Lifeguard (David Lloyd Clubs)",
+   "tecnologie": [],
+   "escluse": ["NPLQ (qualifica personale di bagnino)", "pool tests (procedura)", "Wagestream App (benefit)"]},
+
+  {"n": 191, "id": "a208cceb-05d8-4abd-a011-ac122edef33c", "titolo": "2027 Summer Internship - Trading and Asset Origination (Rothesay)",
+   "tecnologie": [],
+   "escluse": ["financial models, hedging strategy, quantitative analysis (pratiche del mestiere)", "liquid financial instruments (oggetti del mercato)", "English (lingua)"]},
+
+  {"n": 192, "id": "cab6228b-dcba-49ed-9ce0-6e82b44c8631", "titolo": "Directeur de la Restauration (La Citadelle Vauban)",
+   "tecnologie": [{"nome": "Plan de Maitrise Sanitaire", "ruolo": "usata"},
+                  {"nome": "menu engineering", "ruolo": "usata"}],
+   "escluse": ["OS&E, SOP (categorie di acquisto e procedure)", "food cost, beverage cost, average check, capture rate, revenue per outlet (indicatori)", "dry runs, soft opening (fasi di pre-apertura)"]},
+
+  {"n": 193, "id": "90d973f6-db32-4346-80d3-9e45e6b6fd79", "titolo": "Community Care Assistant Moseley (Home Instead)",
+   "tecnologie": [],
+   "escluse": ["PPE (attrezzatura generica)", "NVQ Level 1,2,3 (qualifiche)", "COVID-19 guidelines (procedure)"]},
+
+  {"n": 194, "id": "ce953b55-68a4-470b-a2fe-564923390491", "titolo": "Buchhandler (m/w/d) (Thalia)",
+   "tecnologie": [{"nome": "Warenwirtschaft", "ruolo": "usata"}, {"nome": "Self-Scanning", "ruolo": "usata"},
+                  {"nome": "E-Reading", "ruolo": "servizio"}],
+   "escluse": ["Bestellwesen (funzione)", "digitale Tools, App-Angebote, digitale Services (generici)", "Ausbildung im Buchhandel (titolo)"],
+   "nota": "libraio con tre tecnologie vere: il gestionale di magazzino, la cassa self-scanning e l'offerta di lettura digitale"},
+
+  {"n": 195, "id": "ce2cbe74-ccdb-4032-a527-bd98184149af", "titolo": "Infermieri/e - Importante Ospedale Pubblico (Adecco)",
+   "tecnologie": [],
+   "escluse": ["laurea in Scienze Infermieristiche, OPI (titolo e ordine)", "somministrazione di terapie, medicazioni (attivita' clinica)", "CCNL Comparto Sanita' (contratto)"]},
+
+  {"n": 196, "id": "59181826-b4b8-4513-ba65-f28628436832", "titolo": "Plongeur / Plongeuse en restauration (H/F)",
+   "tecnologie": [],
+   "escluse": ["equipements de cuisine (attrezzatura generica)", "charte qualite, regles d'hygiene (procedure)"]},
+
+  {"n": 197, "id": "dfb9a5dd-7049-4083-b3e1-c0fe5115b51c", "titolo": "Security Officer - Patrol Driver - Full Time (Allied Universal)",
+   "tecnologie": [],
+   "escluse": ["computer or tablet (dispositivi generici)", "driver's license (patente)", "security-related logs (documenti)"],
+   "nota": "stesso datore del #136, dove «access control and badge» era nominato e qui no: la differenza sta nel testo"},
+
+  {"n": 198, "id": "611f47f4-39e3-440f-9129-56c091d7e75f", "titolo": "Regional Key Account (Grafton)",
+   "tecnologie": [],
+   "escluse": ["customer plan, trade spending, revenue growth management, sales forecast, menu di indicatori (pratiche commerciali)", "perfect store (standard di esecuzione)", "FMCG (settore)", "laurea (titolo)"]},
+
+  {"n": 199, "id": "546ddd36-6449-4c4a-8ff1-0d10ea3819b0", "titolo": "Senior Machine Learning Engineer, AI Platform (Smartly)",
+   "tecnologie": [{"nome": "AWS", "ruolo": "usata"}, {"nome": "GCP", "ruolo": "usata"},
+                  {"nome": "Python", "ruolo": "usata"}, {"nome": "PyTorch", "ruolo": "usata"},
+                  {"nome": "TensorFlow", "ruolo": "usata"}, {"nome": "MLflow", "ruolo": "usata"},
+                  {"nome": "Kubeflow", "ruolo": "usata"}, {"nome": "C++", "ruolo": "gradita"},
+                  {"nome": "Java", "ruolo": "gradita"}, {"nome": "Facebook", "ruolo": "servizio"},
+                  {"nome": "Google", "ruolo": "servizio"}, {"nome": "Instagram", "ruolo": "servizio"},
+                  {"nome": "Pinterest", "ruolo": "servizio"}, {"nome": "Snap", "ruolo": "servizio"},
+                  {"nome": "TikTok", "ruolo": "servizio"}],
+   "escluse": ["MLOps, generative AI, computer vision, natural language processing, explainability (categorie e discipline)", "feature engineering, model evaluation (pratiche)", "linear algebra, statistics, calculus (materie)", "M.Sc. (titolo)"],
+   "nota": "il contrario di #32, #41 e #144: un annuncio ML che nomina tutto. Il golden ha entrambi i casi, ed e' quello che serve per misurare le invenzioni"},
+
+  {"n": 200, "id": "87cb1b79-d4df-43a6-83b1-59c859d1c736", "titolo": "License Owner & Operator, Sofia (Stranger Soccer)",
+   "tecnologie": [],
+   "escluse": ["Stranger Soccer app, platform (nome del datore piu' la parola «app»: come Housecall Pro al #154)", "digital and local initiatives (generico)"]}
+ ],
+ "dubbi": [
+  "#186: le tecnologie rinnovabili (onshore wind, offshore wind, solar PV, concentrated solar) sono messe come servizio perche' sono cio' su cui AFRY lavora per i clienti. Sono categorie tecnologiche, non prodotti: e' la stessa scelta fatta per i sistemi di depurazione al #166.",
+  "#187: «stablecoin» e «Visa» come servizio. Visa e' un circuito di pagamento nominato nel prodotto dell'azienda; stablecoin e' una tecnologia il cui nome e' la tecnologia stessa.",
+  "#192: «menu engineering» e' un metodo con un corpo definito nell'alberghiero, tenuto per la regola dei metodi (Six Sigma, Scrum). «Plan de Maitrise Sanitaire» e' l'attuazione francese dell'HACCP, quindi dentro come HACCP; se lo si leggesse come obbligo di legge, uscirebbe.",
+  "#194: «Warenwirtschaft» e' la categoria tedesca del gestionale di magazzino, tenuta per coerenza con ERP e CRM. «Self-Scanning» e' una tecnologia di cassa nominata, e su un annuncio da libraio e' proprio il tipo di voce che il mercato cerca e i dizionari non hanno.",
+  "#199: le sei piattaforme media (Facebook, Google, Instagram, Pinterest, Snap, TikTok) sono messe come servizio: il prodotto di Smartly gira su di esse. Al #105 i link social nel piede della pagina erano invece esclusi — la differenza e' che qui sono il mercato del prodotto.",
+  "#200: «Stranger Soccer app» escluso perche' e' il nome del datore piu' la parola «app», come Housecall Pro al #154. Se l'app avesse un nome proprio diverso, entrerebbe."
+ ]
+}

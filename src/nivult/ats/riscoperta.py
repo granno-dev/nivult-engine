@@ -35,7 +35,21 @@ _ATS_HOST = re.compile(
     r"eightfold|avature|phenom|jobvite|cornerstone|csod\.com|taleo|"
     r"adp\.com|paylocity|dvinci|talentsoft|intervieweb|arbetsformedlingen|"
     r"europa\.eu|francetravail|hirehive|homerun|freshteam|comeet|"
-    r"pageup|radancy|jibeapply|smartjobboard|jazz\.co|jazzhr", re.I)
+    r"pageup|radancy|jibeapply|smartjobboard|jazz\.co|jazzhr|"
+    # Aggiunti il 19/09/2026 dopo aver trovato 457 aziende diverse — Barry's
+    # Bootcamp, Appriss Retail, Black Kite — tutte con dominio `rippling.com`.
+    # Era il loro ATS, non la loro azienda: bastava non essere in questa lista.
+    r"rippling|careerpuck|recruiterbox|paycom|paycor|ukg\.com|"
+    # aggiunti il 19/09/2026: 336 bacheche Zoho erano finite in archivio come
+    # domini aziendali, perche' zohorecruit non era in nessuna delle due liste
+    r"zohorecruit|catsone|vincere|cornerstone|csod|pinpointhq|jobsoid|trakstar|"
+    r"homerun|freshteam|comeet|softgarden|heavenhr|traffit|taleez|hirehive|"
+    r"jobscore|applicantstack|niceboard|crelate|hiringthing|eightfold|avature|"
+    r"phenom|pageup|radancy|jibeapply|smartjobboard|werecruit|digitalrecruiters|"
+    r"dvinci|talentsoft|oraclecloud|paylocity|"
+    r"gusto\.com|hibob|justworks|trinet|deel\.com|oysterhr|"
+    r"wantremote\.com|jobsthatareremote\.com|"
+    r"cloud\.sap|sapsf\.", re.I)
 
 # suffissi a due livelli piu' comuni (co.uk, com.au...): per non troncare male
 _TLD2 = {"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au",

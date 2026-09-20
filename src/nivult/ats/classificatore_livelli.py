@@ -186,14 +186,27 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True,
     # prendi le offerte non classificate
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # `livelli_at` marca le offerte GUARDATE, non quelle riuscite.
+            # Senza, ogni giro ripescava le stesse: misurato il 10/09/2026,
+            # 12.791 su 20.000 non erano classificabili col dizionario, e
+            # restando senza famiglia tornavano nel lotto dopo un'ora, per
+            # sempre. Il marcatore scade dopo 7 giorni perche' il livello 2
+            # (fuzzy sui titoli gia' noti) migliora man mano che il database
+            # si riempie: un titolo oggi ignoto puo' diventare noto domani.
             cur.execute("""
                 SELECT j.id, j.title, j.platform_id, j.raw, j.slug
                   FROM ats_jobs j
              LEFT JOIN job_classifications c ON c.job_id = j.id
                  WHERE c.job_id IS NULL AND j.expired_at IS NULL
+                   AND (j.livelli_at IS NULL
+                        OR j.livelli_at < now() - interval '7 days')
                  LIMIT %s
             """, (limite,))
             offerte = cur.fetchall()
+    if offerte:
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            conn.execute("UPDATE ats_jobs SET livelli_at = now() WHERE id = ANY(%s::uuid[])",
+                         ([o[0] for o in offerte],))
 
     # livello 3: inizializza GLM solo se serve
     modello = None

@@ -110,7 +110,8 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                        AND j.platform_id = ANY(%s)
                        AND EXISTS (SELECT 1 FROM ats_companies c
                                     WHERE c.platform_id = j.platform_id AND c.slug = j.slug
-                                      AND c.last_ok_at > j.fetched_at)
+                                      AND c.last_ok_at > j.fetched_at
+                                      AND c.lettura_parziale = false)   -- 14/09: mai da un elenco incompleto
                      GROUP BY 1),
                 att AS (
                     SELECT platform_id, count(*) AS tot FROM ats_jobs
@@ -130,7 +131,8 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
                    AND NOT (j.platform_id = ANY(%s))
                    AND EXISTS (SELECT 1 FROM ats_companies c
                                 WHERE c.platform_id = j.platform_id AND c.slug = j.slug
-                                  AND c.last_ok_at > j.fetched_at)
+                                  AND c.last_ok_at > j.fetched_at
+                                  AND c.lettura_parziale = false)   -- 14/09: mai da un elenco incompleto
                 RETURNING j.id
             """, (giorni, con_adapter, escluse))
             n = cur.rowcount

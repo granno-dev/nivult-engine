@@ -21,6 +21,26 @@ la conosce: discovery, eventualmente adapter, tutto parte da qui.
 # Il catalogo. Ordinato per priorità: prima le piattaforme con più aziende
 # europee e API facili, poi quelle difficili.
 REGISTRY = [
+    {
+        "id": "rippling",
+        "name": "Rippling ATS",
+        "url_pattern": r"ats\.(?:us1\.)?rippling\.com/([^/?#]+)/jobs",
+        "api_type": "html",
+        "api_endpoint": "https://ats.rippling.com/{slug}/jobs",
+        "cc_search": "ats.rippling.com/*/jobs",
+        "market": "Startup e PMI USA",
+        "priority": 2,
+    },
+    {
+        "id": "applicantstack",
+        "name": "ApplicantStack",
+        "url_pattern": r"https?://([a-z0-9-]+)\.applicantstack\.com/x/openings",
+        "api_type": "html",
+        "api_endpoint": "https://{slug}.applicantstack.com/x/openings",
+        "cc_search": "*.applicantstack.com/x/openings",
+        "market": "PMI USA",
+        "priority": 3,
+    },
     # ── PIATTAFORME CON API JSON PUBBLICA (facili, subito utilizzabili) ──
     {
         "id": "greenhouse",

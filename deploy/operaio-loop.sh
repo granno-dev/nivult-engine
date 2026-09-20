@@ -37,22 +37,115 @@ with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=True) as c:
               (json.dumps(nota),))
 EOF
 }
+# La fascia silenziosa: il N5 sta in casa e la ventola si sente. Fra le
+# 23:30 e le 7:00 (ora di Roma) il detector scende da 24 thread a 6, il
+# render non parte e i lotti si accorciano; nivult-v1 rallenta per conto
+# suo (NOTTE_RIPOSO in classifica_v1.py). Costo misurato l'08/09/2026:
+# l'arretrato del modello si smaltisce in due giorni invece di uno, e le
+# offerte nuove restano coperte comunque — ne entrano 9.700 l'ora contro
+# le 22.000 che v1 fa anche al minimo.
+# 18/09/2026: SPENTA. Giuseppe: «il rumore del N5 non mi da' fastidio». Erano sette
+# ore e mezza al giorno a capacita' ridotta — thread da 24 a 6, classificatore a
+# livelli fermo, v1 a scatti.
+#
+# 20/09/2026, 01:10: RIACCESA, e questa volta copre anche mT5. Giuseppe, di notte:
+# «la ventola va a palla e io non dormo piu'; l'avevo detto di giorno e mi sbagliavo».
+# Misurato in quel momento: carico di sistema 1,88 (basso) ma iGPU al 99% e 64 gradi.
+# La ventola di un mini-PC segue il package, e la scheda integrata sta nel package:
+# quindi il rumore non dipende dal carico ma dall'occupazione della scheda.
+#
+# La fascia copriva rilevatore, render e v1, NON mT5 — che sta in un ciclo suo
+# (nivult-n5.sh) e da solo teneva la scheda al 99%: riaccenderla senza toccarlo non
+# avrebbe fatto tacere niente. La pausa di mT5 e' finita DENTRO il demone, fra un
+# lotto e l'altro (sintesi_mt5.py, fascia_silenziosa()), perche' nel ciclo esterno
+# non funzionava: quello controlla l'ora solo prima di lanciarlo, e il demone gira
+# con --continuo e non esce mai. Costo: zero, le sintesi alimentano un digest che
+# non ha ancora utenti. Effetto misurato: scheda dal 99% allo 0%, 64 gradi -> 55.
+#
+# Interruttore unico per tutti e tre:
+#   accendi:  touch /opt/nivult/engine/logs/.fascia-silenziosa
+#   spegni:   rm    /opt/nivult/engine/logs/.fascia-silenziosa
+notte() {
+  [ -f /opt/nivult/engine/logs/.fascia-silenziosa ] || return 1
+  local h=$(TZ=Europe/Rome date +%H%M); [ $((10#$h)) -ge 2330 ] || [ $((10#$h)) -lt 700 ]
+}
+
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
   battito "inizio giro"
+  if notte; then THREAD=6; RILEVA=400; RIPASSA=150; JSONLD=60; DETTAGLIO=1000
+             else THREAD=24; RILEVA=1500; RIPASSA=600; JSONLD=300; DETTAGLIO=5000; fi
   # Il classificatore a dizionario e' sequenziale (un core) e sull'arretrato
   # trova poco (1.032 famiglie in 10 minuti il 06/09: quei casi li copre lo
   # sprint GLM). Lotti piccoli e pause lunghe: un core in boost a 77 °C
   # faceva girare la ventola del N5 «a palla» — parola di Giuseppe.
-  nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
+  # Il classificatore a livelli (dizionario + fuzzy sui titoli) e' il
+  # passo che scalda i 16 core, e sull'arretrato rende l'1,8% a giro:
+  # 300-500 classificate su 20.000 viste, sempre le stesse che non sa
+  # leggere (misurato la notte del 06/09/2026, mentre GLM ne faceva
+  # 28.000 l'ora). Con il file di pausa il passo si salta; si toglie
+  # quando lo sprint GLM finisce o quando arriva nivult v1.
+  # Il classificatore a livelli era in pausa dal 07/09 perche' rendeva
+  # l'1,8% a giro e scaldava i 16 core: v1 aveva appena passato tutto e non
+  # restava niente da raccogliere. Rimisurato il 10/09: **7.209 famiglie su
+  # 20.000 viste, il 36%**. Il motivo era scaduto — le 306.000 offerte senza
+  # famiglia sono quelle su cui v1 ha visto ma non era sicuro, e il
+  # dizionario le prende. Senza famiglia un'offerta non arriva a nessuno.
+  # Resta fuori dalla fascia silenziosa: e' lui che scalda i core, non la GPU.
+  if [ -f /opt/nivult/engine/logs/.classificatore-pausa ]; then
+    echo "-- classificatore a livelli in pausa (logs/.classificatore-pausa)"
+  elif notte; then
+    echo "-- classificatore a livelli: fermo di notte (scalda i 16 core)"
+  else
+    nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
+  fi
+  # nivult-v1 (mmBERT, 5 teste) sulla GPU: 26 offerte/s misurate il 07/09.
+  # Famiglia solo sopra la soglia del 95% (0.75); seniority/contratto/remoto
+  # solo dove mancano; lingue richieste dove mancano.
+  # nivult-v1 gira come DEMONE a parte (--continuo), non dentro il giro:
+  # cosi' non aspetta gli altri passi e la GPU lavora sempre.
+  if ! pgrep -f "nivult.ats.classifica_v1 --continuo" >/dev/null; then
+    nohup nice -n 5 $PY -m nivult.ats.classifica_v1 --continuo >> /opt/nivult/engine/logs/classifica-v1.log 2>&1 &
+    echo "-- nivult-v1 avviato come demone"
+  fi
+  # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
+  # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
+  nice -n 10 $PY -m nivult.ats.dichiarati --limite 200000 2>&1 | tail -1 || true
+  # La lettura di dettaglio SUBITO, non di notte: SuccessFactors, Rippling,
+  # Breezy, Oracle entrano dall'elenco senza testo, e senza testo nessun
+  # campo si legge ne' si stima (08/09/2026: 0% di testo sulle SF nuove).
+  # 5.000 pagine per giro, le piu' recenti prima.
+  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
+  # La SCOPERTA sta qui, non sul server: crawling a molti thread verso
+  # migliaia di siti diversi, che sul server a 4 vCPU portava il carico a 33
+  # (07/09/2026). Il ripasso del detector rilegge i domini «no_ats» con le
+  # impronte nuove; la scoperta jsonld cerca sitemap + JobPosting.
+  # I domini nuovi (pending: censimento CC, bacheche dei fornitori, certificati)
+  # prima, poi il ripasso dei no_ats. Stava nel volano del server (800 ogni
+  # 10 min): col censimento europeo da centomila domini serve il N5.
+  nice -n 10 $PY -m nivult.ats.detector --rileva --limite $RILEVA --thread $THREAD 2>&1 | grep -E "Detector|visitati|Traceback" | tail -1 || true
+  nice -n 10 $PY -m nivult.ats.detector --ripassa --limite $RIPASSA --thread $THREAD 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
+  nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite $JSONLD --thread $THREAD 2>&1 | tail -1 || true
+  # Il paese delle offerte, ogni 6 ore e non solo di notte: dal testo
+  # della localita' (riempie e corregge) e, per chi non ce l'ha, il
+  # dominante dell'azienda. Stanotte 07/09/2026 il passo notturno e'
+  # morto per un deadlock e 150.000 offerte sono rimaste fuori dai
+  # cluster fino a sera: qui si recupera entro sei ore, sempre.
+  TIMBRO_PAESE=/opt/nivult/engine/logs/.paese.timbro
+  if [ ! -f "$TIMBRO_PAESE" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO_PAESE") )) -gt 21600 ]; then
+    echo "-- arricchisci paese (da-localita, da-azienda)"
+    nice -n 10 $PY -m nivult.ats.arricchisci --da-localita 2>&1 | grep -E "Da localita|Traceback|Error" | tail -2 || true
+    nice -n 10 $PY -m nivult.ats.arricchisci --da-azienda 2>&1 | grep -E "Da azienda|Traceback|Error" | tail -2 || true
+    touch "$TIMBRO_PAESE"
+  fi
   # Render detector (Chrome headless) una volta al giorno: sul server era il
   # piu' goloso di RAM (8 processi uccisi dal kernel il 05/09); qui ha 48 GB
   # e un IP residenziale che i career site bloccano meno.
   TIMBRO=/opt/nivult/engine/logs/.render-detector.timbro
-  if [ ! -f "$TIMBRO" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO") )) -gt 82800 ]; then
+  if ! notte && { [ ! -f "$TIMBRO" ] || [ $(( $(date +%s) - $(stat -c %Y "$TIMBRO") )) -gt 82800 ]; }; then
     echo "-- render detector (60 grandi)"
     nice -n 10 $PY -m nivult.ats.detector --render --limite 60 --dip-minimi 3000 --thread 2 2>&1 | tail -2 || true
     touch "$TIMBRO"

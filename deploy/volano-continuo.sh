@@ -26,9 +26,16 @@ while true; do
   if [ $((i % 6)) -eq 0 ]; then
     "$PY" -m nivult.ats.riscoperta 2>&1 | tail -1 || true
   fi
-  "$PY" -m nivult.ats.detector --rileva --limite 800 --thread 20 2>&1 \
-    | tail -1 || true
   "$PY" -m nivult.ats.risolutore_vanity --limite 250 2>&1 | tail -1 || true
+  # il detector (pending e ripasso) e la scoperta jsonld girano sul N5 (operaio-loop.sh):
+  # sono crawling a molti thread, e sul server a 4 vCPU hanno portato il carico a 33
+  # NAV (Norvegia): feed di eventi dal cursore; le INACTIVE scadono subito,
+  # come chiedono i termini d'uso
+  "$PY" -m nivult.ats.servizi_pubblici --nav --limite 3000 2>&1 | tail -1 || true
+  # Il rubinetto SmartRecruiters: la vetrina del fornitore mostra sempre le
+  # ~96 offerte piu' recenti del mondo con l'identificativo del tenant.
+  # Letta ogni giro, enumera nel tempo chi pubblica (07/09/2026).
+  "$PY" scripts/censimento_smartrecruiters.py 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.mantenimento --expira 2>&1 | tail -1 || true
   pid=${POTA[$((i % ${#POTA[@]}))]}
   "$PY" -m nivult.ats.potatura --piattaforma "$pid" --limite 300 2>&1 \

@@ -1,0 +1,126 @@
+{
+ "lotto": 3,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "CORREZIONE ALLA RUBRICA, trovata qui: la rubrica elencava GDPR fra le tecnologie, e la regola scritta nel lotto 2 esclude le leggi. GDPR e' una legge come SOX, quindi ESCE; ISO27001, SOC2, CyberEssentials, OWASP restano, perche' sono impianti che si costruiscono e su cui si viene certificati. La rubrica va corretta, non l'etichetta.",
+  "Le sigle di CATEGORIA di software (ERP, MES, APS, CRM, HCM, GED, PLM) restano dentro: nominano un tipo di sistema che l'azienda ha davvero, ed e' cosi' che il mercato le cerca. Le sigle di PROCESSO (P2P, DFM, EBOM, KPP) restano fuori."
+ ],
+ "offerte": [
+  {"n": 41, "id": "80ca4fa9-c305-45b0-86d2-0bbc6ce5cef7", "titolo": "Senior Staff AI Engineer (iFood)",
+   "tecnologie": [],
+   "escluse": ["IA, LLMs, agentes autonomos, aprendizado de maquina (discipline e categorie)", "system design, engenharia de software (discipline)"],
+   "nota": "secondo annuncio di alto profilo AI senza un solo strumento nominato (vedi #32): il generativo qui vuole inventare PyTorch"},
+
+  {"n": 42, "id": "7f4d3b58-b3fe-4c16-818f-e9b8ba146dc3", "titolo": "TikTok Channel Manager (Creative Fabrica)",
+   "tecnologie": [{"nome": "TikTok", "ruolo": "usata"}, {"nome": "CapCut", "ruolo": "usata"},
+                  {"nome": "Premiere Pro", "ruolo": "usata"}, {"nome": "Studio AI", "ruolo": "servizio"},
+                  {"nome": "Instagram Reels", "ruolo": "gradita"}, {"nome": "YouTube Shorts", "ruolo": "gradita"}],
+   "escluse": ["hooks, retention, watch time (mestiere del formato breve)", "SVG, fonts, templates (catalogo del datore)"]},
+
+  {"n": 43, "id": "1409ad84-aba0-4d6b-9572-d506194bda71", "titolo": "Warfighting Systems Analyst, Maritime (Anduril)",
+   "tecnologie": [{"nome": "Lattice Mission Simulation", "ruolo": "usata"}, {"nome": "AFSIM", "ruolo": "usata"},
+                  {"nome": "Brawler", "ruolo": "usata"}, {"nome": "Suppressor", "ruolo": "usata"},
+                  {"nome": "ESAMS", "ruolo": "usata"}, {"nome": "Command PE", "ruolo": "usata"},
+                  {"nome": "C++", "ruolo": "usata"}, {"nome": "Python", "ruolo": "usata"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}, {"nome": "Tableau", "ruolo": "gradita"},
+                  {"nome": "MATLAB/SIMULINK", "ruolo": "gradita"}],
+   "escluse": ["ORSA, M&S, MBSE (discipline)", "KPP, KSA, MOE, MOP (metriche)", "U.S. Secret clearance (autorizzazione personale)"]},
+
+  {"n": 44, "id": "7abdfd66-fbfb-4ccb-a80c-7b1b5255b5ae", "titolo": "Registered Practical Nurse - 14 East",
+   "tecnologie": [{"nome": "Meditech", "ruolo": "gradita"}],
+   "escluse": ["BCLS/CPR, registrazione RPN (certificazioni personali)", "electronic health records, computerized physician order entry, surgical tracking systems (categorie senza nome proprio, e sono l'ospedale che si descrive)", "diploma biennale (titolo)"]},
+
+  {"n": 45, "id": "1b86eed6-faa5-43af-b325-022c9bc9e312", "titolo": "Ambulancier / Ambulanciere (H/F)",
+   "tecnologie": [],
+   "escluse": ["DEA, AFGSU2, attestation prefectorale (titoli e abilitazioni personali)", "desinfection du vehicule (attivita')"]},
+
+  {"n": 46, "id": "4155d2e6-f654-4f53-9934-15748e62a1f0", "titolo": "Ingenieur Qualite Production H/F (ALTEN)",
+   "tecnologie": [{"nome": "AMDEC", "ruolo": "usata"}, {"nome": "8D", "ruolo": "usata"},
+                  {"nome": "PFMEA", "ruolo": "usata"}],
+   "escluse": ["plans de controle, capabilites (documenti e indicatori)", "outils bureautiques (nessuno strumento nominato)", "Bac+5 (titolo)"]},
+
+  {"n": 47, "id": "42edc8e1-1b87-41cd-bbe6-f14e9b7f4b56", "titolo": "Regleur Plasturgie (h/f)",
+   "tecnologie": [{"nome": "presses a injection", "ruolo": "usata"},
+                  {"nome": "machines de moulage", "ruolo": "usata"}],
+   "escluse": ["materiaux plastiques (materiali)", "CFP, CQP, CCP, Bac Pro, BTS (titoli)", "maintenance preventive, changement de serie (attivita')"],
+   "nota": "mestiere manuale con tecnologie vere: le presse a iniezione sono macchine nominate, e nessun dizionario di tecnologie le contiene"},
+
+  {"n": 48, "id": "e370ee55-f012-44f9-a822-27ab3ee63c4a", "titolo": "Medical Director - VetCare",
+   "tecnologie": [{"nome": "IDEXX", "ruolo": "usata"}, {"nome": "Digital radiology", "ruolo": "usata"},
+                  {"nome": "Ultrasound", "ruolo": "usata"}],
+   "escluse": ["Laser therapy, Acupuncture, Orthopedic surgery (prestazioni, non strumenti nominati)", "DVM, state license, CE allowance (titoli e benefit)", "AVMA PLIT (assicurazione)"]},
+
+  {"n": 49, "id": "3757e01e-a925-416d-844d-f32ef05ae0c1", "titolo": "Marketing Coordinator - Croatia (Betsson)",
+   "tecnologie": [{"nome": "Microsoft Office", "ruolo": "usata"}, {"nome": "Excel", "ruolo": "usata"}],
+   "escluse": ["Croatian, English (lingue)", "budgeting, invoicing, project management (processi)"]},
+
+  {"n": 50, "id": "197594b7-f3b4-4576-a6fd-edb9aeaca89e", "titolo": "IT Operations & Security Specialist (digiLab)",
+   "tecnologie": [{"nome": "Windows", "ruolo": "usata"}, {"nome": "Mac", "ruolo": "usata"},
+                  {"nome": "CyberEssentials", "ruolo": "usata"}, {"nome": "ISO27001", "ruolo": "usata"},
+                  {"nome": "SOC2", "ruolo": "usata"}, {"nome": "VPN", "ruolo": "usata"},
+                  {"nome": "Wi-Fi", "ruolo": "usata"}, {"nome": "Uncertainty Engine", "ruolo": "servizio"}],
+   "escluse": ["GDPR (legge: vedi la correzione alla rubrica nelle note)", "WAN/LAN (topologia generica)", "uncertainty quantification (disciplina)", "printer troubleshooting (attivita')"]},
+
+  {"n": 51, "id": "a42f664c-6eb5-464b-88f0-f197e177e6c8", "titolo": "Senior ECAD Library & Engineering Data Engineer (Zipline)",
+   "tecnologie": [{"nome": "Altium Designer", "ruolo": "usata"}, {"nome": "Altium 365 Workspace", "ruolo": "usata"},
+                  {"nome": "Concord Pro", "ruolo": "usata"}, {"nome": "NEXUS", "ruolo": "usata"},
+                  {"nome": "Altium Vault", "ruolo": "usata"}, {"nome": "IPC-7351", "ruolo": "usata"},
+                  {"nome": "Python", "ruolo": "usata"}, {"nome": "SQL", "ruolo": "usata"},
+                  {"nome": "PLM", "ruolo": "usata"}, {"nome": "ERP", "ruolo": "usata"},
+                  {"nome": "Teamcenter", "ruolo": "gradita"}],
+   "escluse": ["DFM, EBOM, MBOM, AML, AVL (concetti di dato e processo)", "pad stacks, land patterns (oggetti del mestiere, non strumenti)"]},
+
+  {"n": 52, "id": "ce9787ee-48a6-43e9-a817-2c3b3e853134", "titolo": "Global Product Owner, Manufacturing Systems (Embla Medical)",
+   "tecnologie": [{"nome": "ERP", "ruolo": "usata"}, {"nome": "MES", "ruolo": "usata"},
+                  {"nome": "APS", "ruolo": "usata"}],
+   "escluse": ["master data, enterprise architecture, shop-floor systems (categorie senza nome)", "target operating model, governance (processi)"]},
+
+  {"n": 53, "id": "944986a6-8535-4378-9b74-220301df8148", "titolo": "Kfz Schnellservice Monteur (ATU)",
+   "tecnologie": [],
+   "escluse": ["Reifenwechsel, Olwechsel, Batterietausch (attivita')", "Fuhrerschein Klasse B (patente)", "Deutschkenntnisse (lingua)"],
+   "nota": "meccanico senza nessuna macchina nominata: il confronto con il #47 mostra che la differenza sta nell'annuncio, non nel mestiere"},
+
+  {"n": 54, "id": "6dbc85d1-1e21-4a11-b7cd-1e5b4785c016", "titolo": "Heilerziehungspfleger (m/w/d) (Alloheim)",
+   "tecnologie": [],
+   "escluse": ["Medikamentenvergabe, Pflegeprotokolle (attivita')", "IT-Affinitat (attitudine generica)", "Alloheim Academy (formazione del datore)"]},
+
+  {"n": 55, "id": "7e6b6f42-c093-4e11-b0b2-cd64786cddfa", "titolo": "Content Manager (Polonia)",
+   "tecnologie": [],
+   "escluse": ["SEO, content strategy, editorial planning (pratiche)", "website management (attivita', nessun CMS nominato)"]},
+
+  {"n": 56, "id": "7223272f-0c3c-4572-82c5-e033f2a404fe", "titolo": "Sales Engineer Warmte en Koude (Vattenfall)",
+   "tecnologie": [{"nome": "geothermie", "ruolo": "usata"},
+                  {"nome": "warmte-koudeopslag", "ruolo": "usata"},
+                  {"nome": "warmtenetten", "ruolo": "servizio"}],
+   "escluse": ["restwarmte, oppervlaktewater (fonti di energia, non tecnologie)", "verwarmings-, koel- en tapwaterinstallaties (impianti generici)", "hbo (titolo)"]},
+
+  {"n": 57, "id": "6ec77f59-34a0-4f10-a3af-fc0ea954236f", "titolo": "People Operations Specialist - HR Generalist (Endava)",
+   "tecnologie": [{"nome": "Oracle", "ruolo": "usata"}, {"nome": "ZUS PUE", "ruolo": "usata"},
+                  {"nome": "HCM", "ruolo": "usata"}, {"nome": "Microsoft Office", "ruolo": "usata"},
+                  {"nome": "Excel", "ruolo": "usata"}, {"nome": "Word", "ruolo": "usata"},
+                  {"nome": "Outlook", "ruolo": "usata"}],
+   "escluse": ["SOX (legge)", "PPK, PIT-11, AKUP (strumenti amministrativi e fiscali polacchi)", "polacco, inglese (lingue)"]},
+
+  {"n": 58, "id": "e72d5e44-f15b-4e83-9b2c-fcd3c7cb41b1", "titolo": "Tragwerksplaner (m/w/d)",
+   "tecnologie": [],
+   "escluse": ["Holz (materiale)", "annuncio quasi tutto presentazione aziendale: nessun requisito tecnico scritto"]},
+
+  {"n": 59, "id": "5d523631-3c63-4cda-a194-73e2274ab8f4", "titolo": "Executive Assistant (London & Partners)",
+   "tecnologie": [],
+   "escluse": ["stakeholder management, coordinamento (processi)"]},
+
+  {"n": 60, "id": "f144dc95-a440-46b4-bb32-1d196cb16975", "titolo": "Food Service Worker (Wegmans)",
+   "tecnologie": [],
+   "escluse": ["food preparation, storage, rotation, merchandising (attivita')"]}
+ ],
+ "dubbi": [
+  "#42: «TikTok» come tecnologia. Dentro perche' e' una piattaforma con nome proprio su cui il lavoro si svolge, ed e' come il mercato cercherebbe questo profilo. Un revisore potrebbe chiamarla un canale.",
+  "#43: «Lattice OS» e' il prodotto di Anduril, non uno strumento dell'analista: messo come 'servizio'. «Lattice Mission Simulation» invece l'analista lo usa: 'usata'.",
+  "#46: AMDEC, 8D e PFMEA sono metodi della qualita' con un corpo definito, come Six Sigma nella rubrica. E' il caso in cui un dizionario di tecnologie informatiche non vedrebbe niente e l'annuncio invece e' pieno.",
+  "#48: «Digital radiology» e «Ultrasound» sono tipi di apparato, non marche. Dentro per la regola dei macchinari; IDEXX invece e' una marca e non ha dubbi.",
+  "#50: qui ho corretto la rubrica contro me stesso. GDPR ci era finito dentro, ma e' una legge, e la regola del lotto 2 escludeva SOX per lo stesso motivo. Tolgo GDPR e tengo ISO27001/SOC2/CyberEssentials.",
+  "#56: «geothermie» e «warmte-koudeopslag» sono tecnologie energetiche con nome proprio in olandese. Terzo caso di settore non informatico dove le tecnologie esistono ma in una lingua e un vocabolario che nessun dizionario copre."
+ ]
+}

@@ -45,6 +45,7 @@ TETTO_FAM = 20000
 PAVIMENTO_FAM = 3000
 QUOTA_SENZA_TESTO = 0.20
 QUOTA_ESAME_AZIENDE = 0.05        # 5% delle aziende va all'esame/validazione
+AZIENDA_GRANDE = 300              # sopra questi annunci un'azienda dell'esame a mano NON viene riservata per intero
 AMBIGUE = {"Trades", "Construction", "Retail", "Sales", "Finance & Accounting",
            "Consulting", "Food & Beverage", "Hospitality", "Transportation",
            "Logistics", "Software", "Technology", "Management & Leadership",
@@ -53,12 +54,32 @@ AMBIGUE = {"Trades", "Construction", "Retail", "Sales", "Finance & Accounting",
 _TAG = re.compile(r"<[^>]+>")
 
 
-def pulisci(t: str | None, n: int = 1000) -> str:
+def pulisci(t: str | None, n: int | None = None) -> str:
     """Prima le entita' (due volte: phenom e freshteam codificano l'HTML
     intero come &lt;p&gt;), poi i tag, poi gli spazi. Misurato il 06/09
-    sulla prima versione: il 54% delle righe portava &nbsp;/&lt; nel testo."""
+    sulla prima versione: il 54% delle righe portava &nbsp;/&lt; nel testo.
+
+    NESSUN TAGLIO per difetto (era 1000 caratteri fino al 13/09/2026): la
+    mediana reale degli annunci e' 4.150 caratteri, e il vecchio tetto
+    buttava via i tre quarti del testo. `[:None]` restituisce tutto."""
     import html
-    t = html.unescape(html.unescape(t or ""))
+    t = t or ""
+    # Arbetsförmedlingen (e qualche Ashby/Workable) salvano la descrizione
+    # come JSON serializzato: {"text": "…"} o {"description": …}. Il modello
+    # non deve imparare le graffe (3.891 righe, misurato il 07/09).
+    s = t.lstrip()
+    if s[:1] in "{[":
+        try:
+            d = json.loads(s)
+            if isinstance(d, dict):
+                t = str(d.get("text") or d.get("description") or d.get("descriptionPlain") or "")
+                if not t:
+                    t = " ".join(str(v) for v in d.values() if isinstance(v, str))
+            elif isinstance(d, list):
+                t = " ".join(str(x) for x in d if isinstance(x, str))
+        except ValueError:
+            pass
+    t = html.unescape(html.unescape(t))
     t = _TAG.sub(" ", t).replace("\xa0", " ")
     return re.sub(r"\s+", " ", t).strip()[:n]
 
@@ -84,6 +105,11 @@ def lato_azienda(azienda: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dopo", default="2026-09-06T08:30:00+00:00")
+    ap.add_argument("--escludi-piattaforme", default="",
+                    help="piattaforme da tenere FUORI (virgole): per quelle il cui testo non e' affidabile")
+    ap.add_argument("--escludi-chimere", default="icims,workday,cornerstone,eploy,traffit,pinpoint,vincere",
+                    help="piattaforme con id PER TENANT: una riga il cui URL non contiene lo slug e' una chimera "
+                         "(titolo/URL di un tenant, testo di un altro: chiave (piattaforma, external_id) in collisione)")
     ap.add_argument("--golden-mano", default=None)
     ap.add_argument("--out", default="/opt/nivult/v1")
     a = ap.parse_args()
@@ -96,6 +122,26 @@ def main() -> int:
                     j.platform_id || '/' || j.slug
                FROM ats_jobs j JOIN job_classifications x ON x.job_id = j.id
               WHERE j.title IS NOT NULL AND length(j.title) > 2 AND {modello}"""
+    # Piattaforme escluse per intero: se il testo e' di un altro annuncio
+    # (iCIMS, 07/09/2026: 0 su 25 testi salvati stavano nella pagina viva),
+    # anche l'etichetta GLM e' presa da quel testo, e non si salva niente
+    # tenendo il solo titolo.
+    escluse = [p.strip() for p in a.escludi_piattaforme.split(",") if p.strip()]
+    if escluse:
+        # ARRAY[...] e non '{...}': SEL passa da .format(), e le graffe lo rompono
+        SEL += " AND NOT (j.platform_id = ANY(ARRAY[" + ",".join("'%s'" % p.replace("'", "") for p in escluse) + "]))"
+        print(f"  piattaforme escluse: {escluse}", flush=True)
+    # Le CHIMERE (07/09/2026): su iCIMS, Workday e simili l'id dell'annuncio
+    # e' unico per TENANT, ma la chiave dell'archivio e' (piattaforma, id):
+    # il job 14145 di un tenant sovrascrive titolo e URL del 14145 di un
+    # altro e il testo resta quello vecchio. Misurato: iCIMS 33%, Workday
+    # 7% delle attive con URL di un altro tenant. Fuori dal dataset finche'
+    # la chiave non diventa (piattaforma, tenant, id).
+    chimere = [p.strip() for p in a.escludi_chimere.split(",") if p.strip() and p.strip() not in escluse]
+    if chimere:
+        SEL += (" AND NOT (j.platform_id = ANY(ARRAY[" + ",".join("'%s'" % p.replace("'", "") for p in chimere)
+                + "]) AND j.url NOT ILIKE '%%' || j.slug || '%%')")
+        print(f"  chimere escluse (URL senza slug) su: {chimere}", flush=True)
     print("estrazione rubrica...", flush=True)
     rubrica = c.execute(SEL.format(modello="x.model = 'glm-5.3-flash'") + " AND j.sprint_at >= %s",
                         (a.dopo,)).fetchall()
@@ -116,6 +162,7 @@ def main() -> int:
     # --- esame a mano: autorita'; le sue aziende vanno tutte al lato esame
     escludi_id: set[str] = set()
     aziende_esame: set[str] = set()
+    grandi: set[str] = set()
     golden: list[dict] = []
     if a.golden_mano:
         for g in json.load(open(a.golden_mano)):
@@ -126,8 +173,19 @@ def main() -> int:
             ([g["id"] for g in golden],)).fetchall()}
         for g in golden:
             g["azienda"] = az_mano.get(g["id"])
-        aziende_esame |= set(az_mano.values())
-        print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame)")
+        # Le aziende dell'esame a mano vanno tutte al lato esame — ma solo
+        # se PICCOLE. Le agenzie per il lavoro italiane (Gi Group, Manpower,
+        # Umana…) hanno migliaia di annunci ciascuna: riservarle all'esame
+        # per 3-4 casi giudicati a mano toglieva dal training 25.000 delle
+        # 34.000 righe italiane (07/09/2026: l'Italia era all'1%). Per le
+        # grandi bastano le difese di riga: id esclusi e testo-fotocopia.
+        conte = {r[0]: r[1] for r in c.execute(
+            "SELECT platform_id || '/' || slug, count(*) FROM ats_jobs WHERE platform_id || '/' || slug = ANY(%s) "
+            "GROUP BY 1", (list(set(az_mano.values())),)).fetchall()}
+        grandi = {az for az, n in conte.items() if n >= AZIENDA_GRANDE}
+        aziende_esame |= set(az_mano.values()) - grandi
+        print(f"  golden a mano: {len(golden)} ({len(aziende_esame)} aziende riservate all'esame; "
+              f"{len(grandi)} grandi lasciate al training: {sorted(grandi)[:6]}…)")
 
     # --- dedup + divisione per azienda
     visti_dup: set[str] = set()
@@ -201,7 +259,9 @@ def main() -> int:
     fuga_id = sum(1 for g in golden if g["id"] in id_train)
     az_gold = set(a_ for a_ in (az_mano.values() if a.golden_mano else []))
     az_gold |= {g["azienda"] for g in golden if g.get("azienda")}
-    fuga_az = len(az_gold & az_train)
+    # le aziende GRANDI dell'esame a mano stanno nel training per scelta
+    # (vedi sopra): la fuga per azienda si misura sulle altre
+    fuga_az = len((az_gold - grandi) & az_train)
     assert fuga_id == 0, f"FUGA: {fuga_id} id dell'esame nel training"
     assert fuga_az == 0, f"FUGA: {fuga_az} aziende dell'esame nel training"
 

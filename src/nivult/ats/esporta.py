@@ -31,10 +31,7 @@ log = logging.getLogger("nivult.ats.esporta")
 
 CARTELLA = "/opt/nivult/exports"
 
-_DESCR = ("COALESCE(raw->>'description', raw->>'externalDescription', "
-          "raw->>'descriptionHtml', raw->>'jobDescription', "
-          "raw->>'job_description', raw->>'content', "
-          "raw->>'descriptionPlain')")
+_DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
 
 def _apri(nome: str):

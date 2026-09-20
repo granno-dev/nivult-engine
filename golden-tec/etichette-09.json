@@ -1,0 +1,130 @@
+{
+ "lotto": 9,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "#162 ha il campo text con un JSON serializzato: sesto caso del golden.",
+  "Regola applicata qui e da qui in avanti: i CONCETTI DI ARCHITETTURA restano fuori (event-driven architectures, semantic layer, data marts, knowledge graphs, ontologie), le CATEGORIE DI PRODOTTO con un mercato e dei fornitori restano dentro (vector databases, Data Lake, BI, CRM, ERP).",
+  "I PRODOTTI DEL DATORE che il ruolo sostiene o vende sono 'servizio': i dispositivi AtriCure (#164), i sistemi di depurazione (#166), le terapie cellulari Miltenyi (#178), le maquininhas Stone (#180)."
+ ],
+ "offerte": [
+  {"n": 161, "id": "6e900cf0-6715-487b-9dd2-79d1d854ca30", "titolo": "Brigadnik student, Dunajska Streda Galeria Tesco (H&M)",
+   "tecnologie": [],
+   "escluse": ["technologiami obchodu (generico)", "vernostny program H&M (programma fedelta')", "online hodnotenie (strumento di selezione)"]},
+
+  {"n": 162, "id": "6bbed68d-c8e1-4238-9781-b435f59305d5", "titolo": "Entry Level: Data Scientist (Ericsson)",
+   "tecnologie": [{"nome": "AWS", "ruolo": "usata"}, {"nome": "retrieval-augmented generation", "ruolo": "usata"},
+                  {"nome": "vector databases", "ruolo": "usata"}, {"nome": "Kubernetes", "ruolo": "gradita"},
+                  {"nome": "Docker", "ruolo": "gradita"}, {"nome": "MCP", "ruolo": "gradita"},
+                  {"nome": "LangGraph", "ruolo": "gradita"}],
+   "escluse": ["knowledge graphs, ontologies, semantic APIs (concetti di modellazione)", "CI/CD, Infrastructure as Code, prompt engineering, guardrails (pratiche)", "multi-agent systems, tool calling, human-in-the-loop (concetti)", "LLM, generative AI, agentic systems (categorie)", "microservices, event-driven architectures (architetture)"]},
+
+  {"n": 163, "id": "52bba28a-700d-4a33-97ee-e3aa5ed41f45", "titolo": "Slot (Attendant) Floor Person (Boyd Gaming)",
+   "tecnologie": [{"nome": "two-way radio", "ruolo": "usata"}],
+   "escluse": ["BV jams, paper jams (guasti di componenti, sigla ambigua)", "gaming regulations (normativa di settore)", "minor machine maintenance (attivita')"]},
+
+  {"n": 164, "id": "8290e330-51db-470c-97e7-4f77417e7714", "titolo": "Cardiac Ablation Specialist (AtriCure)",
+   "tecnologie": [{"nome": "Microsoft Office", "ruolo": "usata"}, {"nome": "PowerPoint", "ruolo": "usata"},
+                  {"nome": "Outlook", "ruolo": "usata"}, {"nome": "Excel", "ruolo": "usata"},
+                  {"nome": "Word", "ruolo": "usata"},
+                  {"nome": "Isolator Synergy Ablation System", "ruolo": "servizio"},
+                  {"nome": "AtriClip", "ruolo": "servizio"},
+                  {"nome": "Hybrid AF Therapy", "ruolo": "servizio"},
+                  {"nome": "cryoICE cryoSPHERE", "ruolo": "servizio"}],
+   "escluse": ["EP labs, cath labs, operating rooms (ambienti clinici)", "FDA (autorita')", "E-Verify (sistema citato nella nota legale)", "undergraduate degree (titolo)"]},
+
+  {"n": 165, "id": "3d649730-4eab-4ce3-b0cc-91f3a6c66da8", "titolo": "MECANICIEN ENGINS TRAVAUX PUBLICS H/F",
+   "tecnologie": [],
+   "escluse": ["VGP (verifica periodica obbligatoria, strumento normativo)", "materiel BTP, engins TP (categorie generiche, nessuna macchina nominata)", "BEP/BAC Pro/BTS (titoli)"],
+   "nota": "meccanico di macchine da cantiere che NON nomina nessuna macchina, al contrario del #133 dove c'erano escavatore, pala e terna"},
+
+  {"n": 166, "id": "fd5970ce-8e4c-4289-b993-6d588fa575ef", "titolo": "Responsabile gestione territorio per sistemi di depurazione acqua",
+   "tecnologie": [{"nome": "sistemi di depurazione dell'acqua", "ruolo": "servizio"}],
+   "escluse": ["strategie commerciali, monitoraggio performance (pratiche)", "diploma (titolo)"]},
+
+  {"n": 167, "id": "271e3d61-e91b-489b-b21d-a2bd6481660c", "titolo": "Ausbildung zum Heilerziehungspfleger oder Erzieher",
+   "tecnologie": [],
+   "escluse": ["PivA (formato di apprendistato)", "Vitos Card (benefit)", "Adolf-Reichwein-Schule, DAA (scuole partner)", "Deutsch C1 (lingua)"]},
+
+  {"n": 168, "id": "913f2458-72c4-422e-85f5-7e08b97b6cb4", "titolo": "Sales Manager - Technology Consulting & Partner Business (Tieto)",
+   "tecnologie": [{"nome": "Microsoft", "ruolo": "servizio"}, {"nome": "Snowflake", "ruolo": "servizio"},
+                  {"nome": "Databricks", "ruolo": "servizio"}],
+   "escluse": ["cloud, data, AI, cybersecurity, digital workplace (categorie)", "co-sell, marketplace, go-to-market (pratiche commerciali)", "English, Polish, Czech (lingue)"]},
+
+  {"n": 169, "id": "d5297148-6a4c-4b9f-99b0-e22de522e8d0", "titolo": "Senior B2B Sales Representative",
+   "tecnologie": [{"nome": "CRM", "ruolo": "usata"}, {"nome": "HubSpot", "ruolo": "gradita"}],
+   "escluse": ["AI-driven solution (prodotto del cliente, senza nome)", "cold calls, pipeline (pratiche di vendita)", "Czech, English (lingue)"]},
+
+  {"n": 170, "id": "ad12f799-3c66-4f04-bd94-59d84dd8cbd1", "titolo": "IT Specialist for Systems Integration (Apprenticeship)",
+   "tecnologie": [],
+   "escluse": ["internal AI (strumento del datore, senza nome)", "web technologies, IT security, automation, databases, agile methods (categorie)", "German, English (lingue)"],
+   "nota": "apprendistato IT che elenca solo categorie: quinto annuncio tecnico del golden senza un solo nome proprio"},
+
+  {"n": 171, "id": "5108d91e-6525-4b5c-9a18-ce71a89173c7", "titolo": "Ingenieur Analytics Senior - Sopra Steria Next",
+   "tecnologie": [{"nome": "Power BI", "ruolo": "usata"}, {"nome": "Tableau", "ruolo": "usata"},
+                  {"nome": "Qlik", "ruolo": "usata"}, {"nome": "Dataiku", "ruolo": "usata"},
+                  {"nome": "SQL", "ruolo": "usata"}, {"nome": "BI", "ruolo": "usata"},
+                  {"nome": "Microsoft", "ruolo": "servizio"}],
+   "escluse": ["data marts, semantic layer, star schema, DWH, Data Lake (concetti di modellazione e architettura)", "data storytelling, self-service analytics, data literacy (pratiche)", "IA, analytics augmentee (categorie)", "Bac+5 (titolo)"]},
+
+  {"n": 172, "id": "fea69e5f-9a05-4085-9d62-7c3f9190e8a7", "titolo": "Administratief en onthaal bediende",
+   "tecnologie": [],
+   "escluse": ["reinigingsprogramma (impostazione di una macchina, non un prodotto)", "computerprogramma's (generico)", "Nederlands (lingua)"]},
+
+  {"n": 173, "id": "b83564ab-e896-4d88-9395-39ff73937669", "titolo": "Grocery Store Assistant (Wolt Market Malta)",
+   "tecnologie": [],
+   "escluse": ["dark store (formato di negozio)", "Wolt Market (insegna del datore)", "English, Maltese (lingue)"]},
+
+  {"n": 174, "id": "d110ea8b-018e-4227-9bed-32f17a5a5baf", "titolo": "Staff Propulsion Engineer, Air Vehicles (SRM Integration)",
+   "tecnologie": [{"nome": "Solid Rocket Motors (SRMs)", "ruolo": "usata"},
+                  {"nome": "Thrust Vector Control (TVC)", "ruolo": "usata"},
+                  {"nome": "CAD", "ruolo": "usata"}, {"nome": "3D printing", "ruolo": "usata"},
+                  {"nome": "filament winding", "ruolo": "usata"},
+                  {"nome": "NX", "ruolo": "gradita"}, {"nome": "Teamcenter", "ruolo": "gradita"},
+                  {"nome": "Python", "ruolo": "gradita"}, {"nome": "MATLAB", "ruolo": "gradita"},
+                  {"nome": "Ignition Safety Devices (ISD / ESAD)", "ruolo": "gradita"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["internal ballistics codes, propellant burn-back models (modelli interni, senza nome)", "nozzles, motor cases, blast tubes (componenti)", "U.S. Secret clearance (autorizzazione personale)"]},
+
+  {"n": 175, "id": "258f5054-ed59-470d-a6b3-e2e13898058b", "titolo": "Network Planning Sales Engineer Associate (Astranis)",
+   "tecnologie": [{"nome": "Python", "ruolo": "usata"}],
+   "escluse": ["digital payload, orbital slot, frequency planning, antenna system, gateway, user terminal, modem (parametri e apparati descritti genericamente)", "U.S. Citizenship (requisito di legge)"]},
+
+  {"n": 176, "id": "c2b6ae14-cb03-482d-8884-c15a7d5e9d78", "titolo": "Senior System Safety Engineer (Anduril)",
+   "tecnologie": [{"nome": "MIL-STD-882E", "ruolo": "usata"}, {"nome": "FHA", "ruolo": "usata"},
+                  {"nome": "Fault Tree", "ruolo": "usata"}, {"nome": "SCFTA", "ruolo": "usata"},
+                  {"nome": "FMECA", "ruolo": "usata"}, {"nome": "FTA", "ruolo": "usata"},
+                  {"nome": "ARP-4754", "ruolo": "gradita"}, {"nome": "ARP-4761", "ruolo": "gradita"},
+                  {"nome": "MIL-STD-516C", "ruolo": "gradita"}, {"nome": "JSSSEH", "ruolo": "gradita"},
+                  {"nome": "Relyence", "ruolo": "gradita"}, {"nome": "Teamcenter", "ruolo": "gradita"},
+                  {"nome": "JIRA", "ruolo": "gradita"}, {"nome": "JAMA", "ruolo": "gradita"},
+                  {"nome": "Cameo", "ruolo": "gradita"}, {"nome": "Ansys", "ruolo": "gradita"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["PDR, CDR, QDR, MRR, RCCA (tappe e processi)", "HITL/SITL (approcci di prova)", "AI/ML (categorie)", "B.S., M.S. degree (titoli)"]},
+
+  {"n": 177, "id": "30c57957-6fea-46b9-8067-236e33b330f4", "titolo": "Procurement Manager (Andercore)",
+   "tecnologie": [],
+   "escluse": ["AI-native, agentic AI (categorie)", "our software (prodotto del datore, senza nome)", "KPI (indicatori)", "French, Italian, English (lingue)"]},
+
+  {"n": 178, "id": "359f25b6-4974-4299-bfa3-c8606fce5596", "titolo": "Servicetechniker im Aussendienst mit Schwerpunkt Clinical (Miltenyi Biotec)",
+   "tecnologie": [{"nome": "Zell- und Gentherapien", "ruolo": "servizio"}],
+   "escluse": ["klinische Gerate, Mess- und Prufmittel (apparati generici, nessun nome)", "Elektronik, Optik, Fluidik, Mechanik (discipline)", "Technikerausbildung (titolo)", "Englischkenntnisse (lingua)"],
+   "nota": "tecnico di apparecchi biomedici che non nomina nessuno strumento: come #110 e #178, il mestiere e' tecnico ma il testo non lo e'"},
+
+  {"n": 179, "id": "e23c12cc-8e39-4f44-87cc-da40d5d9b05e", "titolo": "CRM Engagement Intern (Back Market)",
+   "tecnologie": [{"nome": "CRM", "ruolo": "usata"}, {"nome": "Braze", "ruolo": "gradita"}],
+   "escluse": ["A/B testing, CRM automation (pratiche)", "emails, push notifications, in-apps (canali)", "programming languages (generico, nessun nome)"]},
+
+  {"n": 180, "id": "eda1fedf-83c5-472b-8177-3436494b9b3f", "titolo": "Agente Stone - Consultor(a) Comercial Externo",
+   "tecnologie": [{"nome": "maquininhas", "ruolo": "servizio"}],
+   "escluse": ["meios de pagamentos, adquirencia (settore)", "Pluxee, Gympass, Flash, Wellhub, TotalPass, SESC (piattaforme dei benefit)", "ensino medio (titolo)"]}
+ ],
+ "dubbi": [
+  "#162: «vector databases» dentro e «knowledge graphs» fuori. Entrambe sono categorie con dei fornitori; ho tenuto la prima perche' e' un mercato con prodotti nominabili e lasciato fuori la seconda perche' e' prima di tutto un modo di modellare. E' il confine piu' arbitrario del lotto.",
+  "#168 e #171: «Microsoft» tenuto come partner tecnologico, mentre al #134 era escluso. La differenza e' che qui l'annuncio vende l'ecosistema, la' nominava il fornitore per dire «la suite da ufficio». Difendibile, ma e' la stessa parola trattata in due modi.",
+  "#163: «two-way radio» tenuto per coerenza con muletto e Flurforderzeuge. In inglese suona come attrezzatura generica, e un revisore lo escluderebbe.",
+  "#180: «maquininhas» compare in una frase retorica («siamo molto piu' di un'azienda di maquininhas»). E' il prodotto vero di Stone, ma il contesto e' una negazione: tenuto, con riserva.",
+  "#176: diciassette voci, di cui otto norme e sigle di metodo. Su questo annuncio un dizionario di tecnologie informatiche troverebbe JIRA e Ansys, e si perderebbe tutto il resto — che e' il contenuto del lavoro."
+ ]
+}

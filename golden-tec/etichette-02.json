@@ -1,0 +1,119 @@
+{
+ "lotto": 2,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "#22 ha il campo text che contiene un JSON serializzato invece del testo: stesso guasto di dato del #11.",
+  "Regola aggiunta e applicata da qui in avanti: una NORMA che si applica lavorando (ISO 9001, HACCP, OWASP) e' una tecnologia; una LEGGE o un regime di approvazione (SOX, CE/UKCA, il codice sanitario del Michigan) non lo e'. Chi compra dati tecnografici cerca la prima, non la seconda."
+ ],
+ "offerte": [
+  {"n": 21, "id": "abd6ad97-3797-4e1f-ace3-0c65ecd23b91", "titolo": "Skiman / Skiwoman (H/F)",
+   "tecnologie": [{"nome": "SKILOU", "ruolo": "usata"}],
+   "escluse": ["espagnol, catalan (lingue)", "materiel de location (attrezzatura generica)"]},
+
+  {"n": 22, "id": "e5bce562-6faa-4bfd-bd41-11d170503b7a", "titolo": "Jobba Som B2B-saljare",
+   "tecnologie": [],
+   "escluse": ["garantilon & provision (compenso)", "svenska (lingua)", "salj- & produktutbildning (formazione offerta)"]},
+
+  {"n": 23, "id": "702fc4b7-8716-48a5-9a37-671d6d13367b", "titolo": "Associate Manager, Consumer Integrated Marketing (DoorDash)",
+   "tecnologie": [],
+   "escluse": ["SEO/SEM, paid marketing, lifecycle (pratiche di marketing)", "CRM qui e' un canale, non uno strumento nominato", "MAU, GTM, funnel (concetti)"]},
+
+  {"n": 24, "id": "95785b2e-ae40-4c0a-ba74-eebb45d112ca", "titolo": "Product Manager, Pricing (Airbnb)",
+   "tecnologie": [],
+   "escluse": ["dynamic pricing, coupon systems, flash sales (meccaniche commerciali)", "OKR, FP&A (concetti e funzioni)"]},
+
+  {"n": 25, "id": "b290650a-177e-49d5-a5da-bc420062d64c", "titolo": "Ouvrier paysagiste H/F",
+   "tecnologie": [],
+   "escluse": ["taille, tonte, debroussaillage (attivita')", "entretien du materiel: nessuno strumento nominato"]},
+
+  {"n": 26, "id": "e849b298-f77c-48e6-b783-61718f2dad45", "titolo": "VENDEDOR/A - Nueva tienda (JYSK)",
+   "tecnologie": [],
+   "escluse": ["Great Place to Work (certificazione del datore)", "atencion al cliente, reposicion (attivita')"]},
+
+  {"n": 27, "id": "15338566-7c1f-41eb-89d2-d4b5864f3459", "titolo": "Senior SharePoint Engineer - Contract (Manchester)",
+   "tecnologie": [{"nome": "Microsoft 365", "ruolo": "usata"}, {"nome": "SharePoint Online", "ruolo": "usata"},
+                  {"nome": "Power Platform", "ruolo": "usata"}, {"nome": "Salesforce", "ruolo": "usata"},
+                  {"nome": "SharePoint Framework (SPFx)", "ruolo": "usata"}, {"nome": "PowerShell", "ruolo": "usata"},
+                  {"nome": "Microsoft Graph API", "ruolo": "usata"}, {"nome": "REST API", "ruolo": "usata"},
+                  {"nome": "JavaScript", "ruolo": "usata"}, {"nome": "TypeScript", "ruolo": "usata"},
+                  {"nome": "React", "ruolo": "usata"}, {"nome": "Power Automate", "ruolo": "usata"},
+                  {"nome": "Logic Apps", "ruolo": "usata"}, {"nome": "Azure", "ruolo": "usata"},
+                  {"nome": "OWASP", "ruolo": "usata"}, {"nome": "Veracode", "ruolo": "usata"},
+                  {"nome": "CodeQL", "ruolo": "usata"}, {"nome": "Grafana", "ruolo": "usata"},
+                  {"nome": "GitHub", "ruolo": "usata"}, {"nome": "Scrum", "ruolo": "usata"},
+                  {"nome": "Kanban", "ruolo": "usata"}, {"nome": "GitHub Copilot", "ruolo": "gradita"},
+                  {"nome": "Windsurf", "ruolo": "gradita"}],
+   "escluse": ["Agile (atteggiamento; Scrum e Kanban sono i metodi nominati)", "enterprise content management platforms, third-party SaaS (categorie generiche)"]},
+
+  {"n": 28, "id": "94611c77-8190-4045-9e79-a147fa8afe81", "titolo": "Assistente amministrativo (Gi Group)",
+   "tecnologie": [{"nome": "pacchetto office", "ruolo": "usata"}],
+   "escluse": ["piattaforma informatica (generico)", "data entry, archiviazione (attivita')", "diploma o laurea (titoli)"]},
+
+  {"n": 29, "id": "ace1512a-8e22-4b0d-89a0-108842bd7909", "titolo": "Charge de relation client / gestion locative",
+   "tecnologie": [{"nome": "FLATBAY", "ruolo": "usata"}, {"nome": "FLATSY", "ruolo": "usata"},
+                  {"nome": "GED", "ruolo": "usata"}],
+   "escluse": ["Pinel (regime fiscale)", "GLI, VL, DI (prodotti assicurativi)", "logiciel lots vacants (software nominato solo per funzione, senza nome)"]},
+
+  {"n": 30, "id": "0105ee71-7035-4c0f-a1e0-a6e14316a4bb", "titolo": "Aide a domicile F/H",
+   "tecnologie": [],
+   "escluse": ["diplome du medico-social (titolo)", "entretien du logement, preparation des repas (attivita')"]},
+
+  {"n": 31, "id": "afed4d26-73f0-4466-b81e-7c87235ed0a4", "titolo": "A400M Loadmaster Instructor",
+   "tecnologie": [{"nome": "A400M", "ruolo": "usata"}],
+   "escluse": ["English C1 (lingua)", "training devices (attrezzatura generica)"]},
+
+  {"n": 32, "id": "b0b7b0e8-a493-49ac-8f1e-667fb3c94fe4", "titolo": "Lead Machine Learning Inference Engineer (Roku)",
+   "tecnologie": [],
+   "escluse": ["Machine Learning, Reinforcement Learning, AI, HPC (discipline)", "inference frameworks, GPU acceleration (categorie, nessun nome proprio)", "M.S. in CS/ECE (titolo)"],
+   "nota": "un annuncio di ingegneria ML che non nomina un solo strumento: succede, e il modello non deve inventarne"},
+
+  {"n": 33, "id": "d129bf1f-0ee0-4fc7-94e6-6bf3e3eeef74", "titolo": "Founding Engineer - Ambient Care Startup",
+   "tecnologie": [],
+   "escluse": ["CE/UKCA, FDA (regimi di approvazione del prodotto, vedi la regola nelle note)", "embedded systems, AI (discipline)", "PII (categoria di dato)"]},
+
+  {"n": 34, "id": "a75e97eb-7dd9-4829-a02d-1963fc7358e5", "titolo": "CONTROLLER (Grafton)",
+   "tecnologie": [{"nome": "Microsoft Excel", "ruolo": "usata"}],
+   "escluse": ["piattaforma dedicata (generico)", "inglese (lingua)", "budget, statistiche di vendita (attivita')"]},
+
+  {"n": 35, "id": "36e9fd02-a94f-4420-a74e-311b1f8bb511", "titolo": "Responsable qualite (H/F)",
+   "tecnologie": [],
+   "escluse": ["QSE, systeme de management integre, referentiels qualite (discipline e categorie, nessuna norma nominata)", "station de traitement des eaux (impianto che si supervisiona, non strumento di mestiere)", "Bac+3/+5 (titoli)"]},
+
+  {"n": 36, "id": "a4250592-6c9d-4e51-b9bc-8b9181c1d0b5", "titolo": "Developpeur/euse Fullstack - .NET (Sopra Steria)",
+   "tecnologie": [{"nome": "C#", "ruolo": "usata"}, {"nome": ".NET", "ruolo": "usata"},
+                  {"nome": "ASP.NET", "ruolo": "usata"}, {"nome": ".NETCORE", "ruolo": "usata"},
+                  {"nome": "Angular", "ruolo": "usata"}, {"nome": "Azure", "ruolo": "usata"},
+                  {"nome": "Docker", "ruolo": "gradita"}, {"nome": "Kubernetes", "ruolo": "gradita"},
+                  {"nome": "Gitlab CI/CD", "ruolo": "gradita"}],
+   "escluse": ["anglais (lingua)", "TMA, from scratch (modi di lavorare)"]},
+
+  {"n": 37, "id": "c2f7ce88-0dba-47d2-9793-36116b541a14", "titolo": "2K Games - Technical Art Graduate Program",
+   "tecnologie": [{"nome": "Unreal Engine", "ruolo": "usata"}, {"nome": "Maya", "ruolo": "usata"},
+                  {"nome": "Python", "ruolo": "usata"}, {"nome": "Perforce", "ruolo": "usata"},
+                  {"nome": "Blender", "ruolo": "gradita"}, {"nome": "Houdini", "ruolo": "gradita"},
+                  {"nome": "Substance", "ruolo": "gradita"}],
+   "escluse": ["ArtStation, GitHub, itch.io (dove ospitare il portfolio, non strumenti del lavoro)", "shader, rig, pipeline (categorie di lavoro)", "NBA 2K, BioShock, Civilization (giochi del datore)"]},
+
+  {"n": 38, "id": "dd70f75a-a2ec-45eb-8c25-94fbb805cc79", "titolo": "Assistente boccia (Mio BPA)",
+   "tecnologie": [],
+   "escluse": ["forerkort klasse B (patente)", "boccia (sport)", "norsk (lingua)", "CP, epilessia, astma (condizioni della persona assistita)"]},
+
+  {"n": 39, "id": "5d5c9767-0157-47eb-93e9-a5fa9507914a", "titolo": "Director, Procurement Strategy (Toast)",
+   "tecnologie": [],
+   "escluse": ["SOX (legge, vedi la regola nelle note)", "Procure-to-Pay, source-to-pay, P2P (categorie di processo)", "AI, automation (discipline)"]},
+
+  {"n": 40, "id": "24c30750-fa7d-422b-ba29-77f45d2975a6", "titolo": "HRBP Itinerant H/F (NOZ)",
+   "tecnologie": [],
+   "escluse": ["reportings RH, plans d'action (processi)", "mobilite nationale (condizione di lavoro)"]}
+ ],
+ "dubbi": [
+  "#27: «REST API» e' uno stile architetturale, non un prodotto. Tenuto per coerenza con la regola dei protocolli (BACS, HVDC); un revisore severo lo escluderebbe.",
+  "#28: il testo scrive «pacchetto office», non «Microsoft Office». L'etichetta segue il testo, e il collegamento fra i due lo fa la lista di alias — e' esattamente il caso per cui la rubrica impone la forma dell'annuncio.",
+  "#29: «GED» e' una categoria di software (gestione documentale) chiamata per sigla, come «CRM systems» al #18. Dentro per coerenza fra i due.",
+  "#31: «A400M» e' un aereo, quindi un macchinario con nome proprio. Chi vende dati su chi opera A400M lo cerca per nome, e questo e' il criterio.",
+  "#33 e #39: qui ho dovuto scrivere una regola nuova, perche' il lotto 1 l'aveva lasciata implicita. Norma che si applica lavorando = tecnologia; legge o regime di approvazione = no. Sposta CE/UKCA, FDA e SOX fuori, e lascia ISO 9001 e OWASP dentro.",
+  "#32: zero tecnologie su un annuncio di Machine Learning ad alto livello. E' il caso piu' pericoloso per un generativo: sa cosa «dovrebbe» starci (PyTorch, TensorFlow, Triton) e l'annuncio non lo dice."
+ ]
+}

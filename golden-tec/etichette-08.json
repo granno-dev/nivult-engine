@@ -1,0 +1,114 @@
+{
+ "lotto": 8,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Gli ORGANISMI di certificazione restano fuori come le agenzie (BACB al #159, come ANSSI al #127); le loro NORME invece entrano quando l'annuncio le nomina (ISO, IEC, IEEE).",
+  "#142 e' il caso piu' bello del lotto: un addetto al rifornimento scaffali con due sistemi proprietari nominati (ORSY, ORSYmat). Nessun dizionario di tecnologie li contiene, e sono segnale tecnografico puro su Wurth."
+ ],
+ "offerte": [
+  {"n": 141, "id": "31c8cefd-bd6e-4218-b4d1-5e1da2738f21", "titolo": "Werkstudent Belastingadvies Loonheffingen",
+   "tecnologie": [],
+   "escluse": ["slimme technologie, geavanceerde tools, data-gedreven inzichten (generici, nessun nome)", "WKR, cafetariaregeling (strumenti fiscali olandesi)", "NS-Business Card (benefit)"]},
+
+  {"n": 142, "id": "28272d09-5c97-4fea-923d-64c2d49d4c02", "titolo": "Reponedor/a con vehiculo de empresa (Wurth)",
+   "tecnologie": [{"nome": "ORSY", "ruolo": "usata"}, {"nome": "ORSYmat", "ruolo": "usata"}],
+   "escluse": ["carne de conducir (patente)", "tarjeta de combustible, dietas (benefit)"]},
+
+  {"n": 143, "id": "5b63c549-b9bb-46c2-9a5b-3de6e512e6d6", "titolo": "Air Export Agent (Expeditors)",
+   "tecnologie": [{"nome": "Excel", "ruolo": "usata"}, {"nome": "Word", "ruolo": "usata"},
+                  {"nome": "PowerPoint", "ruolo": "usata"}],
+   "escluse": ["IATA certification (certificazione personale)", "house and master air waybills (documenti)", "our operating system (sistema del datore, senza nome)", "English (lingua)"]},
+
+  {"n": 144, "id": "5a979a3d-61a3-4d0c-ad31-454a8a29fc52", "titolo": "(Associate) Consultant Data Driven Banking",
+   "tecnologie": [],
+   "escluse": ["AI, KI, Generative AI, Agentic AI, AI Automation (categorie)", "Analytics, Data Management, Cloud (categorie)", "Hochschulstudium (titolo)", "Deutsch, Englisch (lingue)"],
+   "nota": "annuncio di consulenza «data driven» che non nomina un solo strumento: quarto caso nel golden dopo #32, #41, #91"},
+
+  {"n": 145, "id": "1f70427f-1089-4699-b729-ab72f4b660e3", "titolo": "Portfolio Management Assistant (RBC)",
+   "tecnologie": [],
+   "escluse": ["Office Tools, Sales Systems (etichette della tassonomia di competenze RBC, non prodotti)", "portfolio management, asset allocation (materie)", "A-level, degree (titoli)"]},
+
+  {"n": 146, "id": "843be609-4020-48e4-8281-2cba8582baf7", "titolo": "Assistant Store Manager H/F/X - Paris (Joe & The Juice)",
+   "tecnologie": [],
+   "escluse": ["EBITDA, KPI (indicatori)", "parcours Moneyball (programma del datore)", "normes d'hygiene (procedure)"]},
+
+  {"n": 147, "id": "4f1a1c4f-bd8d-459b-8b8b-de74a151a576", "titolo": "RESPONSABLE INDUSTRIEL",
+   "tecnologie": [],
+   "escluse": ["indicateurs cles de performance, amelioration continue (pratiche e indicatori)", "budget industriel (strumento di gestione)"],
+   "nota": "responsabile di stabilimento agroalimentare senza una sola norma o metodo nominato: confronto col #35 e col #120, dove HACCP e HAZOP c'erano"},
+
+  {"n": 148, "id": "228488dc-7f72-4546-8a4a-73b83342f294", "titolo": "AI Adoption Manager (Neurons Lab)",
+   "tecnologie": [{"nome": "Claude", "ruolo": "usata"}, {"nome": "ChatGPT", "ruolo": "usata"}],
+   "escluse": ["agentic workflows, prompt engineering (pratiche)", "AI governance, responsible-AI frameworks (categorie di politiche)", "change management, instructional design (discipline)", "McKinsey, BCG, Bain (aziende)"]},
+
+  {"n": 149, "id": "3333e7d2-ebe0-4a6c-853d-41fff55e1f6c", "titolo": "Producer (Giga)",
+   "tecnologie": [{"nome": "Asana", "ruolo": "usata"}, {"nome": "Monday", "ruolo": "usata"},
+                  {"nome": "Airtable", "ruolo": "usata"}],
+   "escluse": ["call sheets, carnet, releases (documenti di produzione)", "editing, color, delivery specs (fasi di post-produzione)"]},
+
+  {"n": 150, "id": "71b150aa-5529-4db2-b472-507ccf38fdbb", "titolo": "Social media manager (Klice staci)",
+   "tecnologie": [{"nome": "Instagram", "ruolo": "usata"}, {"nome": "Facebook", "ruolo": "usata"},
+                  {"nome": "LinkedIn", "ruolo": "usata"}, {"nome": "TikTok", "ruolo": "usata"},
+                  {"nome": "Reels", "ruolo": "usata"}, {"nome": "Shorts", "ruolo": "usata"}],
+   "escluse": ["copywriting, strih (pratiche del mestiere)", "brand, povedomi (obiettivi di marketing)"]},
+
+  {"n": 151, "id": "3030b649-4aee-487b-a74f-4fb3b6adb98e", "titolo": "Plongeur, en horaires continu (H/F)",
+   "tecnologie": [],
+   "escluse": ["materiel de cuisine (attrezzatura generica)", "regles d'hygiene et de securite (procedure)"]},
+
+  {"n": 152, "id": "b9ffd8ed-7501-4fca-a527-d3f148757503", "titolo": "Electrical Design Engineer (Lyten)",
+   "tecnologie": [{"nome": "AutoCAD Electrical", "ruolo": "usata"}, {"nome": "EPLAN", "ruolo": "usata"},
+                  {"nome": "IEC", "ruolo": "usata"}, {"nome": "IEEE", "ruolo": "usata"},
+                  {"nome": "EN", "ruolo": "usata"}, {"nome": "LOTO", "ruolo": "usata"},
+                  {"nome": "switchgear", "ruolo": "usata"}, {"nome": "MCC", "ruolo": "usata"},
+                  {"nome": "protective relays", "ruolo": "usata"}, {"nome": "HV", "ruolo": "usata"},
+                  {"nome": "LV", "ruolo": "usata"}, {"nome": "ETAP", "ruolo": "gradita"},
+                  {"nome": "Lyten 3D Graphene", "ruolo": "servizio"},
+                  {"nome": "lithium-sulfur batteries", "ruolo": "servizio"}],
+   "escluse": ["transformers, cable routing (componenti generici)", "load calculations, short-circuit analysis (calcoli)", "Bachelor's degree (titolo)"]},
+
+  {"n": 153, "id": "57f0b9c9-6dfe-4681-81fc-d4256efc3dad", "titolo": "Oliver Wyman - (Senior) Manager - Brussels",
+   "tecnologie": [],
+   "escluse": ["strategy, risk management, organization transformation (materie di consulenza)", "English, French/Dutch (lingue)", "advanced degree (titolo)"]},
+
+  {"n": 154, "id": "db975a5a-2f23-4222-9e0e-436f9a614c06", "titolo": "Account Management Associate (Housecall Pro)",
+   "tecnologie": [{"nome": "CRM", "ruolo": "usata"}, {"nome": "Salesforce", "ruolo": "usata"}],
+   "escluse": ["Housecall Pro (nome del datore, anche se coincide col prodotto)", "SaaS (modello di distribuzione)", "AI tools (generico)", "SOP, ARR, KPI (procedure e metriche)"]},
+
+  {"n": 155, "id": "3a2a7bfe-ea4e-4837-8c75-aa4ad805d0a9", "titolo": "Addetto ai forni (Randstad)",
+   "tecnologie": [{"nome": "muletto", "ruolo": "usata"}, {"nome": "forni", "ruolo": "usata"}],
+   "escluse": ["patentino del muletto (abilitazione personale)", "carico e scarico, manutenzione ordinaria (attivita')", "licenza media (titolo)"]},
+
+  {"n": 156, "id": "135bdec6-ab39-4591-b86b-a53c1a07802b", "titolo": "Senior Manufacturing Engineer (Crusoe)",
+   "tecnologie": [{"nome": "ERP", "ruolo": "usata"}, {"nome": "SolidWorks", "ruolo": "usata"},
+                  {"nome": "Google Suite", "ruolo": "usata"}, {"nome": "Microsoft Office", "ruolo": "usata"},
+                  {"nome": "DFMA", "ruolo": "usata"}, {"nome": "CAD", "ruolo": "gradita"},
+                  {"nome": "Lean manufacturing", "ruolo": "gradita"}, {"nome": "SSBB", "ruolo": "gradita"}],
+   "escluse": ["FPY, OPE (metriche)", "BOM (documento)", "power electronics, industrial controls (domini)", "quality management system (categoria senza nome)"]},
+
+  {"n": 157, "id": "515171b1-4655-484a-9766-9359f25e1677", "titolo": "Responsable d'agence d'aide a domicile - CDD (Joya)",
+   "tecnologie": [],
+   "escluse": ["outils digitaux (generico)", "CLIC, CCAS (istituzioni sociali francesi)", "permis B, BTS, Master (patente e titoli)"]},
+
+  {"n": 158, "id": "a9b1d69c-f503-4372-a21b-c5d9fcb5b0d1", "titolo": "Redacteur Technique - H/F (NEO2)",
+   "tecnologie": [{"nome": "DITA XML", "ruolo": "usata"}],
+   "escluse": ["base documentaire industrielle (categoria senza nome)", "suivi des validations et des versions (procedure)"]},
+
+  {"n": 159, "id": "e0a46a05-50ce-4bb3-885a-ee91af98aaed", "titolo": "School-Based RBT Supervisor/BCBA",
+   "tecnologie": [],
+   "escluse": ["RBT, BT, BCBA, LBA (certificazioni personali)", "BACB (organismo di certificazione, come ANSSI al #127)", "PIP, CEU (strumenti di gestione del personale)", "Masters Degree (titolo)"]},
+
+  {"n": 160, "id": "910fa35a-f421-429c-83fb-870a5b56b26b", "titolo": "Kinderpfleger / Heilerziehungspflegehelfer (Diakonie)",
+   "tecnologie": [],
+   "escluse": ["AVR Bayern (contratto collettivo)", "JobRad, Corporate Benefits, benefits.me, WGKD (benefit)", "Ausbildung als Kinderpfleger (titolo)"]}
+ ],
+ "dubbi": [
+  "#152: quattordici voci, e cinque sono tipi di apparato invece che marche (switchgear, MCC, protective relays, HV, LV). Dentro per la regola dei macchinari, ma e' l'annuncio in cui quella regola pesa piu' del solito.",
+  "#152: «Lyten 3D Graphene» e «lithium-sulfur batteries» sono cio' che l'azienda produce, non strumenti del ruolo: messi come servizio.",
+  "#154: «Housecall Pro» escluso perche' e' il nome del datore, anche se e' anche il nome del prodotto che i clienti usano. Lo stesso caso di MongoDB al #61, deciso allo stesso modo.",
+  "#156: «SSBB» e' una certificazione personale su un metodo (Six Sigma Black Belt). La rubrica dice che una certificazione vale la tecnologia su cui e' fatta, ma dice anche di scrivere la forma del testo: ho scritto SSBB, e sta all'elenco di alias legarlo a Six Sigma. Le due regole qui tirano in direzioni diverse.",
+  "#143: «IATA certification» esclusa come abilitazione personale, mentre IATA e' anche un corpo di standard. Se l'annuncio avesse nominato una norma IATA, sarebbe entrata."
+ ]
+}

@@ -32,6 +32,27 @@
 #   04:30  retention dei dati personali — dopo il backup delle 03:00, cosi'
 #          se un termine e' sbagliato i dati sono ancora nel dump della
 #          notte, e prima del ponte delle 05:00
+#   23:00  jsonld --scopri — le aziende SENZA ATS che pubblicano il
+#          JobPosting sul proprio sito (70.760 mai provate al 13/09/2026,
+#          il modulo esisteva ma nessuno lo pianificava). Alle 23 perche'
+#          dalle 10 all'01 la tabella e' vuota, e' fuori dal riavvio delle
+#          04:00 che troncherebbe un'ora di rete, e i domini promossi
+#          entrano in ats_companies in tempo per il giro ATS delle 02:30.
+#          1.500 domini = ~60 min misurati (50 in 120 s, 4 thread);
+#          timeout 5400 perche' una chiamata appesa non arrivi all'01:00.
+#   22:15  radar Indeed — i DATORI che assumono questa settimana, dal link
+#          «candidati sul sito dell'azienda»: solo il dominio, mai il
+#          contenuto (decisione di Giuseppe, 13/09/2026). 300 ricerche a
+#          rotazione su 16 paesi (~12 min); i domini entrano in coda al
+#          detector con precedenza, i tenant ATS in ats_companies. Prima
+#          del jsonld delle 23 e dell'ATS delle 02:30, che li raccolgono.
+#          Gira da Hetzner: mai dall'IP di casa (regola del 13/09/2026).
+#   21:30  bilanci ESEF — le quotate UE/SEE da filings.xbrl.org (7.357
+#          entita', ~400 bilanci a notte, ~18 min): ricavi, utile, attivo,
+#          patrimonio in `bilanci`, e il LEI agganciato ai nostri domini
+#          dal namespace della tassonomia (14/15 misurati il 13/09/2026).
+#          Quando l'arretrato e' finito, ogni notte prende solo i depositi
+#          nuovi. Prima del radar delle 22:15.
 #   :10    digest, OGNI ORA — l'orario di invio e' quello dell'utente, nel
 #          suo fuso: un giro solo al giorno consegnerebbe in ritardo
 #
@@ -70,6 +91,7 @@ RIGHE=$(cat <<'EOF'
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
+0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 600000
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
 50 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --mix
 30 6 * * * /opt/nivult/engine/deploy/passo-diurno.sh domini nivult.ats.domini_datori --limite 2000
@@ -80,6 +102,9 @@ RIGHE=$(cat <<'EOF'
 30 7 * * 1 /opt/nivult/engine/deploy/revisione-settimanale.sh >> /var/log/nivult-chat.log 2>&1
 25 * * * * cd /opt/nivult/engine && timeout 1500 .venv/bin/python -m nivult.ats.canarini --controlla >> /var/log/nivult-canarini.log 2>&1
 40 6 * * 1 cd /opt/nivult/engine && .venv/bin/python -m nivult.ats.canarini --scegli >> /var/log/nivult-canarini.log 2>&1
+0 23 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 5400 .venv/bin/python -m nivult.ats.jsonld --scopri --limite 1500 --thread 4 >> /var/log/nivult-jsonld.log 2>&1
+15 22 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 1800 .venv/bin/python -m nivult.ats.radar_indeed --giro --limite 300 >> /var/log/nivult-radar-indeed.log 2>&1
+30 21 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 3600 .venv/bin/python -m nivult.ats.bilanci --esef --limite 400 >> /var/log/nivult-bilanci.log 2>&1
 EOF
 )
 

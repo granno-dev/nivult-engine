@@ -1,0 +1,133 @@
+{
+ "lotto": 6,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "#112 ha il campo text con un JSON serializzato: quinto caso.",
+  "Applicata la regola del lotto 2 su un elenco lunghissimo di norme (#106): dentro ISO 270xx, ISO 223xx, BS 11200, SecNumCloud, SWIFT CSP, HDS, PCI DSS, PA DSS, NIST; fuori NIS Directive, GDPR, DSP2, LPM, RGS/PSSIE, che sono leggi e direttive.",
+  "«Blockchain», «AI», «Machine Learning», «Cloud» restano fuori come CATEGORIE, coerentemente col lotto 5 (#84). Sono tecnologie in senso lato, ma non cose che un'azienda «ha» e che si possano contare."
+ ],
+ "offerte": [
+  {"n": 101, "id": "648c6b44-4ac9-470b-97c2-d006001b9a20", "titolo": "QA Test Manager (Aleman B2)",
+   "tecnologie": [],
+   "escluse": ["testing, estrategias de prueba (disciplina e pratiche)", "Udemy Business (formazione offerta)", "ingles C1, aleman B2 (lingue)"]},
+
+  {"n": 102, "id": "bf57f552-8740-4276-a08b-6b45e6c46431", "titolo": "Werkstudent Bau- und Projektmanagement",
+   "tecnologie": [{"nome": "Google Suite", "ruolo": "usata"}, {"nome": "MS Office", "ruolo": "usata"},
+                  {"nome": "BIM", "ruolo": "gradita"}, {"nome": "CAD", "ruolo": "gradita"}],
+   "escluse": ["HOAI, VOB (strumenti giuridici: onorari e aggiudicazione appalti)", "Warmepumpen, Fenster, Fassaden (componenti edilizi generici)", "Deutschkenntnisse (lingua)"]},
+
+  {"n": 103, "id": "0dd1824e-ea5c-4c02-8555-d6806dbf90bd", "titolo": "Lead Sales Excellence EMEA - H/F",
+   "tecnologie": [],
+   "escluse": ["intelligence artificielle (categoria)", "outils et methodologies standards (generico, nessun nome)", "Avanade, Accenture (aziende)", "anglais (lingua)"]},
+
+  {"n": 104, "id": "8bd0317d-16f3-4b8f-9291-007df90c4c35", "titolo": "Junior Product Compliance Engineer | Networking Solutions",
+   "tecnologie": [{"nome": "IoT", "ruolo": "usata"}, {"nome": "EMC", "ruolo": "usata"},
+                  {"nome": "RF", "ruolo": "usata"}, {"nome": "MS Office", "ruolo": "usata"},
+                  {"nome": "spectrum analyzer", "ruolo": "gradita"},
+                  {"nome": "vector network analyzer", "ruolo": "gradita"}],
+   "escluse": ["routers, switches, gateways, modems (categorie di prodotto del datore, senza nome)", "Industry 4.0, Smart City, Green Energy (concetti di settore)", "metrology (disciplina)", "English (lingua)"]},
+
+  {"n": 105, "id": "d5188141-2f51-4471-9f13-8ce76adb42f4", "titolo": "Senior Renewals Account Manager, Strategic Accounts",
+   "tecnologie": [{"nome": "CRM systems", "ruolo": "usata"},
+                  {"nome": "Rubrik Security Cloud", "ruolo": "servizio"},
+                  {"nome": "Rubrik Agent Cloud", "ruolo": "servizio"}],
+   "escluse": ["forecasting tools (generico)", "ACV, ARR (metriche)", "Linkedin, X, Instagram (link nel piede della pagina, non strumenti del ruolo)"]},
+
+  {"n": 106, "id": "777e4839-15e9-48a7-ac09-2491daa0e68c", "titolo": "Cybersecurity Consultant (Sia)",
+   "tecnologie": [{"nome": "ISO 270xx", "ruolo": "usata"}, {"nome": "ISO 27701", "ruolo": "usata"},
+                  {"nome": "ISO 223xx", "ruolo": "usata"}, {"nome": "BS 11200", "ruolo": "usata"},
+                  {"nome": "SecNumCloud", "ruolo": "usata"}, {"nome": "SWIFT CSP", "ruolo": "usata"},
+                  {"nome": "HDS", "ruolo": "usata"}, {"nome": "PCI DSS", "ruolo": "usata"},
+                  {"nome": "PA DSS", "ruolo": "usata"}, {"nome": "NIST", "ruolo": "usata"},
+                  {"nome": "Python", "ruolo": "usata"}, {"nome": "C++", "ruolo": "usata"},
+                  {"nome": "Java", "ruolo": "usata"}, {"nome": "Ruby", "ruolo": "usata"},
+                  {"nome": "Node", "ruolo": "usata"}, {"nome": "Go", "ruolo": "usata"},
+                  {"nome": "Power Shell", "ruolo": "usata"}, {"nome": "Unix", "ruolo": "usata"},
+                  {"nome": "Linux", "ruolo": "usata"}, {"nome": "Windows", "ruolo": "usata"},
+                  {"nome": "macOs", "ruolo": "usata"}, {"nome": "AWS", "ruolo": "usata"},
+                  {"nome": "Azure", "ruolo": "usata"}, {"nome": "GCP", "ruolo": "usata"},
+                  {"nome": "SCADA", "ruolo": "usata"}, {"nome": "ICS", "ruolo": "usata"},
+                  {"nome": "IIoT", "ruolo": "usata"}, {"nome": "IoT", "ruolo": "usata"},
+                  {"nome": "WoT", "ruolo": "usata"}, {"nome": "CIAM", "ruolo": "usata"},
+                  {"nome": "DAG", "ruolo": "usata"}, {"nome": "C2R", "ruolo": "servizio"},
+                  {"nome": "STORM", "ruolo": "servizio"}],
+   "escluse": ["NIS Directive, GDPR, DSP2, LPM, RGS/PSSIE (leggi e direttive)", "Blockchain, AI (categorie)", "Cryptography, Encryption (discipline)", "Penetration Testing, Red Teaming, Threat hunting, Digital Forensics, SSDLC, SecDevOps (pratiche)", "Web Server, BDD, Middleware (categorie generiche)", "Master's degree (titolo)", "francese, olandese, inglese (lingue)"]},
+
+  {"n": 107, "id": "5cb923dd-d0c4-4970-8f1b-601ca27e667c", "titolo": "ETRM Support Analyst (ConocoPhillips)",
+   "tecnologie": [{"nome": "RightAngle", "ruolo": "usata"}, {"nome": "TriplePoint", "ruolo": "usata"},
+                  {"nome": "PlanLogic", "ruolo": "usata"}, {"nome": "Endur", "ruolo": "usata"},
+                  {"nome": "ServiceNow", "ruolo": "usata"}, {"nome": "SQL", "ruolo": "usata"},
+                  {"nome": "Excel", "ruolo": "usata"}, {"nome": "ETRM", "ruolo": "usata"},
+                  {"nome": "ITSM", "ruolo": "usata"}, {"nome": "Allegro", "ruolo": "gradita"}],
+   "escluse": ["trade capture, settlement, invoicing (fasi del mestiere)", "Level 1/2/3, runbook, triage (organizzazione del supporto)"]},
+
+  {"n": 108, "id": "0ccc9fc4-d7ec-44e4-aaaa-90b9239d67bc", "titolo": "Japanese Sports Localization Specialist (Football)",
+   "tecnologie": [],
+   "escluse": ["style guides, localization, fact-check (pratiche)", "giapponese (lingua)"]},
+
+  {"n": 109, "id": "769f4b6f-8f15-4560-af7c-3211bdcae8f5", "titolo": "City Scout - Athens (Atlys)",
+   "tecnologie": [{"nome": "WiFi", "ruolo": "usata"}],
+   "escluse": ["smartphone (dispositivo generico)", "digital survey, Atlys app (strumenti del datore senza nome proprio)", "PlayStation, F1 simulator, flight simulator (attrezzatura ricreativa dell'ufficio)"]},
+
+  {"n": 110, "id": "f8f666e2-a19e-47bd-ae98-bbdf511b8d5e", "titolo": "Servicetechniker / Mechatroniker im Aussendienst",
+   "tecnologie": [],
+   "escluse": ["dentaltechnische Gerate, Praxisausstattung (attrezzatura generica, nessun nome)", "analoge und digitale Technologien (generico)"],
+   "nota": "tecnico di apparecchiature dentali: le macchine ci sono ma l'annuncio non ne nomina nessuna. Confronto utile col #95, dove sei marche erano scritte"},
+
+  {"n": 111, "id": "2ce8e401-6550-4afe-94f7-4347dcac15a2", "titolo": "Logistiek Medewerker Retail (JYSK)",
+   "tecnologie": [],
+   "escluse": ["nieuwste tools en systemen (generico)", "voorraadbeheer, magazijnindeling (attivita')"]},
+
+  {"n": 112, "id": "8d0b4781-d974-4410-95b7-2037b84383a6", "titolo": "Senior Mekaniker (Bilsmidigt)",
+   "tecnologie": [],
+   "escluse": ["diagnostik, felsokning, kamremsbyten (attivita')", "broms, chassi, fjadring (parti del veicolo)", "B-korkort (patente)"],
+   "nota": "meccanico senior, «avancerad diagnostik» ma nessuno strumento di diagnosi nominato"},
+
+  {"n": 113, "id": "0c094a87-3173-4fc1-a25b-095b0ca3eee4", "titolo": "Assistant Buyer EMEA - Hollister Women",
+   "tecnologie": [{"nome": "Microsoft Office", "ruolo": "usata"}],
+   "escluse": ["analytical sales tools (generico)", "hindsight, line review, floorset (processi del mestiere)", "Abercrombie, Hollister (marchi del datore)"]},
+
+  {"n": 114, "id": "138705f8-548d-40ba-a300-f3f75af98046", "titolo": "Social Media Lead (Peregrine)",
+   "tecnologie": [{"nome": "LinkedIn", "ruolo": "usata"}, {"nome": "YouTube", "ruolo": "usata"},
+                  {"nome": "Instagram", "ruolo": "usata"}, {"nome": "Shorts", "ruolo": "usata"}],
+   "escluse": ["paid + organic social, thought leadership (pratiche)", "analytics (generico)", "AI-enabled platform (prodotto del datore senza nome proprio)"]},
+
+  {"n": 115, "id": "1e8c100c-78c8-442b-aed2-14ef9b7db269", "titolo": "Freelance IT Support Engineer (Everience)",
+   "tecnologie": [{"nome": "Windows", "ruolo": "usata"}, {"nome": "Workspace ONE", "ruolo": "usata"}],
+   "escluse": ["CFC, ES (titoli svizzeri)", "agile (atteggiamento)", "Symbiotic Academy (formazione del datore)", "Level 2 support (organizzazione)"]},
+
+  {"n": 116, "id": "b43dc10c-b99d-4da5-af91-4ead36634943", "titolo": "Night Receptionist (Ibis Cambridge)",
+   "tecnologie": [{"nome": "OPERA Cloud", "ruolo": "usata"},
+                  {"nome": "Property Management System", "ruolo": "usata"},
+                  {"nome": "Microsoft Office", "ruolo": "usata"}, {"nome": "Word", "ruolo": "usata"},
+                  {"nome": "Excel", "ruolo": "usata"}],
+   "escluse": ["Night Audit, revenue postings (procedure)", "Accor Discount Card, Bonus Breaks (benefit)", "English (lingua)"]},
+
+  {"n": 117, "id": "9b622799-2903-4cd3-9f5e-cded4b314c3b", "titolo": "Chef de projet IT - AMOA (H/F) (Alten)",
+   "tecnologie": [],
+   "escluse": ["methodologies agiles (pratiche)", "cahier des charges, cahier de recette (documenti)", "Bac+5 (titolo)", "Planet Tech'Care, Climate ambition accelerator (programmi del datore)"]},
+
+  {"n": 118, "id": "a5ab9105-ece6-47cc-bdbd-4fb01dc9856d", "titolo": "Cuisinier / Cuisiniere de collectivite (H/F)",
+   "tecnologie": [],
+   "escluse": ["CAP/BEP (titoli)", "normes de qualite, gestion des stocks (procedure e attivita')"]},
+
+  {"n": 119, "id": "cfb7a591-46b1-434a-95af-153424fd6a92", "titolo": "Truck Driver CDL A Local No Weekends (Ryder)",
+   "tecnologie": [{"nome": "Day Cab", "ruolo": "usata"}, {"nome": "Dry Van", "ruolo": "usata"}],
+   "escluse": ["Class A CDL, DOT physical, endorsements (abilitazioni personali)", "Roadside Maintenance (servizio del datore)", "401(k), PTO (benefit)"]},
+
+  {"n": 120, "id": "4722320f-005b-47d0-a473-23be4e4cc7c4", "titolo": "Ingenieur Risque Industriel / HSE - H/F (NEO2)",
+   "tecnologie": [{"nome": "HAZOP", "ruolo": "usata"}, {"nome": "AMDEC", "ruolo": "usata"},
+                  {"nome": "APR", "ruolo": "usata"}, {"nome": "arbre des causes", "ruolo": "usata"}],
+   "escluse": ["etudes de danger, dossiers reglementaires (documenti)", "HSE, genie des procedes (discipline)", "Bac+5 (titolo)", "anglais (lingua)"]}
+ ],
+ "dubbi": [
+  "#106: l'annuncio piu' carico del golden, 33 voci. Il rischio qui non e' inventare ma perdersi: un modello che ne prende venti su trentatre sembra sbagliare, e invece sta solo leggendo un elenco molto lungo.",
+  "#106: «CIAM» e «DAG» sono sigle di categoria di software (identity per i clienti, governance degli accessi ai dati). Dentro per coerenza con CRM/ERP/MES, ma sono le sigle piu' oscure che ho tenuto.",
+  "#102: HOAI e VOB esclusi come strumenti giuridici. VOB parte C contiene norme tecniche che si applicano lavorando, quindi un revisore severo potrebbe tenerlo.",
+  "#109: «WiFi» dentro perche' l'annuncio ne fa l'oggetto della misura (si verifica la qualita' del WiFi nei bar). Non e' un segnale tecnografico utile sull'azienda, ed e' il tipo di voce vera ma inutile.",
+  "#119: «Day Cab» e «Dry Van» sono tipi di motrice e rimorchio nominati. Dentro per la regola dei macchinari, e per la logistica sono segnale vero.",
+  "#120: HAZOP, AMDEC, APR e «arbre des causes» sono metodi di analisi del rischio con un corpo definito. Secondo annuncio industriale francese in cui il contenuto tecnico e' tutto in metodi e nessuno in software (dopo #46)."
+ ]
+}

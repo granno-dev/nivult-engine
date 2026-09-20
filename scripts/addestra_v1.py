@@ -80,7 +80,11 @@ def _pulito(t: str) -> str:
 
 
 def testo(x: dict) -> str:
-    return f"{x.get('title') or ''} | {x.get('location') or ''}\n{_pulito(x.get('text'))[:1200]}"
+    # niente `[:1200]`: era un SECONDO taglio, che decapitava di nuovo anche
+    # i testi gia' interi. Chi limita davvero la finestra e' `--max-len` del
+    # tokenizzatore, che e' un parametro del modello e non una mutilazione
+    # silenziosa dei dati.
+    return f"{x.get('title') or ''} | {x.get('location') or ''}\n{_pulito(x.get('text'))}"
 
 
 def etichette(x: dict) -> dict:
@@ -140,6 +144,12 @@ def pesi_classi(train: list[dict], dev) -> dict:
 def perdita(logits: dict, y: dict, smoothing: float = 0.1) -> torch.Tensor:
     tot = 0.0
     for t in TESTE:
+        # 15/09/2026: nel dataset 200k contratto e remoto sono vuoti in meta' delle righe;
+        # un lotto con TUTTE le etichette di una testa a IGN faceva tornare NaN a cross_entropy
+        # (media su zero elementi) e la NaN si mangiava i pesi (passo 2400 sulla H100, e il
+        # «NaN da ROCm» sul N5 era questo). Testa senza etichette nel lotto = non contribuisce.
+        if not (y[t] != IGN).any():
+            continue
         tot = tot + F.cross_entropy(logits[t], y[t], ignore_index=IGN, label_smoothing=smoothing,
                                     weight=PESI_CLASSI.get(t))
     bce = F.binary_cross_entropy_with_logits(logits["lingue"], y["lingue"], reduction="none").mean(1)
@@ -149,11 +159,17 @@ def perdita(logits: dict, y: dict, smoothing: float = 0.1) -> torch.Tensor:
     return tot
 
 
-def lotti(righe: list[dict], tok, bs: int, max_len: int, shuffle: bool):
+def lotti(righe: list[dict], tok, bs: int, max_len: int, shuffle: bool,
+          seme: int | None = None, salta: int = 0):
+    """I lotti di un'epoca. `seme` rende l'ordine riproducibile per epoca,
+    `salta` salta i primi N lotti senza tokenizzarli: insieme permettono di
+    riprendere da meta' epoca dopo un checkpoint, invece che dall'inizio.
+    Il 13/09/2026 l'addestramento e' morto al passo ~420 su 2.244 senza
+    aver salvato nulla, perche' il checkpoint c'era solo a fine epoca."""
     idx = list(range(len(righe)))
     if shuffle:
-        random.shuffle(idx)
-    for i in range(0, len(idx), bs):
+        (random.Random(seme) if seme is not None else random).shuffle(idx)
+    for i in range(salta * bs, len(idx), bs):
         parte = [righe[j] for j in idx[i:i + bs]]
         enc = tok([testo(x) for x in parte], truncation=True, max_length=max_len,
                   padding=True, return_tensors="pt")
@@ -220,8 +236,22 @@ def main() -> int:
     ap.add_argument("--train", required=True); ap.add_argument("--golden", required=True)
     ap.add_argument("--out", default="./v1"); ap.add_argument("--base", default=BASE)
     ap.add_argument("--epoche", type=int, default=3); ap.add_argument("--bs", type=int, default=32)
-    ap.add_argument("--lr", type=float, default=3e-5); ap.add_argument("--max-len", type=int, default=384)
+    # --max-len 384 (fino al 13/09/2026) vedeva ~1.500 caratteri: con la
+    # mediana reale a 4.150 il modello leggeva un quarto dell'annuncio.
+    # 3072 token fanno entrare per intero oltre il 99% degli annunci
+    # (99esimo percentile misurato: 10.691 caratteri). Il massimo
+    # architetturale di mmBERT e' 8192, ma sul N5 senza scheda grafica
+    # moltiplicherebbe le ore per venti invece che per otto.
+    ap.add_argument("--lr", type=float, default=3e-5); ap.add_argument("--max-len", type=int, default=3072)
     ap.add_argument("--max-righe", type=int, default=None); ap.add_argument("--max-passi", type=int, default=None)
+    # --accum: lotti piccoli sommati prima di ogni passo dell'ottimizzatore.
+    # `--bs 4 --accum 2` e' lo stesso lotto effettivo di `--bs 8` con meta'
+    # della memoria di picco: sul N5 il processo condivide un tetto di 48 GiB
+    # con il resto dell'operaio. Il testo resta intero (max-len non cambia).
+    ap.add_argument("--accum", type=int, default=1)
+    # --salva-ogni: checkpoint ogni N passi (~50 min a 200), atomico, con
+    # ripresa da meta' epoca. Prima si salvava solo a fine epoca: 9 ore.
+    ap.add_argument("--salva-ogni", type=int, default=200)
     ap.add_argument("--cpu", action="store_true")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -235,43 +265,113 @@ def main() -> int:
     model = Modello(a.base).to(dev)
     PESI_CLASSI.update(pesi_classi(train, dev))
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=0.01)
-    passi_epoca = math.ceil(len(train) / a.bs)
+    # passi = passi dell'OTTIMIZZATORE (ogni `accum` lotti); il gruppo
+    # parziale in coda all'epoca conta come un passo.
+    micro_epoca = math.ceil(len(train) / a.bs)
+    passi_epoca = math.ceil(micro_epoca / max(1, a.accum))
     tot_passi = a.max_passi or passi_epoca * a.epoche
     warm = max(1, int(0.06 * tot_passi))
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda s: min(1.0, (s + 1) / warm) * max(0.0, (tot_passi - s) / max(1, tot_passi - warm)))
     ckpt = os.path.join(a.out, "checkpoint.pt")
     epoca0, passo = 0, 0
+    # La FIRMA del dataset: righe + impronta del file. Un checkpoint di un
+    # altro dataset non si riprende — si mette da parte. E' successo il
+    # 07/09/2026: su Drive c'era il checkpoint dell'anteprima (58k righe,
+    # terza epoca finita), il dataset nuovo da 314k e' stato caricato,
+    # l'addestramento saltato per intero e l'esame fatto coi pesi vecchi.
+    import hashlib
+    with open(a.train, "rb") as fh:
+        firma = f"{len(train)}:{hashlib.sha1(fh.read(1 << 20)).hexdigest()[:12]}"
     if os.path.exists(ckpt):
         st = torch.load(ckpt, map_location=dev)
-        model.load_state_dict(st["model"]); opt.load_state_dict(st["opt"]); sched.load_state_dict(st["sched"])
-        epoca0, passo = st["epoca"] + 1, st["passo"]
-        print(f"ripresa dal checkpoint: epoca {epoca0}, passo {passo}", flush=True)
-    usa_bf16 = dev.type == "cuda" and torch.cuda.is_bf16_supported()
+        if st.get("firma") != firma:
+            vecchio = ckpt + ".altro-dataset"
+            os.replace(ckpt, vecchio)
+            print(f"CHECKPOINT DI UN ALTRO DATASET ({st.get('firma')!r} != {firma!r}): messo da parte in {vecchio}, "
+                  f"si parte da zero", flush=True)
+        else:
+            model.load_state_dict(st["model"]); opt.load_state_dict(st["opt"]); sched.load_state_dict(st["sched"])
+            # `epoca` e' l'epoca IN CORSO al salvataggio (formato 2); se i
+            # passi fatti la coprono per intero, si riparte dalla successiva.
+            epoca0, passo = st["epoca"], st["passo"]
+            if passo >= (epoca0 + 1) * passi_epoca:
+                epoca0 += 1
+            print(f"ripresa dal checkpoint: epoca {epoca0}, passo {passo} "
+                  f"(nell'epoca: {passo - epoca0 * passi_epoca}/{passi_epoca})", flush=True)
+    # bf16 ANCHE SU CPU. Misurato dalla letteratura: 1,62-1,87x rispetto a
+    # fp32 su processori con AVX512_BF16, che il Ryzen del N5 ha
+    # (`avx512_bf16` in /proc/cpuinfo). Prima questa riga accendeva la
+    # precisione ridotta solo su GPU, e su CPU si addestrava in precisione
+    # piena buttando via un acceleratore presente nel silicio: 23 ore invece
+    # di ~13. bf16 ha lo stesso esponente di fp32, quindi non serve il
+    # ridimensionamento della perdita.
+    cpu_bf16 = (dev.type == "cpu"
+                and getattr(torch.backends.cpu, "_is_avx512_bf16_supported", lambda: False)()
+                if hasattr(torch.backends, "cpu") else False)
+    if dev.type == "cpu" and not cpu_bf16:
+        try:                                  # la via portatile: leggere il processore
+            with open("/proc/cpuinfo") as fh:
+                cpu_bf16 = "avx512_bf16" in fh.read()
+        except OSError:
+            cpu_bf16 = False
+    usa_bf16 = (dev.type == "cuda" and torch.cuda.is_bf16_supported()) or cpu_bf16
+    autocast_on = dev.type == "cuda" or cpu_bf16
+    print(f"precisione ridotta bf16: {'SI' if usa_bf16 else 'no'} su {dev.type}", flush=True)
     scaler = torch.amp.GradScaler("cuda", enabled=(dev.type == "cuda" and not usa_bf16))
 
+    def salva(ep: int) -> None:
+        # Scrittura atomica: un kill a meta' torch.save lascerebbe un file
+        # troncato e la ripresa fallirebbe proprio quando serve.
+        tmp = ckpt + ".tmp"
+        # 15/09: mai salvare pesi non finiti (un checkpoint NaN cancellava l'ultimo buono)
+        if any(not torch.isfinite(p).all() for p in model.parameters()):
+            print("  checkpoint SALTATO: pesi non finiti", flush=True); return
+        torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
+                    "epoca": ep, "passo": passo, "firma": firma, "formato": 2}, tmp)
+        if os.path.exists(ckpt):
+            os.replace(ckpt, ckpt + ".prev")     # l'ultimo buono resta sempre a portata di mano
+        os.replace(tmp, ckpt)
+        print(f"  checkpoint: epoca {ep} passo {passo}", flush=True)
+
+    def passo_ottimizzatore() -> None:
+        if scaler.is_enabled():
+            scaler.unscale_(opt); nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(opt); scaler.update()
+        else:
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
+        opt.zero_grad(set_to_none=True); sched.step()
+
+    accum = max(1, a.accum)
     for ep in range(epoca0, a.epoche):
-        model.train(); t0 = time.time(); somma = 0.0; n = 0
-        for enc, y, _ in lotti(train, tok, a.bs, a.max_len, shuffle=True):
+        model.train(); t0 = time.time(); somma = 0.0; n = 0; micro = 0
+        gia_fatti = passo - ep * passi_epoca          # passi gia' fatti in quest'epoca (ripresa)
+        opt.zero_grad(set_to_none=True)
+        for enc, y, _ in lotti(train, tok, a.bs, a.max_len, shuffle=True,
+                               seme=42 + ep, salta=gia_fatti * accum):
             if a.max_passi and passo >= a.max_passi:
                 break
             enc = {k: v.to(dev) for k, v in enc.items()}; y = {k: v.to(dev) for k, v in y.items()}
             with torch.autocast(device_type=dev.type, dtype=torch.bfloat16 if usa_bf16 else torch.float16,
-                                enabled=(dev.type == "cuda")):
+                                enabled=autocast_on):
                 lg = model(enc["input_ids"], enc["attention_mask"])
-                loss = perdita(lg, y)
-            opt.zero_grad(set_to_none=True)
-            if scaler.is_enabled():
-                scaler.scale(loss).backward(); scaler.unscale_(opt)
-                nn.utils.clip_grad_norm_(model.parameters(), 1.0); scaler.step(opt); scaler.update()
-            else:
-                loss.backward(); nn.utils.clip_grad_norm_(model.parameters(), 1.0); opt.step()
-            sched.step(); passo += 1; somma += loss.item(); n += 1
+                loss = perdita(lg, y) / accum
+            if not torch.isfinite(loss):
+                print(f"  lotto scartato al passo {passo}: loss non finita", flush=True)
+                opt.zero_grad(set_to_none=True); continue
+            (scaler.scale(loss) if scaler.is_enabled() else loss).backward()
+            somma += loss.item() * accum; micro += 1
+            if micro % accum:
+                continue
+            passo_ottimizzatore(); passo += 1; n += 1
             if n % 200 == 0:
-                print(f"  ep {ep} passo {passo} loss {somma/n:.4f} {(time.time()-t0)/60:.1f} min", flush=True)
-        print(f"epoca {ep}: loss media {somma/max(1,n):.4f} in {(time.time()-t0)/60:.1f} min", flush=True)
-        torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-                    "epoca": ep, "passo": passo}, ckpt)
+                print(f"  ep {ep} passo {passo} loss {somma/micro:.4f} {(time.time()-t0)/60:.1f} min", flush=True)
+            if a.salva_ogni and passo % a.salva_ogni == 0:
+                salva(ep)
+        if micro % accum:                              # gruppo parziale in coda all'epoca
+            passo_ottimizzatore(); passo += 1; n += 1
+        print(f"epoca {ep}: loss media {somma/max(1,micro):.4f} in {(time.time()-t0)/60:.1f} min", flush=True)
+        salva(ep)
         if a.max_passi and passo >= a.max_passi:
             break
 
@@ -292,7 +392,12 @@ def main() -> int:
             tp += len(vere & viste); fp += len(viste - vere); fn += len(vere - viste)
     rapporto["lingue"] = {"precisione": round(tp / max(1, tp + fp), 3), "copertura": round(tp / max(1, tp + fn), 3)}
     fam_mano = rapporto["family"]["mano"].get("accuratezza")
-    rapporto["cancello"] = {"famiglia_mano": fam_mano, "passa": bool(fam_mano is not None and fam_mano >= 0.90)}
+    # il cancello controlla anche che l'addestramento sia stato fatto DAVVERO
+    # (passi >= 90% del previsto): un esame su pesi non addestrati non passa
+    completo = passo >= 0.9 * tot_passi
+    rapporto["passi_previsti"] = tot_passi; rapporto["epoche_fatte"] = a.epoche - epoca0; rapporto["firma_dataset"] = firma
+    rapporto["cancello"] = {"famiglia_mano": fam_mano, "addestramento_completo": completo,
+                            "passa": bool(fam_mano is not None and fam_mano >= 0.90 and completo)}
     json.dump(rapporto, open(os.path.join(a.out, "esame-v1.json"), "w"), indent=1, ensure_ascii=False)
     print(json.dumps({k: (v if k in ("cancello", "lingue") else {kk: vv.get("accuratezza") for kk, vv in v.items()})
                       for k, v in rapporto.items() if k in TESTE or k in ("cancello", "lingue")},

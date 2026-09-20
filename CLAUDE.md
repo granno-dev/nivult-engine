@@ -217,6 +217,106 @@ e descritti in `docs/manuale-guasti.md`:
    riparazione il bare del server è avanti rispetto a GitHub: dal Mac,
    `git pull server main` prima di pushare.
 
+### Il paese si assegna all'ingresso, e non si azzera mai
+
+Un'offerta senza paese non entra in nessun cluster: è la perdita più
+silenziosa del motore. Il 07/09/2026 erano **150.188 offerte attive**
+(18% del corpus) per tre cause, ciascuna con la sua regola:
+
+1. il paese veniva assegnato **solo di notte** (`arricchisci
+   --da-localita`), e quella notte il passo era morto per deadlock: la
+   SELECT delle 900k righe teneva `AccessShareLock` su `ats_jobs` fino
+   agli UPDATE, un DDL notturno si metteva in coda in mezzo. Ora il
+   runner lo assegna **alla scrittura** (`_paese_all_ingresso`, stesse
+   regole del passo notturno), il passo notturno **committa dopo la
+   lettura** prima di scrivere, e l'operaio N5 lo ripete ogni 6 ore;
+2. alcuni adapter non estraggono la località (Phenom legge solo la
+   sitemap): dove il paese sta **nell'URL** (`/gb/en/job/`) si legge da
+   lì; dove non c'è (`/global/en/`) lo dà la lettura di dettaglio
+   (`--dettaglio`, JSON-LD o **microdata** JobPosting, mai due volte
+   sulla stessa pagina);
+3. **`--da-azienda` riempie, non azzera.** La regola «senza evidenza →
+   NULL, anche se già scritto» ha cancellato in una notte 37.321 paesi
+   buoni (Phenom dall'URL, raw degli adapter) e le offerte senza paese
+   sono *salite* da 150k a 172k. Un paese su una riga senza località non
+   può venire dal testo: è evidenza della fonte. Non si tocca.
+
+### SuccessFactors ha tre template, e la sitemap li unisce
+
+Fino al 07/09/2026 l'adapter leggeva le **prime tre bacheche `/go/`**:
+su ATM Milano la prima era «Eventi», Scania ne ha sedici, Flint zero.
+Risultato: 1.029 tenant su 1.107 a zero con HTTP 200, canarini muti
+perché i tre di riferimento erano della variante che funzionava, e
+Fantastic vedeva 10.463 offerte SF a settimana in Germania contro le
+nostre 434. Ora si leggono, in ordine: `/search/?startrow=N` (tabella
+`data-row`), l'endpoint `tile-search-results` quando la pagina dichiara
+`Results.init({apiEndpoint…})` (siti JavaScript; i campi anche per
+**etichetta**, perché ATM chiama la sede «Sede» in `customfield1`), le
+bacheche come ripiego, e la **sitemap** per ciò che gli elenchi non
+raggiungono. Dopo: 286 tenant con offerte, 65.000 offerte.
+
+Il detector registra un tenant SF **solo con l'host carriere
+verificato** (`_host_sf`: `/search/` con l'elenco e un marcatore SAP).
+L'impronta «successfactors» scatta anche su una homepage che linka il
+login dei dipendenti: il 78% dei tenant «SF» erano `crh.com`,
+`also.com` — homepage che nessun adapter può leggere.
+`scripts/riconcilia_sf.py` ha sanato lo storico. Nei canarini SF stanno
+anche `jobs.scania.com` e `carriere.atm.it`, la variante a tile.
+
+### Il censimento: i domini veri e quelli inventati
+
+`company_domains` ha 140.652 domini `gleif` **inventati dal nome
+legale** (`autotrasporti-dagaro-c.it`): 93% morti, 172 ATS in tutto. I
+domini veri sono `grafo_cc` (94k, chi linka una board ATS: 35k ATS) e
+`http_archive` (7,8k), che però hanno `country` NULL: **un'analisi per
+paese su `company_domains` non li vede** e conclude che l'Italia è
+scoperta. Prima di dedurre «poche aziende», guardare
+`ats_companies.job_count = 0` per piattaforma e verificare a mano le
+pagine pubbliche: il 07/09 su 54 tenant «a zero» 53 erano vuoti davvero.
+
+### nivult-v1 in linea sul N5
+
+Il classificatore locale a cinque teste (mmBERT-base: famiglia,
+seniority, contratto, remoto, lingue richieste) è in produzione dal
+07/09/2026: `nivult.ats.modello_v1` ricostruisce la rete **identica** a
+quella di `addestra_v1.py` e formatta il testo come in addestramento;
+`nivult.ats.classifica_v1` gira nel ciclo dell'operaio N5 (GPU ROCm, 26
+offerte/s misurate) con il suo marcatore `locale_v1_at`. Esame a mano:
+famiglia 90,1% (passa il cancello del 90%), seniority 83,9%, contratto
+83,9%, remoto 94,1%, lingue precisione 87,5%.
+
+**Scrive solo dove è sicuro.** La famiglia sopra la soglia del 95% di
+precisione (`soglie_95.family` = 0,75 in `config-v1.json`), e solo dove
+non c'è; seniority, contratto e remoto **solo dove la colonna è vuota** e
+sopra 0,85 — per quelle teste nessuna soglia raggiunge il 95%, quindi
+riempiono, non sovrascrivono mai la fonte o GLM. Il modello sta in
+`/opt/nivult/modelli/nivult-v1/` sul N5 (pesi, tokenizer, `config-v1.json`,
+`esame-v1.json`); l'addestramento su Colab con `addestra_v1.py`, che
+rifiuta un checkpoint di un altro dataset (è così che l'anteprima è
+stata spacciata per addestramento una volta).
+
+### La scoperta dei datori: i metodi che funzionano
+
+- **Indice colonnare di Common Crawl con DuckDB**, sul N5
+  (`scripts/cc_censimento.py` + `scripts/censimento_cc_carriere.py`):
+  niente AWS, parquet via https in predicate pushdown sui TLD europei,
+  path filtrati coi vocabolari delle lingue. Il 07/09/2026: 1,3 milioni
+  di URL di pagine carriere, **301.678 domini** con paese dal TLD
+  (DE 109k, UK 32k, NL 31k, FR 23k, PL 20k, IT 12k), 287.630 mai visti.
+- **Indice CDX per host** (`index.commoncrawl.org/…-index?url=*.jobs.personio.de`)
+  per i tenant hostati: 548 softgarden.io che mancavano.
+- **Le vetrine dei fornitori**, che non sono aggregatori: jobs.workable.com
+  (API paginata, datori col sito → detector) e jobs.smartrecruiters.com
+  (`sr-jobs/search` ignora ogni filtro ma dà sempre le ~96 offerte più
+  recenti del mondo con l'identificativo del tenant: letto ogni giro dal
+  volano, `scripts/censimento_smartrecruiters.py`).
+- **Chiusi o deboli:** Rapid7 FDNS (CNAME → vanity) non accetta nuovi
+  utenti dal 2022; HTTP Archive/Wappalyzer non riconosce Teamtailor,
+  SuccessFactors, Softgarden; GLEIF inventa i domini.
+
+Il detector dei domini `pending` e il ripasso girano sul N5
+(`operaio-loop.sh`), non sul server.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
@@ -964,6 +1064,7 @@ python scripts/check_modules.py          # lo strato Python committa davvero? (s
 python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
 python scripts/check_oauth.py            # OAuth: state, claim, collegamento (solo db _test/_dev)
 python scripts/delete_user.py --user-id <uuid>
+python -m nivult.ats.runner --schema      # applica schema.sql dell'ATS (una volta a notte; MAI a ogni lotto: lock esclusivi, 47 deadlock/giorno il 07/09)
 python scripts/ponte_ats.py --dry-run     # travaso ATS -> funnel, senza scrivere
 python scripts/ponte_ats.py               # travasa
 python scripts/purge_jobs.py --dry-run    # retention offerte morte

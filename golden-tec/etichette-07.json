@@ -1,0 +1,130 @@
+{
+ "lotto": 7,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "#127 scrive «Unbuntu» e «Promox VE»: errori di battitura del datore per Ubuntu e Proxmox. Le etichette li riportano COME SONO SCRITTI, secondo la rubrica — e sono un banco di prova utile, perche' un modello che li corregge in silenzio non e' piu' ancorabile al testo.",
+  "Terzo lotto di fila in cui i mestieri manuali hanno tecnologie vere e nominate: fotovoltaica e videosorveglianza (#125), escavatore, pala e terna (#133), isolatori farmaceutici (#137)."
+ ],
+ "offerte": [
+  {"n": 121, "id": "19791d23-34bb-4a7b-8530-5094f61e4815", "titolo": "Maintenance Technician - EPA Certified",
+   "tecnologie": [{"nome": "HVAC", "ruolo": "usata"}, {"nome": "Outlook", "ruolo": "usata"}],
+   "escluse": ["EPA Certification Type II / Universal (certificazione personale)", "electrical, plumbing, carpentry (mestieri)", "work order systems, hand and power tools, golf cart (attrezzatura generica)"]},
+
+  {"n": 122, "id": "40590c6b-7b32-423b-99ee-c097674074bb", "titolo": "Data Scientist Associate Manager (Accenture)",
+   "tecnologie": [{"nome": "Python", "ruolo": "usata"}, {"nome": "Docker", "ruolo": "usata"},
+                  {"nome": "Linux", "ruolo": "usata"}, {"nome": "Unix", "ruolo": "usata"},
+                  {"nome": "Git", "ruolo": "usata"}, {"nome": "AWS", "ruolo": "usata"},
+                  {"nome": "Azure", "ruolo": "usata"}, {"nome": "RAG", "ruolo": "usata"},
+                  {"nome": "Graph RAG", "ruolo": "usata"}, {"nome": "HPC", "ruolo": "usata"}],
+   "escluse": ["Agentic AI, Vision Language Models, Computer Vision, Audio Processing, GenAI, MLOps, LLM (categorie e discipline)", "GPU (categoria hardware)", "CI/CD, DevOps, data governance (pratiche)", "BPSS, DV clearance (autorizzazioni personali)"]},
+
+  {"n": 123, "id": "3b53b687-d94f-4e08-a3fa-4cf93d1806be", "titolo": "Customer Service - Self Storage Manager",
+   "tecnologie": [],
+   "escluse": ["driver's license (patente)", "cash drawer audit, bank deposits (attivita')"]},
+
+  {"n": 124, "id": "c0870f9a-daef-450e-bbb5-870f5b6412bf", "titolo": "Guest Experience Leader (McDonald's)",
+   "tecnologie": [],
+   "escluse": ["L-GAV (contratto collettivo)", "Sunrise, Corporate Benefits (piattaforme dei benefit)"]},
+
+  {"n": 125, "id": "53fb925f-696d-41bd-a0ff-6f58208386bd", "titolo": "Elektroinstalater (m/z) (TRUMMER)",
+   "tecnologie": [{"nome": "fotovoltaika", "ruolo": "usata"}, {"nome": "video nadzor", "ruolo": "usata"},
+                  {"nome": "alarmni sistemi", "ruolo": "usata"}, {"nome": "domofoni", "ruolo": "usata"}],
+   "escluse": ["branje nacrtov (lettura disegni, attivita')", "nemski jezik (lingua)", "dovoljenje za delo (permesso di lavoro)"]},
+
+  {"n": 126, "id": "d60b57e5-0e0e-41c8-8d5f-71300481ae6b", "titolo": "Stock Controller (Warrens / Culina)",
+   "tecnologie": [],
+   "escluse": ["pallet database, on-site systems (sistemi citati senza nome)", "pickfaces, hold and release (procedure di magazzino)"]},
+
+  {"n": 127, "id": "9c5df607-4250-4163-90ad-2b472f054bf7", "titolo": "Informaticien (H/F) (APAJH Creuse)",
+   "tecnologie": [{"nome": "Windows Server 2022", "ruolo": "usata"}, {"nome": "Linux", "ruolo": "usata"},
+                  {"nome": "Debian", "ruolo": "usata"}, {"nome": "Unbuntu", "ruolo": "usata"},
+                  {"nome": "Promox VE", "ruolo": "usata"}, {"nome": "Active Directory", "ruolo": "usata"},
+                  {"nome": "GPO", "ruolo": "usata"}, {"nome": "Cato Network", "ruolo": "usata"},
+                  {"nome": "GLPI", "ruolo": "usata"}, {"nome": "PBS", "ruolo": "usata"},
+                  {"nome": "DPI", "ruolo": "usata"}],
+   "escluse": ["RGPD (legge)", "ANSSI (agenzia, non una norma: SecNumCloud invece sarebbe dentro)", "PCA/PRA (piani, pratiche)", "helpdesk niveau 1 et 2 (organizzazione)", "paie (funzione)"]},
+
+  {"n": 128, "id": "419835da-fcc5-4a70-830e-d5d99891d1e2", "titolo": "RECEPTIONNISTE H/F/X - CDD 4 mois (Sofitel)",
+   "tecnologie": [],
+   "escluse": ["outil informatique, logiciels de base (generici, nessun nome)", "check-in, check-out express (procedure)", "Accor (gruppo del datore)", "anglais, francais, neerlandais (lingue)"],
+   "nota": "receptionista d'albergo senza nessun software nominato: confronto diretto col #116, dove OPERA Cloud c'era"},
+
+  {"n": 129, "id": "ca363dd5-f1e4-4e1e-a8a0-d191a519664f", "titolo": "Senior Director, Account Management (Lemonada Media)",
+   "tecnologie": [{"nome": "Megaphone", "ruolo": "usata"}, {"nome": "FlightPath", "ruolo": "usata"},
+                  {"nome": "ad server", "ruolo": "usata"}, {"nome": "pixels", "ruolo": "usata"}],
+   "escluse": ["airchecks, trafficking, revenue pacing (procedure del mestiere)", "inventory management, forecasting (pratiche)"]},
+
+  {"n": 130, "id": "f583bca4-1201-4a75-a495-efa374d58733", "titolo": "Back-end Software Engineer | Betty CA",
+   "tecnologie": [{"nome": "C#", "ruolo": "usata"}, {"nome": ".NET", "ruolo": "usata"},
+                  {"nome": "WebAPI", "ruolo": "usata"}, {"nome": "SQL", "ruolo": "usata"},
+                  {"nome": "Docker", "ruolo": "usata"}, {"nome": "GitHub", "ruolo": "usata"},
+                  {"nome": "REST API", "ruolo": "usata"}, {"nome": "React", "ruolo": "gradita"},
+                  {"nome": "JS", "ruolo": "gradita"}],
+   "escluse": ["CI/CD (pratica)", "unit and integration testing (pratiche)", "AGCO (autorita' di regolazione)"]},
+
+  {"n": 131, "id": "1783b618-3c36-4291-993a-cedc1aafe489", "titolo": "System Engineer, ModSim, Joint Simulation Environment (JSE)",
+   "tecnologie": [{"nome": "AFSIM", "ruolo": "usata"}, {"nome": "JSE", "ruolo": "usata"},
+                  {"nome": "SysML", "ruolo": "usata"}, {"nome": "DoDAF", "ruolo": "usata"},
+                  {"nome": "UAFP", "ruolo": "usata"}, {"nome": "Cameo MagicDraw", "ruolo": "usata"},
+                  {"nome": "Rhapsody", "ruolo": "gradita"}, {"nome": "SparxEA", "ruolo": "gradita"},
+                  {"nome": "MATLAB", "ruolo": "gradita"}, {"nome": "Simulink", "ruolo": "gradita"},
+                  {"nome": "Python", "ruolo": "gradita"}, {"nome": "numpy", "ruolo": "gradita"},
+                  {"nome": "scipy", "ruolo": "gradita"}, {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["MODSIM, MBSE (categorie)", "BDD, IBD, activity diagram, use case diagram (tipi di diagramma SysML)", "U.S. Top Secret clearance (autorizzazione personale)"]},
+
+  {"n": 132, "id": "f74f20b1-2f4f-4485-a7e8-1d12653f48a5", "titolo": "RN Dementia Coordinator (Medefer)",
+   "tecnologie": [{"nome": "Alzheimer's blood test", "ruolo": "servizio"}],
+   "escluse": ["electronic health record and referral platform (prodotto del datore, senza nome proprio)", "CQC, NHS England (enti e autorita')", "Alzheimer's Society, Admiral Nurse (servizi esterni a cui indirizzare)", "memory assessment (prestazione)"]},
+
+  {"n": 133, "id": "b554601c-2f93-4f01-9bbd-fdb11759e32c", "titolo": "Escavatorista (Randstad)",
+   "tecnologie": [{"nome": "escavatore", "ruolo": "usata"}, {"nome": "pala meccanica", "ruolo": "usata"},
+                  {"nome": "terna", "ruolo": "usata"},
+                  {"nome": "macchine movimento terra", "ruolo": "usata"}],
+   "escluse": ["patente C, attestato per la conduzione (abilitazioni personali)", "trincee, pozzetti, livellamento (lavorazioni)", "licenza media (titolo)"]},
+
+  {"n": 134, "id": "44b95717-d6c7-47a1-ab1d-4c64ebfb34a7", "titolo": "Assistant.e Chef(fe) de projet evenementiel (stage)",
+   "tecnologie": [{"nome": "Design Thinking", "ruolo": "usata"}, {"nome": "Lean Startup", "ruolo": "usata"},
+                  {"nome": "MailChimp", "ruolo": "gradita"}, {"nome": "Klaxoon", "ruolo": "gradita"},
+                  {"nome": "Canva", "ruolo": "gradita"}, {"nome": "Mural", "ruolo": "gradita"}],
+   "escluse": ["outils bureautiques (Google et/ou Microsoft): nomi di fornitori, non di prodotti", "DATA et IA (categorie)", "hackathon, ateliers d'ideation (formati di evento)", "Master (titolo)"]},
+
+  {"n": 135, "id": "55aa3e58-7349-4c87-8013-be9de4a1f815", "titolo": "Campaign Director till Cure Media",
+   "tecnologie": [],
+   "escluse": ["creator marketing, projektledning (pratiche)", "KPI (indicatori)", "L'Oreal, Colgate-Palmolive, Wolt, Sephora (clienti del datore)", "psykometriska tester (fase di selezione)"]},
+
+  {"n": 136, "id": "2151c8eb-516a-442d-a2c1-36a0294a5184", "titolo": "Cleared Security Officer Driving (Allied Universal)",
+   "tecnologie": [{"nome": "access control", "ruolo": "gradita"}],
+   "escluse": ["DoD Secret clearance, driver's license, CPR certification (autorizzazioni personali)", "scheduling platform, Claim-A-Shift (strumenti del datore senza nome)", "high school diploma (titolo)"]},
+
+  {"n": 137, "id": "f6c189a4-f016-446f-84c3-c24afdca38d8", "titolo": "Operatore farmaceutico addetto al reparto Sterile",
+   "tecnologie": [{"nome": "isolatori", "ruolo": "usata"}],
+   "escluse": ["reparto sterile (ambiente)", "patente B, diploma (abilitazioni e titoli)", "CCNL Chimica-Farmaceutica (contratto)"],
+   "nota": "annuncio di 40 parole con dentro UNA tecnologia vera e specifica: gli isolatori. Il rischio qui e' il contrario dell'invenzione: la distrazione"},
+
+  {"n": 138, "id": "3b69b56a-aa81-42d9-9b67-75de43de217c", "titolo": "Sales Assistant Motoabbigliamento - Prato",
+   "tecnologie": [],
+   "escluse": ["e-commerce (canale)", "PC, cassa, magazzino (strumenti e luoghi generici)", "CCNL Terziario (contratto)"]},
+
+  {"n": 139, "id": "b4676cf5-a36d-4864-906a-3d0b61099a72", "titolo": "GRAFICO/A E ADDETTO/A ALLA STAMPA (During)",
+   "tecnologie": [{"nome": "programmi Adobe", "ruolo": "usata"}],
+   "escluse": ["grafica vettoriale, adattamento grafico (tecniche del mestiere)", "macchinari (generico, nessun nome)", "GDPR (legge, nella nota privacy)"]},
+
+  {"n": 140, "id": "97d609c3-3207-4701-8451-0fcae296dbac", "titolo": "Lead Engineer - Product Catalog Team (Stitch Fix)",
+   "tecnologie": [{"nome": "Go", "ruolo": "usata"}, {"nome": "Java", "ruolo": "usata"},
+                  {"nome": "Ruby", "ruolo": "usata"}, {"nome": "Python", "ruolo": "usata"},
+                  {"nome": "Postgres", "ruolo": "usata"}, {"nome": "MySQL", "ruolo": "usata"},
+                  {"nome": "AWS", "ruolo": "usata"}, {"nome": "GCP", "ruolo": "usata"},
+                  {"nome": "Azure", "ruolo": "usata"}, {"nome": "Datadog", "ruolo": "usata"}],
+   "escluse": ["Generative AI (categoria)", "automated testing, continuous delivery, observability (pratiche)", "Bachelor's degree (titolo)"]}
+ ],
+ "dubbi": [
+  "#127: «Unbuntu» e «Promox VE» sono errori di battitura dell'annuncio. Etichettati cosi' come sono, per la regola della forma nel testo. E' il caso limite di quella regola, e serve a misurare se un modello copia o corregge.",
+  "#129: «pixels» e «ad server» sono voci di mestiere piu' che prodotti. Tenuti perche' sono cose concrete che si installano e si gestiscono; un revisore severo terrebbe solo Megaphone e FlightPath.",
+  "#132: «Alzheimer's blood test» e' un esame diagnostico che l'azienda vende, non un software. Tenuto come servizio perche' per chi compra dati sulla diagnostica e' segnale vero. La piattaforma di cartella clinica del datore invece e' esclusa, perche' l'annuncio non le da' un nome.",
+  "#134: «outils bureautiques (Google et/ou Microsoft)» esclusi: l'annuncio nomina i fornitori, non i prodotti. Al #102 invece «Google Suite» e «MS Office» erano scritti per nome, e sono dentro. La differenza e' nel testo, non nel giudizio.",
+  "#139: «programmi Adobe» tenuto anche se non nomina quale. E' il confine fra «un nome di fornitore» (escluso al #134) e «una famiglia di prodotti che l'azienda usa davvero»; qui il contesto della stampa rende chiaro che si parla del software.",
+  "#136: «access control» tenuto per coerenza con «passersystem» del #95, ma in inglese suona piu' generico di quanto suoni in svedese."
+ ]
+}

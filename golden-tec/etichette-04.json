@@ -1,0 +1,132 @@
+{
+ "lotto": 4,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "#68 ha il campo text con un JSON serializzato: terzo caso dopo #11 e #22, tutti dalla stessa fonte.",
+  "Le TECNICHE algoritmiche (Visual Odometry, Structure from Motion, Semantic Segmentation) restano fuori: sono modi di risolvere un problema, non cose che un'azienda ha. SLAM e LIDAR invece stanno dentro, perche' il mercato li cerca per nome.",
+  "I NOMI DEI SOCIAL (Instagram, TikTok, YouTube, X) stanno dentro quando il lavoro si svolge su di essi, come al #42."
+ ],
+ "offerte": [
+  {"n": 61, "id": "0d3f1c9c-6711-4be4-bfde-86e995ac1c1c", "titolo": "Senior Recruiter (MongoDB)",
+   "tecnologie": [{"nome": "LinkedIn Recruiter", "ruolo": "usata"}, {"nome": "Gem", "ruolo": "usata"},
+                  {"nome": "Greenhouse", "ruolo": "usata"}, {"nome": "ATS", "ruolo": "usata"},
+                  {"nome": "CRM", "ruolo": "usata"}, {"nome": "MongoDB Atlas", "ruolo": "servizio"}],
+   "escluse": ["Boolean search (tecnica di ricerca, non strumento)", "MongoDB (nome del datore)", "AWS, Google Cloud, Microsoft Azure (infrastruttura su cui gira il prodotto del datore, non offerta ne' usata dal ruolo)"]},
+
+  {"n": 62, "id": "b6fff1d5-82d0-43fc-adb3-5419b59f7d53", "titolo": "Ausbildung Verkaufer im Einzelhandel 2027 (ALDI)",
+   "tecnologie": [],
+   "escluse": ["digitales Ausbildungskonzept, moderne Tools (generici)", "Kassieren, Inventuren (attivita')"]},
+
+  {"n": 63, "id": "a0a4cfa8-3aa7-4a7c-8dea-0b9051c24d76", "titolo": "ADDETTI/E RISTORAZIONE VELOCE ROMA TERMINI",
+   "tecnologie": [],
+   "escluse": ["gestione cassa, preparazione piatti (attivita')"]},
+
+  {"n": 64, "id": "946f0f2c-6c7d-4578-bbfc-211277c0df11", "titolo": "A.I. Specialist (junior) (Royal Swinkels)",
+   "tecnologie": [{"nome": "Azure", "ruolo": "usata"}, {"nome": "Microsoft Fabric", "ruolo": "usata"},
+                  {"nome": "SAP", "ruolo": "usata"}, {"nome": "Python", "ruolo": "usata"},
+                  {"nome": "LangChain", "ruolo": "usata"}, {"nome": "Semantic Kernel", "ruolo": "usata"},
+                  {"nome": "OpenAI SDK", "ruolo": "usata"}, {"nome": "Databricks", "ruolo": "gradita"},
+                  {"nome": "Librechat", "ruolo": "gradita"}],
+   "escluse": ["generatieve AI, machine learning, AI-agents, Large Language Models (categorie)", "API's, cloudplatformen (generici)", "HBO/WO (titoli)"],
+   "nota": "terzo annuncio AI del golden, e il primo che nomina davvero gli strumenti: il confronto con #32 e #41 e' istruttivo"},
+
+  {"n": 65, "id": "f9dad32a-9c72-4c20-9f47-00f7fe4f6da9", "titolo": "Addetto allo sportello bancario (Randstad)",
+   "tecnologie": [{"nome": "ATM", "ruolo": "usata"}, {"nome": "Home Banking", "ruolo": "servizio"}],
+   "escluse": ["strumenti informatici (generico)", "GDPR (legge, e comparirebbe solo nella nota privacy)", "laurea, diploma (titoli)"]},
+
+  {"n": 66, "id": "33ffdc6f-cde3-4a48-b41e-4c9a97d93852", "titolo": "Werkvoorbereider - nieuwbouw (Circet)",
+   "tecnologie": [{"nome": "Glasvezel", "ruolo": "usata"}],
+   "escluse": ["kabelnetwerken, voedingspunten (infrastruttura generica)", "GoodHabitz, Circet Academy (formazione offerta)", "werktekeningen, vergunningen (documenti)"],
+   "nota": "il testo ha solo il composto «glasvezelprojecten»: l'etichetta prende la parola della tecnologia, ed e' un caso che la marcatura sa gestire e il confronto alla lettera no"},
+
+  {"n": 67, "id": "a14b54c8-3a1c-4ad6-b8bb-099cedbd93ca", "titolo": "Product Operations Specialist - SkillBridge (Anduril)",
+   "tecnologie": [{"nome": "Linux", "ruolo": "gradita"}, {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["RCCA, root cause analysis (metodi generici)", "U.S. Secret clearance (autorizzazione personale)"]},
+
+  {"n": 68, "id": "5598cc57-25ac-4641-b9ed-f3003ff93c26", "titolo": "Innesaljare Prenumeration B2B (Pauser Media)",
+   "tecnologie": [],
+   "escluse": ["telefon, provision, saljskola (strumento di lavoro generico, compenso, formazione)", "Miljo & Utveckling, Techtidningen (testate del datore)"]},
+
+  {"n": 69, "id": "2c61a152-32dc-4024-aa14-da1ea5ed871b", "titolo": "Operations Lead Specialist - Mutual Funds (BBH)",
+   "tecnologie": [{"nome": "MS Office", "ruolo": "usata"}],
+   "escluse": ["transfer agencies, contract notes (oggetti del mestiere)", "English C1 (lingua)"]},
+
+  {"n": 70, "id": "e7546c75-98a9-4458-9cec-7aa4cc0314f4", "titolo": "Aide a domicile (H/F) (Ouihelp)",
+   "tecnologie": [],
+   "escluse": ["outils digitaux innovants (generico, nessun nome)", "permis B (patente)"]},
+
+  {"n": 71, "id": "22665052-4416-4aa3-ba0c-e3d84dd4c2e6", "titolo": "Managing Editor - Madrid based (Fever)",
+   "tecnologie": [{"nome": "WordPress", "ruolo": "usata"}, {"nome": "Instagram", "ruolo": "usata"},
+                  {"nome": "TikTok", "ruolo": "usata"}, {"nome": "YouTube", "ruolo": "usata"},
+                  {"nome": "Facebook", "ruolo": "usata"}, {"nome": "X", "ruolo": "usata"},
+                  {"nome": "Photoshop", "ruolo": "gradita"}, {"nome": "Canva", "ruolo": "gradita"}],
+   "escluse": ["Cobee, Payflow, Taxdown, Cigna, Wellhub (piattaforme dei benefit)", "Netflix, F.C. Barcelona, Primavera Sound (partner del datore)", "Secret London, Madrid Secreto (testate del datore)", "media mapping, conversion funnel (pratiche)"]},
+
+  {"n": 72, "id": "eefd4573-54aa-4ae7-b885-7fed31947cd6", "titolo": "Lagermitarbeiter / Kommissionierer (ALDI)",
+   "tecnologie": [{"nome": "Pick-by-Voice", "ruolo": "usata"},
+                  {"nome": "Flurforderzeuge", "ruolo": "usata"}],
+   "escluse": ["Kommissionieren, Inventur (attivita')", "Kuhlbereich 4-6 gradi (condizione di lavoro)"],
+   "nota": "magazziniere con due tecnologie vere e nominate: Pick-by-Voice e' proprio il tipo di voce che un dizionario informatico non ha e che il mercato cerca"},
+
+  {"n": 73, "id": "c2a17f07-b117-4e54-80f4-c697a859a233", "titolo": "Terrassier F/H",
+   "tecnologie": [],
+   "escluse": ["tranchees, terrassement, remblaiement (attivita')", "reseaux eau, gaz, electricite (infrastruttura, nessuna macchina nominata)"]},
+
+  {"n": 74, "id": "2a48b8fb-7b27-45df-bdda-993b33e18839", "titolo": "Senior Scientist I (AbbVie)",
+   "tecnologie": [{"nome": "chromatography", "ruolo": "usata"}, {"nome": "TFF", "ruolo": "usata"},
+                  {"nome": "tLNP", "ruolo": "usata"}, {"nome": "mRNA", "ruolo": "usata"},
+                  {"nome": "siRNA", "ruolo": "usata"}, {"nome": "dsRNA", "ruolo": "usata"},
+                  {"nome": "GMP", "ruolo": "usata"}],
+   "escluse": ["GxP (categoria di norme, non una norma)", "PhD, Master's (titoli)", "immunology, oncology, neuroscience (aree terapeutiche del datore)"]},
+
+  {"n": 75, "id": "578b7c0b-47bf-46d9-b684-65ef440bff13", "titolo": "Pflegefachassistent (m/w/d) (Alloheim)",
+   "tecnologie": [],
+   "escluse": ["Medikamentenvergabe, Pflegeprotokolle (attivita')", "Alloheim Academy (formazione del datore)"]},
+
+  {"n": 76, "id": "0cb66701-db0c-41ba-847b-d24718c66612", "titolo": "Childrens Complex Care Assistant (CCH)",
+   "tecnologie": [{"nome": "Tracheostomy", "ruolo": "usata"}, {"nome": "PEG", "ruolo": "usata"}],
+   "escluse": ["Suction, Oxygen management, Clinical observations (apparati e attivita' generiche)", "DBS check (controllo sui precedenti)", "Blue Light Card (sconto)"]},
+
+  {"n": 77, "id": "678c49eb-fe40-4d65-bd51-74949cc08632", "titolo": "Senior Computer Vision Engineer, Space (Anduril)",
+   "tecnologie": [{"nome": "C++", "ruolo": "usata"}, {"nome": "Linux", "ruolo": "usata"},
+                  {"nome": "Open CV", "ruolo": "gradita"}, {"nome": "Matlab", "ruolo": "gradita"},
+                  {"nome": "Simulink", "ruolo": "gradita"}, {"nome": "Python", "ruolo": "gradita"},
+                  {"nome": "Go", "ruolo": "gradita"}, {"nome": "SLAM", "ruolo": "gradita"},
+                  {"nome": "LIDAR", "ruolo": "gradita"},
+                  {"nome": "Lattice for Space Missions", "ruolo": "servizio"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["Visual Odometry, Structure from Motion, Multi-view Geometry, Semantic Segmentation, Discriminative Correlation Filters (tecniche algoritmiche)", "FlatSats, Hardware-in-the-Loop (banchi di prova generici)", "U.S. Top Secret clearance (autorizzazione personale)"]},
+
+  {"n": 78, "id": "f7bdaf8f-c376-4f1e-b5c6-c6725cfb2241", "titolo": "DBS Director (Cytiva / Danaher)",
+   "tecnologie": [{"nome": "Danaher Business System (DBS)", "ruolo": "usata"},
+                  {"nome": "Lean manufacturing", "ruolo": "usata"},
+                  {"nome": "Danaher PSP", "ruolo": "usata"},
+                  {"nome": "Toyota Production System (TPS)", "ruolo": "gradita"}],
+   "escluse": ["Daily Management Systems, policy deployment, KPI (pratiche e indicatori)", "Degree in Engineering or Business (titolo)"]},
+
+  {"n": 79, "id": "79ac930f-877c-4342-8667-dc4fe865c05f", "titolo": "Outpatient Physical Therapist (Results / Upstream)",
+   "tecnologie": [{"nome": "Generative AI Documentation Scribe", "ruolo": "usata"}],
+   "escluse": ["Medbridge, IAMT, CEU allowance (formazione offerta come benefit)", "OCS, SCS, DPT, MPT, licenza del Tennessee (titoli e abilitazioni personali)", "manual therapy (tecnica clinica generica)"]},
+
+  {"n": 80, "id": "f8db4298-9d4b-403e-b07a-827c42c91923", "titolo": "Cloud Operations Engineer (freelance) (AXA)",
+   "tecnologie": [{"nome": "Azure", "ruolo": "usata"}, {"nome": "AWS", "ruolo": "usata"},
+                  {"nome": "Terraform", "ruolo": "usata"}, {"nome": "Azure DevOps", "ruolo": "usata"},
+                  {"nome": "GitHub Actions", "ruolo": "usata"}, {"nome": "Python", "ruolo": "usata"},
+                  {"nome": "PowerShell", "ruolo": "usata"}, {"nome": "YAML", "ruolo": "usata"},
+                  {"nome": "KQL", "ruolo": "usata"}, {"nome": "Bicep", "ruolo": "usata"},
+                  {"nome": "CloudFormation", "ruolo": "usata"}, {"nome": "ITIL", "ruolo": "usata"},
+                  {"nome": "VNET", "ruolo": "usata"}, {"nome": "NSG", "ruolo": "usata"},
+                  {"nome": "IAM", "ruolo": "usata"}],
+   "escluse": ["IaC, CI/CD, Policy-as-Code, DevOps (pratiche)", "Agile (atteggiamento; ITIL invece e' un impianto nominato)", "Bachelor's degree (titolo)"]}
+ ],
+ "dubbi": [
+  "#61: «MongoDB Atlas» tenuto come servizio perche' e' il prodotto che l'azienda vende; AWS, Google Cloud e Azure esclusi anche se nominati, perche' sono l'infrastruttura del prodotto e non qualcosa che questo ruolo tocca. E' la distinzione piu' fragile del lotto.",
+  "#74: mRNA, siRNA, dsRNA sono molecole, quindi «materiali» per la rubrica. Tenute comunque, perche' in farmaceutica sono piattaforme tecnologiche e sono esattamente cio' che un compratore cerca. Se si applicasse la regola dei materiali alla lettera, uscirebbero tutte e tre.",
+  "#76: «Tracheostomy» e «PEG» sono presidi con nome proprio; «Suction» e «Oxygen management» sono gli stessi oggetti descritti genericamente, e restano fuori. Confine sottile dentro lo stesso annuncio.",
+  "#77: SLAM tenuto, Visual Odometry no, benche' siano parenti. Il criterio e' se il nome e' diventato un'etichetta di mercato: SLAM si', Structure from Motion no.",
+  "#79: «Generative AI Documentation Scribe» e' descritto come uno strumento che il terapista usa, ma non e' un nome di prodotto. Tenuto; un revisore lo chiamerebbe una descrizione.",
+  "#78: DBS, TPS e Lean sono sistemi di gestione con un corpo definito, come Six Sigma. Su questo annuncio un dizionario informatico troverebbe zero, e invece e' il cuore del lavoro."
+ ]
+}

@@ -1,0 +1,582 @@
+"""I campi che il recruiter ha gia' compilato nell'ATS: contratto, seniority, remoto.
+
+Lever e Ashby dichiarano `workplaceType`, SmartRecruiters `experienceLevel` e
+`typeOfEmployment`, Recruitee contratto/esperienza/remoto, Workable, Personio,
+France Travail il tipo di contratto e gli anni di esperienza, Arbetsförmedlingen
+e NAV orario e tipo. Fino al 07/09/2026 questi campi restavano nel JSON grezzo
+e le colonne del prodotto aspettavano un LLM. Qui diventano etichette DIRETTE:
+esatte (le ha scelte chi ha scritto l'annuncio), gratis, per ogni offerta.
+
+`applica(dsn)` riempie seniority / employment_type / remote dove sono NULL e
+segna `dichiarati_at`; le stesse funzioni le usa `scripts/estrai_dataset_v2.py`
+per il dataset (dove la menzione nel testo distingue estrazione da stima).
+"""
+from __future__ import annotations
+
+import logging
+import os
+import re
+import time
+
+import psycopg
+
+log = logging.getLogger("nivult.ats.dichiarati")
+
+PIATTAFORME = ("francetravail", "arbetsformedlingen", "nav", "smartrecruiters", "recruitee",
+               "workable", "ashby", "personio", "lever",
+               # aggiunte il 10/09/2026 per orario/durata: dichiarano il dato
+               # e non lo leggevamo. iCIMS (309.422 offerte) NON e' qui: il suo
+               # campo mescola anche la seniority («Experienced», «RN») e valori
+               # sanitari americani (PRN, Per Diem), va mappato con calma.
+               "bamboohr", "breezy", "zohorecruit", "pinpoint",
+               "recruiterbox", "vincere", "jsonld", "icims", "greenhouse", "werecruit",
+               # 11/09: contratto inequivoco (contractor/freelance) e schema.org
+               "agenzie", "taleez", "join", "softgarden")
+RAW_CAMPI = ("typeContrat", "dureeTravailLibelle", "experienceLibelle", "employment_type",
+             "working_hours_type", "workplace_model", "experience_required", "extent", "engagementtype",
+             "experienceLevel", "typeOfEmployment", "location", "employment_type_code", "experience_code",
+             "remote", "hybrid", "workplace", "experience", "workplaceType", "isRemote", "employmentType",
+             "employmentStatusLabel", "type", "Job_Type", "positionType",
+             "Position Type", "Employment Type", "Location Type",
+             "categories", "Remote_Job", "workplace_type", "language",
+             "DefaultLanguage", "contract", "employment_type_text")
+
+
+# ── contratto: dai campi dichiarati al vocabolario di Nivult ─────────
+def contratto(pid: str, r: dict) -> str | None:
+    if pid == "francetravail":
+        tc = (r.get("typeContrat") or "").upper()
+        durata = (r.get("dureeTravailLibelle") or "").lower()
+        ore = re.search(r"(\d{1,2})h", durata)
+        if ore and int(ore.group(1)) < 30 or "temps partiel" in durata:
+            return "part_time"
+        return {"CDI": "full_time", "CDD": "temporary", "MIS": "temporary", "SAI": "temporary",
+                "LIB": "contract", "FRA": "contract", "DIN": "full_time", "DDI": "temporary",
+                "CCE": "contract", "REP": "contract", "TTI": "temporary"}.get(tc)
+    if pid == "arbetsformedlingen":
+        ore = (r.get("working_hours_type") or {}).get("label", "")
+        tipo = (r.get("employment_type") or {}).get("label", "")
+        if ore == "Deltid":
+            return "part_time"
+        if any(k in tipo for k in ("Tidsbegränsad", "Vikariat", "Säsong", "Behovs")):
+            return "temporary"
+        if ore == "Heltid" or "Vanlig" in tipo or "Tillsvidare" in tipo:
+            return "full_time"
+        return None
+    if pid == "nav":
+        if r.get("extent") == "Deltid":
+            return "part_time"
+        t = r.get("engagementtype") or ""
+        if t in ("Vikariat", "Engasjement", "Sesong", "Prosjekt"):
+            return "temporary"
+        if t == "Fast" or r.get("extent") == "Heltid":
+            return "full_time"
+        return None
+    if pid == "smartrecruiters":
+        # «Contract» negli ATS anglosassoni e' AMBIGUO: a volte un contractor
+        # (autonomo), a volte un tempo determinato. Misurato il 09/09/2026 sul
+        # dataset v2: negli annunci che dicono CDD/temporary il dato dichiarato
+        # diceva temporary 193 volte e contract 197. Un'etichetta che non
+        # distingue non insegna niente: «Contract» resta NULL e lo decide il
+        # modello dal testo. `contract` vale solo dove la fonte dice autonomo
+        # (France Travail LIB/FRA/CCE/REP, Recruitee e Personio «freelance»).
+        return {"Full-time": "full_time", "Part-time": "part_time",
+                "Temporary": "temporary", "Intern": "internship", "Internship": "internship",
+                "Apprenticeship": "apprenticeship"}.get((r.get("typeOfEmployment") or {}).get("label"))
+    if pid == "recruitee":
+        c = r.get("employment_type_code") or ""
+        return {"fulltime_permanent": "full_time", "fulltime": "full_time", "fulltime_fixed_term": "temporary",
+                "parttime_permanent": "part_time", "parttime_fixed_term": "part_time", "parttime": "part_time",
+                "freelance": "contract", "internship": "internship",
+                "apprenticeship": "apprenticeship", "traineeship": "internship"}.get(c)
+    if pid == "workable":
+        return {"Full-time": "full_time", "Part-time": "part_time",
+                "Temporary": "temporary", "Internship": "internship"}.get(r.get("employment_type"))
+    if pid == "ashby":
+        return {"FullTime": "full_time", "PartTime": "part_time",
+                "Temporary": "temporary", "Intern": "internship"}.get(r.get("employmentType"))
+    if pid == "personio":
+        return {"permanent": "full_time", "intern": "internship", "temporary": "temporary",
+                "trainee": "internship", "freelance": "contract", "working_student": "part_time",
+                "fixed_term": "temporary"}.get(r.get("employmentType"))
+    # Le fonti recuperate l'11/09/2026. Il vincolo resta lo stesso di
+    # smartrecruiters: `contract` SOLO dove la fonte dice autonomo senza
+    # equivoci (contractor, freelance, libero professionista, 1099); il nudo
+    # «Contract» anglosassone resta NULL. schema.org distingue per specifica
+    # CONTRACTOR da TEMPORARY, quindi jsonld e agenzie sono inequivoci.
+    if pid in ("jsonld", "agenzie", "softgarden"):
+        return _generico(r.get("employmentType"))
+    if pid == "bamboohr":
+        return _generico(r.get("employmentStatusLabel"))
+    if pid == "zohorecruit":
+        return _generico(r.get("Job_Type"))
+    if pid == "taleez":
+        return {"CDI": "full_time", "CDD": "temporary", "INTERIM": "temporary", "STAGE": "internship",
+                "ALTERNANCE": "apprenticeship", "FREELANCE": "contract"}.get(_testo(r.get("contract")).upper())
+    if pid == "join":
+        # vocabolario suo, misurato l'11/09 su 1.702: Employee 1.395 (= assunto,
+        # cioe' tempo pieno), Contract 82, Working student 61, Internship 59,
+        # Side job 45, Freelance 40. `_generico` da solo leggeva 0% perche' non
+        # conosce «Employee». «Contract» resta NULL anche qui: la piattaforma ha
+        # gia' «Freelance» a parte, quindi non si sa se vuol dire determinato o
+        # autonomo — e nel dubbio non si insegna.
+        return {"employee": "full_time", "working student": "part_time",
+                "side job": "part_time", "internship": "internship",
+                "freelance": "contract", "apprenticeship": "apprenticeship",
+                "temporary": "temporary"}.get(_testo(r.get("employmentType")).lower())
+    if pid == "pinpoint":
+        return _generico(r.get("employment_type") or r.get("employment_type_text"))
+    return None
+
+
+def _testo(v) -> str:
+    """Il valore di un campo dichiarato, comunque la fonte abbia deciso di
+    scriverlo. La stessa chiave arriva come stringa, come {"label": ...} e
+    come lista: join scrive `employmentType` in entrambi i modi, e l'11/09
+    un `.strip()` diretto ha fermato la rigenerazione del dataset dopo pochi
+    secondi. E' la seconda volta in un giorno (l'altra era `baseSalary.currency`):
+    un campo che viene da mille ATS non si tocca senza passare di qui."""
+    if isinstance(v, dict):
+        v = v.get("label") or v.get("name") or v.get("id") or v.get("value") or ""
+    if isinstance(v, (list, tuple)):
+        v = " ".join(_testo(x) for x in v)
+    return v.strip() if isinstance(v, str) else ""
+
+
+_RX_CONTRATTO_GENERICO = (
+    # l'ordine e' la priorita': un «Independent Contractor - Part-Time» e' contract
+    (re.compile(r"contractor|freelanc|self.?employ|1099|libero prof|autonom|independent", re.I), "contract"),
+    (re.compile(r"intern|stage|tirocin|praktik|trainee", re.I), "internship"),
+    (re.compile(r"apprenti|apprendist|alternance|ausbildung", re.I), "apprenticeship"),
+    (re.compile(r"temporary|\btemp\b|seasonal|stagional|interim|fixed.?term|determinato|cdd", re.I), "temporary"),
+    (re.compile(r"part.?time|tempo parziale|parttime", re.I), "part_time"),
+    (re.compile(r"full.?time|fulltime|tempo pieno|permanent|indeterminato|cdi", re.I), "full_time"),
+)
+
+
+def _generico(v) -> str | None:
+    """Un valore libero (stringa o lista schema.org) -> vocabolario di Nivult.
+    Il nudo «contract» non aggancia nessuna regola: resta None, com'e' giusto."""
+    if isinstance(v, list):
+        v = " ".join(str(x) for x in v)
+    if not isinstance(v, str) or not v.strip():
+        return None
+    for rx, esito in _RX_CONTRATTO_GENERICO:
+        if rx.search(v):
+            return esito
+    return None
+
+
+# ── ORARIO e DURATA: due domande diverse, due colonne ───────────────
+# `employment_type` ne mescolava due: quante ore si lavora (full/part time)
+# e che natura ha il rapporto (indeterminato, determinato, stage...). Da
+# `full_time` non si ricava se il posto e' stabile, e «permanent» non
+# esisteva fra i valori: il filtro «e' a tempo indeterminato?», la prima
+# domanda di chi cerca lavoro, non aveva risposta.
+#
+# Peggio: il dato ci ARRIVAVA e lo buttavamo. «CDI» (contrat a duree
+# indeterminee) diventava `full_time`, che parla di ore e non di durata;
+# Recruitee dichiara `fulltime_permanent` — ENTRAMBI gli assi, espliciti —
+# e ne tenevamo meta'; Personio dichiara `permanent` e lo salvavamo come
+# `full_time`, sbagliando su tutte e due.
+#
+# Regola: si scrive SOLO dove la fonte lo dice esplicitamente. Valori
+# ambigui (l'inglese «Contract», lo svedese «Vanlig anställning» che vuol
+# dire «impiego normale» e non dichiara la durata) restano NULL e li
+# decidera' il lettore del testo. Valori misurati sul database il 10/09/2026.
+
+def _jsonld_tipo(v) -> str | None:
+    """schema.org mette `employmentType` a volte come stringa, a volte come
+    lista (`["FULL_TIME"]`) e a volte con piu' valori insieme
+    (`["FULL_TIME", "PART_TIME"]`): con due valori non si sceglie, si tace."""
+    if isinstance(v, str):
+        v = v.strip()
+        if v.startswith("["):
+            import json as _json
+            try:
+                v = _json.loads(v)
+            except Exception:                        # noqa: BLE001
+                return None
+        else:
+            return v.upper().replace(" ", "_").replace("-", "_")
+    if isinstance(v, list):
+        vals = {str(x).upper().replace(" ", "_").replace("-", "_") for x in v if x}
+        return vals.pop() if len(vals) == 1 else None
+    return None
+
+
+def _icims_tipo(r: dict) -> str:
+    """iCIMS mette il tipo di impiego in due campi diversi a seconda del
+    cliente: «Position Type» (23% delle offerte) e «Employment Type» (2%).
+    Nello STESSO campo alcuni datori scrivono anche la seniority («RN»,
+    «Experienced») o la reperibilita' sanitaria americana («PRN», «Per
+    Diem»): quelli non sono tipi di impiego e restano fuori."""
+    v = r.get("Position Type") or r.get("Employment Type") or ""
+    return v.strip().lower().replace("-", " ") if isinstance(v, str) else ""
+
+
+def orario(pid: str, r: dict) -> str | None:
+    """full_time / part_time: quante ore, e nient'altro."""
+    if pid == "francetravail":
+        d = (r.get("dureeTravailLibelle") or "").lower()
+        if "temps partiel" in d:
+            return "part_time"
+        ore = re.search(r"(\d{1,2})h/semaine", d)
+        # in Francia la settimana piena e' 35 ore: sotto le 30 e' parziale,
+        # in mezzo non si indovina
+        if ore:
+            n = int(ore.group(1))
+            return "full_time" if n >= 35 else ("part_time" if n < 30 else None)
+        return None
+    if pid == "arbetsformedlingen":
+        return {"Heltid": "full_time", "Deltid": "part_time"}.get(
+            (r.get("working_hours_type") or {}).get("label"))
+    if pid == "nav":
+        return {"Heltid": "full_time", "Deltid": "part_time"}.get(r.get("extent"))
+    if pid == "smartrecruiters":
+        return {"Full-time": "full_time", "Part-time": "part_time"}.get(
+            (r.get("typeOfEmployment") or {}).get("label"))
+    if pid == "recruitee":
+        c = r.get("employment_type_code") or ""
+        if c.startswith("fulltime"):
+            return "full_time"
+        if c.startswith("parttime"):
+            return "part_time"
+        return None
+    if pid == "workable":
+        return {"Full-time": "full_time", "Part-time": "part_time"}.get(r.get("employment_type"))
+    if pid == "ashby":
+        return {"FullTime": "full_time", "PartTime": "part_time"}.get(r.get("employmentType"))
+    if pid == "personio":
+        # «working_student» in Germania e' per definizione a ore ridotte
+        return "part_time" if r.get("employmentType") == "working_student" else None
+    if pid == "bamboohr":
+        e = (r.get("employmentStatusLabel") or "").lower().replace("-", " ")
+        if "full time" in e:
+            return "full_time"
+        if "part time" in e:
+            return "part_time"
+        return None
+    if pid == "breezy":
+        # il nome e' tradotto («Vollzeit», «Temps plein»): si usa l'id, che
+        # non cambia lingua
+        return {"fullTime": "full_time", "partTime": "part_time"}.get(
+            (r.get("type") or {}).get("id") if isinstance(r.get("type"), dict) else None)
+    if pid == "zohorecruit":
+        j = (r.get("Job_Type") or "").lower()
+        if j in ("full time", "tiempo completo", "vollzeit", "temps plein",
+                 "voltijd", "tempo pieno", "heltid"):
+            return "full_time"
+        if j in ("part time", "tiempo parcial", "teilzeit", "temps partiel",
+                 "deeltijd", "tempo parziale", "deltid"):
+            return "part_time"
+        return None
+    if pid == "pinpoint":
+        e = r.get("employment_type") or ""
+        if e.endswith("full_time"):
+            return "full_time"
+        if e.endswith("part_time"):
+            return "part_time"
+        return None
+    if pid == "recruiterbox":
+        return {"full_time": "full_time", "part_time": "part_time"}.get(r.get("positionType"))
+    if pid == "jsonld":
+        v = _jsonld_tipo(r.get("employmentType"))
+        return {"FULL_TIME": "full_time", "PART_TIME": "part_time"}.get(v)
+    if pid == "icims":
+        t = _icims_tipo(r)
+        if "full time" in t:
+            return "full_time"
+        if "part time" in t:
+            return "part_time"
+        return None
+    if pid == "lever":
+        # `categories.commitment` e' scritto a mano dal recruiter: «Full-time»,
+        # «Full Time», «Contract Full time»... si normalizza e si guarda
+        # dentro. «Remote» compare qui ma e' un luogo, non un orario: lo
+        # prende `remoto()`.
+        t = ((r.get("categories") or {}).get("commitment") or "").lower().replace("-", " ")
+        if "full time" in t:
+            return "full_time"
+        if "part time" in t:
+            return "part_time"
+        return None
+    return None
+
+
+def durata(pid: str, r: dict) -> str | None:
+    """permanent / fixed_term / internship / apprenticeship / freelance:
+    che natura ha il rapporto, e nient'altro."""
+    if pid == "francetravail":
+        return {"CDI": "permanent", "DIN": "permanent",
+                "CDD": "fixed_term", "MIS": "fixed_term", "SAI": "fixed_term",
+                "DDI": "fixed_term", "TTI": "fixed_term",
+                "LIB": "freelance", "FRA": "freelance",
+                "CCE": "freelance", "REP": "freelance",
+                }.get((r.get("typeContrat") or "").upper())
+    if pid == "arbetsformedlingen":
+        lab = (r.get("employment_type") or {}).get("label") or ""
+        if "Tillsvidare" in lab:
+            return "permanent"
+        # «Vanlig anställning» = «impiego normale»: NON dichiara la durata,
+        # e sono 5.525 offerte. Restano senza, che e' la verita'.
+        if any(k in lab for k in ("Tidsbegränsad", "Vikariat", "Säsong",
+                                  "Behovs", "Sommarjobb", "feriejobb")):
+            return "fixed_term"
+        return None
+    if pid == "nav":
+        return {"Fast": "permanent",
+                "Vikariat": "fixed_term", "Engasjement": "fixed_term",
+                "Sesong": "fixed_term", "Prosjekt": "fixed_term",
+                "Åremål": "fixed_term",
+                "Lærling": "apprenticeship", "Trainee": "internship",
+                "Frilanser": "freelance",
+                "Selvstendig næringsdrivende": "freelance",
+                }.get(r.get("engagementtype"))
+    if pid == "smartrecruiters":
+        # «Contract» resta NULL: negli ATS anglosassoni vale sia autonomo
+        # sia tempo determinato (misurato: 197 contro 193 sul dataset v2)
+        return {"Intern": "internship", "Internship": "internship",
+                "Temporary": "fixed_term", "Apprenticeship": "apprenticeship",
+                }.get((r.get("typeOfEmployment") or {}).get("label"))
+    if pid == "recruitee":
+        c = r.get("employment_type_code") or ""
+        if c.endswith("_permanent"):
+            return "permanent"
+        if c.endswith("_fixed_term"):
+            return "fixed_term"
+        return {"freelance": "freelance", "internship": "internship",
+                "traineeship": "internship", "apprenticeship": "apprenticeship",
+                "temporary": "fixed_term"}.get(c)
+    if pid == "workable":
+        return {"Temporary": "fixed_term", "Internship": "internship"}.get(r.get("employment_type"))
+    if pid == "ashby":
+        return {"Temporary": "fixed_term", "Intern": "internship"}.get(r.get("employmentType"))
+    if pid == "personio":
+        return {"permanent": "permanent", "fixed_term": "fixed_term",
+                "temporary": "fixed_term", "intern": "internship",
+                "trainee": "internship", "freelance": "freelance",
+                }.get(r.get("employmentType"))
+    if pid == "bamboohr":
+        e = (r.get("employmentStatusLabel") or "").lower()
+        if "permanent" in e:
+            return "permanent"
+        if "seasonal" in e or "temporary" in e:
+            return "fixed_term"
+        if "intern" in e:
+            return "internship"
+        if "contractor" in e:
+            return "freelance"
+        return None
+    if pid == "breezy":
+        # «contract» resta NULL: stessa ambiguita' dell'inglese
+        return {"temporary": "fixed_term"}.get(
+            (r.get("type") or {}).get("id") if isinstance(r.get("type"), dict) else None)
+    if pid == "zohorecruit":
+        return {"permanent": "permanent", "festanstellung": "permanent",
+                "temporary": "fixed_term", "internship": "internship",
+                "stage": "internship", "apprentissage": "apprenticeship",
+                "alternance": "apprenticeship", "freelance": "freelance",
+                }.get((r.get("Job_Type") or "").lower())
+    if pid == "pinpoint":
+        e = r.get("employment_type") or ""
+        if e.startswith("permanent"):
+            return "permanent"
+        if e.startswith("fixed_term") or e == "temporary":
+            return "fixed_term"
+        return {"internship": "internship", "apprenticeship": "apprenticeship",
+                "freelance": "freelance"}.get(e)
+    if pid == "vincere":
+        # vocabolario delle agenzie: «Contract» e «Temp-To-Perm» restano NULL
+        return {"permanent": "permanent", "festanstellung": "permanent",
+                "permanent / fixed term (perm)": "permanent",
+                "temporary": "fixed_term", "locum": "fixed_term",
+                "interim / project consulting": "fixed_term",
+                }.get((r.get("type") or "").lower() if isinstance(r.get("type"), str) else None)
+    if pid == "jsonld":
+        return {"TEMPORARY": "fixed_term", "INTERN": "internship",
+                "CONTRACTOR": "freelance", "PER_DIEM": "fixed_term",
+                }.get(_jsonld_tipo(r.get("employmentType")))
+    if pid == "icims":
+        t = _icims_tipo(r)
+        # «Regular» nel vocabolario HR americano vuol dire rapporto
+        # continuativo, in opposizione a «Temporary»/«Contingent»
+        if t.startswith("regular"):
+            return "permanent"
+        if "temporary" in t or "seasonal" in t:
+            return "fixed_term"
+        if "intern" in t:
+            return "internship"
+        # «PRN», «Per Diem», «Flex/Per Diem» sono turni a chiamata: dicono
+        # come si lavora, non per quanto. Restano senza.
+        return None
+    return None
+
+
+# ── lingua dell'annuncio, DICHIARATA ────────────────────────────────
+# La lingua la ricavavamo dal testo e arrivavamo al 75%. Tre piattaforme
+# ce la dichiarano — greenhouse (202.471 offerte), smartrecruiters
+# (168.973) e werecruit (25.467) — e la dichiarano su quasi il 100% dei
+# loro annunci: esatta, gratis, e su un filtro che vendiamo nel piano Pro.
+# `lingua.py` non entra in conflitto: la sua query pretende `lang IS NULL`.
+_LINGUE_NOTE = {
+    "en", "fr", "de", "it", "es", "pt", "nl", "sv", "da", "no", "nb", "nn",
+    "fi", "pl", "cs", "sk", "hu", "ro", "bg", "el", "hr", "sl", "et", "lv",
+    "lt", "ga", "mt", "tr", "ru", "uk", "ja", "zh", "ko", "ar", "he", "is",
+}
+
+
+def lingua_dichiarata(pid: str, r: dict) -> str | None:
+    """Il codice ISO a due lettere, senza la regione: «en-GB» e «fr-fr»
+    restano «en» e «fr» — la variante regionale qui non serve e il resto
+    del sistema usa due lettere."""
+    v = None
+    if pid == "greenhouse":
+        v = r.get("language")
+    elif pid == "smartrecruiters":
+        v = (r.get("language") or {}).get("code") if isinstance(r.get("language"), dict) else None
+    elif pid == "werecruit":
+        v = r.get("DefaultLanguage")
+    if not isinstance(v, str):
+        return None
+    cod = v.strip().lower().replace("_", "-").split("-")[0]
+    return cod if cod in _LINGUE_NOTE else None
+
+
+# ── seniority dichiarata ────────────────────────────────────────────
+def seniority(pid: str, r: dict) -> str | None:
+    if pid == "francetravail":
+        e = (r.get("experienceLibelle") or "").lower()
+        if "débutant" in e or "debutant" in e:
+            return "junior"
+        m = re.search(r"(\d+)\s*(an|mois)", e)
+        if m:
+            n = int(m.group(1)) / (12 if m.group(2) == "mois" else 1)
+            return "junior" if n < 2 else ("mid" if n < 5 else "senior")
+        return None
+    if pid == "arbetsformedlingen":
+        return "junior" if str(r.get("experience_required")).lower() == "false" else None
+    if pid in ("smartrecruiters", "workable"):
+        lab = (r.get("experienceLevel") or {}).get("label") if pid == "smartrecruiters" else r.get("experience")
+        return {"Entry level": "junior", "Entry Level": "junior", "Internship": "intern", "Associate": "mid",
+                "Mid-Senior level": "senior", "Mid-Senior Level": "senior", "Director": "head",
+                "Executive": "head"}.get(lab or "")
+    if pid == "recruitee":
+        return {"entry_level": "junior", "mid_level": "mid", "experienced": "senior", "student_school": "intern",
+                "student_college": "intern", "manager": "lead", "senior_manager": "head"}.get(r.get("experience_code") or "")
+    return None
+
+
+# ── remoto dichiarato ───────────────────────────────────────────────
+def remoto(pid: str, r: dict) -> str | None:
+    if pid == "ashby":
+        return {"Remote": "remote", "Hybrid": "hybrid", "OnSite": "onsite"}.get(r.get("workplaceType") or "")
+    if pid == "recruitee":
+        rem, hyb = str(r.get("remote")).lower() == "true", str(r.get("hybrid")).lower() == "true"
+        return "hybrid" if hyb else ("remote" if rem else "onsite")
+    if pid == "workable":
+        return {"remote": "remote", "hybrid": "hybrid", "on_site": "onsite", "onsite": "onsite"}.get(r.get("workplace") or "")
+    if pid == "smartrecruiters":
+        return "remote" if str((r.get("location") or {}).get("remote")).lower() == "true" else None
+    if pid == "arbetsformedlingen":
+        lab = (r.get("workplace_model") or {}).get("label", "")
+        return "onsite" if "på plats" in lab else ("remote" if "distans" in lab.lower() else None)
+    if pid == "icims":
+        # «Regional» non dice se si sta in sede: resta fuori
+        return {"onsite": "onsite", "on site": "onsite", "remote": "remote",
+                "hybrid": "hybrid"}.get((r.get("Location Type") or "").strip().lower())
+    if pid == "pinpoint":
+        return {"onsite": "onsite", "hybrid": "hybrid", "remote": "remote"}.get(
+            (r.get("workplace_type") or "").strip().lower())
+    if pid == "zohorecruit":
+        v = r.get("Remote_Job")
+        if v is True or str(v).lower() == "true":
+            return "remote"
+        if v is False or str(v).lower() == "false":
+            return "onsite"
+        return None
+    if pid == "lever":
+        # gia' gestito sopra via workplaceType; qui il ripiego: alcuni
+        # recruiter scrivono «Remote» nel campo dell'impegno
+        if r.get("workplaceType"):
+            return {"remote": "remote", "hybrid": "hybrid", "onsite": "onsite"}.get(r.get("workplaceType"))
+        t = ((r.get("categories") or {}).get("commitment") or "").strip().lower()
+        return "remote" if t == "remote" else None
+    if pid == "join":
+        # dichiarato sul 100% delle offerte (1.702 su 1.702, misurato l'11/09):
+        # ONSITE 1.074, HYBRID 402, REMOTE 226. Era li' e non lo leggevamo.
+        return {"onsite": "onsite", "hybrid": "hybrid", "remote": "remote"}.get(
+            _testo(r.get("workplaceType")).lower())
+    if pid in ("jsonld", "agenzie", "softgarden"):
+        # schema.org: jobLocationType TELECOMMUTE e' l'unico valore previsto,
+        # e dice solo «remoto». L'assenza NON vuol dire in sede (lo decide
+        # «onsite per assenza» nel dataset, sul testo), quindi qui o remote o niente.
+        v = _testo(r.get("jobLocationType") or r.get("workplaceType"))
+        return "remote" if "telecommute" in v.lower() else None
+    return None
+
+
+
+
+def applica(dsn: str, limite: int = 200_000) -> dict:
+    """Riempie le colonne vuote dai campi dichiarati, a lotti, con unnest."""
+    st = {"viste": 0, "seniority": 0, "employment_type": 0, "remote": 0,
+          "orario": 0, "durata": 0, "lang": 0}
+    t0 = time.time()
+    with psycopg.connect(dsn) as conn:
+        while st["viste"] < limite:
+            righe = conn.execute("""
+                SELECT j.id, j.platform_id,
+                       (SELECT jsonb_object_agg(k, j.raw->k) FROM unnest(%s::text[]) k WHERE j.raw ? k),
+                       j.seniority, j.employment_type, j.remote,
+                       j.orario, j.durata, j.lang
+                  FROM ats_jobs j
+                 WHERE j.expired_at IS NULL AND j.dichiarati_at IS NULL AND j.platform_id = ANY(%s::text[])
+                 ORDER BY j.fetched_at DESC LIMIT 5000""", (list(RAW_CAMPI), list(PIATTAFORME))).fetchall()
+            if not righe:
+                break
+            sen, con, rem, ids = [], [], [], []
+            ora, dur, lin = [], [], []
+            for jid, pid, campi, s0, c0, r0, o0, d0, l0 in righe:
+                ids.append(jid)
+                campi = campi or {}
+                if s0 is None and (v := seniority(pid, campi)):
+                    sen.append((jid, v))
+                if c0 is None and (v := contratto(pid, campi)):
+                    con.append((jid, v))
+                if r0 is None and (v := remoto(pid, campi)):
+                    rem.append((jid, v))
+                if o0 is None and (v := orario(pid, campi)):
+                    ora.append((jid, v))
+                if d0 is None and (v := durata(pid, campi)):
+                    dur.append((jid, v))
+                if l0 is None and (v := lingua_dichiarata(pid, campi)):
+                    lin.append((jid, v))
+            for col, rows in (("seniority", sen), ("employment_type", con),
+                              ("remote", rem), ("orario", ora), ("durata", dur),
+                              ("lang", lin)):
+                if rows:
+                    conn.execute(f"UPDATE ats_jobs j SET {col} = coalesce(j.{col}, v.val) "
+                                 f"FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
+                                 ([r[0] for r in rows], [r[1] for r in rows]))
+                    st[col] += len(rows)
+            conn.execute("UPDATE ats_jobs SET dichiarati_at = now() WHERE id = ANY(%s::uuid[])", (ids,))
+            conn.commit()
+            st["viste"] += len(righe)
+    log.info("dichiarati: %s in %ds", st, time.time() - t0)
+    return st
+
+
+def main(argv=None) -> int:
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    ap = argparse.ArgumentParser(prog="nivult.ats.dichiarati")
+    ap.add_argument("--limite", type=int, default=200_000)
+    a = ap.parse_args(argv)
+    dsn = os.environ.get("ATS_DATABASE_URL", "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+    print("Dichiarati:", applica(dsn, a.limite))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

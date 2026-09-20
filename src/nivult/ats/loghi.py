@@ -89,17 +89,33 @@ _RUMORE_NOME = re.compile(r"^(jobs?|careers?|join|apply|hiring)\b[\s@:|-]*", re.
 
 
 def da_offerte(dsn: str) -> int:
-    """Copia il logo per-offerta al livello azienda, in blocco SQL."""
+    """Copia il logo per-offerta al livello azienda, in blocco SQL.
+
+    Si parte dalle AZIENDE senza logo (38.348 su 197.292 il 10/09/2026) e
+    per ognuna si cerca il suo annuncio piu' recente con l'indice
+    (platform_id, slug). Prima si partiva dagli ANNUNCI: scansione completa
+    di 2,23 milioni di righe con il JSON da decomprimere, piu' un ordinamento
+    globale, per aggiornare un centinaio di aziende. Costo stimato da
+    Postgres: 278.666 prima, 50.552 dopo.
+
+    Contava piu' di quanto sembri: `arricchisci-continua.sh` la richiamava a
+    ogni giro del suo `while true`, quindi girava in continuazione. Nel
+    campionamento del 10/09 teneva il database occupato il 100% del tempo,
+    e rallentava tutto il resto — compreso nivult-v1 sul N5."""
     with psycopg.connect(dsn, autocommit=True) as c:
         r = c.execute("""
             UPDATE ats_companies ac
                SET logo_url = sub.logo, logo_checked_at = now()
-              FROM (SELECT DISTINCT ON (platform_id, slug)
-                           platform_id, slug, raw->>'logo' AS logo
-                      FROM ats_jobs
-                     WHERE raw->>'logo' LIKE 'http%'
-                       AND expired_at IS NULL
-                     ORDER BY platform_id, slug, fetched_at DESC) sub
+              FROM (SELECT co.platform_id, co.slug, g.logo
+                      FROM ats_companies co
+                      CROSS JOIN LATERAL (
+                           SELECT j.raw->>'logo' AS logo FROM ats_jobs j
+                            WHERE j.platform_id = co.platform_id
+                              AND j.slug = co.slug
+                              AND j.expired_at IS NULL
+                              AND j.raw->>'logo' LIKE 'http%'
+                            ORDER BY j.fetched_at DESC LIMIT 1) g
+                     WHERE co.logo_url IS NULL AND co.job_count > 0) sub
              WHERE ac.platform_id = sub.platform_id
                AND ac.slug = sub.slug
                AND ac.logo_url IS NULL""")

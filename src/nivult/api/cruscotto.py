@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import os
 import re
 import time
@@ -27,6 +28,8 @@ import httpx
 import psycopg
 
 from nivult import oauth as _oauth
+
+log = logging.getLogger("nivult.cruscotto")
 
 OPERATORE = os.environ.get("CRUSCOTTO_EMAIL", "g.ranno@outlook.com").lower()
 # Venti minuti, non otto ore: un cookie rubato vale poco se muore in
@@ -325,13 +328,21 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','jobDescription','job_description',
                    'content','externalDescription','descriptionPlain']),
-               count(employment_type), count(contact_email)
+               count(employment_type), count(contact_email),
+               -- la lingua dell'annuncio e' un filtro VENDUTO (piano Pro):
+               -- la sua copertura va sorvegliata come le altre, o se un
+               -- giorno si rompe non se ne accorge nessuno
+               count(lang),
+               count(*) FILTER (WHERE languages_required IS NOT NULL
+                                  AND array_length(languages_required, 1) > 0)
           FROM ats_jobs WHERE expired_at IS NULL""")[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
           FROM ats_companies WHERE is_active AND job_count > 0""")[0]
-    campi = [("paese", r[0]), ("descrizione", r[5]), ("seniority", r[2]),
+    campi = [("paese", r[0]), ("descrizione", r[5]),
+             ("lingua dell'annuncio", r[8]), ("lingue richieste", r[9]),
+             ("seniority", r[2]),
              ("lavoro remoto", r[3]), ("competenze", r[4]),
              ("tipo di contratto", r[6]), ("contatto nell'annuncio", r[7]),
              ("salario", r[1])]
@@ -441,6 +452,14 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
     # ── freschezza del codone: ogni tenant va rivisitato entro la soglia
     # (spazzino a 12h in runner.py); se le fasce lontane si gonfiano, lo
     # scraping si sta affamando.
+    #
+    # SOLO i tenant che hanno offerte (`job_count > 0`). Senza quel filtro il
+    # pannello contava anche i ~135.000 tenant scoperti e VUOTI, che di
+    # rileggersi spesso non hanno motivo: dava 41,1% e 100.907 «oltre 12h»
+    # mentre le aziende con offerte erano al 100% entro 12 ore e al 95,9%
+    # entro sei (misurato il 10/09/2026). Un allarme che suona sempre non
+    # avvisa di niente. `codone_vuoti` tiene il conto degli esclusi, cosi'
+    # l'informazione non si perde.
     _fresh = _righe(ats_dsn, """
         SELECT
           count(*),
@@ -457,9 +476,14 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
           count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '12 hours'
                               AND ac.last_fetch_at >= now()-interval '24 hours')
           FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
-         WHERE ac.is_active AND ap.is_active""")
+         WHERE ac.is_active AND ap.is_active AND ac.job_count > 0""")
     _tot, _fre, _o12, _o24, b0, b1, b2, b3, b4 = \
         _fresh[0] if _fresh else (0,) * 9
+    _vuoti = _righe(ats_dsn, """
+        SELECT count(*) FROM ats_companies ac
+          JOIN ats_platforms ap ON ap.id = ac.platform_id
+         WHERE ac.is_active AND ap.is_active AND coalesce(ac.job_count, 0) = 0""")
+    d["salute"]["codone_vuoti"] = _vuoti[0][0] if _vuoti else 0
     d["salute"]["codone_totale"] = _tot
     d["salute"]["codone_oltre_12h"] = _o12
     d["salute"]["codone_oltre_24h"] = _o24
@@ -597,9 +621,16 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
 
     # ── il magazzino da vendere: le grandezze che crescono da sole ──
     def _forse(sql):
+        """Una voce che puo' non esserci ancora: se manca, il pannello mostra
+        un trattino invece di rompersi. Ma l'errore si SCRIVE nel log: per
+        mesi tre voci del magazzino sono state vuote perche' `nivult_app`
+        non aveva il permesso di leggere le loro tabelle, e tacendo il
+        cruscotto non lo diceva a nessuno (10/09/2026)."""
         try:
             return _uno(ats_dsn, sql)
-        except Exception:                            # noqa: BLE001
+        except Exception as e:                       # noqa: BLE001
+            log.warning("cruscotto: voce del magazzino non leggibile (%s): %s",
+                        type(e).__name__, str(e).splitlines()[0][:120])
             return None
     d["magazzino"] = {
         "coppie_tecnografiche": _forse(
@@ -1257,7 +1288,7 @@ async function tick(){
  +'<div class="sect"><h2>Salute del dato</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
  +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte senza categoria',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende riviste entro 12 ore',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h')
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende CON OFFERTE riviste entro 12h',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h · '+IT(h.codone_vuoti)+' tenant vuoti esclusi')
  +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">piattaforme da collegare</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende trovate ma non ancora leggibili</div>`:'<div class="sub">leggiamo tutte le piattaforme trovate</div>'}</div>`
  +'</div>'
 

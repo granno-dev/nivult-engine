@@ -101,7 +101,10 @@ FINGERPRINT: dict[str, list[str]] = {
     "recruitcrm": ["recruitcrm.io"],
     "jobscore": ["jobscore.com"],
     "softgarden": ["softgarden"],
-    "rippling": ["rippling-ats", "rippling.com/careers"],
+    # Ashby e Rippling: senza impronta il detector lasciava «no_ats» 276
+    # e 71 aziende su 2.000 censite il 07/09/2026, con l'adapter gia' pronto
+    "ashby": ["ashbyhq.com"],
+    "rippling": ["rippling-ats", "rippling.com/careers", "ats.rippling.com", "ats.us1.rippling.com"],
     "apply2jobs": ["apply2jobs.com"],
     "paylocity": ["paylocity.com/careers", "recruiting.paylocity.com"],
     "paycom": ["paycom.com/careers", "paycomsoftware.net"],
@@ -315,6 +318,66 @@ def _url_piattaforma_in_html(html: str) -> tuple[str, str, str] | None:
     return None
 
 
+_RX_SF_VIVO = re.compile(r'class="data-row"|jobTitle-link|tile-search-results|Results\.init\(')
+_RX_SF_MARCA = re.compile(r'jobs2web|successfactors|rmk_|csod-|jobDisplayShell', re.I)
+_RX_HOST_CARRIERE = re.compile(
+    r'https?://((?:jobs?|careers?|karriere|carriere|carrieres|stellen|lavoraconnoi|'
+    r'recrutement|empleo|jobsuche|talent|work|join)[a-z0-9-]*\.[a-z0-9.-]+)', re.I)
+
+
+def _host_sf(client: httpx.Client | None, careers_url: str | None, html: str) -> str | None:
+    """L'host del sito carriere SuccessFactors, VERIFICATO.
+
+    L'impronta «successfactors» scatta anche su una homepage che linka
+    il login dei dipendenti (performancemanager5.successfactors.eu): il
+    07/09/2026, 312 tenant su 400 «SuccessFactors a zero» erano cosi',
+    registrati con lo slug della homepage (crh.com) che l'adapter non
+    puo' leggere. Qui si prova ogni host candidato — quello della pagina
+    carriere e i sottodomini jobs./careers./karriere. citati nella
+    pagina — e si accetta solo chi risponde su /search/ con l'elenco
+    (tabella, o l'API delle tile) e un marcatore SAP. L'adapter lavora
+    su https://{slug}/: lo slug deve essere questo host, non un altro.
+    """
+    candidati: list[str] = []
+    if careers_url:
+        candidati.append(urlparse(careers_url).netloc.lower())
+    candidati += [h.lower() for h in _RX_HOST_CARRIERE.findall(html or "")]
+    candidati = [h for h in dict.fromkeys(candidati)
+                 if h and "successfactors" not in h and "sapsf" not in h
+                 and "jobs2web" not in h][:5]
+    proprio = client is None
+    if proprio:
+        client = httpx.Client(timeout=12, follow_redirects=True,
+                              headers={"User-Agent": "nivult-ats/0.1"})
+    try:
+        for h in candidati:
+            try:
+                r = client.get(f"https://{h}/search/?q=&startrow=0")
+            except httpx.HTTPError:
+                continue
+            if r.status_code == 200 and _RX_SF_VIVO.search(r.text) and _RX_SF_MARCA.search(r.text):
+                return str(r.url.host or h).lower()
+    finally:
+        if proprio:
+            client.close()
+    return None
+
+
+def _connetti(dsn: str, tentativi: int = 5):
+    """Una connessione con ritentativo: il detector ne apre una per
+    dominio, e un solo timeout (07/09/2026, 308 domini su 2.000) ammazzava
+    l'intero giro. Cinque tentativi con attesa crescente, poi si alza."""
+    import time as _t
+    ultimo = None
+    for k in range(tentativi):
+        try:
+            return psycopg.connect(dsn, connect_timeout=15)
+        except psycopg.OperationalError as exc:
+            ultimo = exc
+            _t.sleep(2 * (k + 1))
+    raise ultimo
+
+
 def _registra_azienda(dsn: str, piattaforma: str, slug: str,
                       nome: str | None, paese: str | None,
                       url_piattaforma: str = "") -> None:
@@ -327,7 +390,7 @@ def _registra_azienda(dsn: str, piattaforma: str, slug: str,
         if m:
             wd_server = m.group(1)
             wd_instance = m.group(2)
-    with psycopg.connect(dsn) as conn:
+    with _connetti(dsn) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO ats_companies
@@ -363,12 +426,29 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
         else:
             # 1) l'ATS può già dichiararsi in homepage
             impronte = _trova_impronte(r.text)
-            if impronte:
-                piattaforma = impronte[0]
-                careers_url = str(r.url)
+            hit = None if impronte else _url_piattaforma_in_html(r.text)
+            if impronte or hit:
+                # o un'impronta, o un URL di piattaforma del registro
+                # (jobs.ashbyhq.com/acme) nella pagina: senza questo secondo
+                # ramo, 276 tenant Ashby su 2.000 finivano «no_ats» (07/09)
+                piattaforma = impronte[0] if impronte else hit[0]
+                careers_url = hit[2] if hit else str(r.url)
                 kind = "custom"
                 esito = "ats"
                 html_carriere = r.text
+                if not hit and not _url_piattaforma_in_html(r.text):
+                    # l'impronta c'e' (uno script Ashby in homepage) ma lo
+                    # slug no: sta un clic piu' in la', sulla pagina carriere
+                    # (2l.vc → /jobs → jobs.ashbyhq.com/revenuebase-inc)
+                    for url in _link_carriere(str(r.url), r.text)[:3]:
+                        try:
+                            rc = client.get(url)
+                        except httpx.HTTPError:
+                            continue
+                        if rc.status_code == 200 and _url_piattaforma_in_html(rc.text):
+                            html_carriere = rc.text
+                            careers_url = str(rc.url)
+                            break
             else:
                 # 2) segue il link carriere
                 link = _link_carriere(str(r.url), r.text)
@@ -378,9 +458,10 @@ def _analizza_dominio(client: httpx.Client, dominio: str) -> tuple:
                         if rc.status_code != 200 or len(rc.text) < 300:
                             continue
                         impronte = _trova_impronte(rc.text)
-                        if impronte:
-                            piattaforma = impronte[0]
-                            careers_url = str(rc.url)
+                        hit = None if impronte else _url_piattaforma_in_html(rc.text)
+                        if impronte or hit:
+                            piattaforma = impronte[0] if impronte else hit[0]
+                            careers_url = hit[2] if hit else str(rc.url)
                             kind = "custom"
                             esito = "ats"
                             html_carriere = rc.text
@@ -494,7 +575,7 @@ def _renderizza_e_analizza(dominio: str) -> tuple:
 
 
 def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
-           thread: int = 16) -> dict:
+           thread: int = 16, stato: str = "pending") -> dict:
     """Il giro di riconoscimento sui domini in attesa.
 
     I domini sono tutti siti diversi: connessioni simultanee verso
@@ -505,12 +586,20 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
              "dead": 0, "error": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
+            # stato='no_ats' = RIPASSO: i domini gia' visti senza impronta,
+            # da rifare quando il detector impara a riconoscere qualcosa
             sql = ("SELECT domain, company_name, country, employees "
-                   "FROM company_domains WHERE status = 'pending'")
+                   f"FROM company_domains WHERE status = '{stato}'")
             if solo_grandi:
                 sql += " AND employees >= 500"
-            sql += (" ORDER BY employees DESC NULLS LAST, domain "
-                    f"LIMIT {int(limite)}")
+            if stato != "pending":
+                sql += " AND (checked_at IS NULL OR checked_at < now() - interval '2 days')"
+            # I domini del radar Indeed prima di tutti: Indeed li ha visti
+            # assumere questa settimana, e non hanno `employees` — senza
+            # questa riga finirebbero in fondo a una coda di nove giorni.
+            sql += (" ORDER BY (source = 'indeed_radar') DESC, "
+                    "(country IN ('IT','DE','FR','ES','NL','BE','AT','CH','GB')) DESC, "
+                    f"employees DESC NULLS LAST, domain LIMIT {int(limite)}")
             cur.execute(sql)
             domini = cur.fetchall()
 
@@ -544,8 +633,14 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
                 stats["ats"] += 1
                 # se l'URL carriere o uno dentro la pagina è di piattaforma
                 # (pattern del registro), l'azienda è subito scrapeable
-                hit = (_pattern_registro(careers_url or "")
-                       or _url_piattaforma_in_html(html_carriere))
+                if piattaforma == "successfactors":
+                    # mai dal registro (career5.sapsf.com darebbe «career5»):
+                    # lo slug e' l'host carriere verificato, o niente
+                    host_sf = _host_sf(None, careers_url, html_carriere)
+                    hit = ("successfactors", host_sf, f"https://{host_sf}/") if host_sf else None
+                else:
+                    hit = (_pattern_registro(careers_url or "")
+                           or _url_piattaforma_in_html(html_carriere))
                 if hit:
                     pid, slug = hit[0], hit[1]
                     url_p = hit[2] if len(hit) > 2 else careers_url
@@ -558,15 +653,19 @@ def rileva(dsn: str, limite: int = 200, solo_grandi: bool = False,
             else:
                 stats[esito if esito in stats else "error"] += 1
 
-            with psycopg.connect(dsn) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE company_domains SET status = %s,
-                          platform_id = %s, careers_url = %s,
-                          careers_kind = %s, checked_at = now()
-                        WHERE domain = %s
-                    """, (esito, piattaforma, careers_url, kind, dominio))
-                conn.commit()
+            try:
+                with _connetti(dsn) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE company_domains SET status = %s,
+                              platform_id = %s, careers_url = %s,
+                              careers_kind = %s, checked_at = now()
+                            WHERE domain = %s
+                        """, (esito, piattaforma, careers_url, kind, dominio))
+                    conn.commit()
+            except psycopg.OperationalError as exc:
+                log.warning("  %s: database non raggiungibile, salto (%s)", dominio, exc)
+                stats["error"] += 1
 
             if stats["visitati"] % 500 == 0:
                 log.info("  … %d visitati: %s", stats["visitati"], stats)
@@ -620,8 +719,14 @@ def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
             stats["visitati"] += 1
             if esito == "ats" and piattaforma:
                 stats["ats"] += 1
-                hit = (_pattern_registro(careers_url or "")
-                       or _url_piattaforma_in_html(html_carriere))
+                if piattaforma == "successfactors":
+                    # mai dal registro (career5.sapsf.com darebbe «career5»):
+                    # lo slug e' l'host carriere verificato, o niente
+                    host_sf = _host_sf(None, careers_url, html_carriere)
+                    hit = ("successfactors", host_sf, f"https://{host_sf}/") if host_sf else None
+                else:
+                    hit = (_pattern_registro(careers_url or "")
+                           or _url_piattaforma_in_html(html_carriere))
                 if hit:
                     pid, slug = hit[0], hit[1]
                     url_p = hit[2] if len(hit) > 2 else careers_url
@@ -634,15 +739,19 @@ def rileva_render(dsn: str, limite: int = 200, dip_minimi: int = 1000,
             else:
                 stats[esito if esito in stats else "error"] += 1
 
-            with psycopg.connect(dsn) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE company_domains SET status = %s,
-                          platform_id = %s, careers_url = %s,
-                          careers_kind = %s, checked_at = now()
-                        WHERE domain = %s
-                    """, (esito, piattaforma, careers_url, kind, dominio))
-                conn.commit()
+            try:
+                with _connetti(dsn) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            UPDATE company_domains SET status = %s,
+                              platform_id = %s, careers_url = %s,
+                              careers_kind = %s, checked_at = now()
+                            WHERE domain = %s
+                        """, (esito, piattaforma, careers_url, kind, dominio))
+                    conn.commit()
+            except psycopg.OperationalError as exc:
+                log.warning("  %s: database non raggiungibile, salto (%s)", dominio, exc)
+                stats["error"] += 1
             if stats["visitati"] % 50 == 0:
                 log.info("  … %d renderizzati: %s", stats["visitati"], stats)
     return stats
@@ -683,6 +792,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Wikidata con classi extra (company, quotata): giro settimanale")
     ap.add_argument("--produzione", action="store_true",
                     help="carica i domini dal DB del motore")
+    ap.add_argument("--ripassa", action="store_true",
+                    help="rifa' il giro HTTP sui domini 'no_ats' (dopo un'impronta nuova)")
     ap.add_argument("--rileva", action="store_true",
                     help="gira il riconoscimento sui domini in attesa")
     ap.add_argument("--solo-grandi", action="store_true",
@@ -709,7 +820,10 @@ def main(argv: list[str] | None = None) -> int:
         carica_produzione(ATS_DSN, dsn_prod)
     if args.rileva:
         s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread)
-        print(f"\nDetector: {s}")
+        print("Detector:", s)
+    if args.ripassa:
+        s = rileva(ATS_DSN, args.limite, args.solo_grandi, args.thread, stato="no_ats")
+        print("Ripasso no_ats:", s)
     if args.render:
         s = rileva_render(ATS_DSN, args.limite, args.dip_minimi,
                           min(args.thread, 4))

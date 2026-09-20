@@ -36,6 +36,15 @@ from nivult.delivery.testi import t
 
 API = "https://api.telegram.org"
 
+# httpx a livello INFO stampa l'URL intero di ogni chiamata — e l'URL di
+# Telegram CONTIENE IL TOKEN DEL BOT. Sette righe cosi' erano finite in
+# /var/log/nivult-digests.log (07/09/2026), leggibile da tutti sul
+# server. Il token non deve comparire nei log: stessa regola del CV e
+# dei gettoni di accesso.
+import logging as _logging
+_logging.getLogger("httpx").setLevel(_logging.WARNING)
+_logging.getLogger("httpcore").setLevel(_logging.WARNING)
+
 # Telegram taglia a 4096 caratteri. Si spezza sul confine fra un'offerta e
 # l'altra, mai a metà: un messaggio che finisce a metà di una motivazione
 # sembra un guasto, e la seconda parte arriva senza contesto.

@@ -1,0 +1,118 @@
+{
+ "lotto": 1,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "I nomi sono nella forma in cui l'annuncio li scrive, non nella forma commerciale: e' la marcatura che deve poter puntare il testo.",
+  "Dove ho dovuto decidere un caso di confine l'ho scritto in 'dubbi': sono quelli che definiscono il tetto della misura.",
+  "#11 ha il campo text che contiene un JSON serializzato invece del testo: guasto di dato, non dell'annuncio."
+ ],
+ "offerte": [
+  {"n": 1, "id": "5008db5a-d403-4f5d-85c7-15db15afb235", "titolo": "Civil Construction Technical Site Advisor",
+   "tecnologie": [{"nome": "HVDC", "ruolo": "usata"}],
+   "escluse": ["First Aid and CPR (abilitazione personale)", "Civil Engineering / Construction Management (discipline)", "HSE (disciplina)"]},
+
+  {"n": 2, "id": "3f3b7cd7-e3ee-48b3-a914-f575c4b7146f", "titolo": "IT System Electronics Technician (Apprenticeship)",
+   "tecnologie": [{"nome": "fiber optic", "ruolo": "usata"},
+                  {"nome": "intrusion and fire alarm systems", "ruolo": "usata"},
+                  {"nome": "video and public-address systems", "ruolo": "usata"},
+                  {"nome": "ticket vending machines", "ruolo": "usata"},
+                  {"nome": "hot-roller localization systems", "ruolo": "usata"}],
+   "escluse": ["copper (materiale)", "ITK / automation technology (discipline)", "German B2 (lingua)"]},
+
+  {"n": 3, "id": "8212e1ce-f6e6-41e0-8783-afb96322cdeb", "titolo": "Senior Analyst, GTM Analytics",
+   "tecnologie": [{"nome": "SQL", "ruolo": "usata"}, {"nome": "dbt", "ruolo": "usata"},
+                  {"nome": "Looker", "ruolo": "usata"}, {"nome": "Omni", "ruolo": "usata"},
+                  {"nome": "Sigma", "ruolo": "usata"}, {"nome": "Excel", "ruolo": "usata"},
+                  {"nome": "Google Sheets", "ruolo": "usata"}, {"nome": "Salesforce", "ruolo": "usata"},
+                  {"nome": "Claude", "ruolo": "usata"}, {"nome": "Hex", "ruolo": "gradita"},
+                  {"nome": "Python", "ruolo": "gradita"}],
+   "escluse": ["Fivetran / dbt Labs (il datore)", "SFDC (alias di Salesforce)", "MQL/SQL funnel, ARR (concetti)"]},
+
+  {"n": 4, "id": "956d9472-f43b-4edd-be05-f3782b9f749f", "titolo": "Senior Payments Operations Officer (FTC)",
+   "tecnologie": [{"nome": "Bacs", "ruolo": "usata"}, {"nome": "FPS", "ruolo": "usata"},
+                  {"nome": "ICS", "ruolo": "usata"}],
+   "escluse": ["Managed Services / Reference Data (categorie di servizio)"]},
+
+  {"n": 5, "id": "34e5a2a1-642a-4329-972e-855deb16fb78", "titolo": "Greeter - Part-Time",
+   "tecnologie": [],
+   "escluse": ["401k, dental, vision, Bass Pro Cares Fund (benefit)", "CLUB Membership, VOC, In-Store Pickup (programmi)", "SOP (procedura)"]},
+
+  {"n": 6, "id": "0de9949a-c878-4283-ac70-39244f12377e", "titolo": "Marine Offshore UK Ireland Director",
+   "tecnologie": [],
+   "escluse": ["Budgeting, Forecasting, P&L, Change Management, Customer Relationship Management (processi)", "Leadership, critical thinking (qualita')", "English (lingua)"]},
+
+  {"n": 7, "id": "88b5baee-e742-4ed1-ae73-f7b69dde093c", "titolo": "Stage LLM-as-a-Judge (Wavestone)",
+   "tecnologie": [{"nome": "Python", "ruolo": "usata"}, {"nome": "RAG", "ruolo": "usata"},
+                  {"nome": "Microsoft Fabric", "ruolo": "servizio"}, {"nome": "Mistral", "ruolo": "servizio"},
+                  {"nome": "AWS", "ruolo": "servizio"}, {"nome": "Databricks", "ruolo": "servizio"},
+                  {"nome": "Dataiku", "ruolo": "servizio"}, {"nome": "Copilot M365", "ruolo": "usata"}],
+   "escluse": ["Microsoft, Google, Anthropic (nomi di aziende, non piattaforme nominate)", "Machine Learning, GenAI, MLOps, computer vision (discipline)", "DataCamp (benefit formativo)"]},
+
+  {"n": 8, "id": "5fc9a840-935a-42b3-b3e8-20669f5563b8", "titolo": "Chef de projet etudes ferroviaire - Signalisation",
+   "tecnologie": [{"nome": "MS Project", "ruolo": "usata"}, {"nome": "Tilos", "ruolo": "usata"},
+                  {"nome": "Primavera", "ruolo": "usata"}, {"nome": "Coplann", "ruolo": "usata"},
+                  {"nome": "AutoCAD", "ruolo": "usata"}, {"nome": "Microsoft Excel", "ruolo": "usata"},
+                  {"nome": "LEA", "ruolo": "usata"}, {"nome": "GEREMI", "ruolo": "usata"}],
+   "escluse": ["AVP, PRO, REA, APS, APD (fasi di progetto)", "MOE (ruolo contrattuale)", "genie civil, electrotechnique (discipline)"]},
+
+  {"n": 9, "id": "de885550-4e83-46fb-ab83-63ecc20dc6f1", "titolo": "Junior Project Manager Front-End Innovation",
+   "tecnologie": [],
+   "escluse": ["fibers, polymers, additives, nonwovens (materiali)", "Chemistry, Materials Science, Engineering (discipline)"]},
+
+  {"n": 10, "id": "d11dfaa8-7b99-468e-99eb-b24601d0e883", "titolo": "Kokenut veroasiantuntija",
+   "tecnologie": [],
+   "escluse": ["M&A, litigaatio, yritysverotus (materie)", "OTM, KTM (titoli)", "suomi, englanti (lingue)", "LinkedIn, TikTok (canali social del datore)"]},
+
+  {"n": 11, "id": "aae54ec0-0646-461e-880b-f82bfa299841", "titolo": "Byggnadsplatslagare - Nybe Plat AB",
+   "tecnologie": [{"nome": "Tigsvetsning", "ruolo": "usata"}, {"nome": "Kantpressning", "ruolo": "usata"}],
+   "escluse": ["Byggnadsplatslageri, Smide, Legotillverkning, Hallbyggnationer (mestieri e lavorazioni)", "B-korkort (patente)", "svenska (lingua)"]},
+
+  {"n": 12, "id": "95349fee-974f-43fa-a20e-9a84b2dba0f5", "titolo": "Brand Lead Consumer Healthcare - Milan",
+   "tecnologie": [],
+   "escluse": ["brand strategy, portfolio management, consumer insights, budget management (processi)", "OTC, FMCG, VMS (categorie di mercato)", "Allegra, Buscopan, Doliprane (farmaci del datore)"]},
+
+  {"n": 13, "id": "ada46ba2-ced3-48ab-b1dc-f413866265ab", "titolo": "Chef de Partie",
+   "tecnologie": [],
+   "escluse": ["YuLife, tronc, cycle to work, sconti (benefit)"]},
+
+  {"n": 14, "id": "bab383f5-f076-4822-8a1b-70d41f738fba", "titolo": "Therapist - Co Responder",
+   "tecnologie": [{"nome": "motivational interviewing", "ruolo": "usata"},
+                  {"nome": "Person-Centered Planning", "ruolo": "usata"}],
+   "escluse": ["LMSW, LPC, LLP, MCBAP (licenze personali)", "Michigan Mental Health Code (legge, non standard tecnico)", "trauma-informed practices (approccio generico)"]},
+
+  {"n": 15, "id": "2bd54439-40e3-4ea2-adae-9ebb177e968f", "titolo": "Aushilfe / Minijob Verkauf - Kiel",
+   "tecnologie": [],
+   "escluse": ["amor, NOELANI, Paul Valentine, JOOP! (marchi del datore)", "Beratung, Verkauf, Merchandising (attivita')"]},
+
+  {"n": 16, "id": "15cfbbff-5ae0-4512-8329-9bbf06de970e", "titolo": "Commis de cuisine F/H",
+   "tecnologie": [],
+   "escluse": ["fiches techniques, normes d'hygiene (procedure)", "materiel de cuisine (attrezzatura generica)", "gestion du stress (qualita')"]},
+
+  {"n": 17, "id": "8ee11328-abaa-4daf-8aea-5a4580501bb0", "titolo": "Senior Reporting Support",
+   "tecnologie": [{"nome": "Word", "ruolo": "usata"}, {"nome": "Excel", "ruolo": "usata"},
+                  {"nome": "PowerPoint", "ruolo": "usata"}, {"nome": "Access", "ruolo": "usata"},
+                  {"nome": "Tableau", "ruolo": "usata"}, {"nome": "MS Power BI", "ruolo": "usata"}],
+   "escluse": ["KPI, project controls, data visualisation (concetti)", "Twitter, Instagram, LinkedIn (canali del datore)"]},
+
+  {"n": 18, "id": "ef66e1f5-b8ce-4ae1-9183-f5a7a8477b74", "titolo": "Key Accounts Manager",
+   "tecnologie": [{"nome": "Microsoft Office", "ruolo": "usata"}, {"nome": "CRM systems", "ruolo": "usata"}],
+   "escluse": ["driving licence (patente)", "sales forecasting, business reviews (processi)"]},
+
+  {"n": 19, "id": "50c9033a-ee26-4817-a0ea-96b4e5e407aa", "titolo": "FTC Growth Marketing Lead",
+   "tecnologie": [],
+   "escluse": ["PPC, SEO, CRO, Affiliate Marketing, Direct Mail (pratiche di marketing, non strumenti)", "B Corp (certificazione dell'azienda)"]},
+
+  {"n": 20, "id": "1fb93222-448b-409e-bb94-cc3b37dc8a3c", "titolo": "Master Tyre Technician",
+   "tecnologie": [],
+   "escluse": ["CAP, BEP, Bac pro, CQP (diplomi)", "habilitation climatisation / electrique, permis B (abilitazioni)", "vidange, plaquettes, geometrie (prestazioni e ricambi, nessuno strumento nominato)"]}
+ ],
+ "dubbi": [
+  "#7: Microsoft Fabric, Mistral, AWS, Databricks, Dataiku sono nominati come «ecosistema di partner», non come strumenti del tirocinio. Li ho tenuti come 'servizio'; chi decidesse che sono contesto aziendale li escluderebbe tutti e cinque.",
+  "#14: 'motivational interviewing' e 'Person-Centered Planning' sono metodi clinici con un nome proprio, quindi dentro per la regola dei metodi (Scrum, Six Sigma). Ma non sono software, e un revisore severo li chiamerebbe pratiche.",
+  "#19: PPC, SEO, CRO sono pratiche, non strumenti: escluse. I modelli generativi le mettono sempre dentro — e' uno dei disaccordi sistematici, non un caso isolato.",
+  "#18: 'CRM systems' e' una categoria di software senza nome proprio. Tenuta perche' nomina un tipo di strumento che il lavoro usa; e' il confine piu' sottile del lotto.",
+  "#2 e #11: mestieri manuali. Qui le tecnologie esistono ma si chiamano 'Tigsvetsning' e 'ticket vending machines', e nessun dizionario di tecnologie le contiene."
+ ]
+}

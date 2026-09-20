@@ -9,6 +9,7 @@ su nivult: i due sistemi si parlano solo tramite il risultato finale.
 """
 
 from __future__ import annotations
+import re
 
 import argparse
 import logging
@@ -22,7 +23,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND
+from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND, LetturaFallita
 from nivult.ats.enrichment import cerca_wikidata
 
 log = logging.getLogger("nivult.ats.runner")
@@ -49,6 +50,37 @@ def _rate_gate(platform_id: str) -> None:
         _rate_next[platform_id] = (prossimo if prossimo > ora else ora) + intervallo
     if attesa > 0:
         time.sleep(attesa)
+
+
+def _rate_penalizza(platform_id: str, secondi: float = 20.0) -> None:
+    """Un 429 sposta in avanti il prossimo turno di TUTTA la piattaforma:
+    e' il server che dice «troppo», e insistere con gli altri thread
+    trasforma un limite in un ban."""
+    with _rate_lock:
+        ora = time.monotonic()
+        _rate_next[platform_id] = max(_rate_next.get(platform_id, 0.0), ora) + secondi
+
+
+def _paese_all_ingresso(j) -> str | None:
+    """Il paese dalla localita', al momento della scrittura.
+
+    Prima veniva assegnato SOLO dal passo notturno «arricchisci paese»:
+    se quello falliva (deadlock, 07/09/2026) le offerte del giorno —
+    57.927 JazzHR con «Atlanta, GA» e simili — restavano senza paese e
+    fuori da ogni cluster. Stesse regole del passo notturno, che resta
+    come correzione e ripiego (paese dominante dell'azienda)."""
+    if j.country:
+        return j.country
+    testo = ((j.location or "") + " " + (j.city or "")).strip()
+    if not testo:
+        return None
+    try:
+        from .arricchisci import _paese_dal_testo
+        from .geografia import paese_da_localita
+    except Exception:  # noqa: BLE001 — geonamescache assente: si resta senza
+        return None
+    return (_paese_dal_testo(testo.lower()) or paese_da_localita(j.location)
+            or paese_da_localita(j.city))
 
 ATS_DSN = os.environ.get(
     "ATS_DATABASE_URL",
@@ -183,7 +215,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
-                   "       ac.wd_server, ac.wd_instance, ac.pub_key "
+                   "       ac.wd_server, ac.wd_instance, ac.pub_key, ac.sorgente_url "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -229,7 +261,7 @@ def scrape(dsn: str, piattaforma: str | None = None,
             """
             adapter_cls = ADAPTERS.get(az["platform_id"])
             if not adapter_cls:
-                return az, None, None
+                return az, None, None, False
             _rate_gate(az["platform_id"])   # gate solo per gli endpoint condivisi
             try:
                 with adapter_cls() as adapter:
@@ -237,20 +269,28 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         jobs = adapter.jobs(az["slug"], az["wd_server"], az["wd_instance"])
                     elif az["platform_id"] == "inrecruiting":
                         jobs = adapter.jobs(az["slug"], az["pub_key"])
+                    elif az["platform_id"] == "jsonld":
+                        jobs = adapter.jobs(az["slug"], az.get("sorgente_url"))
                     else:
                         jobs = adapter.jobs(az["slug"])
-                    return az, jobs, (adapter.ultima_pagina if not jobs else None)
+                    return az, jobs, (adapter.ultima_pagina if not jobs else None), adapter.lettura_parziale
+            except LetturaFallita as exc:
+                if exc.status == 429:
+                    _rate_penalizza(az["platform_id"])
+                log.warning("%s/%s: fetch fallita: %s",
+                            az["platform_id"], az["slug"], exc)
+                return az, None, None, False
             except Exception as exc:  # noqa: BLE001
                 log.warning("%s/%s: fetch fallita: %s",
                             az["platform_id"], az["slug"], exc)
-                return az, None, None
+                return az, None, None, False
 
         campioni_ora: dict[str, float] = {}   # un campione per piattaforma l'ora, non uno per tenant
 
         with ThreadPoolExecutor(max_workers=thread) as pool:
             futuri = [pool.submit(_fetch, az) for az in aziende]
             for fut in as_completed(futuri):
-                az, jobs, pagina = fut.result()
+                az, jobs, pagina, parziale = fut.result()
                 if jobs is None:
                     # Fetch fallita (rete, slug morto, piattaforma senza
                     # adapter). Va segnata comunque come tentata: senza
@@ -289,23 +329,29 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         continue
 
                 for j in jobs:
+                    j.country = _paese_all_ingresso(j)
                     with conn.cursor() as cur:
                         cur.execute("""
                             INSERT INTO ats_jobs (platform_id, slug, external_id, title,
-                              url, location, country, city, posted_at, department, raw)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                            ON CONFLICT (platform_id, external_id) DO UPDATE SET
+                              url, location, country, city, posted_at, department, raw,
+                              posted_at_estimated)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::timestamptz, now()),%s,%s,(%s::timestamptz IS NULL))
+                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                               title = EXCLUDED.title, url = EXCLUDED.url,
                               location = EXCLUDED.location,
                               country = COALESCE(EXCLUDED.country, ats_jobs.country),
-                              city = EXCLUDED.city, posted_at = EXCLUDED.posted_at,
+                              city = EXCLUDED.city,
+                              -- 14/09: senza data dichiarata vale la prima vista (stimata);
+                              -- una data dichiarata batte sempre una stima
+                              posted_at = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN EXCLUDED.posted_at ELSE ats_jobs.posted_at END,
+                              posted_at_estimated = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN false ELSE ats_jobs.posted_at_estimated END,
                               department = EXCLUDED.department, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
                               expired_at = NULL,   -- rivista = di nuovo viva
                               fetched_at = now()
                             RETURNING (xmax = 0) AS is_new
                         """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
                               j.location, j.country, j.city, j.posted_at,
-                              j.department, psycopg.types.json.Json(j.raw)))
+                              j.department, psycopg.types.json.Json(j.raw), j.posted_at))
                         r = cur.fetchone()
                         if r and r[0]:
                             stats["nuove"] += 1
@@ -319,8 +365,8 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     # da cui la scadenza per presenza puo' dedurre qualcosa.
                     cur.execute(
                         "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
-                        "job_count = %s WHERE platform_id = %s AND slug = %s",
-                        (len(jobs), az["platform_id"], az["slug"]))
+                        "job_count = %s, lettura_parziale = %s WHERE platform_id = %s AND slug = %s",
+                        (len(jobs), bool(parziale), az["platform_id"], az["slug"]))
                 conn.commit()
                 if len(jobs):
                     log.info("  %s/%s: %d offerte",
@@ -418,13 +464,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limite", type=int, default=None,
                     help="scarica solo le prime N aziende per priorita' "
                          "(per il demone a lotti; vuoto = tutte)")
+    ap.add_argument("--schema", action="store_true",
+                    help="applica schema.sql (idempotente) e registra le piattaforme; poi esce se non c'e' altro")
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
     dsn = ATS_DSN
-    setup(dsn)
-    print(f"database ATS: {dsn}")
+    # Lo schema si applica SOLO su richiesta (--schema, o con --semina).
+    # Prima girava a ogni invocazione — ogni 30 secondi con lo scraper
+    # continuo — e schema.sql contiene ALTER TABLE … ADD COLUMN IF NOT
+    # EXISTS e DROP/CREATE TRIGGER, che prendono un AccessExclusiveLock su
+    # ats_jobs anche quando non c'e' nulla da cambiare: 47 deadlock in 24
+    # ore (misurato il 07/09/2026), «arricchisci paese» fallito ogni
+    # notte, lo sprint costretto a riprovare. Il notturno lo applica una
+    # volta; dopo un cambio di schema si lancia a mano `runner --schema`.
+    if args.schema or args.semina:
+        setup(dsn)
+        if args.schema and not args.semina:
+            print("schema applicato")
+            return 0
+    print("database ATS:", re.sub(r"://([^:]+):[^@]*@", r"://\1:***@", dsn))   # mai la password in chiaro nei log
 
     if args.semina:
         dsn_prod = os.environ.get("DATABASE_URL",

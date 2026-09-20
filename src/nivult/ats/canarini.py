@@ -34,7 +34,17 @@ from .adapters import ADAPTERS, LetturaFallita
 log = logging.getLogger("nivult.ats.canarini")
 ESITO_FILE = "/opt/nivult/canarini.json"
 CAMPIONI_DIR = "/opt/nivult/campioni"
-FUORI = {"workday", "inrecruiting", "icims"}
+# Fuori dai canarini: chi non si legge con `jobs(slug)` e basta.
+#  - argomenti extra (server/istanza, chiave di pubblicazione): workday,
+#    inrecruiting, werecruit;
+#  - browser headless (Playwright): taleo, welcometothejungle, welcomekit,
+#    carerix — e icims, che passa dal headless_runner;
+#  - taleo ha anche lo slug composto «host#sezione»: il canarino scelto
+#    dalle offerte («textron.taleo.net») era senza «#», l'adapter
+#    rispondeva zero per costruzione, e alle 07:40 del 07/09 si e' aperta
+#    un'officina per un guasto che non esisteva.
+FUORI = {"workday", "inrecruiting", "werecruit", "icims", "jsonld",
+         "taleo", "welcometothejungle", "welcomekit", "carerix"}
 PER_PIATTAFORMA = 3
 MINIMO_ATTESE = 5
 
@@ -148,7 +158,31 @@ def controlla(dsn: str, solo: str | None = None) -> dict:
                               "canarini": [{"slug": s, "attese": a, "campione": c} for s, a, t, c in esiti]})
             elif esiti and not riuscite:
                 bloccate.append({"piattaforma": pid, "canarini": len(esiti)})
+    # «Rotta» per l'officina solo dopo TRE giri di fila a zero. Un vuoto
+    # passeggero del portale non e' un adapter rotto, e capita: crelate
+    # il 07/09/2026 alle 03:35 (SPA a 200 senza GUID su tutti e tre i
+    # canarini, tutto a posto alle 04:05) e taleez l'08/09 alle 20:38
+    # (tre canarini a zero, 375/765/593 offerte alle 21:36). Con due giri
+    # taleez ha aperto un'officina per un guasto che non esisteva; con
+    # tre, un'ora di silenzio non basta piu'. Il prezzo e' un'ora di
+    # ritardo sul guasto vero, e la scadenza per assenza chiede comunque
+    # una rilettura riuscita: nessuna offerta muore nel frattempo.
+    storia = []
+    if solo is None:
+        try:
+            vecchio_esito = json.load(open(ESITO_FILE))
+            storia = vecchio_esito.get("storia_rotte", [])
+            if not storia:                       # primo giro col nuovo formato
+                storia = [[r["piattaforma"] for r in vecchio_esito.get("rotte", [])]]
+        except (OSError, ValueError):
+            pass
+    ora = [r["piattaforma"] for r in rotte]
+    storia = (storia + [ora])[-3:]
+    confermate = [r for r in rotte
+                  if len(storia) >= 3 and all(r["piattaforma"] in g for g in storia)]
     out = {"at": time.time(), "rotte": rotte, "bloccate": bloccate,
+           "storia_rotte": storia,
+           "rotte_confermate": confermate,
            "piattaforme": len(per_pid), "canarini": len(can), "vivi": vivi, "letti": letti}
     if solo is None:
         try:
@@ -181,7 +215,8 @@ def main(argv=None) -> int:
     if a.controlla:
         r = controlla(dsn, a.piattaforma)
         print(f"canarini: {r['canarini']} su {r['piattaforme']} piattaforme — VIVI {r['vivi']}/{r['letti']} — "
-              f"ROTTE: {', '.join(x['piattaforma'] for x in r['rotte']) or 'nessuna'} — "
+              f"a zero: {', '.join(x['piattaforma'] for x in r['rotte']) or 'nessuna'} — "
+              f"ROTTE (due giri): {', '.join(x['piattaforma'] for x in r.get('rotte_confermate', [])) or 'nessuna'} — "
               f"bloccate: {', '.join(x['piattaforma'] for x in r['bloccate']) or 'nessuna'}")
     if a.stato:
         for pid, slug, at, trovate, attese in stato(dsn):

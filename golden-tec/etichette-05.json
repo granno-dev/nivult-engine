@@ -1,0 +1,125 @@
+{
+ "lotto": 5,
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-19",
+ "note_di_metodo": [
+  "#82 ha il campo text con un JSON serializzato: quarto caso del golden.",
+  "I MODULI di un prodotto contano come tecnologie: SAP MM, FI, SD, PP, WM, QM sono esattamente cio' che un compratore di dati tecnografici cerca, non sigle di processo.",
+  "#95 e' il caso piu' istruttivo del lotto: un tecnico della sicurezza svedese con SEI marche di prodotto nominate (SPC, RCO, ASSA ARX, APTUS, AXIS, Hanwaha). Nessun dizionario informatico ne ha una."
+ ],
+ "offerte": [
+  {"n": 81, "id": "3b68406d-8c2f-4ae9-b6ba-4e562645e441", "titolo": "Financial Controller - Wirral & Surrounding areas",
+   "tecnologie": [{"nome": "Xero", "ruolo": "usata"}, {"nome": "Sage", "ruolo": "gradita"},
+                  {"nome": "QuickBooks", "ruolo": "gradita"}],
+   "escluse": ["ACA, ACCA, CIMA (qualifiche personali)", "budgeting, forecasting, financial modelling, scenario planning (pratiche)", "KPI reporting (attivita')"]},
+
+  {"n": 82, "id": "a4d7cc71-23e9-44bc-aa27-aa2e2530fa2c", "titolo": "Almia soker barnmorska till Kiruna",
+   "tecnologie": [],
+   "escluse": ["modrahalsovard (area clinica)", "svenska (lingua)", "tipsbonus, formanspaket (compenso)"]},
+
+  {"n": 83, "id": "ff65bd18-cc81-4168-b5bb-8c5e410260f4", "titolo": "BECAS BBVA AREAS DE SOSTENIBILIDAD MADRID 2026",
+   "tecnologie": [],
+   "escluse": ["Analytics, Customer Targeting, Learning Culture (etichette della tassonomia di competenze del datore, non tecnologie)", "Formacion en Innovacion y Transformacion Digital (formazione offerta)", "ingles (lingua)"]},
+
+  {"n": 84, "id": "fb193d76-af3b-4573-82e0-b71ef20009e3", "titolo": "SAP Procurement (Senior) Manager (Accenture)",
+   "tecnologie": [{"nome": "SAP S/4HANA", "ruolo": "usata"},
+                  {"nome": "SAP Business Technology Platforms (BTP)", "ruolo": "usata"},
+                  {"nome": "Ariba", "ruolo": "usata"}, {"nome": "Fieldglass", "ruolo": "usata"},
+                  {"nome": "SAP ECC", "ruolo": "usata"}, {"nome": "MM", "ruolo": "usata"},
+                  {"nome": "FI", "ruolo": "usata"}, {"nome": "SD", "ruolo": "usata"},
+                  {"nome": "PP", "ruolo": "usata"}, {"nome": "WM", "ruolo": "usata"},
+                  {"nome": "QM", "ruolo": "usata"}],
+   "escluse": ["machine learning, edge computing, blockchain, advanced analytics, generative and agentic AI, cloud-native architectures (categorie)", "Procure-to-Pay, P2P (processo)", "design thinking, agile (pratiche; e sono di Accenture, non requisiti)", "Master's degree (titolo)"]},
+
+  {"n": 85, "id": "a1ba7f38-9313-4624-af6a-e081620d0628", "titolo": "Responsable de restaurant / Chef(fe) de cuisine",
+   "tecnologie": [],
+   "escluse": ["regles d'hygiene et securite alimentaire (norme non nominate)", "CFC de cuisinier (titolo)", "plan de nettoyage (documento)", "francais (lingua)"]},
+
+  {"n": 86, "id": "d498bec2-b9f9-4964-a498-09321754f994", "titolo": "Lead Hardware Engineer (Anduril)",
+   "tecnologie": [{"nome": "Ladar", "ruolo": "usata"}, {"nome": "Lidar", "ruolo": "usata"},
+                  {"nome": "EO/IR", "ruolo": "usata"}, {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["SRR, PDR, CDR, MRR, NPI, DVT, TRL, V+V, CRB (tappe e processi di progetto)", "thermal, shock, vibration (prove ambientali generiche)", "U.S. security clearance (autorizzazione personale)"]},
+
+  {"n": 87, "id": "cca174a5-adbe-46bc-88a2-391a059c15a6", "titolo": "Motebooker med vei inn i salg - Weneva",
+   "tecnologie": [],
+   "escluse": ["digitale losninger (generico, nessun nome)", "norsk (lingua)", "fastlonn med provisjon (compenso)"]},
+
+  {"n": 88, "id": "15786c2a-2725-4779-85eb-ffbd720a2e6e", "titolo": "Sesonghjelp jul MATCH Eidsvoll",
+   "tecnologie": [],
+   "escluse": ["laringsplattformer (generico)", "videregaende skole (titolo)"]},
+
+  {"n": 89, "id": "8b450224-c46f-4dad-ba7f-508b8eb66fff", "titolo": "(Senior) Analytics Solutions Engineer (Continental)",
+   "tecnologie": [{"nome": "Power BI", "ruolo": "usata"}, {"nome": "DAX", "ruolo": "usata"},
+                  {"nome": "SQL", "ruolo": "usata"}, {"nome": "SAP S/4HANA", "ruolo": "usata"},
+                  {"nome": "Hive", "ruolo": "usata"}, {"nome": "Azure", "ruolo": "usata"},
+                  {"nome": "Jira", "ruolo": "usata"}, {"nome": "Confluence", "ruolo": "usata"},
+                  {"nome": "BI", "ruolo": "usata"}, {"nome": "Microsoft Fabric", "ruolo": "gradita"}],
+   "escluse": ["Agile (atteggiamento)", "UX/UI, data modeling, performance optimization (pratiche)", "automotive, tire, fitment data (dominio del datore)"]},
+
+  {"n": 90, "id": "c0afeb23-123b-40a0-9ec7-976583561963", "titolo": "Distriktschef till Nordic Wellness Bohuslan",
+   "tecnologie": [],
+   "escluse": ["B-korkort (patente)", "svenska (lingua)", "padelanlaggningar (impianti del datore)"]},
+
+  {"n": 91, "id": "a6ac9a98-f55d-46f5-a0f7-91e9937738fb", "titolo": "Staff Site Reliability Engineer",
+   "tecnologie": [],
+   "escluse": ["SRE, observability, incident response, resilience (discipline e pratiche)", "AI (categoria)"],
+   "nota": "annuncio SRE che non nomina un solo strumento: il generativo qui vuole scrivere Prometheus, Grafana, Kubernetes"},
+
+  {"n": 92, "id": "06daf283-fb17-44c0-a4a9-5b484f0dc9bc", "titolo": "Software Engineering Leader (Inter IKEA)",
+   "tecnologie": [{"nome": "TOGAF", "ruolo": "usata"}],
+   "escluse": ["design patterns, architecture concepts, technology stack (categorie generiche)", "security best practices (pratica)"]},
+
+  {"n": 93, "id": "293086e9-399d-4124-a8a2-efaf7312fa80", "titolo": "Supervisor Product Support (Sabre)",
+   "tecnologie": [{"nome": "Sabre Agency Workspace", "ruolo": "servizio"},
+                  {"nome": "Sabre GDS", "ruolo": "gradita"}],
+   "escluse": ["Udemy, Luxmed, Multisport, My Benefit (piattaforme dei benefit)", "Augmented Reality & Virtual Reality equipment, 3D printers, Robot construction kit (attrezzatura della sala giochi aziendale)", "Google Developers Group, Women in Technology (comunita' interne)"]},
+
+  {"n": 94, "id": "62761fb4-02d8-4bf1-8a81-0e0402ccc32a", "titolo": "Conducteur travaux principal en rehabilitation H/F",
+   "tecnologie": [],
+   "escluse": ["beton bas carbone (materiale)", "diplome d'ingenieur BTP (titolo)", "RSE, CHANDICAP', Licorne (programmi del datore)", "PEG (azionariato)"]},
+
+  {"n": 95, "id": "9b5ae466-1ef6-443c-a3a1-7432b6651d44", "titolo": "Teletekniker till Oskarshamn (Elajo)",
+   "tecnologie": [{"nome": "inbrottslarm", "ruolo": "usata"}, {"nome": "passersystem", "ruolo": "usata"},
+                  {"nome": "brandlarm", "ruolo": "usata"}, {"nome": "CCTV", "ruolo": "usata"},
+                  {"nome": "SPC", "ruolo": "gradita"}, {"nome": "RCO", "ruolo": "gradita"},
+                  {"nome": "ASSA ARX", "ruolo": "gradita"}, {"nome": "APTUS", "ruolo": "gradita"},
+                  {"nome": "AXIS", "ruolo": "gradita"}, {"nome": "Hanwaha", "ruolo": "gradita"}],
+   "escluse": ["ECY-certifikat (certificazione personale)", "B-korkort (patente)", "styrsystem, automation, energi (categorie generiche)"]},
+
+  {"n": 96, "id": "273b5cd4-3228-431f-b226-0e3c1a012a5e", "titolo": "Senior Director, Product Security (Anduril)",
+   "tecnologie": [{"nome": "C/C++", "ruolo": "usata"}, {"nome": "Golang", "ruolo": "usata"},
+                  {"nome": "Rust", "ruolo": "usata"}, {"nome": "Python", "ruolo": "usata"},
+                  {"nome": "IoT", "ruolo": "usata"}, {"nome": "Linux", "ruolo": "gradita"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["secure SDLC, AppSec, anti-tamper, reverse engineering (pratiche e tecniche)", "programmable logic devices (categoria hardware senza nome)", "TTP (concetto)", "U.S. TS clearance (autorizzazione personale)"]},
+
+  {"n": 97, "id": "fab504fb-35c5-4f08-a52a-1f4e0fdef905", "titolo": "Dental Assistant (Dallas Endodontics)",
+   "tecnologie": [{"nome": "dental radiographs", "ruolo": "usata"},
+                  {"nome": "four-handed dentistry", "ruolo": "usata"}],
+   "escluse": ["Registered Dental Assistant license, radiology certification, CPR, BLS (abilitazioni personali)", "dental software (generico, nessun nome)", "E-Verify (sistema citato nella nota legale, non strumento del ruolo)", "sterilization protocols (procedure)"]},
+
+  {"n": 98, "id": "a3c80386-e4df-4939-b2f9-39d54e380331", "titolo": "Pre-construction Manager (Harmony)",
+   "tecnologie": [{"nome": "passive fire protection", "ruolo": "servizio"}],
+   "escluse": ["fire and height safety (area di attivita')", "Best Companies 'Outstanding Employer' (riconoscimento del datore)"]},
+
+  {"n": 99, "id": "23d5a9da-38b8-462e-8186-b91ca7decc7f", "titolo": "Technical Sourcer, Hardware (Anduril)",
+   "tecnologie": [{"nome": "LinkedIn Recruiter", "ruolo": "usata"},
+                  {"nome": "applicant tracking systems", "ruolo": "usata"},
+                  {"nome": "Greenhouse", "ruolo": "gradita"}, {"nome": "Gem", "ruolo": "gradita"},
+                  {"nome": "Lattice OS", "ruolo": "servizio"}],
+   "escluse": ["Boolean search (tecnica)", "AAV, UAS, AUV (classi di veicoli, elencate come settori di esperienza)", "various AI tools (generico)"]},
+
+  {"n": 100, "id": "d2abd92d-3416-4315-b37a-f62838987834", "titolo": "Finance Manager (Locinox)",
+   "tecnologie": [],
+   "escluse": ["AI-toepassingen, rapporteringstools (categorie senza nome)", "P&L, treasury, jaarrekeningen (oggetti del mestiere)", "bachelor/master (titoli)"]}
+ ],
+ "dubbi": [
+  "#84: i moduli SAP (MM, FI, SD, PP, WM, QM) sono sigle di due lettere. Dentro perche' nominano componenti di un prodotto reale, ma sono anche il tipo di voce piu' facile da confondere con una sigla di processo.",
+  "#84: «blockchain», «edge computing», «machine learning» esclusi come categorie, per coerenza con l'esclusione di AI e ML negli altri annunci. Un revisore potrebbe tenerli: sono tecnologie in senso lato, solo non cose che un'azienda «ha».",
+  "#89: «BI» tenuto come categoria di sistema, per coerenza con ERP/CRM/MES. «Agile» escluso come atteggiamento.",
+  "#97: «four-handed dentistry» e' una tecnica clinica con nome proprio, tenuta per coerenza con «motivational interviewing» al #14. Se si escludesse, andrebbe escluso anche quello.",
+  "#98: «passive fire protection» e' un sistema edilizio con nome proprio e insieme il mestiere dell'azienda. Tenuto come servizio; e' il confine piu' incerto del lotto.",
+  "#91: secondo annuncio di alto profilo tecnico con zero strumenti nominati (dopo #32, #41). Sono tre su cento: la tentazione di inventare qui e' la piu' forte, e il dato piu' facile da sporcare."
+ ]
+}
