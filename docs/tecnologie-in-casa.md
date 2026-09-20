@@ -112,17 +112,35 @@ l'elenco di cosa trova e cosa perde non lascia dubbi:
 | Notifier, Simplex, Fire Lite, Gamewell FCI, Honeywell | Brandmeldeanlagen, Videosysteme, Zutrittskontrolle |
 | Terminal Radio, PEG J | X-rays, Ultrasonography, AED, CGM, snowmobile, NFPA 72 |
 
-**La causa non è il modello, è di nuovo il dataset.** Le etichette di
-addestramento vengono dal 2B, e il 2B su queste otto famiglie **non è mai
-girato**: il buttafuori le scartava prima. La testa ha imparato che
-«tecnologia» vuol dire «nome di software», perché è l'unica cosa che le hanno
-fatto vedere. Non si può riconoscere ciò che non è mai stato mostrato.
+**La causa non è il modello, è il dataset — ma non come sembrava.**
 
-Quindi: **il buttafuori è ancora lì, ma si è spostato.** Prima stava nel codice
-e tagliava il 28% del flusso; adesso sta dentro i pesi del modello e taglia due
-terzi delle tecnologie di quel 28%. La cura è una sola, e non è addestrare di
-più: il prossimo dataset deve contenere annunci di mestieri, trasporti, sanità
-e ristorazione, etichettati da un maestro che li abbia visti davvero.
+La prima spiegazione che mi ero dato era che il 2B quelle famiglie non le
+avesse mai lette, perché il buttafuori le scartava. **È falsa, e verificarla ha
+richiesto una query.** Il 2B le ha lette eccome — il buttafuori è arrivato il
+19/09, dopo:
+
+| famiglia | annunci letti dal 2B | tecnologie per annuncio | lasciati vuoti |
+|---|---|---|---|
+| Software | 5.530 | 6,11 | 9,7% |
+| Engineering | 6.295 | 2,84 | 24,3% |
+| **Trades** | **8.677** | **0,16** | **90,7%** |
+| Healthcare | 7.830 | 0,13 | 92,8% |
+| Retail | 8.482 | 0,05 | 96,6% |
+
+Sulle 13 righe di Trades etichettate a mano ci sono **2,15 tecnologie per
+annuncio**. Il 2B ne trovava 0,16: **ne vedeva il 7%**.
+
+Quindi non è un buco nei dati. Sono **circa 40.000 esempi che insegnano
+attivamente a tacere** su mestieri, sanità, commercio e trasporti, e la testa
+ha imparato benissimo quella lezione — è [[addestramento-copia-il-maestro]]
+nella sua forma più costosa. Un'assenza si colma aggiungendo dati; una lezione
+sbagliata va prima tolta.
+
+**Il buttafuori è ancora lì, ma si è spostato.** Prima stava nel codice e
+tagliava il 28% del flusso; adesso sta dentro i pesi e taglia due terzi delle
+tecnologie di quel 28%. La cura non è addestrare di più: serve un maestro che
+quelle tecnologie le veda, e **va misurato prima** — sulle 104 righe a mano,
+che esistono apposta.
 
 Due falsi positivi in 104 annunci: `Mozilla` (dalla riga «usa Chrome o Firefox
 per candidarti» — la trappola messa apposta nel metro) e un `SAP` in
