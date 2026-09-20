@@ -117,7 +117,11 @@ def _controlli() -> list[Condizione]:
                 c.append(Condizione("classificatore fermo", "avviso", "classificazione ferma",
                                     f"ultima famiglia scritta {int((eta or 0)//60)} min fa (N5 o sprint)"))
             o24 = db.execute("""SELECT count(*) FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
-                WHERE ac.is_active AND ap.is_active AND ac.last_fetch_at < now()-interval '24 hours'""").fetchone()[0]
+                WHERE ac.is_active AND ap.is_active AND ac.last_fetch_at < now()-interval '24 hours'
+                  -- SOLO chi ha offerte: i tenant vuoti si rivedono a cadenza piu' lenta per
+                  -- scelta, e contarli teneva aperto da giorni un incidente su 99.309
+                  -- tenant di cui zero con offerte e zero piu' vecchi di 7 giorni (21/09/2026)
+                  AND ac.job_count > 0""").fetchone()[0]
             if o24 > 20000:
                 c.append(Condizione("codone affamato", "info", "aziende non riviste da 24h",
                                     f"{o24} tenant oltre 24h"))
