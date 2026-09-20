@@ -18,6 +18,9 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import LogitsProcessor, LogitsProcessorList
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sintesi_ancorata import ripulisci                             # noqa: E402
+
 MODELLO = "nivult-mt5"
 PERCORSO = os.environ.get("MT5", "/opt/nivult/mt5")
 CAMPI_TESTO = ("description", "content", "descriptionHtml", "descriptionPlain", "externalDescription",
@@ -111,8 +114,9 @@ RETURNING j.id, j.title, coalesce(j.location, j.city, ''), j.country, j.lang,
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO),
            scadenza=int(os.environ.get("SCADENZA_PRESA", "20")))
 
-SQL_INSERISCI = ("INSERT INTO sintesi_mt5 (job_id, sintesi, fiducia, modello, testo_hash) "
-                 "VALUES (%s,%s,%s,%s,%s) ON CONFLICT (job_id) DO NOTHING")
+SQL_INSERISCI = ("INSERT INTO sintesi_mt5 "
+                 "(job_id, sintesi, fiducia, modello, testo_hash, sintesi_pulita, frasi_tolte, pulita_at) "
+                 "VALUES (%s,%s,%s,%s,%s,%s,%s,now()) ON CONFLICT (job_id) DO NOTHING")
 
 
 def valida(s: str | None) -> str | None:
@@ -203,7 +207,7 @@ def main() -> int:
                 if len(testo) < 300:
                     st["senza_testo"] += 1
                     # niente impronta: una riga d'esito non deve finire fra le gemelle
-                    esiti.append((jid, None, None, MODELLO + "+saltato:senza-testo", None))
+                    esiti.append((jid, None, None, MODELLO + "+saltato:senza-testo", None, None, None))
                     continue
                 lavoro.append((jid, titolo, sede, paese, lingua, testo, impronta(testo)))
 
@@ -218,7 +222,10 @@ def main() -> int:
                 da_fare = [x for x in lavoro if x[6] not in copie]
                 for g in (x for x in lavoro if x[6] in copie):
                     s, f = copie[g[6]]
-                    scritte.append((g[0], s, f, MODELLO + "+gemella", g[6]))
+                    # anche la copia passa dal filtro: la gemella l'aveva scritta un
+                    # giro precedente, magari prima che il filtro esistesse
+                    p, tolte, _ = ripulisci(s, f"{g[1] or ''} {g[5]}")
+                    scritte.append((g[0], s, f, MODELLO + "+gemella", g[6], p, tolte))
                     st["gemelle"] += 1
             else:
                 da_fare = []
@@ -258,9 +265,19 @@ def main() -> int:
                     s = valida(t)
                     if not s:
                         st["vuote"] += 1
-                        esiti.append((x[0], None, None, MODELLO + "+saltato:illeggibile", None))
+                        esiti.append((x[0], None, None, MODELLO + "+saltato:illeggibile", None, None, None))
                         continue
-                    scritte.append((x[0], s, f, MODELLO, x[6]))
+                    # IL FILTRO SULLE CIFRE. mT5 inventa salari: nel 13,2% delle sue
+                    # sintesi c'e' una cifra di paga che in tutto il raw non esiste —
+                    # a volte un numero vero con le cifre scambiate ($116.975 che
+                    # diventa $116.775), a volte un range tondo tirato fuori dal nulla.
+                    # Il 2B, sullo stesso metro, sta allo 0,3%. La frase che porta una
+                    # cifra non ancorata si butta; l'originale resta in `sintesi`, chi
+                    # legge prende `sintesi_pulita`. Misurato il 20/09/2026.
+                    p, tolte, _ = ripulisci(s, f"{x[1] or ''} {x[5]}")
+                    if tolte:
+                        st["ripulite"] = st.get("ripulite", 0) + 1
+                    scritte.append((x[0], s, f, MODELLO, x[6], p, tolte))
                 del out, enc
                 torch.cuda.empty_cache()
 

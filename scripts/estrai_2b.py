@@ -28,6 +28,9 @@ import concurrent.futures as cf
 import psycopg
 from psycopg.types.json import Jsonb
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sintesi_ancorata import ripulisci                             # noqa: E402
+
 # Accanto a questo file, non nel percorso di Python: le tre copie del codice
 # (Hetzner, N5, Mac mini) girano da cartelle diverse. Import duro: senza il
 # filtro sulle invenzioni il demone non deve partire.
@@ -169,8 +172,13 @@ SQL_INSERISCI = (
 # 2B non ha ancora fatto le tecnologie — e quella riga, per via dell'ON CONFLICT DO
 # NOTHING del passaggio tecnologie, sarebbe rimasta senza tecnologie per sempre.
 # La sintesi originale di mT5 si conserva: serve per confrontare i due modelli.
+#
+# `sintesi_pulita` si riscrive INSIEME a `sintesi`, o la vista servirebbe il testo
+# vecchio: chi legge prende la colonna ripulita, e quella qui dentro e' ancora la
+# versione di mT5 di prima del ripasso (20/09/2026).
 SQL_RISCRIVI = (
-    "UPDATE sintesi_mt5 SET sintesi_originale = sintesi, sintesi = %s, modello = %s, "
+    "UPDATE sintesi_mt5 SET sintesi_originale = sintesi, sintesi = %s, "
+    "sintesi_pulita = %s, frasi_tolte = %s, pulita_at = now(), modello = %s, "
     "ripassata_at = now(), presa_ripasso_at = NULL WHERE job_id = %s")
 
 def chiedi(url: str, sistema: str, testo_utente: str, gram: str | None, max_nuovi: int, tentativi: int = 3):
@@ -242,7 +250,8 @@ def infornata_ripasso(c, a, gram_rip, st) -> int:
             st["errori"] += 1
             # niente sintesi nuova: si tiene quella di mT5 e non si riprova
             fatte.append(x[0]); continue
-        scritte.append((v["sintesi"], MODELLO + "+ripasso", x[0]))
+        p, tolte, _ = ripulisci(v["sintesi"], f"{x[1] or ''} {x[4] or ''}")
+        scritte.append((v["sintesi"], p, tolte, MODELLO + "+ripasso", x[0]))
     if not a.dry_run:
         if scritte:
             with c.cursor() as cur: cur.executemany(SQL_RISCRIVI, scritte)
