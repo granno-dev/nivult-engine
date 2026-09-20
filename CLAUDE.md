@@ -317,6 +317,138 @@ stata spacciata per addestramento una volta).
 Il detector dei domini `pending` e il ripasso girano sul N5
 (`operaio-loop.sh`), non sul server.
 
+### Le chimere: l'id di un'offerta è per tenant, non per piattaforma
+
+Fino all'08/09/2026 `ats_jobs` era `UNIQUE (platform_id, external_id)`.
+Su iCIMS, Workday, Cornerstone, Eploy, Traffit, Pinpoint, Vincere e
+HiringThing gli id ripartono da 1 **per tenant**: il secondo tenant con
+lo stesso numero sovrascriveva titolo e URL del primo, il testo e la
+famiglia restavano del primo. «Journeyman Plumber» col testo di
+un'insegnante d'asilo — iCIMS 33% delle attive, Cornerstone 36%, Eploy
+57%. Scoperto leggendo a occhio 100 righe del dataset v1.
+
+Ora la chiave è `(platform_id, slug, external_id)` (schema e gli 11
+`ON CONFLICT`); `deploy/chimere.sh` ha scambiato il vincolo e cancellato
+lo storico incoerente: **51.163 righe** dove l'URL non conteneva il
+tenant. La cancellazione va fatta **a lotti e coi runner fermi**: in un
+colpo solo si è incastrata in deadlock con `nivult-scrape`. Le 648
+righe iCIMS/Eploy rimaste sono alias di tenant rinominati
+(`careers-mhpm` → `careers-colliersprojects`), non chimere. Le offerte
+cancellate rientrano da sole al giro successivo, ciascuna col suo testo.
+
+### ESCO: le competenze si riconoscono, ma con tre guardie
+
+`nivult.ats.esco` cerca in un passaggio (Aho-Corasick) le 13.466
+competenze ESCO in 28 lingue e restituisce l'etichetta inglese
+canonica: «saldatura», «Schweißen» e «welding» sono la stessa voce.
+Senza guardie era rumore: «avec» → *mobile device management* nel 22%
+degli annunci francesi, «data» → *statistics*, «lead» → *lead others*,
+«paris» → *betting*. Misurato l'08/09/2026 su 400 annunci a caso.
+
+1. **Un alias di una parola vale solo se è etichetta preferita**: le
+   alternative monoparola («term», «plan», «access») sono la quasi
+   totalità delle trappole. 6.614 scartate.
+2. **Una parola sola scatta solo nella sua lingua**: «lassen» è saldare
+   in olandese e un verbo in tedesco. La lingua la dà `lingua.rileva`;
+   se non si sbilancia, le monoparola non scattano.
+3. **La lista nera è per concentrazione, non per frequenza.** «python»
+   e «source» stanno entrambi nel 5% degli annunci, ma il primo è
+   nell'80% degli annunci IT e il secondo ovunque nella proporzione del
+   corpus. `esco_calibra` misura il *lift* sulla famiglia più
+   rappresentata: «pregnancy» 2,0, «history» 1,8, «source» 2,7 contro
+   «python» 6,6, «accounting» 11,8, «logistics» 6,5. Sotto **3,0**
+   l'alias non distingue nessun mestiere e va in lista nera. Le lingue
+   sono esenti. Più una lista a mano con la ragione accanto (i
+   boilerplate pari opportunità: *pregnancy*, *genetics*, *childbirth*;
+   gli alias ESCO sbagliati: «and procedures», «regulatory requirements»).
+
+Resta un residuo di competenze trasversali vere ma vuote («attend
+meetings», «meet deadlines», «show responsibility»): ESCO le tiene in
+un ramo suo, e il passo successivo è farlo scrivere a `esco_scarica`
+per escluderle alla radice invece che una per una.
+
+Il cancello di produzione (`/opt/nivult/esco-attivo`, letto da
+`profilo.py`) lo apre **solo** `esco_calibra --apri`, dopo aver letto il
+campione stampato dal rapporto. Una calibrazione senza `--apri` lo
+chiude: i numeri vecchi non valgono più. La prima calibrazione (07/09)
+aveva aperto il cancello contando le etichette canoniche invece degli
+alias, e «avec» passava perché in inglese la stessa competenza non
+scattava mai.
+
+### Il salario si legge anche nel testo, e si dice da dove viene
+
+Il campo strutturato della fonte c'è sul **4,5%** delle offerte attive
+(85.417 su 1.890.734). Nel testo il salario è scritto molto più spesso, e
+un lettore a regole (`nivult.ats.salari`, `--testo`) lo recupera dove la
+fonte tace.
+
+**La precisione non è stimata, e non è costata un'etichetta.** Le offerte
+che hanno *entrambe* le cose sono una verità gratis: si legge il testo e
+si confronta col campo dichiarato. Su un campione **fisso** di 13.066
+offerte distinte (misurato il 10/09/2026):
+
+| | |
+|---|---|
+| precisione severa (tutto ciò che non combacia è errore) | **96,4%** |
+| precisione sostanziale | 97,5% |
+| copertura sulle offerte col campo strutturato | 24,8% |
+
+La «sostanziale» perdona due cose che errori non sono: la stessa paga
+detta in un'altra unità (2.300 €/mese contro 31.000 €/anno) e la valuta
+dove a sbagliare è **la fonte**, che scrive USD su un annuncio canadese in
+dollari canadesi.
+
+> **Il campione dev'essere fisso, non `random()`.** Finché la query
+> ordinava a caso, due versioni del lettore non erano confrontabili: la
+> differenza fra 91,9% e 92,8% era il sorteggio, non il codice. Ora è
+> `ORDER BY md5(id::text)`.
+
+Due banchi, entrambi da riga di comando:
+
+```bash
+python scripts/prova_salari.py     # 17 casi a mano, nessun database
+python scripts/valida_salari.py    # la misura sul campo, campione fisso
+python -m nivult.ats.salari --testo --limite 5000 --dry-run
+```
+
+**Da 67% a 96,4% non è stato un modello, sono stati cinque difetti**, e
+nessuno si vedeva senza il banco:
+
+1. fra la cifra e il periodo l'annuncio infila una parola — «12,02 €
+   **brut** de l'heure», «45.000 € **lordi** all'anno». Quelle offerte non
+   venivano lette affatto, e al loro posto vinceva il premio più avanti
+   nel testo: 16 €. Era l'errore più frequente, 120 su 165;
+2. il connettore del range cambia lingua: senza `and`, `und`, `en` il
+   range si spezzava e restava **sempre l'estremo alto**;
+3. «USD $16.10 - USD $19.25» porta due marcatori di valuta sul secondo
+   estremo, e uno solo era ammesso;
+4. «35 000 **kr** per månad» perdeva la corona, perché la «k» di «45k» si
+   mangiava la k di «kr»; e «annually» lo catturava il regex ma non lo
+   conosceva il dizionario dei periodi;
+5. la ricerca girava su tutto l'annuncio, e `finditer` **non restituisce
+   agganci sovrapposti**: un numero qualunque incontrato prima (un
+   telefono, un anno) si mangiava il pezzo in cui stava il salario e lo
+   rendeva invisibile. Cercando solo attorno alle parole-salario le
+   trovate sono passate da 1.830 a 3.234 **e** la precisione da 92,6% a
+   96,4%. Era nata come ottimizzazione: costava ~24 ms a offerta, cioè
+   dodici ore per il corpus.
+
+**Le due regole di prudenza restano, perché un salario sbagliato si vede
+nel digest e una casella vuota no:** fra due cifre della stessa valuta e
+dello stesso periodo vince **la più bassa** — la base, non la base più i
+premi — e se l'annuncio dichiara **due periodi diversi** non si sceglie,
+si tace.
+
+**`salary_da` dice la provenienza, e non è un dettaglio.** `dichiarato` è
+esatto, `testo` sbaglia una volta su ventotto. Il digest e il dataset di
+v2 devono poterli distinguere invece di trovarseli mescolati.
+`salary_testo_at` marca l'offerta **anche quando non si trova niente**: più
+di un milione di annunci nominano lo stipendio senza scrivere una cifra, e
+senza il marcatore ogni giro li rileggerebbe tutti.
+
+In cron alle **05:00** fra i passi diurni. Dopo il recupero iniziale resta
+il lavoro sulle nuove: pochi minuti.
+
 ### 2. Matching — valutazione diretta, non a imbuto
 
 **GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
@@ -1073,6 +1205,33 @@ python scripts/purge_jobs.py --stats      # aggregati per cluster e mese
 sudo deploy/cron.sh                       # installa i lavori periodici (idempotente)
 sudo deploy/cron.sh --check               # verifica che ci siano tutti, esce 1 se no
 ```
+
+### Il deploy aggiorna i file, NON riavvia niente
+
+`git push server main` e `git push n5 main` fanno solo il checkout: i
+processi già in esecuzione tengono in memoria il codice con cui sono
+partiti, e continuano a girare con quello finché non li si riavvia. È
+un errore che non dà segnale: nessun log, nessun allarme, e il
+comportamento vecchio che sembra un guasto nuovo.
+
+**Misurato l'08/09/2026:** il cruscotto segnalava `jsonld` come
+piattaforma «in coda di collegamento» pur avendo il suo adapter dal
+giorno prima. `nivult-api` era partita alle 07:21, l'adapter era stato
+aggiunto alle 14:35, e Python teneva `adapters.py` in `sys.modules`.
+Nello stesso giro tre demoni giravano ancora col codice del 7.
+
+**Dopo ogni push, riavviare ciò che tocca:**
+
+| Cosa hai cambiato | Cosa riavviare |
+|---|---|
+| `api/`, `adapters.py` | `systemctl restart nivult-api` |
+| `ats/runner.py`, adapter, `mantenimento.py` | `nivult-scrape`, `nivult-scrape-veloce`, `nivult-profonda`, `nivult-volano` |
+| `deploy/operaio-loop.sh` o i moduli del N5 | `docker restart nivult-operaio` (bash tiene in memoria il ciclo) |
+| `matching/`, `delivery/` | niente: il worker parte dal cron a ogni giro |
+| `deploy/cron.sh` | `sudo deploy/cron.sh` sul server |
+
+Il modo più veloce per accorgersene: `systemctl show <unità> -p
+ActiveEnterTimestamp --value` e confrontarlo con l'ora del commit.
 
 Le migrazioni sono file SQL numerati in `migrations/`, applicati in ordine da un
 runner minimo. Niente Alembic: lo schema è pesantemente specifico di Postgres e
