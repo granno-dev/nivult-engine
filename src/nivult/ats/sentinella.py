@@ -226,7 +226,12 @@ def _controlli() -> list[Condizione]:
         pass
 
     # passi diurni fermi (info)
-    for nome_log, ore in (("registri", 26), ("domini", 26), ("scheda-sito", 26), ("lingue", 26), ("organico", 8 * 24)):
+    # «lingue» non c'e' piu': il passo diurno delle lingue richieste e' stato
+    # assorbito dalla testa lingue di nivult-v1 (classifica_v1 scrive
+    # languages_required; al 21/09/2026 restavano 26 offerte attive senza
+    # lingue_at su 2,7 milioni). Il controllo teneva aperto dal 07/09 un
+    # incidente su un passo che non doveva piu' girare.
+    for nome_log, ore in (("registri", 26), ("domini", 26), ("scheda-sito", 26), ("organico", 8 * 24)):
         p = f"/opt/nivult/engine/logs/{nome_log}.log"
         try:
             eta_h = (time.time() - os.path.getmtime(p)) / 3600
