@@ -3,7 +3,8 @@
 Due passaggi, perche' uno solo sarebbe una query da minuti di cui non si vede
 niente finche' non finisce:
   1. l'anagrafica + il conteggio delle offerte attive;
-  2. le tecnologie aggregate per azienda, dalle estrazioni del 2B.
+  2. le tecnologie aggregate per azienda: dalla testa v1 (`tecnologie_v1`)
+     e, dove quella non e' passata, dal 2B (`estrazioni_v2b`).
 
 L'aggancio fra offerta e azienda e' (platform_id, slug): `ats_jobs` non ha un
 company_id. Copre il 95,1% delle offerte attive.
@@ -116,17 +117,32 @@ ON CONFLICT (company_id) DO UPDATE SET
 # (`+famiglia-esclusa`): quella lista vuota l'ha decisa una regola, non il modello,
 # e non deve pesare sul conteggio delle offerte lette.
 TECNOLOGIE = """
-WITH lette AS (
-  SELECT a.id AS cid, e.job_id, e.tecnologie
+WITH v1 AS (
+  -- la testa v1: array di stringhe. LEFT JOIN LATERAL, cosi' un'offerta letta
+  -- e trovata vuota conta fra le lette (vale zero, non «non so»)
+  SELECT a.id AS cid, t.job_id, x AS nome
+    FROM ats_companies a
+    JOIN ats_jobs j ON j.platform_id = a.platform_id AND j.slug = a.slug
+                   AND j.expired_at IS NULL
+    JOIN tecnologie_v1 t ON t.job_id = j.id
+    LEFT JOIN LATERAL jsonb_array_elements_text(t.tecnologie) x ON true
+), v2b AS (
+  -- il 2B: array di oggetti {nome, ruolo}. Solo dove la testa v1 non e' passata:
+  -- dove ci sono tutte e due vince v1 (richiamo piu' alto sullo stesso golden)
+  SELECT a.id AS cid, e.job_id, el->>'nome' AS nome
     FROM ats_companies a
     JOIN ats_jobs j ON j.platform_id = a.platform_id AND j.slug = a.slug
                    AND j.expired_at IS NULL
     JOIN estrazioni_v2b e ON e.job_id = j.id
+    LEFT JOIN LATERAL jsonb_array_elements(e.tecnologie) el ON true
    WHERE e.tecnologie IS NOT NULL AND e.modello NOT LIKE '%famiglia-esclusa%'
+     AND NOT EXISTS (SELECT 1 FROM tecnologie_v1 t WHERE t.job_id = e.job_id)
+), lette AS (
+  SELECT * FROM v1 UNION ALL SELECT * FROM v2b
 ), contate AS (
-  SELECT cid, t->>'nome' AS nome, count(DISTINCT job_id) AS offerte
-    FROM lette CROSS JOIN LATERAL jsonb_array_elements(tecnologie) t
-   WHERE coalesce(t->>'nome', '') <> ''
+  SELECT cid, nome, count(DISTINCT job_id) AS offerte
+    FROM lette
+   WHERE coalesce(nome, '') <> ''
    GROUP BY 1, 2
 ), per_azienda AS (
   SELECT cid,
@@ -180,7 +196,10 @@ def main() -> int:
 
         if a.bacheche:
             t = time.time()
-            c.execute(BACHECHE.format(d=DICHIARATO), (list(PIATTAFORME_CON_NOME), a.soglia_bacheca))
+            # La query ha UN segnaposto, la soglia. Il secondo parametro (una lista di
+            # piattaforme mai definita) era un resto di una modifica mai finita:
+            # NameError a ogni --bacheche, gia' nel repo (20/09/2026).
+            c.execute(BACHECHE.format(d=DICHIARATO), (a.soglia_bacheca,))
             b = c.execute("SELECT count(*) FROM aziende_vendibili WHERE e_bacheca").fetchone()[0]
             off = c.execute("SELECT coalesce(sum(offerte_attive), 0) FROM aziende_vendibili WHERE e_bacheca").fetchone()[0]
             print(f"bacheche:   {b:,} tenant marcati come bacheca ({off:,} offerte) in {time.time()-t:.0f}s", flush=True)
