@@ -32,6 +32,12 @@ _sp = importlib.util.spec_from_file_location(
 ancoraggio = importlib.util.module_from_spec(_sp)
 _sp.loader.exec_module(ancoraggio)
 
+_sf = importlib.util.spec_from_file_location(
+    "finestre", str(pathlib.Path(__file__).resolve().parent / "finestre.py"))
+_finestre_mod = importlib.util.module_from_spec(_sf)
+_sf.loader.exec_module(_finestre_mod)
+finestre = _finestre_mod.finestre
+
 MODELLO = os.environ.get("MODELLO_TEC", "/opt/nivult/modelli/tec-v1")
 NOME = os.environ.get("NOME_TEC", "tec-v1-ck02500")
 # La soglia scelta sul golden: 0,30 da' il miglior F1 (93,0% precisione,
@@ -207,7 +213,11 @@ def main() -> int:
                 if len(testo) < 300:
                     st["senza_testo"] += 1
                     continue
-                lavoro.append((jid, f"{titolo or ''}\n{testo}"[:20000]))
+                # NIENTE TAGLIO A MANO. Il testo entra intero e piu' sotto viene letto a
+                # pezzi: a 1024 token il 22,5% degli annunci veniva letto a
+                # meta', e su quelli si perdeva il 27% del testo — la fine,
+                # dove i requisiti elencano gli strumenti (20/09/2026).
+                lavoro.append((jid, f"{titolo or ''}\n{testo}"))
 
             # gemelle: stesso testo, stessa risposta. Si chiede al database
             # invece che al modello, e su un magazzino di 2,7 milioni con molti
@@ -227,21 +237,38 @@ def main() -> int:
                 # i lotti si formano per lunghezza simile: il tokenizzatore
                 # riempie fino al piu' lungo del lotto, e mescolare un annuncio
                 # da 1.600 token con quindici da 200 fa pagare 1.600 a tutti.
-                da_fare.sort(key=lambda x: len(x[1]))
+                # OGNI ANNUNCIO DIVENTA UNA O PIU' FINESTRE, e il lotto si forma
+                # su quelle. Un annuncio lungo costa piu' di uno corto, che e'
+                # giusto: prima costava uguale perche' lo leggevamo a meta'.
+                pezzi = []
+                for jid, testo, h in da_fare:
+                    for k, f in enumerate(finestre(tok, testo, a.max_len)):
+                        pezzi.append((jid, f, h, k))
+                st["finestre"] = st.get("finestre", 0) + len(pezzi)
+                st["spezzati"] = st.get("spezzati", 0) + sum(
+                    1 for _, _, _, k in pezzi if k == 1)
+
+                trovate = {j: [] for j, _, _ in da_fare}
+                pezzi.sort(key=lambda x: len(x[1]))
                 with torch.inference_mode():
-                    for i in range(0, len(da_fare), a.lotto):
-                        gruppo = da_fare[i:i + a.lotto]
-                        enc = tok([t for _, t, _ in gruppo], truncation=True,
+                    for i in range(0, len(pezzi), a.lotto):
+                        gruppo = pezzi[i:i + a.lotto]
+                        enc = tok([t for _, t, _, _ in gruppo], truncation=True,
                                   max_length=a.max_len, padding=True,
                                   return_offsets_mapping=True, return_tensors="pt")
                         off = enc.pop("offset_mapping")
                         pr = torch.softmax(
                             mod(**{k: v.to(dev) for k, v in enc.items()}).logits, -1).cpu()
-                        for j2, (jid, testo, h) in enumerate(gruppo):
-                            tec = voci(testo, pr[j2], off[j2].tolist(), SOGLIA)
-                            st["nomi"] += len(tec)
-                            st["vuote"] += not tec
-                            scritte.append((jid, Jsonb(tec), len(tec), h))
+                        for j2, (jid, finestra, h, _) in enumerate(gruppo):
+                            for n in voci(finestra, pr[j2], off[j2].tolist(), SOGLIA):
+                                if n not in trovate[jid]:
+                                    trovate[jid].append(n)
+
+                for jid, testo, h in da_fare:
+                    tec = trovate[jid]
+                    st["nomi"] += len(tec)
+                    st["vuote"] += not tec
+                    scritte.append((jid, Jsonb(tec), len(tec), h))
 
             # MPS non restituisce la memoria fra un lotto e l'altro se non glielo
             # si chiede: su una macchina da 8 GB la differenza si sente, e
