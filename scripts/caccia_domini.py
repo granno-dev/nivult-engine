@@ -317,7 +317,11 @@ class Cacciatore:
         try:
             rq = urllib.request.Request(f"{SEARX}?q={q}&format=json&engines={MOTORI_SEARX}",
                                         headers={"User-Agent": "nivult/1.0"})
-            with urllib.request.urlopen(rq, timeout=40) as r:
+            # 12 secondi, non 40: quando i motori rispondono lo fanno in meno di
+            # cinque; quando scadono, aspettare 40 non li fa arrivare. Sui tenant
+            # dove tutto fallisce questo timeout ERA la velocita' del cacciatore:
+            # 161 all'ora contro 1.066 (20/09/2026).
+            with urllib.request.urlopen(rq, timeout=12) as r:
                 d = json.load(r)
         except Exception:
             return []
