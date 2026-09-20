@@ -146,15 +146,52 @@ def _nome_nudo(n: str) -> str:
     return re.sub(r"[^a-z0-9]", "", _FORME.sub(" ", (n or "").lower()))
 
 
-def _radice_dominio(d: str) -> str:
+# Prefissi che dicono «pagina carriere», non «azienda»: careers.axpo.com e'
+# axpo.com. Si tolgono solo se quel che resta e' ancora un dominio (ha un punto).
+PREFISSI_CARRIERE = re.compile(
+    r"^(careers?|jobs?|jobb|karriere|karriera|karriere-portal|work|talent|talents|join|"
+    r"recruit(ing|ment)?|hr|empleo|emploi|lavoro|vacatures|vacancies|stellen|"
+    r"stellenangebote|bewerbung|candidat|candidature|carriere|carriere)\.", re.I)
+
+
+def radice_sito(d: str) -> str:
+    """Il dominio da SALVARE: senza www. e senza il prefisso «carriere»."""
     d = (d or "").lower().removeprefix("www.")
-    return re.sub(r"[^a-z0-9]", "", d.split(".")[0] if d else "")
+    r = PREFISSI_CARRIERE.sub("", d)
+    return r if "." in r else d
+
+
+def _etichette(d: str) -> list[str]:
+    """Le etichette dell'host che possono dire il nome: tutte tranne il suffisso.
+    Per «careers.axpo.com» sono «careers» e «axpo»; prima si guardava solo la
+    prima, e «axpo» contro «careers» dava zero (20/09/2026)."""
+    d = (d or "").lower().removeprefix("www.")
+    parti = [re.sub(r"[^a-z0-9]", "", p) for p in d.split(".")]
+    parti = [p for p in parti if p]
+    if len(parti) >= 2:
+        parti = parti[:-1]                       # via il TLD
+        # via anche «com»/«co» in com.br, co.uk: due lettere-tre, mai un nome
+        if len(parti) >= 2 and parti[-1] in ("com", "co", "net", "org", "ac", "gov", "edu"):
+            parti = parti[:-1]
+    return parti
+
+
+def _radice_dominio(d: str) -> str:
+    e = _etichette(d)
+    return e[-1] if e else ""
 
 
 def somiglia_al_nome(nome: str, dominio: str) -> float:
-    """Quanto il dominio dice il nome dell'azienda. 1.0 se uno contiene l'altro."""
-    a, b = _nome_nudo(nome), _radice_dominio(dominio)
-    if not a or not b or len(b) < 3:
+    """Quanto il dominio dice il nome dell'azienda. 1.0 se uno contiene l'altro.
+    Si prova ogni etichetta dell'host e vale la migliore."""
+    a = _nome_nudo(nome)
+    if not a:
+        return 0.0
+    return max((_somiglia_etichetta(a, b) for b in _etichette(dominio)), default=0.0)
+
+
+def _somiglia_etichetta(a: str, b: str) -> float:
+    if not b or len(b) < 3:
         return 0.0
     if a == b:
         return 1.0
@@ -247,6 +284,7 @@ class Cacciatore:
 
     # --- LE TRE FONTI ----------------------------------------------------------------
     def da_logo(self, plat, slug, wds, wdi) -> list[str]:
+        self.redirect = None
         for url in BACHECA.get(plat, lambda *_: [])(slug, wds, wdi):
             try:
                 r = self.cli.get(url, timeout=12, follow_redirects=True)
@@ -254,6 +292,15 @@ class Cacciatore:
                 continue
             if r.status_code >= 400:
                 continue
+            # LA BACHECA CI HA REINDIRIZZATI sul dominio dell'azienda? E' la prova
+            # piu' forte che abbiamo: un fornitore serve la bacheca di un tenant
+            # solo sul CNAME di quel tenant. Si accetta solo se la pagina d'arrivo
+            # porta ancora l'impronta del fornitore — e' ancora la bacheca, non un
+            # parcheggio o una home qualunque.
+            arrivo = dominio_di(str(r.url))
+            if (arrivo and not NON_AZIENDA.search(arrivo) and plat not in arrivo
+                    and plat in r.text[:300000].lower()):
+                self.redirect = arrivo
             fuori = []
             for m in re.finditer(r'href=["\'](https?://[^"\'>\s]+)', r.text[:300000], re.I):
                 d = dominio_di(m.group(1))
@@ -312,11 +359,16 @@ class Cacciatore:
         fonti.append(("searxng", lambda: self.da_searx(nome or slug, paese or "")))
         visti = []                       # i candidati raccolti strada facendo
         for nome_fonte, prendi in fonti:
-            for dom in prendi():
+            candidati = prendi()
+            # il reindirizzamento della bacheca (vedi da_logo) vale livello 1
+            # senza altre richieste: la prova e' nel viaggio, non nella pagina
+            if nome_fonte == "logo-ats" and getattr(self, "redirect", None):
+                return (cid, radice_sito(self.redirect), "bacheca-redirect", "redirect", 1)
+            for dom in candidati:
                 visti.append((nome_fonte, dom))
                 via = self.verifica(dom, patt)
                 if via:
-                    return (cid, dom, nome_fonte, via, 1)
+                    return (cid, radice_sito(dom), nome_fonte, via, 1)
         # Livello 1 fallito. Fra i candidati che abbiamo gia' in mano — nessuna
         # richiesta in piu' — ce n'e' uno che dice il nome dell'azienda?
         # Il nome dell'azienda, non lo slug del tenant: lo slug e' spesso una
@@ -335,7 +387,7 @@ class Cacciatore:
             # e deve almeno esistere: il DNS costa nulla e non lo blocca nessuno
             if (migliore and punteggio >= SOGLIA_NOME
                     and tld_plausibile(nome, migliore, paese) and esiste(migliore)):
-                return (cid, migliore, da, f"nome~{punteggio:.2f}", 2)
+                return (cid, radice_sito(migliore), da, f"nome~{punteggio:.2f}", 2)
         return (cid, None, None, None, None)
 
 
