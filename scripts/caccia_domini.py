@@ -51,6 +51,16 @@ BACHECA = {
  "icims":           lambda s, a, b: [f"https://careers-{s}.icims.com/jobs", f"https://{s}.icims.com/jobs"],
  "breezy":          lambda s, a, b: [f"https://{s}.breezy.hr"],
  "recruiterbox":    lambda s, a, b: [f"https://{s}.recruiterbox.com", f"https://{s}.recruiterbox.com/jobs"],
+ # Aggiunte il 20/09/2026 dopo averle sondate su 8 tenant ciascuna: la pagina
+ # risponde sempre, e porta il sito dell'azienda per hiringthing 8/8, jobscore
+ # 8/8, join 7/8, hirehive 5/8, catsone 3/8, freshteam 2/8. Rippling 0/8 (pagina
+ # in JavaScript, come bamboohr): non si aggiunge, sarebbero richieste a vuoto.
+ "hiringthing":     lambda s, a, b: [f"https://{s}.hiringthing.com/"],
+ "jobscore":        lambda s, a, b: [f"https://careers.jobscore.com/careers/{s}"],
+ "join":            lambda s, a, b: [f"https://join.com/companies/{s}"],
+ "hirehive":        lambda s, a, b: [f"https://{s}.hirehive.com/"],
+ "catsone":         lambda s, a, b: [f"https://{s}.catsone.com/careers"],
+ "freshteam":       lambda s, a, b: [f"https://{s}.freshteam.com/jobs"],
 }
 
 # Domini che non sono mai l'azienda: gli ATS, i social, le bacheche, i servizi.
@@ -129,6 +139,12 @@ def impronta_ats(platform: str, slug: str) -> re.Pattern:
         "workable":        rf"{s}\.workable\.com|apply\.workable\.com/{s}",
         "teamtailor":      rf"{s}\.teamtailor\.com",
         "recruitee":       rf"{s}\.recruitee\.com",
+        "hiringthing":     rf"{s}\.hiringthing\.com",
+        "jobscore":        rf"jobscore\.com/careers/{s}\b",
+        "join":            rf"join\.com/companies/{s}\b",
+        "hirehive":        rf"{s}\.hirehive\.com",
+        "catsone":         rf"{s}\.catsone\.com",
+        "freshteam":       rf"{s}\.freshteam\.com",
     }.get(platform, rf"\b{s}\b"), re.I)
 
 
