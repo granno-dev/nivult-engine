@@ -84,6 +84,50 @@ escludevamo (agricoltura, commercio, ristorazione, trasporti, mestieri, sanità)
 le escludevamo perché il 2B era lento. Sono proprio quelle con la coda lunga più
 preziosa, che nessun concorrente ha perché nessun dizionario la contiene.
 
+## Dove la testa è cieca: le otto famiglie che il 2B non vedeva
+
+*Misurato il 20/09/2026 su 104 annunci nuovi, 13 per famiglia, etichettati a
+mano alla cieca (`golden-tec-famiglie/`).*
+
+| | 200 righe del primo golden | 104 righe delle otto famiglie |
+|---|---|---|
+| precisione | 93,0% | **91,7%** |
+| richiamo | 64,9% | **31,9%** |
+| F1 | 76,4% | 47,3% |
+| annunci senza tecnologie, azzeccati | — | **68 su 69** |
+
+Due cose insieme, e vanno lette insieme.
+
+**La testa è sicura qui.** Non inventa (91,7%), e su 69 annunci che non
+contengono nessuna tecnologia ne sbaglia **uno**. Non stiamo vendendo
+spazzatura in queste famiglie: stiamo vendendo poco.
+
+**Ma è cieca su tutto ciò che non è informatica.** Trova 22 nomi su 69, e
+l'elenco di cosa trova e cosa perde non lascia dubbi:
+
+| trova | perde |
+|---|---|
+| Lely Horizon, HEXALIS, Prompt EMR, StoreForce, POS | MIG Welding, grinders, zoom boom, D1.1 GMAW |
+| MS Office, Word, Excel, Outlook, PowerPoint | tracteurs, moissonneuses, pompes de relevage |
+| Notifier, Simplex, Fire Lite, Gamewell FCI, Honeywell | Brandmeldeanlagen, Videosysteme, Zutrittskontrolle |
+| Terminal Radio, PEG J | X-rays, Ultrasonography, AED, CGM, snowmobile, NFPA 72 |
+
+**La causa non è il modello, è di nuovo il dataset.** Le etichette di
+addestramento vengono dal 2B, e il 2B su queste otto famiglie **non è mai
+girato**: il buttafuori le scartava prima. La testa ha imparato che
+«tecnologia» vuol dire «nome di software», perché è l'unica cosa che le hanno
+fatto vedere. Non si può riconoscere ciò che non è mai stato mostrato.
+
+Quindi: **il buttafuori è ancora lì, ma si è spostato.** Prima stava nel codice
+e tagliava il 28% del flusso; adesso sta dentro i pesi del modello e taglia due
+terzi delle tecnologie di quel 28%. La cura è una sola, e non è addestrare di
+più: il prossimo dataset deve contenere annunci di mestieri, trasporti, sanità
+e ristorazione, etichettati da un maestro che li abbia visti davvero.
+
+Due falsi positivi in 104 annunci: `Mozilla` (dalla riga «usa Chrome o Firefox
+per candidarti» — la trappola messa apposta nel metro) e un `SAP` in
+Transportation.
+
 ## Le trappole, perché non si ripetano
 
 - **Il golden di settembre non conteneva tecnologie.** Il «47,3%» di allora era

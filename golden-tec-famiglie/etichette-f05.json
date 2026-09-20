@@ -1,0 +1,142 @@
+{
+ "lotto": "famiglie-05",
+ "famiglia": "Social Services",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 53,
+   "id": "2dbceade-f618-493d-8d2f-a3482a4c137e",
+   "titolo": "Children's Home Registered Manager",
+   "tecnologie": [
+    {
+     "nome": "PACE",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 54,
+   "id": "581fa3fc-74b6-4c5c-a6e0-76d782f4ffb6",
+   "titolo": "Licensed Mental Health Professional - Hourly",
+   "tecnologie": [],
+   "escluse": [
+    "DailyPay (benefit)",
+    "Narcan (farmaco)"
+   ]
+  },
+  {
+   "n": 55,
+   "id": "d2209dd0-d505-497e-a4e6-b8763dea9893",
+   "titolo": "Care Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "DBS check, Blue Light Card (controlli e benefit)"
+   ]
+  },
+  {
+   "n": 56,
+   "id": "6af66f3d-ae3c-437a-aa94-2c9151f8868c",
+   "titolo": "Personlig assistent timvikarie sökes till aktiv  man i Örbyhus",
+   "tecnologie": [],
+   "escluse": [
+    "permobil, rullstol (ausili della persona assistita, non strumenti del lavoro)",
+    "il campo text contiene un JSON serializzato: guasto di dato"
+   ]
+  },
+  {
+   "n": 57,
+   "id": "c73188f2-828c-4b79-aa1b-2f0763f838b3",
+   "titolo": "Care Professional",
+   "tecnologie": []
+  },
+  {
+   "n": 58,
+   "id": "0c3a0a0b-eabb-4a2c-bb0b-66f1a0322146",
+   "titolo": "Volunteer Services Senior Specialist",
+   "tecnologie": [],
+   "escluse": [
+    "Google Chrome, Mozilla Firefox (modulistica per candidarsi, non strumenti del lavoro)"
+   ]
+  },
+  {
+   "n": 59,
+   "id": "d0d1cd26-a97c-4e9c-9c74-9aecfcfdb4a2",
+   "titolo": "Social Worker @ Indian Hills Elementary (Start of 2nd Semester)",
+   "tecnologie": [],
+   "escluse": [
+    "ACT, SAT (test)"
+   ]
+  },
+  {
+   "n": 60,
+   "id": "7cf83ee5-a3b0-4078-a8ba-223c31151092",
+   "titolo": "Care Assistant - Berkshire",
+   "tecnologie": [
+    {
+     "nome": "Cera Technology app",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "BHN rewards platform (benefit)"
+   ]
+  },
+  {
+   "n": 61,
+   "id": "ae85f0de-31c3-4a33-b07e-cb3750384be8",
+   "titolo": "Childrens Crisis Support Worker",
+   "tecnologie": []
+  },
+  {
+   "n": 62,
+   "id": "dadb8009-4081-4579-b707-fad43086a125",
+   "titolo": "Arbetsledare",
+   "tecnologie": []
+  },
+  {
+   "n": 63,
+   "id": "68a9def8-c40c-4e3f-a50a-b6ae5eaf7108",
+   "titolo": "Community Inclusion Worker",
+   "tecnologie": [],
+   "escluse": [
+    "case management database (descrittivo)"
+   ]
+  },
+  {
+   "n": 64,
+   "id": "2c8784ad-8258-421e-a73f-fde7b6981e4e",
+   "titolo": "Social Worker – Learning Disabilities",
+   "tecnologie": [],
+   "escluse": [
+    "Care Act 2014, Mental Capacity Act 2005, Section 42 (leggi)"
+   ]
+  },
+  {
+   "n": 65,
+   "id": "030364ec-2058-4878-b37e-c76c6b5108c7",
+   "titolo": "Auxiliaire de vie - job étudiant (H/F)",
+   "tecnologie": [
+    {
+     "nome": "Ouihelp Pro",
+     "ruolo": "usata"
+    }
+   ]
+  }
+ ]
+}

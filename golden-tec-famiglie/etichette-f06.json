@@ -1,0 +1,186 @@
+{
+ "lotto": "famiglie-06",
+ "famiglia": "Sports & Recreation",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 66,
+   "id": "0267c149-061f-4d1b-8642-cdacdd393448",
+   "titolo": "Lifeguard (part-time) - Mercy HealthPlex - West Clermont",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "member management system (descrittivo)",
+    "CPR/AED/First Aid (certificazioni)"
+   ]
+  },
+  {
+   "n": 67,
+   "id": "e0caf354-81b3-4dfd-bc12-48aaf30e282d",
+   "titolo": "Preschool Sports Program Coach",
+   "tecnologie": []
+  },
+  {
+   "n": 68,
+   "id": "94b360eb-c940-46bc-af97-7c68f8bbfe56",
+   "titolo": "Wellness Coach",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Word",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "PowerPoint",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Windows Operating System",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 69,
+   "id": "d79872b9-1522-4edd-ae61-43edbe7f63f0",
+   "titolo": "Athletic Trainer",
+   "tecnologie": [],
+   "escluse": [
+    "H2F (programma), ACFT (test)",
+    "CAATE, BOC, NPI (accrediti)"
+   ]
+  },
+  {
+   "n": 70,
+   "id": "d9eb71fb-2f6b-46d7-94ce-d5044a10abd9",
+   "titolo": "Personal Trainer",
+   "tecnologie": [
+    {
+     "nome": "Svetness Fitness App",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 71,
+   "id": "95504a6b-36f5-4d63-bdf2-3ba1864fd7d5",
+   "titolo": "Part-Time Lifeguard - Hazel Dell",
+   "tecnologie": [
+    {
+     "nome": "AED",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "LifeMart, Aflac (benefit)"
+   ]
+  },
+  {
+   "n": 72,
+   "id": "4f5f81f9-51f9-4b31-b05b-1e67440e2e66",
+   "titolo": "Bilingual Coach (English/Spanish)",
+   "tecnologie": [
+    {
+     "nome": "CGM",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Twin platform",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "AI Digital Twin technology (tecnologia propria dell'azienda, non del mestiere)"
+   ]
+  },
+  {
+   "n": 73,
+   "id": "7cb4e981-b8ac-43b7-8372-148aa0d1013b",
+   "titolo": "Coach - Assistant Modified Boys Wrestling Coach - District Wide RB# 26-073",
+   "tecnologie": []
+  },
+  {
+   "n": 74,
+   "id": "5c17bb50-1683-4a24-9f8b-8ff43f475ef6",
+   "titolo": "Instructor",
+   "tecnologie": [],
+   "escluse": [
+    "Pilates (disciplina, come 'yoga': il mestiere stesso, non uno strumento)"
+   ]
+  },
+  {
+   "n": 75,
+   "id": "2834a79a-6621-4c6e-95b0-9f5200b001c6",
+   "titolo": "Personal Trainer - Kailua-Kona, HI",
+   "tecnologie": [
+    {
+     "nome": "Svetness Fitness App",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 76,
+   "id": "622270f7-5462-44d1-ae90-dbdcc218a7ad",
+   "titolo": "Personal Trainer",
+   "tecnologie": [
+    {
+     "nome": "Svetness Fitness App",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 77,
+   "id": "8426b0f0-0f16-43c3-afce-ae97e2c64260",
+   "titolo": "Recreational Activities Specialist II",
+   "tecnologie": []
+  },
+  {
+   "n": 78,
+   "id": "d8162239-f350-4969-b3fa-3034a7d0e318",
+   "titolo": "🇳🇴 Snowmobile Guide — Tromsø, Northern Norway (Winter 2026/27) (EU/EEA only)",
+   "tecnologie": [
+    {
+     "nome": "snowmobile",
+     "ruolo": "usata"
+    }
+   ]
+  }
+ ]
+}

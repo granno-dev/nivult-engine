@@ -1,0 +1,157 @@
+{
+ "lotto": "famiglie-01",
+ "famiglia": "Agriculture",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "967eee32-430c-42ec-803b-c006bed91bd4",
+   "titolo": "Ouvrier Paysagiste - H/F",
+   "tecnologie": [],
+   "escluse": [
+    "techniques d'entretien paysager (mestiere)",
+    "règles de sécurité (processo)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "984d281a-5fb9-45bd-ba69-9584bf689f83",
+   "titolo": "Product Manager - Crop Protection",
+   "tecnologie": [],
+   "escluse": [
+    "biologicals, adjuvants, seed treatments (prodotti)",
+    "401k (benefit)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "2cbae345-c0ad-41d6-9f6a-160c3b8e7c68",
+   "titolo": "General Hatchery Labor 1st Shift- Dahlonega, GA. Hatchery",
+   "tecnologie": [
+    {
+     "nome": "setters",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "hatchers",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 4,
+   "id": "b67986d3-abad-40ea-9184-5917e9a2cb33",
+   "titolo": "Independent Seed Advisor",
+   "tecnologie": [],
+   "escluse": [
+    "Golden Harvest, Syngenta (aziende e marchi di prodotto)",
+    "Digital tools (generico)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "b6871382-3d69-438e-8774-92c79450ae19",
+   "titolo": "Profesional en formación para carnicería, charcutería y pescadería-Majadahonda 40h/Rotativo",
+   "tecnologie": []
+  },
+  {
+   "n": 6,
+   "id": "6b23cd3c-f281-449c-a2dd-0fc9d91899f3",
+   "titolo": "Relationship Manager Intern Agriculture",
+   "tecnologie": [],
+   "escluse": [
+    "digital banking, web-based meetings, mobile applications (categorie generiche)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "6a8414ec-419c-44a9-9ed3-f11175201658",
+   "titolo": "Herdenmanager für automatische Melksysteme (m/w/d)",
+   "tecnologie": [
+    {
+     "nome": "Lely Horizon",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Herdenmanagementprogrammen",
+     "ruolo": "gradita"
+    }
+   ]
+  },
+  {
+   "n": 8,
+   "id": "aef238cb-abf8-452a-8307-84678b1daa77",
+   "titolo": "Seeds Communications Intern",
+   "tecnologie": []
+  },
+  {
+   "n": 9,
+   "id": "99166c76-7226-4a09-8dbe-311438528621",
+   "titolo": "Ettersøkspersonell - fallviltmannskap",
+   "tecnologie": [
+    {
+     "nome": "hjorteviltregisteret",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "jegerregisteret",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "ettersøkshundregisteret",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Naturmangfoldloven, Viltloven, Hundeloven (leggi)",
+    "skyteprøve, førerkort klasse B (abilitazioni personali)",
+    "sambandsutstyr (apparato generico)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "b3cbe501-92c7-4cca-81da-c47d069d440f",
+   "titolo": "Adjoint FRUITS ET LEGUMES (H/F)",
+   "tecnologie": []
+  },
+  {
+   "n": 11,
+   "id": "2697b43a-66be-4775-acbe-3493a16ca043",
+   "titolo": "Enseignant en Diagnostic Agri-environnemental F/H",
+   "tecnologie": []
+  },
+  {
+   "n": 12,
+   "id": "c344bf33-e57f-46e2-b7a2-540f7c4ad149",
+   "titolo": "Legitimerad djursjukskötare till AniCura Dalarna (vikariat)",
+   "tecnologie": []
+  },
+  {
+   "n": 13,
+   "id": "f24ec629-9bb1-48fe-a624-5cf3ca6f463e",
+   "titolo": "RO Plant Foreman (for Reverse Osmosis water treatment) - Agriculture Farm",
+   "tecnologie": [
+    {
+     "nome": "Reverse Osmosis",
+     "ruolo": "usata"
+    }
+   ]
+  }
+ ]
+}

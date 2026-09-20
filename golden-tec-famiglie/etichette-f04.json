@@ -1,0 +1,138 @@
+{
+ "lotto": "famiglie-04",
+ "famiglia": "Retail",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 40,
+   "id": "a2e8942b-eb13-4444-b696-4bac7410edf1",
+   "titolo": "Retail Merchandiser",
+   "tecnologie": [],
+   "escluse": [
+    "theScore Bet Sportsbook (prodotto dell'azienda, fuori dal mestiere)",
+    "soda dispensers, coffee machines (attrezzatura generica)"
+   ]
+  },
+  {
+   "n": 41,
+   "id": "089defec-84f7-4ef3-b2f9-0aa67e904030",
+   "titolo": "Wireless Retail Sales Associate - W5844",
+   "tecnologie": []
+  },
+  {
+   "n": 42,
+   "id": "9ec5682f-2864-4dcd-b597-6900662d29a3",
+   "titolo": "Grocery Retail Planogram Merchandiser",
+   "tecnologie": [],
+   "escluse": [
+    "plan-o-gram (documento di reparto, non strumento con identita')",
+    "smartphone, app (generici)"
+   ]
+  },
+  {
+   "n": 43,
+   "id": "14966882-b386-4c52-94ad-c41a8869f3fd",
+   "titolo": "Studentenjob Verkauf (m/w/d)",
+   "tecnologie": []
+  },
+  {
+   "n": 44,
+   "id": "cf40edee-8cb3-4afb-90e6-13e37f225440",
+   "titolo": "Assistant Store Manager ",
+   "tecnologie": [],
+   "escluse": [
+    "Benefits@work (benefit)"
+   ]
+  },
+  {
+   "n": 45,
+   "id": "0cdd9290-a8cc-4c38-b5bd-f83f65bbaf20",
+   "titolo": "Brand Representative m/w/d - Riem Arcaden, Hollister",
+   "tecnologie": []
+  },
+  {
+   "n": 46,
+   "id": "c6aa93ae-f28d-4ec1-97d7-70319ae77929",
+   "titolo": "Butiksmedarbetare sökes Till Värnamo",
+   "tecnologie": [],
+   "escluse": [
+    "Pokémon TCG (merce venduta, non strumento)",
+    "e-handel (generico)",
+    "il campo text contiene un JSON serializzato: guasto di dato"
+   ]
+  },
+  {
+   "n": 47,
+   "id": "fbb12aa4-1c3f-40e8-bf91-71340422d212",
+   "titolo": "Employé de commerce drive (F/H) Titre professionnel en alternance",
+   "tecnologie": [
+    {
+     "nome": "Terminal Radio",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 48,
+   "id": "471b544e-806e-4eb6-83bc-3edcd79e6a44",
+   "titolo": "Open sollicitatie",
+   "tecnologie": [],
+   "escluse": [
+    "IT come reparto, non come strumento"
+   ]
+  },
+  {
+   "n": 49,
+   "id": "9fc13ede-6284-4ffc-9d94-1ee68f7fe05a",
+   "titolo": "Seasonal Ambassador - Metrotown",
+   "tecnologie": [
+    {
+     "nome": "StoreForce",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 50,
+   "id": "314e7d4e-a965-4ef3-a471-4b7228a78e94",
+   "titolo": "addetto vendita libreria part time - Milano Centro (F/M/NB)",
+   "tecnologie": [],
+   "escluse": [
+    "GDPR (legge)"
+   ]
+  },
+  {
+   "n": 51,
+   "id": "9aee8503-6b11-43e7-94de-63df0c53dd2b",
+   "titolo": "Retail Sales Associate - Smart Cart",
+   "tecnologie": [
+    {
+     "nome": "Smart Cart",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 52,
+   "id": "d2254f53-cdc8-41ef-9fa7-97cf73574bba",
+   "titolo": "Vendeur/Ambassadeur en téléphonie H/F",
+   "tecnologie": []
+  }
+ ]
+}

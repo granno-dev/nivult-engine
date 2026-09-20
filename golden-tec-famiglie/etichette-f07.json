@@ -1,0 +1,244 @@
+{
+ "lotto": "famiglie-07",
+ "famiglia": "Trades",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 79,
+   "id": "232060ee-7257-48ea-a161-026f86eb2f1e",
+   "titolo": "VVS montör till IMD i Upplands Väsby",
+   "tecnologie": [
+    {
+     "nome": "Techem IMD-system",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "IMD",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 80,
+   "id": "971ef71d-6f2f-4d37-a52e-5dec7aa349f1",
+   "titolo": "Auto Technician",
+   "tecnologie": [],
+   "escluse": [
+    "Wagestream (benefit)"
+   ]
+  },
+  {
+   "n": 81,
+   "id": "acc514d7-1134-4ee2-87c3-6d04d5955925",
+   "titolo": "Fire Alarm Technician",
+   "tecnologie": [
+    {
+     "nome": "NFPA 72",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "NEC",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Notifier",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Siemens",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Edwards",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Simplex",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Fire Lite",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Gamewell FCI",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Honeywell",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "OSHA (ente e norma di legge)"
+   ]
+  },
+  {
+   "n": 82,
+   "id": "52564f25-51a6-4031-9945-59e5357fa326",
+   "titolo": "Alternance Technicien SAV itinérant (H/F)",
+   "tecnologie": []
+  },
+  {
+   "n": 83,
+   "id": "c95df76e-b590-4b11-9e2a-f059b1eba22b",
+   "titolo": "Electricien d'installation industrielle / Electricienne d'install (H/F)",
+   "tecnologie": [
+    {
+     "nome": "groupes électropompes",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "armoires électriques",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "pompes de relevage",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "capteurs (troppo generico)"
+   ]
+  },
+  {
+   "n": 84,
+   "id": "21654fa1-a586-42c8-923b-703d91c5844c",
+   "titolo": "Automotive Technician",
+   "tecnologie": [],
+   "escluse": [
+    "BMW (marchio del datore e dei veicoli, non sistema su cui si lavora)",
+    "ASE (certificazione)"
+   ]
+  },
+  {
+   "n": 85,
+   "id": "b2273b62-7d03-438a-a0c6-0ebcbf393ad1",
+   "titolo": "Pipefitters | 3rd Year, 4th Year & Journeypersons | Empress Turnaround, AB",
+   "tecnologie": [
+    {
+     "nome": "zoom boom",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CSTS 2020, H2S Alive, Fall Protection (tessere di sicurezza)"
+   ]
+  },
+  {
+   "n": 86,
+   "id": "d6886115-2ffc-4109-844f-9c00b263c0a9",
+   "titolo": "Techniker / Installateur / Elektriker (m/w/d) - für sicherheitstechnische Anlagen",
+   "tecnologie": [
+    {
+     "nome": "Videosysteme",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Zutrittskontrolle",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Intercom",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Einbruchmeldeanlagen",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Brandmeldeanlagen",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Leitstellensysteme",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 87,
+   "id": "f9cec6c2-965e-4e00-82fe-7dcef2a6bf53",
+   "titolo": "Mécanicien réparateur / Mécanicienne réparatrice machines agricoles (H/F)",
+   "tecnologie": [
+    {
+     "nome": "tracteurs",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "moissonneuses",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 88,
+   "id": "3093b928-2dff-4373-9077-01e9f7141f32",
+   "titolo": "Seasonal Maintenance Technician",
+   "tecnologie": []
+  },
+  {
+   "n": 89,
+   "id": "e0e822f6-97be-485c-b68a-3e07089851c2",
+   "titolo": "TOYOTA Automotive Service Technician",
+   "tecnologie": [],
+   "escluse": [
+    "TOYOTA (marchio del datore)"
+   ]
+  },
+  {
+   "n": 90,
+   "id": "1f2f1a2a-b111-457c-a061-c1066864fdbe",
+   "titolo": "IDE ou Technicien laboratoire F/H",
+   "tecnologie": [
+    {
+     "nome": "HEXALIS",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "logiciel de gestion de laboratoire (descrittivo)",
+    "RPPS, AFGSU, CCEPS (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 91,
+   "id": "aff9f0b0-ac62-45ce-822e-798cfa18b24f",
+   "titolo": "Welder - 2nd and Weekend Shift",
+   "tecnologie": [
+    {
+     "nome": "MIG Welding",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "D1.1 GMAW",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "D1.3 GMAW",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "grinders",
+     "ruolo": "usata"
+    }
+   ]
+  }
+ ]
+}

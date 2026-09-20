@@ -133,9 +133,17 @@ def main() -> int:
             migliore, uscite = (s, f1), {"soglia": s, "dettaglio": dettaglio}
 
     print(f"\nmigliore: soglia {migliore[0]:.2f}, F1 {migliore[1]:.1f}%")
-    print(f"{'':>8}{'per confronto sulle stesse 200 righe:':>50}")
-    print(f"{'':>8}{'2B in produzione   precisione 93,6%  richiamo 50,3%  F1 65,4%':>62}")
-    print(f"{'':>8}{'8B + filtro        precisione 58,2%  richiamo 69,5%  F1 63,4%':>62}")
+    # I voti di 2B e 8B valgono SOLO sulle 200 righe del primo golden. Stampati
+    # accanto a un esame fatto su altre righe sarebbero un confronto falso, ed e'
+    # esattamente il modo in cui una misura inganna (visto il 20/09/2026 girando
+    # questo stesso esame sulle 104 righe delle otto famiglie).
+    if len(mano) == 200:
+        print(f"{'':>8}{'per confronto sulle stesse 200 righe:':>50}")
+        print(f"{'':>8}{'2B in produzione   precisione 93,6%  richiamo 50,3%  F1 65,4%':>62}")
+        print(f"{'':>8}{'8B + filtro        precisione 58,2%  richiamo 69,5%  F1 63,4%':>62}")
+    else:
+        print(f"{'':>8}nessun confronto: 2B e 8B sono stati misurati su altre righe "
+              f"(le 200 del primo golden), e i voti non si mettono accanto.")
     json.dump(uscite, open(a.uscita, "w"), ensure_ascii=False, indent=1)
     return 0
 

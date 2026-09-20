@@ -1,0 +1,147 @@
+{
+ "lotto": "famiglie-03",
+ "famiglia": "Healthcare",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 27,
+   "id": "ef8f0394-1c78-4980-b910-e26fefad56a2",
+   "titolo": "PRN Physical Therapist - Acute Care",
+   "tecnologie": [],
+   "escluse": [
+    "Basic Life Support, CAPTE, APTA (abilitazioni e accrediti personali)"
+   ]
+  },
+  {
+   "n": 28,
+   "id": "bffeae67-c971-4c0d-b87e-cf468df045b0",
+   "titolo": "Nurse Practitioner / Physician Assistant - Prescott, AZ",
+   "tecnologie": []
+  },
+  {
+   "n": 29,
+   "id": "1e7f8f68-4cac-4fbe-ab42-69b54cfdd7c9",
+   "titolo": "Altenpflegekraft (m/w/d)  in einer unserer 58 Fachkliniken",
+   "tecnologie": []
+  },
+  {
+   "n": 30,
+   "id": "9ff11f5f-453d-4ba7-934d-dcf6e41ebb60",
+   "titolo": "Facharzt für Psychiatrie und Psychotherapie (m/w/d) für unsere Psychiatrische Institutsambulanz",
+   "tecnologie": []
+  },
+  {
+   "n": 31,
+   "id": "f3e06829-8a37-42d8-938b-5d053d8847ec",
+   "titolo": "RN, Clinical Supervisor",
+   "tecnologie": [],
+   "escluse": [
+    "BLS, ACLS, PALS, NRP (abilitazioni personali)",
+    "NLC/eNLC (compatto di licenze)"
+   ]
+  },
+  {
+   "n": 32,
+   "id": "c8bc9a95-94c4-432d-8314-6c16eee2445b",
+   "titolo": "Registered Nurse Hospice",
+   "tecnologie": [],
+   "escluse": [
+    "Noom, SkinIO (piattaforme offerte come benefit)"
+   ]
+  },
+  {
+   "n": 33,
+   "id": "06ea9675-4196-4c0a-9c0e-816ccf3eaba8",
+   "titolo": "Physical Therapist Assistant (PTA), Millsboro Delaware",
+   "tecnologie": [
+    {
+     "nome": "Prompt EMR",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 34,
+   "id": "053f4f16-d3f2-48c5-9905-b911ca4e88a7",
+   "titolo": "Occupational Therapist",
+   "tecnologie": [],
+   "escluse": [
+    "OBRA (legge)"
+   ]
+  },
+  {
+   "n": 35,
+   "id": "fab96106-d061-44d2-a21b-aaf38cc3c8b8",
+   "titolo": "Infermiere a Domicilio Bologna e Provincia",
+   "tecnologie": [
+    {
+     "nome": "PEG J",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Pompa infusionale",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 36,
+   "id": "908ac84d-2e7a-4ea0-90f6-bbf0a3a955e6",
+   "titolo": "Nurse Practitioner / Physician Assistant (Clinical Research) - Chandler, AZ",
+   "tecnologie": []
+  },
+  {
+   "n": 37,
+   "id": "ccd09be4-0ca1-46c1-afc3-279bd8c03614",
+   "titolo": "Rhode Island (Waitlist) - Contract Psychiatric Nurse Practitioner",
+   "tecnologie": [
+    {
+     "nome": "Talkspace platform",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 38,
+   "id": "a4d0e833-a921-4965-9e09-afb61c02828e",
+   "titolo": "Certified Senior Medical Assistant - Endocrinology (Clear Lake)",
+   "tecnologie": [
+    {
+     "nome": "EMR",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CLIA, HIPAA, NCQA (leggi e accrediti)",
+    "AAMA, NCCT, NHA, BLS, CPT (certificazioni)"
+   ]
+  },
+  {
+   "n": 39,
+   "id": "1b01d0ca-9ef2-4857-9ee3-b3f5a47cfd85",
+   "titolo": "Mammography Tech Part Time Days",
+   "tecnologie": [
+    {
+     "nome": "X-rays",
+     "ruolo": "usata"
+    }
+   ]
+  }
+ ]
+}

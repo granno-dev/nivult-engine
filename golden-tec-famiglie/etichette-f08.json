@@ -1,0 +1,143 @@
+{
+ "lotto": "famiglie-08",
+ "famiglia": "Transportation",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 92,
+   "id": "66038a4e-4587-43d8-8be4-e3b996522ee7",
+   "titolo": "Paratransit Driver-CDL",
+   "tecnologie": [],
+   "escluse": [
+    "navigation applications (generico)",
+    "CDL, DOT (patenti e visite)"
+   ]
+  },
+  {
+   "n": 93,
+   "id": "0271083e-8417-456c-8d56-f335b0115619",
+   "titolo": "Dispatcher",
+   "tecnologie": [],
+   "escluse": [
+    "fax machine, ten key (attrezzatura d'ufficio comune)"
+   ]
+  },
+  {
+   "n": 94,
+   "id": "faacfc0f-dba7-4974-973c-d79b8f751a67",
+   "titolo": "DVM Student Externship - [Beachwood Animal Clinic]",
+   "tecnologie": [
+    {
+     "nome": "High Speed Dentistry",
+     "ruolo": "servizio"
+    },
+    {
+     "nome": "Digital full body and dental radiology",
+     "ruolo": "servizio"
+    },
+    {
+     "nome": "Ultrasonography",
+     "ruolo": "servizio"
+    }
+   ]
+  },
+  {
+   "n": 95,
+   "id": "580044be-563d-4a9a-ba5a-48a6215c4423",
+   "titolo": "Delivery Driver (4326)",
+   "tecnologie": [
+    {
+     "nome": "Global Positioning System",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 96,
+   "id": "239cfec0-34ea-4cec-9a59-f395bbbdb6b5",
+   "titolo": "Parcelforce Collection Delivery Driver Saturday Only",
+   "tecnologie": []
+  },
+  {
+   "n": 97,
+   "id": "1038e5dc-3990-4754-b39c-f982b93c63af",
+   "titolo": "Conducteur SPL National (H/F)",
+   "tecnologie": [],
+   "escluse": [
+    "FIMO/FCO, permis CE, carte conducteur (abilitazioni)"
+   ]
+  },
+  {
+   "n": 98,
+   "id": "17548594-ec52-40d0-ab72-5d71fa1f9cdf",
+   "titolo": "Delivery Driver(08503) - 943 Otay Lakes Road",
+   "tecnologie": [],
+   "escluse": [
+    "touch screen, calculator, hand truck (attrezzatura generica)"
+   ]
+  },
+  {
+   "n": 99,
+   "id": "5b1939e4-f562-4deb-a036-79738a8daf81",
+   "titolo": "CDL-A Drivers needed , home WEEKLY, no touch freight",
+   "tecnologie": [
+    {
+     "nome": "Cascadia Freightliners",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "KW's (troppo corto e ambiguo per ancorarlo)"
+   ]
+  },
+  {
+   "n": 100,
+   "id": "63ab8634-b9b2-4bdc-8960-54f9cda7d282",
+   "titolo": "B-Chaufförer - Sollentuna",
+   "tecnologie": []
+  },
+  {
+   "n": 101,
+   "id": "56895338-544d-49d1-b5d8-08b41e9174db",
+   "titolo": "DRIVERS WANTED – CDL & NON-CDL – MULTIPLE POSITIONS AVAILABLE",
+   "tecnologie": []
+  },
+  {
+   "n": 102,
+   "id": "c110977c-65e7-43e1-b603-18299006547c",
+   "titolo": "Autista consegnatario/magazziniere - Gerenzano",
+   "tecnologie": []
+  },
+  {
+   "n": 103,
+   "id": "e9d2a584-e4b9-4d39-b6c0-574f080c6d26",
+   "titolo": "CDL Delivery Driver",
+   "tecnologie": []
+  },
+  {
+   "n": 104,
+   "id": "8043aa1d-9b6c-413f-8dc2-c4abcc048092",
+   "titolo": "LGV Driver - Part Time ",
+   "tecnologie": [],
+   "escluse": [
+    "LGV (categoria di patente)"
+   ]
+  }
+ ]
+}

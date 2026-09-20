@@ -1,0 +1,122 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Food & Beverage",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "claude-opus-5, lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-20",
+ "note_di_metodo": [
+  "Le otto famiglie che il buttafuori del 2B escludeva: qui non c'era nessun metro, e la testa di marcatura le lavora tutte.",
+  "Stessa rubrica dei primi dieci lotti, stessa forma dei file: i due voti si possono mettere accanto.",
+  "Il testo letto e' quello tagliato a 4.000 caratteri, la stessa finestra che la testa vede in produzione (1.024 token): segnare una tecnologia oltre quel punto vorrebbe dire contarla come persa quando il modello non l'ha mai vista."
+ ],
+ "dubbi": [
+  "MACCHINARI CHIAMATI PER FUNZIONE. La rubrica tiene dentro «muletto» e «saldatrice TIG», cioe' tipi di macchina riconoscibili. Ho tenuto sulla stessa riga setters/hatchers (#3), zoom boom (#85), snowmobile (#78), tracteurs/moissonneuses (#87); ho lasciato fuori «industrial dishwashing equipment» (#14) e «fax machine» (#93), che sono descrizioni o oggetti d'ufficio comuni. Il confine e': un compratore di tecnografia ci filtrerebbe sopra?",
+  "IL MARCHIO E' IL SISTEMA, O E' IL DATORE? In #81 «fire alarm systems from major manufacturers such as Notifier, Siemens, Edwards, Simplex...» nomina i sistemi su cui si mette le mani: dentro. In #84 e #89 «BMW» e «TOYOTA» sono il marchio del concessionario e delle auto: fuori. E' la differenza fra «lavoro su X» e «lavoro da X».",
+  "MODULISTICA PER CANDIDARSI. myWORKDAY (#22), Google Chrome e Mozilla Firefox (#58) sono software veri e il modello quasi certamente li marchera'. Sono fuori perche' riguardano il candidarsi, non il lavoro. E' una trappola di precisione messa apposta nel metro.",
+  "BENEFIT CON UN NOME PROPRIO. Wagestream, DailyPay, Noom, SkinIO, Benefits@work, LifeMart, Blue Light Card: piattaforme vere, ma sono paga e welfare. La rubrica le mette fuori con 401k e buoni pasto.",
+  "REGISTRI PUBBLICI (#9). hjorteviltregisteret, jegerregisteret e ettersøkshundregisteret sono banche dati nazionali con un nome, e chi fa quel lavoro ci scrive dentro: tenuti. Ma sono il caso piu' fragile di tutto il lotto.",
+  "DISCIPLINE CHE SEMBRANO METODI. Pilates (#74) ha un nome proprio e un corpo definito come Scrum, ma e' il mestiere stesso, non uno strumento che il mestiere usa: fuori, come «ingegneria civile».",
+  "DUE ANNUNCI (#46, #56) hanno nel campo text un JSON serializzato invece del testo: stesso guasto di dato visto al #11 del primo giro. Restano nel campione perche' il modello in produzione li riceve identici."
+ ],
+ "offerte": [
+  {
+   "n": 14,
+   "id": "4082de5e-22b6-4a3c-a7be-5ab252b15574",
+   "titolo": "Steward Helper - Seasonal, Full-Time",
+   "tecnologie": []
+  },
+  {
+   "n": 15,
+   "id": "f34fa83e-cdd1-40a8-a698-c7bd501baaab",
+   "titolo": "Back of House Nandoca",
+   "tecnologie": []
+  },
+  {
+   "n": 16,
+   "id": "d0c4e44c-ce33-450d-9a8d-916f838ba9b1",
+   "titolo": "Kitchen Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "Wagestream (benefit, non strumento di lavoro)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "861c6249-33d4-4933-b986-1126b040beb4",
+   "titolo": "Bartender",
+   "tecnologie": [
+    {
+     "nome": "POS",
+     "ruolo": "usata"
+    }
+   ]
+  },
+  {
+   "n": 18,
+   "id": "93d65bad-5293-4864-afa3-b6a1865afc63",
+   "titolo": "Line Cook",
+   "tecnologie": []
+  },
+  {
+   "n": 19,
+   "id": "6dd12cbb-1113-432e-9903-4bd153456866",
+   "titolo": "#Forumalternance2026 Boulanger (H/F)",
+   "tecnologie": []
+  },
+  {
+   "n": 20,
+   "id": "8a3bc6ba-c87f-4f21-8732-2377adc9ec10",
+   "titolo": "Food & Beverage Hostess (Saudi National)",
+   "tecnologie": [],
+   "escluse": [
+    "restaurant reservation systems (descrittivo, non un nome)",
+    "Forbes standards (regime di valutazione, non tecnologia)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "0f98e4cf-0043-4d80-9ef7-fbbeebcc3192",
+   "titolo": "Kitchen Team Leader",
+   "tecnologie": [],
+   "escluse": [
+    "Wagestream (benefit)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "cbc662d6-114f-4630-aceb-e7441541a7cc",
+   "titolo": "Food Service Specialist - UH Lakewood (6a - 6:30p)",
+   "tecnologie": [],
+   "escluse": [
+    "myWORKDAY (modulistica per candidarsi, non strumento del lavoro)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "632ae563-c9aa-4987-a8b9-e56d6d23dbdc",
+   "titolo": "Commis 3 Chef - Cold Kitchen",
+   "tecnologie": []
+  },
+  {
+   "n": 24,
+   "id": "7c0e2927-9be6-422b-b794-e2b9a91ecfb0",
+   "titolo": "Cook Helper",
+   "tecnologie": [],
+   "escluse": [
+    "New York City Food Standards, Executive Order 122, Directive 6 (regolamenti)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "0526633b-ec2b-4d68-9ce1-e583c4cd9fd1",
+   "titolo": "Sous Chef Banquet",
+   "tecnologie": []
+  },
+  {
+   "n": 26,
+   "id": "077fabe7-f428-4af3-b964-b26451ec45cd",
+   "titolo": "STEWARD",
+   "tecnologie": []
+  }
+ ]
+}
