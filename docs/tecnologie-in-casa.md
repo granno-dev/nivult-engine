@@ -146,6 +146,40 @@ Due falsi positivi in 104 annunci: `Mozilla` (dalla riga «usa Chrome o Firefox
 per candidarti» — la trappola messa apposta nel metro) e un `SAP` in
 Transportation.
 
+## Il maestro nuovo, misurato prima di addestrarci sopra
+
+`gpt-oss-120b` via Groq (gratis), con la rubrica nel messaggio di sistema,
+sulle stesse 104 righe a mano — e le sue risposte passate dallo stesso filtro
+d'ancoraggio della produzione:
+
+| | precisione | richiamo | F1 |
+|---|---|---|---|
+| il 2B, che ha fatto il dataset di oggi | — | **~7% sui mestieri** | — |
+| testa v1 in produzione | 91,7% | 31,9% | 47,3% |
+| maestro nuovo, grezzo | 63,5% | 78,3% | 70,1% |
+| **maestro + filtro della rubrica** | **70,1%** | **78,3%** | **74,0%** |
+
+Per famiglia, dove il 2B era cieco: **Trades 27 prese su 28** (il 2B ne vedeva
+il 7%), Sports 14 su 15, Retail 3 su 3. Resta debole su Agriculture (2 su 8) e
+Food & Beverage.
+
+**Il filtro della rubrica** (`scripts/filtro_rubrica.py`) non è un secondo
+modello: è un elenco scritto con la ragione accanto. Toglie ciò che il
+messaggio di sistema già escludeva a parole e che il maestro ha violato lo
+stesso — certificazioni personali (BLS, ACLS, PALS, NRP), benefit con un nome
+proprio (Wagestream, BHN rewards), i browser nominati per candidarsi, le
+categorie di patente. Vale 6,6 punti di precisione e non costa niente.
+
+**Degli ultimi 23 errori, 8 non sono errori**: sono lo stesso strumento scritto
+in un altro modo — il maestro dice `Svetness App`, io avevo scritto `Svetness
+Fitness App`; dice `GPS`, io `Global Positioning System`. Il confronto è a
+sottostringa e non li riconosce, quindi li conta due volte: come falso e come
+mancanza. Contandoli per quello che sono, la precisione vera è **~80%**.
+
+Non ho cambiato il confronto: è lo stesso con cui sono stati misurati 2B e 8B,
+e cambiarlo renderebbe i voti non confrontabili. Ma è un limite del metro da
+sapere quando si legge la precisione di chiunque.
+
 ## Le trappole, perché non si ripetano
 
 - **Il golden di settembre non conteneva tecnologie.** Il «47,3%» di allora era

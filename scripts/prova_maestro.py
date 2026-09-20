@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import collections
 import concurrent.futures as cf
+import contextlib
 import glob
 import gzip
 import importlib.util
@@ -92,7 +93,7 @@ def chiedi(url: str, chiave: str, modello: str, testo: str, tentativi: int = 4):
     body = json.dumps({"model": modello,
                        "messages": [{"role": "system", "content": SISTEMA},
                                     {"role": "user", "content": testo}],
-                       "temperature": 0, "max_tokens": 3000,
+                       "temperature": 0, "max_tokens": 1200,
                        "response_format": {"type": "json_object"}}).encode()
     for k in range(tentativi):
         try:
@@ -104,6 +105,20 @@ def chiedi(url: str, chiave: str, modello: str, testo: str, tentativi: int = 4):
                 "Authorization": f"Bearer {chiave}"})
             d = json.load(urllib.request.urlopen(rq, timeout=180))
             return d["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            # IL TETTO E' SUI TOKEN AL MINUTO, non sulle richieste: il piano
+            # gratuito di Groq ne da' 8.000, e un annuncio ne pesa ~2.000. Con
+            # quattro richieste in parallelo il 46% e' caduto in 429 e il voto
+            # e' uscito su mezzo campione (20/09/2026). Qui si aspetta quello
+            # che il server stesso dice di aspettare, invece di indovinare.
+            attesa = 0.0
+            if e.code == 429:
+                with contextlib.suppress(Exception):
+                    attesa = float(e.headers.get("retry-after") or 0)
+                attesa = max(attesa, 20.0)
+            if k == tentativi - 1:
+                return f"__ERRORE__ {e}"
+            time.sleep(attesa or 4 * (k + 1))
         except Exception as e:                                     # noqa: BLE001
             if k == tentativi - 1:
                 return f"__ERRORE__ {e}"
@@ -135,7 +150,8 @@ def main() -> int:
     ap.add_argument("--chiave", default=os.environ.get("GROQ_API_KEY", ""))
     ap.add_argument("--golden", default="/opt/nivult/golden-tec-famiglie")
     ap.add_argument("--banco", default="/opt/nivult/banco-famiglie.jsonl.gz")
-    ap.add_argument("--par", type=int, default=4)
+    ap.add_argument("--par", type=int, default=2,
+                    help="oltre 2 si sfonda il tetto dei token al minuto")
     ap.add_argument("--uscita", default="/opt/nivult/maestro-famiglie.json")
     a = ap.parse_args()
     if not a.chiave:
