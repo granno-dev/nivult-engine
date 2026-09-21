@@ -7,7 +7,12 @@ quei campi si DEDUCE dalle offerte stesse e dalle fonti aperte che gia'
 leggiamo, e si etichetta per quello che e':
 
   size_range        fascia di dipendenti (stile LinkedIn) dal numero migliore
-                    che abbiamo: registro > sito > dichiarato > wikidata
+                    che abbiamo: wikidata > sito > registro > dichiarato (il
+                    registro conta l'unita' legale: vedi `dipendenti`), con
+                    la categoria INSEE (PME/ETI/GE) che corregge la fascia
+  legal_form, founded, registration_id, hq con via/CAP/coordinate: dalla
+                    scheda di registro (aziende_registro: SIRENE, Brreg, PRH,
+                    CVR, EDGAR, GLEIF)
   locations         le sedi VISTE nelle offerte, con quante offerte ciascuna;
                     la prima e' la piu' frequente (is_primary)
   hq_*              la sede principale: dal registro/GLEIF se ce l'abbiamo,
@@ -44,6 +49,14 @@ CREATE TABLE IF NOT EXISTS aziende_dettagli (
   size_range     text,
   size_da        text,
   employees_best integer,
+  employees_scope text,      -- group / legal_entity / self_declared
+  legal_name     text,
+  legal_form     text,
+  legal_form_code text,
+  registration_id text,
+  founded        date,
+  hq_latitude    real,
+  hq_longitude   real,
   locations      jsonb,       -- [{city, country, state, offerte, is_primary}]
   n_locations    integer,
   hq_country     text,
@@ -52,9 +65,9 @@ CREATE TABLE IF NOT EXISTS aziende_dettagli (
   hq_street      text,
   hq_zipcode     text,
   hq_full_address text,
-  hq_da          text,        -- registro / gleif / offerte
+  hq_da          text,        -- gleif / sirene / brreg / prh / cvr / edgar / offerte
   description    text,
-  description_da text,
+  description_da text,        -- jsonld hiringOrganization / smartrecruiters companyDescription / sito (meta description)
   external_urls  jsonb,
   keywords       jsonb,       -- {famiglie: [...], tecnologie: [...]}
   calcolato_at   timestamptz NOT NULL DEFAULT now());
@@ -74,12 +87,48 @@ def fascia(n: int | None) -> str | None:
     return None
 
 
+def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int | None, str | None, str | None, str | None]:
+    """LA regola dei dipendenti, una sola per scheda ed export (21/09/2026).
+
+    Il registro conta l'UNITA' LEGALE: SIRENE dava Veolia Environnement SA a
+    1.499, Renault a 4, Eurofins a 374, mentre Wikidata (che conta il
+    gruppo) li da' a 220.000, 179.000 e 62.000. Il compratore vuole il
+    gruppo: prima Wikidata, poi cio' che l'azienda dichiara sul proprio
+    sito, poi il registro, per ultimo il numero letto negli annunci (rumoroso:
+    «765» per Eurofins). La categoria INSEE, quando c'e', corregge la fascia:
+    GE = impresa da 5.000+, ETI = 250-4.999, anche se l'unita' legale e'
+    piccola. Restituisce (numero, fonte, portata, fascia)."""
+    best, da, portata = None, None, None
+    for n, fonte, scope in ((e_wd, "wikidata", "group"), (e_site, "sito", "group"),
+                            (e_reg, "registro", "legal_entity"), (e_self, "dichiarato", "self_declared")):
+        if n and int(n) > 0:
+            best, da, portata = int(n), fonte, scope
+            break
+    size = fascia(best) or (band if band else None)
+    if size and not da:
+        da, portata = "registro (fascia)", "legal_entity"
+    if categoria == "GE" and (best or 0) < 5000:
+        size, da, portata = "5001+", f"{da or 'registro'} + INSEE GE", "group"
+    elif categoria == "ETI" and (best or 0) < 250:
+        size, da, portata = "251-5000", f"{da or 'registro'} + INSEE ETI", "group"
+    return best, da, portata, size
+
+
 SQL_TENANT = """
-SELECT c.id, c.employees_reg, c.employees_site, c.employees_self_n, c.employees_wd, c.employees_reg_band, c.country
+SELECT c.id, c.employees_reg, c.employees_site, c.employees_self_n, c.employees_wd, c.employees_reg_band, c.country,
+       c.site_description
   FROM ats_companies c
  WHERE c.job_count > 0 AND (c.dettagli_at IS NULL OR c.dettagli_at < now() - interval '7 days')
  ORDER BY c.job_count DESC
  LIMIT %s
+"""
+# la scheda di registro: GLEIF (sede operativa) batte i registri nazionali
+# (sede legale), che battono le offerte
+SQL_REGISTRO = """
+SELECT fonte, legal_name, legal_form, legal_form_code, registro_id, street, postal_code, city, region, country,
+       latitude, longitude, founded, website, categoria
+  FROM aziende_registro WHERE company_id = %s
+ ORDER BY CASE fonte WHEN 'gleif' THEN 0 ELSE 1 END, fetched_at DESC
 """
 SQL_SEDI = """
 SELECT coalesce(j.city, ''), coalesce(j.country, ''), coalesce(d.state, ''), count(*) AS n
@@ -104,19 +153,12 @@ SELECT j.raw->'hiringOrganization', j.raw->'jobAd'->'sections'->'companyDescript
    AND (j.raw ? 'hiringOrganization' OR j.raw->'jobAd'->'sections' ? 'companyDescription')
  ORDER BY j.posted_at DESC NULLS LAST LIMIT 3
 """
-SQL_SCRIVI = """
-INSERT INTO aziende_dettagli (company_id, size_range, size_da, employees_best, locations, n_locations,
-                              hq_country, hq_state, hq_city, hq_street, hq_zipcode, hq_full_address, hq_da,
-                              description, description_da, external_urls, keywords)
-VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-ON CONFLICT (company_id) DO UPDATE SET
-  size_range = EXCLUDED.size_range, size_da = EXCLUDED.size_da, employees_best = EXCLUDED.employees_best,
-  locations = EXCLUDED.locations, n_locations = EXCLUDED.n_locations,
-  hq_country = EXCLUDED.hq_country, hq_state = EXCLUDED.hq_state, hq_city = EXCLUDED.hq_city,
-  hq_street = EXCLUDED.hq_street, hq_zipcode = EXCLUDED.hq_zipcode, hq_full_address = EXCLUDED.hq_full_address,
-  hq_da = EXCLUDED.hq_da, description = EXCLUDED.description, description_da = EXCLUDED.description_da,
-  external_urls = EXCLUDED.external_urls, keywords = EXCLUDED.keywords, calcolato_at = now()
-"""
+COLONNE = ("company_id", "size_range", "size_da", "employees_best", "employees_scope", "locations", "n_locations",
+           "hq_country", "hq_state", "hq_city", "hq_street", "hq_zipcode", "hq_full_address", "hq_da",
+           "hq_latitude", "hq_longitude", "legal_name", "legal_form", "legal_form_code", "registration_id", "founded",
+           "description", "description_da", "external_urls", "keywords")
+SQL_SCRIVI = ("INSERT INTO aziende_dettagli (" + ", ".join(COLONNE) + ") VALUES (" + ", ".join(["%s"] * len(COLONNE)) + ") "
+              "ON CONFLICT (company_id) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in COLONNE[1:]) + ", calcolato_at = now()")
 _TAG = re.compile(r"<[^>]+>")
 
 
@@ -149,10 +191,22 @@ def _schema(c) -> None:
     colonna c'e' gia' (vedi dettagli._schema, 21/09)."""
     tabella = c.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'aziende_dettagli'").fetchone()
     colonna = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_companies' AND column_name = 'dettagli_at'").fetchone()
-    if tabella and colonna:
-        return
     c.execute("SET lock_timeout = '10s'")
-    c.execute(DDL)
+    if not (tabella and colonna):
+        c.execute(DDL)
+    # le colonne aggiunte il 21/09 sera (scheda di registro): solo su
+    # aziende_dettagli, che nessun demone legge
+    presenti = {r[0] for r in c.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'aziende_dettagli'")}
+    for col, tipo in (("employees_scope", "text"), ("legal_name", "text"), ("legal_form", "text"), ("legal_form_code", "text"),
+                      ("registration_id", "text"), ("founded", "date"), ("hq_latitude", "real"), ("hq_longitude", "real")):
+        if col not in presenti:
+            c.execute(f"ALTER TABLE aziende_dettagli ADD COLUMN {col} {tipo}")
+    # site_description la scrive scheda_sito; se non e' ancora passato, la
+    # colonna si crea qui (lock_timeout 10s: se la tabella e' occupata si
+    # rinuncia e si riprova al prossimo giro)
+    if not c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_companies' AND column_name = 'site_description'").fetchone():
+        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description text")
+        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description_at timestamptz")
     c.execute("RESET lock_timeout")
 
 
@@ -162,34 +216,50 @@ def applica(dsn: str, limite: int = 20000) -> dict:
     with psycopg.connect(dsn, autocommit=True) as c:
         _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
-        # i dati del registro/GLEIF con indirizzo, se un giorno ci saranno, entrano qui:
-        # oggi ats_companies non ha colonne d'indirizzo, quindi hq_da e' sempre «offerte»
-        for cid, e_reg, e_site, e_self, e_wd, band, paese in tenants:
+        for cid, e_reg, e_site, e_self, e_wd, band, paese, descr_sito in tenants:
             pid, slug = c.execute("SELECT platform_id, slug FROM ats_companies WHERE id = %s", (cid,)).fetchone()
             st["viste"] += 1
-            for n, da in ((e_reg, "registro"), (e_site, "sito"), (e_self, "dichiarato"), (e_wd, "wikidata")):
-                if n and int(n) > 0:
-                    best, size_da = int(n), da
-                    break
-            else:
-                best, size_da = None, None
-            size = fascia(best) or (band if band else None)
-            if size and not size_da:
-                size_da = "registro (fascia)"
+            try:
+                registri = c.execute(SQL_REGISTRO, (cid,)).fetchall()
+            except psycopg.errors.UndefinedTable:
+                registri = []
+            reg = dict(zip(("fonte", "legal_name", "legal_form", "legal_form_code", "registro_id", "street", "postal_code",
+                            "city", "region", "country", "latitude", "longitude", "founded", "website", "categoria"),
+                           registri[0])) if registri else {}
+            categoria = next((r[14] for r in registri if r[14]), None)
+            best, size_da, portata, size = dipendenti(e_reg, e_site, e_self, e_wd, band, categoria)
             sedi = c.execute(SQL_SEDI, (pid, slug)).fetchall()
             locs = [{"city": ci or None, "country": co or None, "state": s or None, "offerte": n, "is_primary": i == 0}
                     for i, (ci, co, s, n) in enumerate(sedi) if ci or co]
-            hq = locs[0] if locs else None
+            # la sede: dal registro se ce l'ha (con via e CAP), altrimenti la
+            # citta' piu' frequente nelle offerte
+            if reg.get("city") or reg.get("street"):
+                hq = {"country": reg.get("country") or paese, "state": reg.get("region"), "city": reg.get("city"),
+                      "street": reg.get("street"), "zipcode": reg.get("postal_code"),
+                      "full_address": ", ".join(x for x in (reg.get("street"), " ".join(y for y in (reg.get("postal_code"), reg.get("city")) if y), reg.get("country")) if x),
+                      "lat": reg.get("latitude"), "lon": reg.get("longitude"), "da": reg["fonte"]}
+            elif locs:
+                hq = {"country": locs[0]["country"] or paese, "state": locs[0]["state"], "city": locs[0]["city"],
+                      "street": None, "zipcode": None, "full_address": None, "lat": None, "lon": None, "da": "offerte"}
+            else:
+                hq = None
             fam = [f for f, _ in c.execute(SQL_FAMIGLIE, (pid, slug)).fetchall()]
             try:
                 tec = [t for t, _ in c.execute(SQL_TEC, (pid, slug)).fetchall()]
             except psycopg.errors.UndefinedTable:
                 tec = []
             desc, desc_da, urls = _descrizione_e_url(c.execute(SQL_ORG, (pid, slug)).fetchall())
+            if not desc and descr_sito:
+                desc, desc_da = descr_sito, "sito (meta description)"
+            if reg.get("website") and not any(reg["website"].split("/")[-1] in u for u in urls):
+                w = reg["website"] if reg["website"].startswith("http") else "https://" + reg["website"]
+                urls.append(w[:200])
             kw = {"famiglie": fam, "tecnologie": tec} if (fam or tec) else None
-            c.execute(SQL_SCRIVI, (cid, size, size_da, best, json.dumps(locs, ensure_ascii=False) if locs else None, len(locs),
+            c.execute(SQL_SCRIVI, (cid, size, size_da, best, portata, json.dumps(locs, ensure_ascii=False) if locs else None, len(locs),
                                    (hq or {}).get("country") or paese, (hq or {}).get("state"), (hq or {}).get("city"),
-                                   None, None, None, "offerte" if hq else None,
+                                   (hq or {}).get("street"), (hq or {}).get("zipcode"), (hq or {}).get("full_address"), (hq or {}).get("da"),
+                                   (hq or {}).get("lat"), (hq or {}).get("lon"),
+                                   reg.get("legal_name"), reg.get("legal_form"), reg.get("legal_form_code"), reg.get("registro_id"), reg.get("founded"),
                                    desc, desc_da, json.dumps(urls) if urls else None, json.dumps(kw, ensure_ascii=False) if kw else None))
             c.execute("UPDATE ats_companies SET dettagli_at = now() WHERE id = %s", (cid,))
             st["fascia"] += bool(size); st["sedi"] += bool(locs); st["descrizione"] += bool(desc); st["keywords"] += bool(kw)
@@ -202,7 +272,11 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser()
     ap.add_argument("--limite", type=int, default=20000)
+    ap.add_argument("--tutte", action="store_true", help="rifa' anche le schede fresche (dopo una modifica della regola)")
     a = ap.parse_args(argv)
+    if a.tutte:
+        global SQL_TENANT
+        SQL_TENANT = SQL_TENANT.replace("AND (c.dettagli_at IS NULL OR c.dettagli_at < now() - interval '7 days')", "")
     dsn = os.environ.get("ATS_DATABASE_URL")
     if not dsn:
         for f in ("/opt/nivult/.env", "/opt/nivult/engine/.env"):

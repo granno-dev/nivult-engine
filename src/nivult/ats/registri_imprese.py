@@ -143,7 +143,29 @@ _TRANCHE = {
 }
 
 
-# ── gli adattatori: nome -> (settore, dipendenti, fascia) o None ────
+# ── la SCHEDA di registro (21/09/2026) ──────────────────────────────
+# Oltre a settore e dipendenti i registri danno indirizzo della sede,
+# forma giuridica, data di fondazione e (Francia) la categoria INSEE
+# dell'impresa: PME / ETI / GE. Quest'ultima e' la cura al difetto visto il
+# 21/09: la fascia SIRENE conta l'UNITA' LEGALE (Veolia Environnement SA:
+# 1.000-1.999; Renault: 3-5) mentre il compratore vuole il gruppo. GE vuol
+# dire 5.000+ dipendenti a livello d'impresa, ETI 250-4.999.
+# Codici «nature juridique» INSEE piu' comuni -> etichetta leggibile
+_NATURE_FR = {
+    "1000": "Entrepreneur individuel", "5202": "SNC", "5410": "SARL", "5498": "SARL unipersonnelle (EURL)",
+    "5499": "SARL", "5505": "SA à directoire", "5510": "SA", "5599": "SA à conseil d'administration",
+    "5710": "SAS", "5720": "SASU", "5800": "Société européenne (SE)", "6220": "GIE",
+    "6540": "SCI", "9210": "Association non déclarée", "9220": "Association déclarée",
+    "3120": "Société commerciale étrangère immatriculée au RCS", "7210": "Commune",
+    "4110": "EPIC", "5306": "SCS", "5370": "Société de participation financière de profession libérale",
+}
+
+
+def _scheda(**kv) -> dict:
+    return {k: v for k, v in kv.items() if v not in (None, "", [])}
+
+
+# ── gli adattatori: nome -> (settore, dipendenti, fascia, scheda) o None ─
 def _fr(cli: httpx.Client, nome: str):
     r = cli.get("https://recherche-entreprises.api.gouv.fr/search",
                 params={"q": nome, "per_page": 10})
@@ -159,12 +181,30 @@ def _fr(cli: httpx.Client, nome: str):
         if not _combacia(nome, [n for n in nomi if n]):
             continue
         fascia = _TRANCHE.get(ris.get("tranche_effectif_salarie") or "")
+        sede = ris.get("siege") or {}
+        nat = str(ris.get("nature_juridique") or "") or None
+        scheda = _scheda(
+            legal_name=ris.get("nom_raison_sociale") or ris.get("nom_complet"),
+            registro_id=ris.get("siren"), legal_form_code=nat,
+            legal_form=_NATURE_FR.get(nat or ""),
+            street=sede.get("adresse"), postal_code=sede.get("code_postal"),
+            city=sede.get("libelle_commune"), country="FR",
+            latitude=_num(sede.get("latitude")), longitude=_num(sede.get("longitude")),
+            founded=ris.get("date_creation"), categoria=ris.get("categorie_entreprise"),
+            status="active" if ris.get("etat_administratif") == "A" else None)
         cand = (_nace(ris.get("activite_principale")),
                 fascia[1] if fascia else None,
-                fascia[0] if fascia else None)
+                fascia[0] if fascia else None, scheda)
         if migliore is None or (cand[1] or -1) > (migliore[1] or -1):
             migliore = cand
     return migliore
+
+
+def _num(v):
+    try:
+        return float(v) if v not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _no(cli: httpx.Client, nome: str):
@@ -175,7 +215,16 @@ def _no(cli: httpx.Client, nome: str):
         if not _combacia(nome, [ris.get("navn")]):
             continue
         cod = (ris.get("naeringskode1") or {}).get("kode")
-        return (_nace(cod), ris.get("antallAnsatte"), None)
+        forma = ris.get("organisasjonsform") or {}
+        ind = ris.get("forretningsadresse") or {}
+        scheda = _scheda(
+            legal_name=ris.get("navn"), registro_id=ris.get("organisasjonsnummer"),
+            legal_form_code=forma.get("kode"), legal_form=forma.get("beskrivelse"),
+            street=", ".join(ind.get("adresse") or []) or None, postal_code=ind.get("postnummer"),
+            city=ind.get("poststed"), region=ind.get("kommune"), country=ind.get("landkode") or "NO",
+            founded=ris.get("stiftelsesdato"), website=ris.get("hjemmeside"),
+            status="inactive" if ris.get("konkurs") or ris.get("underAvvikling") else "active")
+        return (_nace(cod), ris.get("antallAnsatte"), None, scheda)
     return None
 
 
@@ -188,8 +237,29 @@ def _fi(cli: httpx.Client, nome: str):
         if not _combacia(nome, nomi):
             continue
         mbl = ris.get("mainBusinessLine") or {}
+        forma = forma_cod = None
+        for f in ris.get("companyForms") or []:
+            if f.get("endDate"):
+                continue
+            forma_cod = f.get("type")
+            for d in f.get("descriptions") or []:
+                if d.get("languageCode") == "3":          # 3 = inglese
+                    forma = d.get("description")
+            forma = forma or next((d.get("description") for d in f.get("descriptions") or []), None)
+        via = cap = citta = None
+        for a in ris.get("addresses") or []:
+            if a.get("endDate"):
+                continue
+            via = a.get("street") or via
+            cap = a.get("postCode") or cap
+            citta = next((po.get("city") for po in a.get("postOffices") or [] if po.get("languageCode") in ("1", "3")), citta)
+            if a.get("type") == 1:      # 1 = sede, 2 = postale
+                break
+        scheda = _scheda(legal_name=nomi[0] if nomi else None, registro_id=ris.get("businessId", {}).get("value") if isinstance(ris.get("businessId"), dict) else ris.get("businessId"),
+                         legal_form_code=forma_cod, legal_form=forma, street=via, postal_code=cap, city=citta,
+                         country="FI", founded=ris.get("registrationDate"), website=ris.get("website"))
         # il codice YTJ e' TOL 2008 = NACE con cifre in piu'
-        return (_nace(mbl.get("type")), None, None)
+        return (_nace(mbl.get("type")), None, None, scheda)
     return None
 
 
@@ -210,7 +280,17 @@ def _dk(cli: httpx.Client, nome: str):
             dip = (int(m.group(1)) + int(m.group(2))) // 2
         else:
             dip = int(dip) if dip.strip().isdigit() else None
-    return (ris.get("industrydesc"), dip, fascia)
+    fondata = ris.get("startdate")
+    if isinstance(fondata, str) and re.match(r"^\d{2}/\d{2}/\d{4}$", fondata):
+        g, m_, a = fondata.split("/")
+        fondata = f"{a}-{m_}-{g}"
+    else:
+        fondata = None
+    scheda = _scheda(legal_name=ris.get("name"), registro_id=str(ris.get("vat") or "") or None,
+                     legal_form=ris.get("companydesc"), street=ris.get("address"), postal_code=ris.get("zipcode"),
+                     city=ris.get("city"), country="DK", founded=fondata,
+                     status="inactive" if ris.get("enddate") else "active")
+    return (ris.get("industrydesc"), dip, fascia, scheda)
 
 
 class _Edgar:
@@ -237,7 +317,14 @@ class _Edgar:
                     f"https://data.sec.gov/submissions/CIK{cik}.json")
                 if r.status_code != 200:
                     return None
-                return (r.json().get("sicDescription") or None, None, None)
+                j = r.json()
+                ind = (j.get("addresses") or {}).get("business") or {}
+                scheda = _scheda(legal_name=j.get("name"), registro_id=cik, website=j.get("website") or None,
+                                 street=", ".join(x for x in (ind.get("street1"), ind.get("street2")) if x) or None,
+                                 city=ind.get("city"), region=ind.get("stateOrCountry"), postal_code=ind.get("zipCode"),
+                                 country="US" if len(ind.get("stateOrCountry") or "") == 2 and (ind.get("stateOrCountry") or "").isupper() else None,
+                                 legal_form=j.get("entityType"))
+                return (j.get("sicDescription") or None, None, None, scheda)
         return None
 
 
@@ -245,7 +332,74 @@ _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0)}          # fonte, secondi di pausa fra chiamate
 
 
+DDL_REGISTRO = """
+CREATE TABLE IF NOT EXISTS aziende_registro (
+  company_id      uuid NOT NULL REFERENCES ats_companies(id) ON DELETE CASCADE,
+  fonte           text NOT NULL,      -- sirene / brreg / prh / cvr / edgar / gleif
+  legal_name      text,
+  registro_id     text,               -- SIREN, org.nr, Y-tunnus, CVR, CIK, LEI
+  legal_form_code text,
+  legal_form      text,
+  street          text,
+  postal_code     text,
+  city            text,
+  region          text,
+  country         text,
+  latitude        real,
+  longitude       real,
+  founded         date,
+  website         text,
+  categoria       text,               -- INSEE: PME / ETI / GE (solo Francia)
+  status          text,
+  fetched_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (company_id, fonte));
+"""
+SQL_SCHEDA = """
+INSERT INTO aziende_registro (company_id, fonte, legal_name, registro_id, legal_form_code, legal_form, street, postal_code,
+                              city, region, country, latitude, longitude, founded, website, categoria, status)
+VALUES (%(company_id)s, %(fonte)s, %(legal_name)s, %(registro_id)s, %(legal_form_code)s, %(legal_form)s, %(street)s,
+        %(postal_code)s, %(city)s, %(region)s, %(country)s, %(latitude)s, %(longitude)s, %(founded)s, %(website)s,
+        %(categoria)s, %(status)s)
+ON CONFLICT (company_id, fonte) DO UPDATE SET
+  legal_name = EXCLUDED.legal_name, registro_id = EXCLUDED.registro_id, legal_form_code = EXCLUDED.legal_form_code,
+  legal_form = EXCLUDED.legal_form, street = EXCLUDED.street, postal_code = EXCLUDED.postal_code, city = EXCLUDED.city,
+  region = EXCLUDED.region, country = EXCLUDED.country, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
+  founded = EXCLUDED.founded, website = EXCLUDED.website, categoria = EXCLUDED.categoria, status = EXCLUDED.status,
+  fetched_at = now()
+"""
+_CAMPI_SCHEDA = ("legal_name", "registro_id", "legal_form_code", "legal_form", "street", "postal_code", "city",
+                 "region", "country", "latitude", "longitude", "founded", "website", "categoria", "status")
+
+
+def scrivi_scheda(c, company_id, fonte: str, scheda: dict | None) -> bool:
+    """Una riga in aziende_registro, se la scheda dice qualcosa. La data di
+    fondazione arriva in forme diverse (2026-01-01, 01/01/2026 gia' girata,
+    o solo l'anno): si scrive solo se e' una data."""
+    if not scheda:
+        return False
+    riga = {k: scheda.get(k) for k in _CAMPI_SCHEDA}
+    f = riga.get("founded")
+    if isinstance(f, str):
+        f = f.strip()[:10]
+        if re.match(r"^\d{4}$", f):
+            f += "-01-01"
+        riga["founded"] = f if re.match(r"^\d{4}-\d{2}-\d{2}$", f) else None
+    else:
+        riga["founded"] = None
+    for k in ("street", "city", "legal_name", "legal_form", "website"):
+        if isinstance(riga.get(k), str):
+            riga[k] = riga[k].strip()[:300] or None
+    if not any(riga.get(k) for k in ("street", "city", "legal_form", "founded", "categoria")):
+        return False
+    c.execute(SQL_SCHEDA, {"company_id": company_id, "fonte": fonte, **riga})
+    return True
+
+
 def prepara(c) -> None:
+    if not _tabella_ce(c, "aziende_registro"):
+        c.execute("SET lock_timeout = '10s'")
+        c.execute(DDL_REGISTRO)
+        c.execute("RESET lock_timeout")
     if _colonna_manca(c, "ats_companies", "reg_checked_at"):
         c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS "
                   "industry_reg text")
@@ -260,9 +414,11 @@ def prepara(c) -> None:
 
 
 def arricchisci(dsn: str, limite: int = 1000,
-                paesi: list[str] | None = None) -> dict:
+                paesi: list[str] | None = None, rifai: bool = False) -> dict:
+    """`rifai`: ripassa le aziende GIA' trovate in un registro ma senza
+    scheda (indirizzo, forma giuridica): quelle lette prima del 21/09."""
     stats: dict = {"esaminate": 0, "trovate": 0, "settore": 0,
-                   "dipendenti": 0, "errori": 0}
+                   "dipendenti": 0, "schede": 0, "errori": 0}
     cli = httpx.Client(timeout=25, headers={"User-Agent": _UA},
                        follow_redirects=True)
     edgar = _Edgar(cli)
@@ -276,15 +432,17 @@ def arricchisci(dsn: str, limite: int = 1000,
                WHERE ap.platform_id = ac.platform_id AND ap.slug = ac.slug
                ORDER BY ap.jobs DESC LIMIT 1))""" if con_geo \
             else "ac.country"
+        condizione = ("ac.reg_source IS NOT NULL AND NOT EXISTS (SELECT 1 FROM aziende_registro r WHERE r.company_id = ac.id AND r.fonte = ac.reg_source)"
+                      if rifai else "ac.reg_checked_at IS NULL")
         righe = c.execute(f"""
             SELECT ac.platform_id, ac.slug, ac.company_name,
-                   {geo_sql} AS paese
+                   {geo_sql} AS paese, ac.id
               FROM ats_companies ac
              WHERE ac.is_active AND ac.job_count > 0
                AND ac.company_name IS NOT NULL
-               AND ac.reg_checked_at IS NULL
+               AND {condizione}
              ORDER BY ac.job_count DESC""").fetchall()
-        for pid, slug, nome, paese in righe:
+        for pid, slug, nome, paese, cid in righe:
             if stats["esaminate"] >= limite:
                 break
             if paese not in ammessi:
@@ -307,13 +465,17 @@ def arricchisci(dsn: str, limite: int = 1000,
                             type(exc).__name__)
                 time.sleep(3)
                 continue      # errore di rete: NON si marca, si riprova
-            settore = dip = fascia = None
+            settore = dip = fascia = scheda = None
             if esito:
-                settore, dip, fascia = esito
+                settore, dip, fascia, scheda = (tuple(esito) + (None,))[:4]
             if settore or dip is not None:
                 stats["trovate"] += 1
                 stats["settore"] += 1 if settore else 0
                 stats["dipendenti"] += 1 if dip is not None else 0
+            if scrivi_scheda(c, cid, fonte, scheda):
+                stats["schede"] += 1
+            if rifai:
+                continue          # settore e dipendenti restano quelli di prima
             c.execute("""UPDATE ats_companies
                             SET industry_reg = coalesce(%s, industry_reg),
                                 employees_reg = coalesce(%s, employees_reg),
@@ -371,6 +533,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.registri_imprese")
     ap.add_argument("--limite", type=int, default=1000)
     ap.add_argument("--paesi", help="es. FR,NO (default: tutti)")
+    ap.add_argument("--rifai", action="store_true",
+                    help="scheda di registro (indirizzo, forma) per le aziende gia' trovate")
     ap.add_argument("--mix", action="store_true",
                     help="solo il settore derivato dal corpus")
     a = ap.parse_args()
@@ -378,7 +542,7 @@ def main() -> int:
         print(json.dumps(settore_dal_mix(ATS_DSN)))
         return 0
     paesi = a.paesi.upper().split(",") if a.paesi else None
-    print(json.dumps(arricchisci(ATS_DSN, a.limite, paesi)))
+    print(json.dumps(arricchisci(ATS_DSN, a.limite, paesi, a.rifai)))
     return 0
 
 

@@ -24,8 +24,12 @@ import gzip
 import json
 import logging
 import os
+import re
 
 import psycopg
+
+from nivult.ats.aziende_dettagli import dipendenti
+from nivult.ats.testo import pulito
 
 log = logging.getLogger("nivult.ats.esporta")
 
@@ -54,6 +58,35 @@ def _chiudi(percorso: str, f, righe: int) -> None:
     os.replace(tmp, stabile)
     log.info("%s: %d righe, %.1f MB", percorso, righe,
              os.path.getsize(percorso) / 1e6)
+
+
+# ── competenze: il campo `skills` e' un sacco di parole chiave, non una
+# lettura. Misurato il 21/09/2026 sulle attive: «dental» la piu' frequente
+# (218k, dalla frase «medical, dental, vision» dei benefit), «English» ed
+# «english» separate, «computer science» (una laurea), etichette ESCO con la
+# parentesi («Python (computer programming)»). Il compratore ha
+# `technologies` (misurato sul golden) e `languages_required`; qui si toglie
+# cio' che e' certamente un'altra cosa e si normalizza il resto.
+_SKILL_NO = {"dental", "vision", "medical", "life insurance", "401k", "401(k)", "pto", "benefits",
+             "english", "german", "french", "spanish", "italian", "dutch", "portuguese", "chinese", "japanese",
+             "swedish", "norwegian", "danish", "finnish", "polish", "russian", "arabic", "georgian",
+             "computer science", "bachelor", "master", "phd", "degree", "geography", "history"}
+_SKILL_PAR_RX = re.compile(r"\s*\((computer programming|programming language|software|framework|database|tool|technology|methodology)\)\s*$", re.I)
+
+
+def _skills_pulite(valori) -> list[str]:
+    viste: set[str] = set()
+    out: list[str] = []
+    for v in valori or []:
+        if not isinstance(v, str):
+            continue
+        t = _SKILL_PAR_RX.sub("", v.strip())
+        chiave = t.lower()
+        if not chiave or chiave in _SKILL_NO or chiave in viste or len(chiave) < 2:
+            continue
+        viste.add(chiave)
+        out.append(t if t.isupper() or any(ch.isupper() for ch in t[1:]) else chiave)
+    return out[:20]
 
 
 def _riga(**kv) -> str:
@@ -173,11 +206,14 @@ def attive(dsn: str, campione: int | None = None) -> int:
                     id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
                     company=r[4], url=r[5], country=r[6], city=r[7],
                     location=r[8], language=r[9], seniority=r[10],
-                    remote=r[11], skills=list(r[12] or []),
+                    remote=r[11], skills=_skills_pulite(r[12]),
                     salary_min=float(r[13]) if r[13] is not None else None,
                     salary_max=float(r[14]) if r[14] is not None else None,
                     salary_currency=r[15], posted_at=r[16],
-                    first_seen=r[17], last_seen=r[18], description=r[19],
+                    first_seen=r[17], last_seen=r[18],
+                    # testo piano: niente tag, niente entita' (Greenhouse le
+                    # codifica due volte; misurato il 21/09/2026)
+                    description=pulito(r[19]),
                     category=r[20], employment_type=r[21],
                     contact_email=r[22],
                     languages_required=list(r[23] or []), **stima,
@@ -280,16 +316,10 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                        COALESCE(ac.industry_reg, ac.industry,
                                 ac.industry_site, ac.industry_mix),
                        ac.employees_reg_band, ac.reg_source,
-                       CASE WHEN ac.employees_reg IS NOT NULL
-                            THEN ac.reg_source
-                            WHEN ac.employees_wd IS NOT NULL
-                            THEN 'wikidata'
-                            WHEN ac.employees_site IS NOT NULL
-                            THEN 'company_site'
-                            WHEN ac.employees_self IS NOT NULL
-                            THEN 'self_declared'
-                            WHEN cd.employees IS NOT NULL
-                            THEN 'domain' END,
+                       -- la fonte dei dipendenti la decide la regola unica
+                       -- (aziende_dettagli.dipendenti): qui solo il nome
+                       -- del registro, per size_range_source
+                       ac.reg_source,
                        CASE WHEN ac.industry_reg IS NOT NULL
                             THEN ac.reg_source
                             WHEN ac.industry IS NOT NULL THEN 'wikidata'
@@ -312,7 +342,12 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                        ad.n_locations, ad.hq_country, ad.hq_state,
                        ad.hq_city, ad.hq_street, ad.hq_zipcode,
                        ad.hq_full_address, ad.hq_da, ad.description,
-                       ad.description_da, ad.external_urls, ad.keywords
+                       ad.description_da, ad.external_urls, ad.keywords,
+                       ad.employees_best, ad.employees_scope, ad.legal_name,
+                       ad.legal_form, ad.legal_form_code, ad.registration_id,
+                       ad.founded, ad.hq_latitude, ad.hq_longitude,
+                       ac.employees_reg, ac.employees_wd, ac.employees_site,
+                       ac.employees_self_n
                   FROM ats_companies ac
                   LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
                   LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
@@ -326,24 +361,39 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                              reverse=True)[:25]
                 (sito, lei, nome_da, size_range, size_da, sedi, n_sedi,
                  hq_paese, hq_stato, hq_citta, hq_via, hq_cap, hq_indirizzo,
-                 hq_da, descr, descr_da, urls, keywords) = r[15:33]
+                 hq_da, descr, descr_da, urls, keywords, dip_best, dip_scope,
+                 legal_name, legal_form, legal_form_code, reg_id, fondata,
+                 hq_lat, hq_lon, e_reg, e_wd, e_site, e_self) = r[15:46]
+                # la scheda puo' non esserci ancora (tenant nuovo): allora la
+                # regola unica si applica qui, sugli stessi ingressi
+                if dip_best is None and size_range is None:
+                    dip_best, dip_da, dip_scope, size_range = dipendenti(
+                        e_reg, e_site, e_self, e_wd, r[9], None)
+                    size_da = size_da or dip_da
                 hq = ({"country": hq_paese, "state": hq_stato,
                        "city": hq_citta, "street": hq_via,
                        "zipcode": hq_cap, "full_address": hq_indirizzo,
+                       "latitude": hq_lat, "longitude": hq_lon,
                        "source": hq_da} if hq_da else None)
                 f.write(_riga(
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
                     domain=r[4], logo=r[5], active_jobs=r[6],
-                    employees=r[7], industry=r[8],
-                    employees_band=r[9], employees_source=r[11],
+                    employees=dip_best, employees_scope=dip_scope,
+                    employees_source=size_da, industry=r[8],
+                    employees_legal_entity=e_reg,
+                    employees_legal_entity_band=r[9],
+                    employees_legal_entity_source=r[11],
                     industry_source=r[12],
+                    legal_name=legal_name, legal_form=legal_form,
+                    legal_form_code=legal_form_code,
+                    registration_id=reg_id, founded=fondata,
                     jobs_posted_30d=r[13],
                     languages=list(r[14] or []),
                     top_skills=[{"skill": s, "jobs": c} for c, s in cime],
                     website=sito, lei=lei, company_name_source=nome_da,
                     size_range=size_range, size_range_source=size_da,
                     locations=list(sedi or []), n_locations=n_sedi,
-                    headquarters=hq, description=descr,
+                    headquarters=hq, description=pulito(descr) or None,
                     description_source=descr_da,
                     external_urls=list(urls or []), keywords=keywords,
                     technologies=[{"technology": t, "active_jobs": a,

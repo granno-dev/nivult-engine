@@ -24,7 +24,8 @@ import time
 
 import psycopg
 
-from nivult.ats.modello_v1 import ModelloV1, testo
+from nivult.ats.modello_v1 import ModelloV1, testo, pulito
+from nivult.ats.testo import evidenza_stage
 
 SOGLIA_RIPIEGO = float(os.environ.get("SOGLIA_RIPIEGO_V1", "0.85"))
 # Il contratto e' la testa piu' debole (83,9% all'esame) e sbaglia in modo
@@ -113,7 +114,7 @@ def main() -> int:
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 12000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
-                       true AS ha_famiglia, j.created_at
+                       true AS ha_famiglia, j.created_at, j.lang
                   FROM job_classifications x
                   JOIN ats_jobs j ON j.id = x.job_id
                  WHERE x.v1_family IS NULL AND j.expired_at IS NULL
@@ -123,7 +124,7 @@ def main() -> int:
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 12000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia,
-                       j.created_at
+                       j.created_at, j.lang
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
                  -- LA GARA COL DETTAGLIO (21/09/2026): le offerte piu' nuove
@@ -206,7 +207,7 @@ def main() -> int:
                     print("-- fascia silenziosa finita: piena velocita'", flush=True)
                     notte_detta = False
                 pred = m.predici([testo(t, l, d) for _, t, l, d, *_ in b])
-                for (jid, _, _, _, sen, con, rem, lin, ha_fam, _creato), p in zip(b, pred):
+                for (jid, tit, _, des, sen, con, rem, lin, ha_fam, _creato, lang), p in zip(b, pred):
                     st["viste"] += 1
                     marcati.append(jid)
                     fam, cf = p["family"]
@@ -221,10 +222,35 @@ def main() -> int:
                         # l'etichetta di GLM nel dataset. Prima si buttava, e
                         # ricostruirlo costava tre ore di GPU (09/09/2026).
                         par_rows.append((jid, fam, round(cf, 3)))
-                    if sen is None and p["seniority"][1] >= soglia_sen:
-                        sen_rows.append((p["seniority"][0], jid))
-                    if con is None and p["employment_type"][1] >= soglia_con:
-                        con_rows.append((p["employment_type"][0], jid))
+                    # LA PROVA LESSICALE (21/09/2026): «internship»,
+                    # «apprenticeship» e seniority «intern» si scrivono solo
+                    # se l'annuncio nomina lo stage (titolo, o due volte nel
+                    # testo). Misurato: 30k «internship» su 72k senza la
+                    # parola nel titolo, fra cui «Head of Global Product
+                    # Quality». Altrimenti vale la seconda scelta del modello,
+                    # se supera la soglia; se no resta NULL.
+                    stage_ok = None      # si calcola una volta sola, solo se serve
+                    def _ammessa(testa, etichette_stage, soglia):
+                        nonlocal stage_ok
+                        et, cf = p[testa]
+                        if et in etichette_stage:
+                            if stage_ok is None:
+                                stage_ok = evidenza_stage(tit, pulito(des), lang)
+                            if not stage_ok:
+                                st["stage_negati"] = st.get("stage_negati", 0) + 1
+                                et2, cf2 = p.get(testa + "_2", (None, 0.0))
+                                if et2 is not None and et2 not in etichette_stage and cf2 >= soglia:
+                                    return et2
+                                return None
+                        return et if cf >= soglia else None
+                    if sen is None:
+                        e = _ammessa("seniority", ("intern",), soglia_sen)
+                        if e:
+                            sen_rows.append((e, jid))
+                    if con is None:
+                        e = _ammessa("employment_type", ("internship", "apprenticeship"), soglia_con)
+                        if e:
+                            con_rows.append((e, jid))
                     if rem is None and p["remote"][1] >= soglia_rem:
                         rem_rows.append((p["remote"][0], jid))
                     if lin is None:
@@ -271,7 +297,8 @@ def main() -> int:
             dt = time.time() - t0
             print(f"{st['viste']} viste | famiglie {st['famiglie']} | seniority {st['seniority']} | "
                   f"contratto {st['contratto']} | remoto {st['remoto']} | lingue {st['lingue']} | "
-                  f"incerte {st['incerte']} | {st['viste'] / max(dt, 1):.1f}/s", flush=True)
+                  f"incerte {st['incerte']} | stage negati {st.get('stage_negati', 0)} | "
+                  f"{st['viste'] / max(dt, 1):.1f}/s", flush=True)
             if dry:
                 break
             # poco lavoro = si cede la scheda al 2B e si torna fra un po'

@@ -61,13 +61,35 @@ def _pagina(cli: httpx.Client, url: str) -> str:
     return r.text[:400_000]
 
 
-def _testo_azienda(cli: httpx.Client, dominio: str) -> str:
-    """La home piu' l'eventuale pagina about: testo pulito, tetto 12k."""
+# la descrizione che l'azienda scrive di se' nell'intestazione del sito:
+# <meta name="description"> o og:description. E' il campo company_description
+# di Coresignal per chi non ha jsonld negli annunci (21/09/2026).
+_META_RX = re.compile(
+    r'<meta\s+(?:[^>]*?\b(?:name|property)\s*=\s*["\'](?:description|og:description|twitter:description)["\'][^>]*?\bcontent\s*=\s*["\']([^"\']{40,2000})["\']'
+    r'|[^>]*?\bcontent\s*=\s*["\']([^"\']{40,2000})["\'][^>]*?\b(?:name|property)\s*=\s*["\'](?:description|og:description|twitter:description)["\'])',
+    re.I | re.S)
+
+
+def descrizione_sito(html_pagina: str) -> str | None:
+    import html as _html
+    for m in _META_RX.finditer(html_pagina or ""):
+        d = _html.unescape(m.group(1) or m.group(2) or "").strip()
+        d = re.sub(r"\s+", " ", d)
+        if len(d) >= 40:
+            return d[:1500]
+    return None
+
+
+def _testo_azienda(cli: httpx.Client, dominio: str, meta: dict | None = None) -> str:
+    """La home piu' l'eventuale pagina about: testo pulito, tetto 12k.
+    Se `meta` e' un dict ci mette la descrizione dall'intestazione."""
     base = f"https://{dominio}"
     try:
         home = _pagina(cli, base)
     except Exception:                                # noqa: BLE001
         return ""
+    if meta is not None:
+        meta["descrizione"] = descrizione_sito(home)
     pezzi = [home]
     m = _ABOUT_RX.search(home or "")
     if m:
@@ -103,6 +125,11 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
                       "EXISTS site_evidence text")
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS site_checked_at timestamptz")
+        if _colonna_manca(c, "ats_companies", "site_description"):
+            c.execute("SET lock_timeout = '10s'")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description text")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description_at timestamptz")
+            c.execute("RESET lock_timeout")
         righe = c.execute("""
             SELECT platform_id, slug,
                    coalesce(logo_domain, site_domain), company_name
@@ -115,8 +142,12 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
              LIMIT %s""", (limite,)).fetchall()
         for pid, slug, dominio, nome in righe:
             stats["esaminate"] += 1
-            testo = _testo_azienda(cli, dominio)
+            meta: dict = {}
+            testo = _testo_azienda(cli, dominio, meta)
             time.sleep(0.5)
+            if meta.get("descrizione"):
+                c.execute("UPDATE ats_companies SET site_description = %s, site_description_at = now() "
+                          "WHERE platform_id=%s AND slug=%s", (meta["descrizione"], pid, slug))
             if len(testo) < 300:
                 c.execute("UPDATE ats_companies SET site_checked_at=now() "
                           "WHERE platform_id=%s AND slug=%s", (pid, slug))
@@ -171,13 +202,53 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
     return stats
 
 
+def descrizioni(dsn: str, limite: int = 1500) -> dict:
+    """Solo la descrizione dall'intestazione della home, una richiesta per
+    azienda, niente GLM: per le aziende con dominio che non l'hanno ancora.
+    Chi non ne ha una nell'intestazione si rimarca lo stesso (ricontrollo
+    fra 90 giorni)."""
+    stats = {"esaminate": 0, "descrizioni": 0}
+    cli = httpx.Client(timeout=12, headers={"User-Agent": _UA}, follow_redirects=True)
+    with psycopg.connect(dsn, autocommit=True) as c:
+        if _colonna_manca(c, "ats_companies", "site_description"):
+            c.execute("SET lock_timeout = '10s'")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description text")
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description_at timestamptz")
+            c.execute("RESET lock_timeout")
+        righe = c.execute("""
+            SELECT platform_id, slug, coalesce(site_domain, logo_domain)
+              FROM ats_companies
+             WHERE is_active AND job_count > 0
+               AND coalesce(site_domain, logo_domain) IS NOT NULL
+               AND (site_description_at IS NULL OR (site_description IS NULL AND site_description_at < now() - interval '90 days'))
+             ORDER BY job_count DESC LIMIT %s""", (limite,)).fetchall()
+        for pid, slug, dominio in righe:
+            stats["esaminate"] += 1
+            try:
+                home = _pagina(cli, f"https://{dominio}")
+            except Exception:                        # noqa: BLE001
+                home = ""
+            d = descrizione_sito(home)
+            c.execute("UPDATE ats_companies SET site_description = %s, site_description_at = now() "
+                      "WHERE platform_id=%s AND slug=%s", (d, pid, slug))
+            stats["descrizioni"] += bool(d)
+            time.sleep(0.3)
+    log.info("descrizioni dal sito: %s", stats)
+    return stats
+
+
 def main() -> int:
     import argparse
     from .runner import ATS_DSN
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="nivult.ats.scheda_sito")
     ap.add_argument("--limite", type=int, default=300)
+    ap.add_argument("--descrizioni", action="store_true",
+                    help="solo la descrizione dall'intestazione della home, senza GLM")
     a = ap.parse_args()
+    if a.descrizioni:
+        print(json.dumps(descrizioni(ATS_DSN, a.limite)))
+        return 0
     print(json.dumps(arricchisci(ATS_DSN, a.limite)))
     return 0
 

@@ -99,6 +99,8 @@ RIGHE=$(cat <<'EOF'
 40 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh aziende-dettagli nivult.ats.aziende_dettagli --limite 20000
 20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
 30 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito nivult.ats.scheda_sito --limite 400
+50 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito-descrizioni nivult.ats.scheda_sito --descrizioni --limite 1500
+35 8 * * * /opt/nivult/engine/deploy/passo-diurno.sh gleif nivult.ats.gleif --limite 300
 15 8 * * * /opt/nivult/engine/deploy/passo-diurno.sh loghi-dominio nivult.ats.loghi --da-dominio --limite 2500
 0 9 * * * /opt/nivult/engine/deploy/passo-diurno.sh glm-extra nivult.ats.estrai_extra --glm 600
 0 10 * * * /opt/nivult/engine/deploy/passo-diurno.sh organico nivult.ats.organico_dichiarato

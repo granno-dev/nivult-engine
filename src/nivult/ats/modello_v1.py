@@ -117,8 +117,14 @@ class ModelloV1:
             temp = float(self.temperature.get(t) or 1.0)
             p = torch.softmax(out[t].float() / temp, -1)
             conf, idx = p.max(-1)
+            # anche la SECONDA scelta: quando la prima non regge alla prova
+            # lessicale (uno «stage» che l'annuncio non nomina) il demone
+            # scrive questa, se supera la soglia, invece di inventare
+            top2 = p.topk(2, -1) if p.shape[-1] >= 2 else None
             for i in range(len(testi)):
                 ris[i][t] = (voc[int(idx[i])], float(conf[i]))
+                if top2 is not None:
+                    ris[i][t + "_2"] = (voc[int(top2.indices[i][1])], float(top2.values[i][1]))
         pl = torch.sigmoid(out["lingue"].float())
         for i in range(len(testi)):
             ris[i]["lingue"] = [(cod, float(pl[i][k])) for k, cod in enumerate(self.lingue)]
