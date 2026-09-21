@@ -74,7 +74,16 @@ def main() -> int:
     ap.add_argument("--soglie", default="0.3,0.4,0.5,0.6,0.7",
                     help="la soglia si sceglie SUL GOLDEN, e poi si usa quella in produzione")
     ap.add_argument("--uscita", default="/opt/nivult/esame-golden.json")
+    ap.add_argument("--finestre", action="store_true",
+                    help="legge a finestre sovrapposte come la produzione (finestre.py): nessun testo tagliato")
     a = ap.parse_args()
+    finestre_span = None
+    if a.finestre:
+        _sf = importlib.util.spec_from_file_location("finestre", os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "finestre.py"))
+        _fm = importlib.util.module_from_spec(_sf)
+        _sf.loader.exec_module(_fm)
+        finestre_span = _fm.finestre_span
 
     mano: dict[str, set[str]] = {}
     for p in sorted(glob.glob(os.path.join(GOLDEN, "etichette-*.json"))):
@@ -95,28 +104,40 @@ def main() -> int:
     mod = AutoModelForTokenClassification.from_pretrained(a.modello).to(dev).eval()
 
     # una passata sola sul modello, poi si prova ogni soglia sulle stesse uscite
+    # a finestre: ogni riga diventa uno o piu' pezzi, e le voci si uniscono per id.
+    # Senza --finestre il testo oltre max_len resta fuori (com'era prima), e il
+    # voto e' confrontabile con quelli vecchi; con --finestre e' quello vero.
+    pezzi = []
+    for jid, tit, x in righe:
+        testo = f"{tit}\n{x}"
+        estremi = finestre_span(tok, testo, a.max_len) if finestre_span else [(0, len(testo))]
+        pezzi += [(jid, testo[fa:fb]) for fa, fb in estremi]
+    if finestre_span:
+        print(f"  {len(pezzi)} finestre per {len(righe)} righe")
     grezze = []
     with torch.inference_mode():
-        for i in range(0, len(righe), a.bs):
-            lotto = righe[i:i + a.bs]
-            testi = [f"{t}\n{x}"[:20000] for _, t, x in lotto]
+        for i in range(0, len(pezzi), a.bs):
+            lotto = pezzi[i:i + a.bs]
+            testi = [t for _, t in lotto]
             enc = tok(testi, truncation=True, max_length=a.max_len, padding=True,
                       return_offsets_mapping=True, return_tensors="pt")
             off = enc.pop("offset_mapping")
             pr = torch.softmax(mod(**{k: v.to(dev) for k, v in enc.items()}).logits, -1).cpu()
-            for j, (jid, tit, _) in enumerate(lotto):
+            for j, (jid, _) in enumerate(lotto):
                 grezze.append((jid, testi[j], pr[j], off[j].tolist()))
             if i % 40 == 0:
-                print(f"  {i}/{len(righe)}", flush=True)
+                print(f"  {i}/{len(pezzi)}", flush=True)
 
     print(f"\n{'soglia':>8}{'precisione':>13}{'richiamo':>11}{'F1':>8}{'Jaccard':>10}{'vuoti ok':>10}")
     migliore, uscite = None, {}
     for s in (float(x) for x in a.soglie.split(",")):
         P = nP = R = nR = vuoti = 0
         jac, dettaglio = [], []
+        per_id: dict[str, set[str]] = {}
         for jid, testo, pr, off in grezze:
+            per_id.setdefault(jid, set()).update(voci(testo, pr, off, s))
+        for jid, trovati in per_id.items():
             veri = mano[jid]
-            trovati = voci(testo, pr, off, s)
             dettaglio.append({"id": jid, "trovati": sorted(trovati), "veri": sorted(veri)})
             if not veri and not trovati:
                 vuoti += 1
