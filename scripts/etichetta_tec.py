@@ -57,10 +57,12 @@ CREATE TABLE IF NOT EXISTS etichette_tec (
   modello    text NOT NULL,
   tecnologie jsonb NOT NULL,          -- [{"nome": "..."}] dopo il filtro della rubrica
   tolte      jsonb,                   -- [[voce, ragione]] scartate dal filtro
+  grezze     jsonb,                   -- la risposta del maestro com'era: se il filtro cambia non si ripaga
   famiglia   text,
   uso        jsonb,                   -- token della chiamata
   creato_at  timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (job_id, modello))"""
+  PRIMARY KEY (job_id, modello));
+ALTER TABLE etichette_tec ADD COLUMN IF NOT EXISTS grezze jsonb"""
 
 # Campione casuale SENZA ordinare per md5: quello costringeva a leggere tutte le
 # righe della famiglia (7 minuti a query, e il db di produzione in ginocchio,
@@ -191,10 +193,10 @@ def main() -> int:
                         muti += 1
                         continue
                     tenute, tolte = FR.filtra_rubrica(voci)
-                    c.execute("INSERT INTO etichette_tec (job_id, modello, tecnologie, tolte, famiglia, uso) "
-                              "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (job_id, modello) DO NOTHING",
+                    c.execute("INSERT INTO etichette_tec (job_id, modello, tecnologie, tolte, grezze, famiglia, uso) "
+                              "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (job_id, modello) DO NOTHING",
                               (jid, a.modello, json.dumps([{"nome": n} for n in tenute]),
-                               json.dumps(tolte), fam, json.dumps(uso)))
+                               json.dumps(tolte), json.dumps(voci), fam, json.dumps(uso)))
                     fatte += 1
                     vuote += not tenute
                     spesa += costo(uso)

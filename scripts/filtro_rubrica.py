@@ -35,9 +35,19 @@ REGOLE: tuple[tuple[str, re.Pattern[str]], ...] = (
         r"large goods vehicle.*|heavy goods vehicle.*|"
         r"patente [a-e]\b.*|permis [a-e]{1,2}\b.*|b-k[oö]rkort.*|f[uü]hrerschein.*)$")),
     ("benefit o welfare", re.compile(
-        r"(?i)^(wagestream|dailypay|noom|skinio|lifemart|aflac|blue light card|"
-        r"benefits@work|bhn( rewards)?( platform)?|perkbox|cycle2work|"
-        r"sharesave|401\s?\(?k\)?|employee assistance program(me)?|eap)$")),
+        r"(?i)^(wagestream|dailypay|payactiv|earnin|tapcheck|rain|noom|skinio|lifemart|aflac|"
+        r"blue light card|benefits@work|bhn( rewards)?( platform)?|perkbox|cycle2work|"
+        r"sharesave|401\s?\(?k\)?|employee assistance program(me)?|eap|"
+        # le app di benessere elencate fra i benefit: DeepSeek le prendeva per
+        # strumenti di lavoro (21/09/2026: Peloton, Headspace, Carrot Fertility)
+        r"peloton|headspace|calm|carrot( fertility)?|gympass|wellhub|classpass|"
+        r"talkspace|lyra( health)?|modern health|spring health|betterhelp|"
+        r"virgin pulse|maven( clinic)?|progyny|ginger|hinge health)$")),
+    ("oggetto generico, non uno strumento con un nome", re.compile(
+        r"(?i)^(laptop|chromebook|computer|pc|phone|smartphone|cell ?phone|tablet|"
+        r"headset|printer|trucks?|vans?|lorry|car|vehicles?|"
+        r"lighting|tools?|hand tools|power tools|equipment|machinery|"
+        r"prises|interrupteurs|mat|barrels)$")),
     ("software per candidarsi", re.compile(
         r"(?i)^(google chrome|chrome|mozilla firefox|firefox|safari|microsoft edge|edge|"
         r"myworkday|candidate home|taleo|icims portal)$")),
