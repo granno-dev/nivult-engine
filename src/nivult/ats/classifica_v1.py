@@ -101,7 +101,7 @@ def main() -> int:
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 12000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
-                       true AS ha_famiglia
+                       true AS ha_famiglia, j.created_at
                   FROM job_classifications x
                   JOIN ats_jobs j ON j.id = x.job_id
                  WHERE x.v1_family IS NULL AND j.expired_at IS NULL
@@ -110,18 +110,20 @@ def main() -> int:
                 SELECT j.id, j.title, coalesce(j.location, j.city, ''),
                        left(coalesce((SELECT v FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), ''), 12000),
                        j.seniority, j.employment_type, j.remote, j.languages_required,
-                       EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
+                       EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia,
+                       j.created_at
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
                  -- LA GARA COL DETTAGLIO (21/09/2026): le offerte piu' nuove
                  -- vengono prese per prime, e per meta' delle piattaforme il
                  -- testo arriva DOPO, da un passo di dettaglio a parte. Senza
-                 -- questa riga v1 decideva famiglia, seniority, contratto e
-                 -- remoto dal SOLO TITOLO, marcava l'offerta come vista e non
-                 -- ci tornava piu' — indovinare non e' classificare. Senza
-                 -- testo si aspetta fino a 7 giorni, come la testa tecnologie.
-                 AND (EXISTS (SELECT 1 FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80)
-                      OR j.created_at < now() - interval '7 days')
+                 -- questo v1 decideva famiglia, seniority, contratto e remoto
+                 -- dal SOLO TITOLO, marcava l'offerta come vista e non ci
+                 -- tornava piu'. Il controllo del testo si fa in Python sulle
+                 -- 2048 righe prese (un EXISTS su raw qui dentro costava 78 s a
+                 -- lotto, misurato: il jsonb va scompattato per ogni candidata);
+                 -- chi non ha testo viene DIFFERITO di due ore, fino a 7 giorni.
+                 AND (j.differito_v1_at IS NULL OR j.differito_v1_at < now() - interval '2 hours')
                  -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
                  -- speso 295k letture per scriverne 22k, perche' rileggeva
                  -- offerte gia' classificate mentre l'arretrato senza famiglia
@@ -130,8 +132,27 @@ def main() -> int:
                           (NOT coalesce(j.posted_at_estimated, false)) DESC,
                           j.posted_at DESC NULLS LAST
                  LIMIT 2048"""
+        # IL RIPASSO (21/09/2026). Le ~793.000 offerte classificate dal solo
+        # titolo stanno in `ripasso_v1_dal_titolo` con locale_v1_at azzerato. La
+        # query normale le prenderebbe, ma ordina TUTTA la coda a ogni lotto (50 s
+        # con 170k righe, minuti con 800k): da questa tabella si legge senza
+        # ordinare, un lotto si' e uno no, cosi' le offerte nuove non aspettano.
+        SQL_RIPASSO = SQL_NORMALE.replace(
+            "FROM ats_jobs j\n", "FROM ripasso_v1_dal_titolo r JOIN ats_jobs j ON j.id = r.job_id\n"
+        ).split("ORDER BY")[0] + " LIMIT 2048"
+        giro = 0
         while st["viste"] < tetto:
-            righe = c.execute(SQL_PARERI if pareri else SQL_NORMALE).fetchall()
+            giro += 1
+            righe = []
+            if not pareri and giro % 2:
+                try:
+                    righe = c.execute(SQL_RIPASSO).fetchall()
+                except psycopg.errors.UndefinedTable:
+                    pass                                     # nessun ripasso in corso
+            if len(righe) < 2048:
+                visti = {r[0] for r in righe}
+                righe += [r for r in c.execute(SQL_PARERI if pareri else SQL_NORMALE).fetchall()
+                          if r[0] not in visti]
             if not righe:
                 if continuo:
                     time.sleep(60)
@@ -139,6 +160,17 @@ def main() -> int:
                 break
             fam_rows, sen_rows, con_rows, rem_rows, lin_rows, marcati = [], [], [], [], [], []
             par_rows = []          # il parere di v1 dove la famiglia c'e' gia'
+            # senza testo e giovane: si DIFFERISCE (due ore), non si classifica
+            # dal titolo. Dopo 7 giorni si prende atto che il testo non arriva.
+            from datetime import datetime, timedelta, timezone
+            soglia_eta = datetime.now(timezone.utc) - timedelta(days=7)
+            differiti = [r[0] for r in righe
+                         if len(r[3] or "") < 80 and r[9] is not None and r[9] > soglia_eta]
+            if differiti:
+                righe = [r for r in righe if r[0] not in set(differiti)]
+                if not dry:
+                    c.execute("UPDATE ats_jobs SET differito_v1_at = now() WHERE id = ANY(%s::uuid[])", (differiti,))
+                st["differite"] = st.get("differite", 0) + len(differiti)
             # I lotti si formano per LUNGHEZZA simile: il tokenizzatore riempie
             # fino al piu' lungo del lotto, e mescolare un annuncio da 1.600 token
             # con quindici da 200 fa pagare 1.600 token a tutti e sedici.
@@ -159,7 +191,7 @@ def main() -> int:
                     print("-- fascia silenziosa finita: piena velocita'", flush=True)
                     notte_detta = False
                 pred = m.predici([testo(t, l, d) for _, t, l, d, *_ in b])
-                for (jid, _, _, _, sen, con, rem, lin, ha_fam), p in zip(b, pred):
+                for (jid, _, _, _, sen, con, rem, lin, ha_fam, _creato), p in zip(b, pred):
                     st["viste"] += 1
                     marcati.append(jid)
                     fam, cf = p["family"]

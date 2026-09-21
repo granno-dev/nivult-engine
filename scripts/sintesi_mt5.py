@@ -107,11 +107,10 @@ UPDATE ats_jobs j SET preso_mt5_at = now()
       -- solo nella pagina di dettaglio, che un altro passo va a prendere dopo la
       -- lista. Questo demone prende le offerte piu' nuove per prime, quindi le
       -- leggeva PRIMA del dettaglio, le marcava «senza testo» per sempre e non ci
-      -- tornava: 48.787 righe cosi', 15.721 delle quali attive e col testo arrivato
-      -- dopo. Regola della testa tecnologie: senza testo si aspetta fino a
-      -- {giorni} giorni, poi si prende atto che il testo non arrivera'.
-      AND (EXISTS (SELECT 1 FROM unnest(ARRAY[{campi_k}]) v WHERE length(v) >= 300)
-           OR k.created_at < now() - interval '{giorni} days')
+      -- tornava: 48.787 righe cosi', 15.814 delle quali attive e col testo arrivato
+      -- dopo. Il controllo del testo si fa in Python sulle righe prese (un EXISTS
+      -- su raw qui dentro scompatta il jsonb di ogni candidata: 78 s a lotto,
+      -- misurato su v1); chi non ha testo ed e' giovane torna in coda fra due ore.
       -- Le offerte che il 2B aveva gia' riassunto in modalita' piena (116.592 al
       -- 19/09/2026) non si rifanno: la sua sintesi vale 4,71 contro 4,44, e la vista
       -- `sintesi_finali` dara' comunque la precedenza alla sua. Sarebbe lavoro buttato.
@@ -121,11 +120,15 @@ UPDATE ats_jobs j SET preso_mt5_at = now()
     LIMIT %s
     FOR UPDATE SKIP LOCKED)
 RETURNING j.id, j.title, coalesce(j.location, j.city, ''), j.country, j.lang,
-       coalesce((SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 300 LIMIT 1), '')
+       coalesce((SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 300 LIMIT 1), ''),
+       j.created_at
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO),
-           campi_k=", ".join(f"k.raw->>'{c}'" for c in CAMPI_TESTO),
-           scadenza=int(os.environ.get("SCADENZA_PRESA", "20")),
-           giorni=int(os.environ.get("GIORNI_ATTESA_TESTO", "7")))
+           scadenza=int(os.environ.get("SCADENZA_PRESA", "20")))
+GIORNI_ATTESA_TESTO = int(os.environ.get("GIORNI_ATTESA_TESTO", "7"))
+# Senza testo e giovane: la prenotazione si sposta nel FUTURO, cosi' la riga
+# torna eleggibile fra due ore (la query esclude preso_mt5_at recente) senza
+# timbrarla come fatta e senza scriverle un esito.
+SQL_DIFFERISCI = "UPDATE ats_jobs SET preso_mt5_at = now() + interval '100 minutes' WHERE id = ANY(%s)"
 
 SQL_INSERISCI = ("INSERT INTO sintesi_mt5 "
                  "(job_id, sintesi, fiducia, modello, testo_hash, sintesi_pulita, frasi_tolte, pulita_at) "
@@ -212,17 +215,26 @@ def main() -> int:
                 time.sleep(120)
                 continue
 
-            lavoro, tutti, esiti = [], [], []
-            for jid, titolo, sede, paese, lingua, grezzo in righe:
+            from datetime import datetime, timedelta, timezone
+            soglia_eta = datetime.now(timezone.utc) - timedelta(days=GIORNI_ATTESA_TESTO)
+            lavoro, tutti, esiti, differiti = [], [], [], []
+            for jid, titolo, sede, paese, lingua, grezzo, creato in righe:
                 st["viste"] += 1
-                tutti.append(jid)
                 testo = pulito(grezzo)
+                if len(testo) < 300 and creato is not None and creato > soglia_eta:
+                    differiti.append(jid)            # il dettaglio puo' ancora arrivare
+                    continue
+                tutti.append(jid)
                 if len(testo) < 300:
                     st["senza_testo"] += 1
                     # niente impronta: una riga d'esito non deve finire fra le gemelle
                     esiti.append((jid, None, None, MODELLO + "+saltato:senza-testo", None, None, None))
                     continue
                 lavoro.append((jid, titolo, sede, paese, lingua, testo, impronta(testo)))
+            if differiti:
+                st["differite"] = st.get("differite", 0) + len(differiti)
+                if not a.dry_run:
+                    c.execute(SQL_DIFFERISCI, (differiti,))
 
             # 1. le gemelle: stesso testo gia' riassunto, si copia senza spendere calcolo
             scritte = []
