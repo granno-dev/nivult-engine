@@ -87,7 +87,7 @@ def fascia(n: int | None) -> str | None:
     return None
 
 
-def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int | None, str | None, str | None, str | None]:
+def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int | None, str | None, str | None, str | None, str | None]:
     """LA regola dei dipendenti, una sola per scheda ed export (21/09/2026).
 
     Il registro conta l'UNITA' LEGALE: SIRENE dava Veolia Environnement SA a
@@ -97,21 +97,26 @@ def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int |
     sito, poi il registro, per ultimo il numero letto negli annunci (rumoroso:
     «765» per Eurofins). La categoria INSEE, quando c'e', corregge la fascia:
     GE = impresa da 5.000+, ETI = 250-4.999, anche se l'unita' legale e'
-    piccola. Restituisce (numero, fonte, portata, fascia)."""
+    piccola. Restituisce (numero, fonte del numero, portata del numero,
+    fascia, fonte della fascia): il numero resta quello della sua fonte con
+    la sua portata (1.499 = unita' legale), la fascia puo' venire da un'altra
+    (INSEE GE = 5001+)."""
     best, da, portata = None, None, None
     for n, fonte, scope in ((e_wd, "wikidata", "group"), (e_site, "sito", "group"),
                             (e_reg, "registro", "legal_entity"), (e_self, "dichiarato", "self_declared")):
         if n and int(n) > 0:
             best, da, portata = int(n), fonte, scope
             break
-    size = fascia(best) or (band if band else None)
-    if size and not da:
-        da, portata = "registro (fascia)", "legal_entity"
+    size, size_da = fascia(best), da
+    if not size and band:
+        size, size_da = band, "registro (fascia)"
+        if not da:
+            portata = "legal_entity"
     if categoria == "GE" and (best or 0) < 5000:
-        size, da, portata = "5001+", f"{da or 'registro'} + INSEE GE", "group"
+        size, size_da = "5001+", "INSEE catégorie GE (impresa, non unità legale)"
     elif categoria == "ETI" and (best or 0) < 250:
-        size, da, portata = "251-5000", f"{da or 'registro'} + INSEE ETI", "group"
-    return best, da, portata, size
+        size, size_da = "251-5000", "INSEE catégorie ETI (impresa, non unità legale)"
+    return best, da, portata, size, size_da
 
 
 SQL_TENANT = """
@@ -160,6 +165,22 @@ COLONNE = ("company_id", "size_range", "size_da", "employees_best", "employees_s
 SQL_SCRIVI = ("INSERT INTO aziende_dettagli (" + ", ".join(COLONNE) + ") VALUES (" + ", ".join(["%s"] * len(COLONNE)) + ") "
               "ON CONFLICT (company_id) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in COLONNE[1:]) + ", calcolato_at = now()")
 _TAG = re.compile(r"<[^>]+>")
+
+
+def _indirizzo_intero(reg: dict) -> str | None:
+    """Via, CAP citta', paese: senza ripetere cio' che la via gia' contiene
+    (SIRENE scrive «3 RUE DU PRE FAUCON 74000 ANNECY» tutto in `adresse`)."""
+    via = (reg.get("street") or "").strip()
+    pezzi = [via] if via else []
+    cap_citta = " ".join(y for y in (reg.get("postal_code"), reg.get("city")) if y).strip()
+    if cap_citta and cap_citta.lower() not in via.lower():
+        if reg.get("city") and reg["city"].lower() in via.lower() and reg.get("postal_code") and reg["postal_code"] in via:
+            pass
+        else:
+            pezzi.append(cap_citta)
+    if reg.get("country"):
+        pezzi.append(reg["country"])
+    return ", ".join(pezzi) or None
 
 
 def _pulito(t) -> str:
@@ -227,7 +248,7 @@ def applica(dsn: str, limite: int = 20000) -> dict:
                             "city", "region", "country", "latitude", "longitude", "founded", "website", "categoria"),
                            registri[0])) if registri else {}
             categoria = next((r[14] for r in registri if r[14]), None)
-            best, size_da, portata, size = dipendenti(e_reg, e_site, e_self, e_wd, band, categoria)
+            best, dip_da, portata, size, size_da = dipendenti(e_reg, e_site, e_self, e_wd, band, categoria)
             sedi = c.execute(SQL_SEDI, (pid, slug)).fetchall()
             locs = [{"city": ci or None, "country": co or None, "state": s or None, "offerte": n, "is_primary": i == 0}
                     for i, (ci, co, s, n) in enumerate(sedi) if ci or co]
@@ -236,7 +257,7 @@ def applica(dsn: str, limite: int = 20000) -> dict:
             if reg.get("city") or reg.get("street"):
                 hq = {"country": reg.get("country") or paese, "state": reg.get("region"), "city": reg.get("city"),
                       "street": reg.get("street"), "zipcode": reg.get("postal_code"),
-                      "full_address": ", ".join(x for x in (reg.get("street"), " ".join(y for y in (reg.get("postal_code"), reg.get("city")) if y), reg.get("country")) if x),
+                      "full_address": _indirizzo_intero(reg),
                       "lat": reg.get("latitude"), "lon": reg.get("longitude"), "da": reg["fonte"]}
             elif locs:
                 hq = {"country": locs[0]["country"] or paese, "state": locs[0]["state"], "city": locs[0]["city"],

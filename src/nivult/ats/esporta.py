@@ -367,9 +367,13 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                 # la scheda puo' non esserci ancora (tenant nuovo): allora la
                 # regola unica si applica qui, sugli stessi ingressi
                 if dip_best is None and size_range is None:
-                    dip_best, dip_da, dip_scope, size_range = dipendenti(
+                    dip_best, dip_da, dip_scope, size_range, size_da = dipendenti(
                         e_reg, e_site, e_self, e_wd, r[9], None)
-                    size_da = size_da or dip_da
+                else:
+                    # la fonte del NUMERO: quella il cui valore e' il numero
+                    # scelto (la fascia puo' venire da un'altra, es. INSEE GE)
+                    dip_da = next((f for f, n in (("wikidata", e_wd), ("sito", e_site), ("registro", e_reg),
+                                                  ("dichiarato", e_self)) if n and int(n) == dip_best), None)
                 hq = ({"country": hq_paese, "state": hq_stato,
                        "city": hq_citta, "street": hq_via,
                        "zipcode": hq_cap, "full_address": hq_indirizzo,
@@ -379,7 +383,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
                     domain=r[4], logo=r[5], active_jobs=r[6],
                     employees=dip_best, employees_scope=dip_scope,
-                    employees_source=size_da, industry=r[8],
+                    employees_source=dip_da, industry=r[8],
                     employees_legal_entity=e_reg,
                     employees_legal_entity_band=r[9],
                     employees_legal_entity_source=r[11],
