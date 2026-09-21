@@ -1,0 +1,465 @@
+{
+ "lotto": 1,
+ "etichettate_da": "Claude Fable 5.1 (giudice unico, 21/09/2026); da verificare a campione da una seconda persona",
+ "data": "2026-09-21",
+ "rubrica": {
+  "famiglia": "una sola fra le 33 di v1; se due sono plausibili si sceglie quella del lavoro quotidiano e si annota l'altra in `ambigua`",
+  "seniority": "intern / junior / mid / senior / lead / head; dal contenuto (anni richiesti, responsabilita' di persone), non dal titolo; null se il testo non permette di dirlo",
+  "contratto": "full_time / part_time / contract / temporary / internship / apprenticeship SOLO se dichiarato o inequivoco (orario, 'gig' pagato a prestazione); null se non detto",
+  "remoto": "remote / hybrid / onsite; onsite anche quando il testo non parla di remoto ma da' una sede fisica di lavoro; null se non c'e' nemmeno la sede",
+  "tecnologie": "la rubrica di prova_maestro.SISTEMA: strumenti con un nome proprio o un tipo riconoscibile, nella forma esatta del testo; il software per candidarsi, i benefit, le abilitazioni personali e i titoli di studio vanno in `escluse` con la ragione",
+  "testo_utile": "false se l'annuncio e' uno stub (aggregatore, solo titolo): quelle righe non fanno media sugli altri campi"
+ },
+ "offerte": [
+  {
+   "n": 1,
+   "id": "069051ec-2d42-45b6-bb5a-3b598ce5ada0",
+   "titolo": "VP, Regional Medical Officer (West Coast Region) -US, Remote",
+   "testo_utile": false,
+   "famiglia": "Healthcare",
+   "seniority": "head",
+   "contratto": null,
+   "remoto": "remote",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "stub di aggregatore (RemotePhysicianJobs.org), 359 caratteri: etichette dal solo titolo"
+  },
+  {
+   "n": 2,
+   "id": "e31e3a53-64b0-4da2-929b-965b88778022",
+   "titolo": "Sales Stylist / Verkäufer (m/w/d) in Teilzeit (24 Stunden)",
+   "testo_utile": true,
+   "famiglia": "Retail",
+   "seniority": "junior",
+   "contratto": "part_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Workday (software per candidarsi)",
+    "tills (oggetto generico)"
+   ],
+   "note": "esperienza 'an advantage, but not essential': ingresso"
+  },
+  {
+   "n": 3,
+   "id": "3420ccda-7453-43bf-8cdb-7ac8fa5fedda",
+   "titolo": "Data Analist | Analytics & AI",
+   "testo_utile": true,
+   "famiglia": "Data & Analytics",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "Snowflake",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "dbt",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Git Hub",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Power BI",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "SQL",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Python",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "AI (categoria, non uno strumento)"
+   ],
+   "note": "2-4 anni; '32-36 uur' non e' dichiarato come part o full time; 'Hybride werken'"
+  },
+  {
+   "n": 4,
+   "id": "a8085728-561b-4773-aeb8-af4e3da544be",
+   "titolo": "Human Resources (Organizational Development &Training) Intern",
+   "testo_utile": true,
+   "famiglia": "Human Resources",
+   "seniority": "intern",
+   "contratto": "internship",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "LMS",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "DisasterReady",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Box",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Taleo (link per candidarsi)"
+   ],
+   "note": "non retribuito, 20-30 ore; nessuna menzione di remoto, sede Washington"
+  },
+  {
+   "n": 5,
+   "id": "7fb13193-e985-4994-91b9-b6ba04a49d14",
+   "titolo": "Sioux Falls Tour Guide",
+   "testo_utile": true,
+   "famiglia": "Hospitality",
+   "ambigua": "Creative & Media",
+   "seniority": null,
+   "contratto": "contract",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "guida turistica pagata a prestazione ($50 a tour, mance): lavoro a chiamata; l'annuncio chiede doti teatrali"
+  },
+  {
+   "n": 6,
+   "id": "90c6160b-be7f-41d5-98ae-32f61ebdbada",
+   "titolo": "SDR Manager",
+   "testo_utile": true,
+   "famiglia": "Sales",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "Outreach",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Salesforce",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "ZoomInfo",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [],
+   "note": "gestisce un team di SDR, 3+ anni di management; OTE 165k CAD, 'hybrid work schedules'; il contratto non e' dichiarato (GLM diceva internship: sbagliato)"
+  },
+  {
+   "n": 7,
+   "id": "14866c9f-651e-4fac-bd3a-60714a87c0a2",
+   "titolo": "STUDIO MARE - Chef position",
+   "testo_utile": true,
+   "famiglia": "Food & Beverage",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "sous chef, 3-5 anni, guida un team di cucina ma non e' il capo: mid"
+  },
+  {
+   "n": 8,
+   "id": "a6695053-38f0-4c9b-aa05-cb1b7a8c2718",
+   "titolo": "Senior Project Superintendent",
+   "testo_utile": true,
+   "famiglia": "Construction",
+   "seniority": "senior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "OSHA 30 (abilitazione personale)",
+    "SSQP (piano interno, non uno strumento)"
+   ],
+   "note": "dichiarato Full-Time; supervisiona capisquadra e assistant superintendent ma riporta al General Superintendent; 3-7 anni"
+  },
+  {
+   "n": 9,
+   "id": "5822b75b-0fbe-4de4-a4f6-8ec7c0c1316f",
+   "titolo": "Housekeeping & Laundry Assistant",
+   "testo_utile": true,
+   "famiglia": "Hospitality",
+   "ambigua": "Healthcare",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "GED/HSE (titolo di studio)"
+   ],
+   "note": "pulizie e lavanderia in una struttura di lungodegenza: il lavoro e' housekeeping, l'ambiente e' sanitario"
+  },
+  {
+   "n": 10,
+   "id": "b1105893-04a9-4dae-9544-cfce4eb8c055",
+   "titolo": "Principal Ecologist",
+   "testo_utile": true,
+   "famiglia": "Environmental & Sustainability",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [],
+   "escluse": [
+    "PEA / EcIA / HRA / ECoW (tipi di valutazione, non strumenti)",
+    "MCIEEM (abilitazione)",
+    "UK driving licence (patente)"
+   ],
+   "note": "guida tecnica, gestione di persone (line manage Assistant to Senior Ecologists) e commerciale: lead; 'This is a hybrid role'"
+  },
+  {
+   "n": 11,
+   "id": "6ec593c3-37cb-49d9-a077-787484d916cf",
+   "titolo": "- BOULANGER -PATISSIER (H/F)",
+   "testo_utile": true,
+   "famiglia": "Food & Beverage",
+   "ambigua": "Retail",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "CAP Boulangerie (titolo di studio)"
+   ],
+   "note": "'avec ou sans expérience': ingresso; laboratorio di panetteria dentro un supermercato"
+  },
+  {
+   "n": 12,
+   "id": "b93a73cb-f8b9-46fd-8528-ebcdf98da41c",
+   "titolo": "Test Technician Onsite",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "ambigua": "Trades",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "TIG",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "MIG welding",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "rocket sleds",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "mill",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "lathe",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "CAD/PAD (materiali energetici, non uno strumento)",
+    "Ovia Health / Doctor on Demand / Teladoc / Bright Horizons (benefit)",
+    "401(k) (benefit)"
+   ],
+   "note": "tecnico di prova su slitte a razzo: saldatura e officina; minimo 2 anni; 'Position Role Type: Onsite' dichiarato; il contratto non e' dichiarato"
+  },
+  {
+   "n": 13,
+   "id": "222cd022-737a-4871-8d2e-3dfb5eebed39",
+   "titolo": "Product Manager, Hardware",
+   "testo_utile": true,
+   "famiglia": "Technology",
+   "ambigua": "Marketing",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "point-of-sale systems (area di esperienza, non uno strumento)",
+    "OEM / ODM (tipi di partner)"
+   ],
+   "note": "5+ anni di product management su hardware di pagamento; nessuna menzione di remoto, sedi San Francisco/Seattle"
+  },
+  {
+   "n": 14,
+   "id": "6c263111-8beb-4b71-83d3-6fee9aa721de",
+   "titolo": "AnaCipher Walk-In Bioanalytical Jobs for Freshers & Experienced",
+   "testo_utile": true,
+   "famiglia": "Science & Research",
+   "seniority": null,
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "LC-MS/MS",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "GLP",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "B.Pharm / M.Pharm / MSc (titoli di studio)"
+   ],
+   "note": "un annuncio per cinque livelli (0-12 anni): la seniority non e' una sola; laboratorio bioanalitico a Hyderabad"
+  },
+  {
+   "n": 15,
+   "id": "34ff3b9e-726d-4e3b-8370-0e673b057053",
+   "titolo": "Strategist, Agent Development - Public Sector",
+   "testo_utile": true,
+   "famiglia": "Consulting",
+   "ambigua": "Technology",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "RAG",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "API (generico: 'reading API documentation')",
+    "eval frameworks / agent tooling / prompt engineering (categorie senza nome proprio)",
+    "Carrot (benefit)"
+   ],
+   "note": "consulente di implementazione per clienti pubblici, non un ruolo di governo: la categoria dichiarata dalla piattaforma (Government & Public Sector) e' il settore del cliente"
+  },
+  {
+   "n": 16,
+   "id": "2239fa19-b9d6-4a45-8631-5b65298903d6",
+   "titolo": "Analista de Cobrança Pleno | Cobrança - Produtos com Garantia",
+   "testo_utile": true,
+   "famiglia": "Finance & Accounting",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Pacote Office",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "SQL",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "Assessorias / App / Site / Whatsapp (canali di contatto, non strumenti dell'analista)",
+    "WellHub / TotalPass / Conexa (benefit)"
+   ],
+   "note": "'Pleno' e' il livello intermedio brasiliano; ufficio a São Paulo con servizi in sede"
+  },
+  {
+   "n": 17,
+   "id": "eb3bbf9a-0416-4aa3-afb8-a1d5aaf919fe",
+   "titolo": "Vietnamese Instructor",
+   "testo_utile": true,
+   "famiglia": "Education",
+   "seniority": "senior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "ILR",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "TS/SCI clearance (abilitazione personale)",
+    "Bachelor's / Master's (titoli di studio)"
+   ],
+   "note": "minimo 5 anni; 'Full-time onsite work. No possibility of remote work' dichiarato; ILR e' la scala standard di competenza linguistica"
+  },
+  {
+   "n": 18,
+   "id": "33164ee0-7fc5-4a72-bcdc-596cc10762d2",
+   "titolo": "SAP Success Factors Employee Central Consultant",
+   "testo_utile": true,
+   "famiglia": "Consulting",
+   "ambigua": "Technology",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "remote",
+   "tecnologie": [
+    {
+     "nome": "SuccessFactors Employee Central",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "MDF",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "MS Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "SNOW",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "JIRA",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Learning, Performance and Goal, Onboarding",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "SuccessFactors Employee Central active certificate (abilitazione)"
+   ],
+   "note": "'2+ years': per la regola (fino a 2 anni = junior) e' junior, anche se il ruolo e' da consulente certificato; 'Remote' dichiarato, solo Messico"
+  },
+  {
+   "n": 19,
+   "id": "d2dce549-f40f-4d3d-afa5-a51239492755",
+   "titolo": "Assistant Fitness Manager",
+   "testo_utile": true,
+   "famiglia": "Sports & Recreation",
+   "ambigua": "Sales",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "Daily Pay / Sophia Learning (benefit)",
+    "Personal Training certification / CPR (abilitazioni)",
+    "Company computer system (generico)"
+   ],
+   "note": "2-3 anni + 1 di supervisione: mid; 'HOURLY POSITION' con full-time o part-time a seconda: il contratto non e' uno solo"
+  },
+  {
+   "n": 20,
+   "id": "15f504ab-f2e8-4b30-8efa-d6c58751ab3d",
+   "titolo": "Projektleiter (w/m/d) Hochbau",
+   "testo_utile": true,
+   "famiglia": "Construction",
+   "ambigua": "Management & Leadership",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [],
+   "escluse": [
+    "AHO / HOAI / VOB (norme e regimi contrattuali, non strumenti)",
+    "EGYM-Wellpass / Jobrad (benefit)"
+   ],
+   "note": "guida team di progetto interdisciplinari, esperienza pluriennale: lead; 'Möglichkeit zum mobilen Arbeiten' = ibrido"
+  }
+ ],
+ "convenzioni_seniority": "junior: fino a 2 anni richiesti o ingresso; mid: 3-5 anni o livello intermedio dichiarato; senior: oltre 5 anni o 'senior'; lead: guida persone o progetti come compito principale; head: direzione di funzione o dirigente; null: piu' livelli nello stesso annuncio o nessun indizio"
+}

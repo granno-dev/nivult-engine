@@ -1,0 +1,491 @@
+{
+ "lotto": 4,
+ "etichettate_da": "Claude Fable 5.1 (giudice unico, 21/09/2026); da verificare a campione da una seconda persona",
+ "data": "2026-09-21",
+ "rubrica": "vedi etichette-v2-01.json e -02.json (stesse regole e convenzioni; i project manager sono lead; i direttori con P&L sono head)",
+ "offerte": [
+  {
+   "n": 1,
+   "id": "690837c1-12b2-4dd7-92c1-447852949a17",
+   "titolo": "Spacecraft RF Engineer (Early)",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "MATLAB",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "401(k) (benefit)",
+    "U.S. Person status (requisito legale)"
+   ],
+   "note": "'Early', 1-3 anni: ingresso; ufficio a Playa Vista; 'For Full-time Employees' e' il paragrafo dei benefit, non una dichiarazione del contratto"
+  },
+  {
+   "n": 2,
+   "id": "9bf59f0b-1f2c-4fd9-ab9f-f10f5fde36d5",
+   "titolo": "Contract Back Office",
+   "testo_utile": true,
+   "famiglia": "Administrative",
+   "ambigua": "Management & Leadership",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "CCNL metalmeccanica (contratto collettivo)",
+    "metodologie di Project Management (categoria)"
+   ],
+   "note": "'contano piu' la passione e l'attitudine che l'esperienza'; 'Inserimento: 6 mesi con possibilita' di proroga' = a termine (temporary), orario full-time annotato; annuncio di agenzia (Adecco)"
+  },
+  {
+   "n": 3,
+   "id": "6836a3a3-5688-4c3a-b54e-c57fb8106c0f",
+   "titolo": "CDL Shuttle Driver (DOT)",
+   "testo_utile": true,
+   "famiglia": "Transportation",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "CDL Class A/B/C / DOT Medical Card (patenti e abilitazioni)",
+    "shuttle buses (veicolo generico)"
+   ],
+   "note": "un mese di esperienza o meno; turni variabili, contratto non dichiarato"
+  },
+  {
+   "n": 4,
+   "id": "a68fdc79-7f58-42e9-92ae-4143dd382352",
+   "titolo": "Accuflex - Privacy Paralegal",
+   "testo_utile": true,
+   "famiglia": "Legal",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "GDPR / Data Protection Act 2018 (leggi)",
+    "LLB / GDL / SQE1 (titoli)",
+    "DPIA / PIA (procedure)"
+   ],
+   "note": "bacino di candidati, non un posto: incarichi da poche settimane a permanenti, quindi contratto null; minimo 3 mesi di esperienza"
+  },
+  {
+   "n": 5,
+   "id": "5c660274-a710-4dc7-ba63-a6079a02af95",
+   "titolo": "Employé viticole polyvalent (H/F)",
+   "testo_utile": true,
+   "famiglia": "Agriculture",
+   "ambigua": "Retail",
+   "seniority": null,
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "tracteur",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "Permis de conduire (patente)"
+   ],
+   "note": "'CDD de 2 mois, renouvelable'; esperienza di guida del trattore obbligatoria ma senza livello"
+  },
+  {
+   "n": 6,
+   "id": "8fd281bc-4618-4fda-99a5-44b60d061a46",
+   "titolo": "Software Engineer, Applied AI",
+   "testo_utile": true,
+   "famiglia": "Software",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "RAG",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "React",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Next.js",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Typescript",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "GraphQL",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Apollo",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Node.js",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Postgres",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Redis",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "LLMs / embeddings / vector databases / cloud infrastructure (categorie)",
+    "401(k) (benefit)"
+   ],
+   "note": "5+ anni: senior; uffici SF/NYC/Dallas/Chicago/LA, niente sul remoto; lo stack e' dichiarato come 'Our Tech Stack' (usata)"
+  },
+  {
+   "n": 7,
+   "id": "63d05959-4ba1-433c-ab68-46b571e251e3",
+   "titolo": "Director, Supply chain & Distribution | Directeur.trice, Chaîne logistique et distribution",
+   "testo_utile": true,
+   "famiglia": "Logistics",
+   "seniority": "head",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Excel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Slack",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Warehouse management / planning / procurement (funzioni, non strumenti)"
+   ],
+   "note": "direttore con P&L (~3M), guida i responsabili di magazzino di due stabilimenti: head; annuncio bilingue, il testo francese ripete l'inglese"
+  },
+  {
+   "n": 8,
+   "id": "a1e3845d-b05d-4110-914e-ef01e580d199",
+   "titolo": "Direct Support Professional",
+   "testo_utile": true,
+   "famiglia": "Social Services",
+   "ambigua": "Healthcare",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "AMAP / SCIP-R / CPR & First Aid (abilitazioni)",
+    "403(b) / 1199 union benefits (benefit)",
+    "GED (titolo)"
+   ],
+   "note": "un anno di esperienza 'preferred'; 'Work Location In Person' dichiarato; paga fissa 20 $/ora, contratto non dichiarato"
+  },
+  {
+   "n": 9,
+   "id": "2cce4281-0096-47fd-a20d-07927ba43a9e",
+   "titolo": "Senior Product Designer (Remote)",
+   "testo_utile": true,
+   "famiglia": "Art & Design",
+   "ambigua": "Technology",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "remote",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "'Senior' senza anni; 'Remote' nel titolo; annuncio corto senza requisiti tecnici"
+  },
+  {
+   "n": 10,
+   "id": "299da4fb-840e-4826-8fa5-5d5cce9dce87",
+   "titolo": "Dental Nurse",
+   "testo_utile": true,
+   "famiglia": "Healthcare",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "GDC registration / Dental Nursing qualification (abilitazioni)",
+    "intra-oral scanning training (formazione offerta)"
+   ],
+   "note": "qualifica richiesta, nessun anno: ingresso nella professione; 'Full-time hours: 37.5' dichiarato"
+  },
+  {
+   "n": 11,
+   "id": "5a909e95-d2d2-43ad-8ced-02d0b8da5dc3",
+   "titolo": "Seasonal Sales Associate (Part-Time) - Sherway Gardens",
+   "testo_utile": true,
+   "famiglia": "Retail",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "'Seasonal' e 'Part-Time' dichiarati insieme: per convenzione la durata (temporary), orario part-time fino a 20 ore annotato; 1+ anni 'preferred'"
+  },
+  {
+   "n": 12,
+   "id": "5a5d7cd8-fb55-4aa9-8e6f-110abfe1500d",
+   "titolo": "Senior Data Solutions Engineer, Finance Technology",
+   "testo_utile": true,
+   "famiglia": "Data & Analytics",
+   "ambigua": "Software",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "SQL Server",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Databricks",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Python",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PySpark",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Spark",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Delta Lake",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Git",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Azure Data Factory",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Data Lake Storage",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Azure DevOps",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Microsoft Fabric",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "APIs / JSON / CI/CD / ETL/ELT (categorie e formati)",
+    "Fund Accounting systems (categoria)"
+   ],
+   "note": "5-8 anni: senior; Mumbai, niente sul remoto"
+  },
+  {
+   "n": 13,
+   "id": "c990279c-41c6-45ce-84f4-a62e4e3d2ea2",
+   "titolo": "Human Resources Assistant (Administration) @ Remedial Health",
+   "testo_utile": true,
+   "famiglia": "Human Resources",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "HND / Bachelor's (titoli)"
+   ],
+   "note": "minimo 2 anni: junior per la regola; l'annuncio ha scadenza 5 dicembre 2023, e' vecchio di anni ma ancora attivo nel db (da jsonld)"
+  },
+  {
+   "n": 14,
+   "id": "48d43265-b1df-4da1-b0e5-8da2c50a861e",
+   "titolo": "Content Creator and Strategist",
+   "testo_utile": true,
+   "famiglia": "Marketing",
+   "ambigua": "Creative & Media",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Instagram",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "TikTok",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Youtube",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Nectar",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Dash Hudson",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Emplifi",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Canto",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Figma",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "Ai tools / native social platform analytics (categorie)",
+    "Great Place to Work (certificazione aziendale)"
+   ],
+   "note": "5-10 anni: senior; gestisce un video editor ma il compito principale e' creare: non lead; riprese in ufficio e in citta' a San Francisco"
+  },
+  {
+   "n": 15,
+   "id": "d2fcf7ff-ff72-4dbd-a9b6-7c472e21ba08",
+   "titolo": "Account Executive - Philadelphia",
+   "testo_utile": true,
+   "famiglia": "Sales",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Salesforce",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "social networking platforms (categoria)",
+    "driver's license (patente)",
+    "401(k) (benefit)"
+   ],
+   "note": "esperienza di vendita 'a plus but not required'; 'Time Type: Full time' dichiarato; ufficio a Bala Cynwyd"
+  },
+  {
+   "n": 16,
+   "id": "8eb37411-c798-4e38-aa25-fc9ae0e674f2",
+   "titolo": "MANAGER DE RAYON CHARCUTERIE FROMAGE TRAITEUR (H/F)",
+   "testo_utile": true,
+   "famiglia": "Retail",
+   "ambigua": "Food & Beverage",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "DLC (norma di conservazione, non uno strumento)"
+   ],
+   "note": "responsabile di reparto con conto economico e un team di 2: lead; 'expérience significative' senza anni"
+  },
+  {
+   "n": 17,
+   "id": "21971e68-18f6-465c-a41b-dedcf51eee15",
+   "titolo": "Bedrijfsleider/Projectleider",
+   "testo_utile": true,
+   "famiglia": "Construction",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "capo progetto e responsabile operativo di un'impresa edile, guida il team: lead; nessuna esperienza quantificata"
+  },
+  {
+   "n": 18,
+   "id": "d9c3ee12-4839-4b2d-868e-1b3401a96200",
+   "titolo": "Concierge Agent - Splendido, a Belmond Hotel Portofino",
+   "testo_utile": true,
+   "famiglia": "Hospitality",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "PMS",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "Concierge software systems (categoria senza nome)",
+    "C.C.N.L. Settore Turismo (contratto collettivo)",
+    "Italian / English / French... (lingue)"
+   ],
+   "note": "minimo 2 anni: junior per la regola; 'seasonal Labour contract' giugno-novembre 2026: temporary; alloggio in sede"
+  },
+  {
+   "n": 19,
+   "id": "169f5d53-65e5-4663-b4b3-ae7fcbcb7749",
+   "titolo": "Electricity + Natural Gas Analyst Internship: Summer 2027",
+   "testo_utile": true,
+   "famiglia": "Finance & Accounting",
+   "ambigua": "Energy",
+   "seniority": "intern",
+   "contratto": "internship",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Python",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Pandas",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "MySQL",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [],
+   "note": "ricerca sui mercati elettrici per una societa' di trading: il lavoro e' finanziario, il dominio e' energia; '#LI-Onsite' e alloggio fornito"
+  },
+  {
+   "n": 20,
+   "id": "d48a703b-d898-4e78-9e6c-d3d8282dd44d",
+   "titolo": "General Service Technician",
+   "testo_utile": true,
+   "famiglia": "Trades",
+   "ambigua": "Transportation",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "driver's license (patente)",
+    "GED (titolo)"
+   ],
+   "note": "cambio olio e gomme, esperienza 'helpful but not necessary'; sabato lavorativo, contratto non dichiarato"
+  }
+ ]
+}

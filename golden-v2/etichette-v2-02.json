@@ -1,0 +1,471 @@
+{
+ "lotto": 2,
+ "etichettate_da": "Claude Fable 5.1 (giudice unico, 21/09/2026); da verificare a campione da una seconda persona",
+ "data": "2026-09-21",
+ "rubrica": "vedi etichette-v2-01.json (stesse regole e convenzioni)",
+ "offerte": [
+  {
+   "n": 1,
+   "id": "19a932c0-c591-489a-bbb7-1b2e4dfcd644",
+   "titolo": "Level 2 Assistant Manager(07433) - 98 Crescent Dr",
+   "testo_utile": true,
+   "famiglia": "Food & Beverage",
+   "ambigua": "Retail",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "calculator / computer keyboard / TDD equipment (oggetti generici)",
+    "driver's license (patente)"
+   ],
+   "note": "assistant manager di un punto Domino's: responsabile del turno, primo gradino manageriale; il paese MY nel record e' sbagliato (indirizzo americano)"
+  },
+  {
+   "n": 2,
+   "id": "d994de38-d8fa-4c64-8cb9-be8d2d7dfc4a",
+   "titolo": "IT Technical Support",
+   "testo_utile": true,
+   "famiglia": "Technology",
+   "ambigua": "Customer Service & Support",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "windows 8-10",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "command prompt",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "bar code scanner",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "SPM / STPM (titoli di studio)",
+    "printer / PC (oggetti generici)",
+    "English / Bahasa Malaysia / Mandarin (lingue)"
+   ],
+   "note": "1-2 anni; assistenza in sede dai clienti; stipendio mensile in MYR non e' una dichiarazione di contratto"
+  },
+  {
+   "n": 3,
+   "id": "22f9ab0e-fd50-4a6f-a1f9-319ad7e57eb8",
+   "titolo": "Remote Client Support Representative (Entry-Level)",
+   "testo_utile": true,
+   "famiglia": "Customer Service & Support",
+   "ambigua": "Sales",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "remote",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "nessuna esperienza richiesta; '100% remote work'; sembra un annuncio di vendita di polizze travestito da supporto"
+  },
+  {
+   "n": 4,
+   "id": "ff9bb8c6-69dd-4a2f-a302-e7487e133221",
+   "titolo": "Technical Writer - Homeland Security",
+   "testo_utile": true,
+   "famiglia": "Creative & Media",
+   "ambigua": "Technology",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "remote",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Adobe Acrobat",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "CMS",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "BCBS CareFirst / HSA / FSA / 401(k) (benefit)",
+    "federal background suitability check (abilitazione)"
+   ],
+   "note": "minimo 2 anni; 'Status: Full-Time'; 'Remote or Oklahoma City'"
+  },
+  {
+   "n": 5,
+   "id": "4e369793-a679-4090-916d-edc71c482b34",
+   "titolo": "Energy Data Quality Specialist | Mapping Support [DOEOP068073]",
+   "testo_utile": true,
+   "famiglia": "Data & Analytics",
+   "ambigua": "Consulting",
+   "seniority": "mid",
+   "contratto": "contract",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Access",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PowerPoint",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Adobe Acrobat",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Visio",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "data analytic tools (categoria senza nome)",
+    "Secret / Top Secret / DOE Q clearance (abilitazioni)",
+    "401(k) / FSA / POP (benefit)"
+   ],
+   "note": "3-5 anni; 'Exempt 1099 Contract', 'Contract Contingent' dichiarato; sede Washington DC, niente sul remoto"
+  },
+  {
+   "n": 6,
+   "id": "a5a6f143-373c-48ee-8af1-84887965b2b0",
+   "titolo": "Projektipäällikkö/Projektinjohtaja – Alue- ja geosuunnittelun hankkeet",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "ambigua": "Construction",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "capo progetto per progetti geotecnici, oltre 10 anni come project manager; 'in qualunque nostra sede in Finlandia' = sede fisica"
+  },
+  {
+   "n": 7,
+   "id": "4ae77514-eb6e-4c65-b9a8-342dee1bf81e",
+   "titolo": "Business Associate, Primary & Walk In Care, Wayne Office, Full Time, Day",
+   "testo_utile": true,
+   "famiglia": "Administrative",
+   "ambigua": "Healthcare",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "EAP / Fitness Center (benefit)"
+   ],
+   "note": "front desk di uno studio medico, 6 mesi di esperienza; 'Full Time' nel titolo"
+  },
+  {
+   "n": 8,
+   "id": "3f558f5c-a5f9-4255-9a02-0c5dc6f4f64a",
+   "titolo": "Vil du bli med på laget?",
+   "testo_utile": true,
+   "famiglia": "Transportation",
+   "ambigua": "Construction",
+   "seniority": null,
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Førerkort klasse CE / YSK / Maskinførerbevis (patenti e abilitazioni)",
+    "lastebil / vogntog / maskiner (oggetti generici)"
+   ],
+   "note": "autista di mezzi pesanti con lavori di asfalto, cantiere e sgombero neve; esperienza richiesta ma senza livello"
+  },
+  {
+   "n": 9,
+   "id": "c3762309-7a0a-4172-8f60-66d68f43dfe1",
+   "titolo": "Trading Regulatory & Compliance Senior Advisor",
+   "testo_utile": true,
+   "famiglia": "Legal",
+   "ambigua": "Finance & Accounting",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "REMIT / MAR / MiFID II / EMIR / FCA (regolamenti)",
+    "commodity trading and risk management systems (categoria senza nome)"
+   ],
+   "note": "minimo 5 anni, 'Mid to Senior Professional' dichiarato; compliance regolamentare del trading energetico"
+  },
+  {
+   "n": 10,
+   "id": "e0da5b73-dffe-43bb-aefd-c134e8427176",
+   "titolo": "Residential Lawn Specialist/Aerator",
+   "testo_utile": true,
+   "famiglia": "Agriculture",
+   "ambigua": "Trades",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "driver's license / DOT medical card (abilitazioni)",
+    "fertilizers (materiali)",
+    "PPE (generico)",
+    "401(k) (benefit)"
+   ],
+   "note": "tecnico di cura del prato, esperienza 'preferred'; paga oraria con fascia annua, contratto non dichiarato"
+  },
+  {
+   "n": 11,
+   "id": "5b5d465f-aea1-482a-b81b-3bfa3af3d6e6",
+   "titolo": "FBS Agile Dev Team Member III - Software Development Engineer in Test (SDET)",
+   "testo_utile": true,
+   "famiglia": "Software",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "PlayWright",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Python",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "docker",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "TDD",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "BDD",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Microservices / Cloud / AI / CICD pipeline / Test Automation (categorie e pratiche senza nome proprio)",
+    "PI Planning / Sprint (cerimonie, non strumenti)"
+   ],
+   "note": "'Member III', fa da mentore ai junior: mid; 'remote and/or office-based' = ibrido"
+  },
+  {
+   "n": 12,
+   "id": "00b95025-7c2c-4a68-89ef-5dce24b7b627",
+   "titolo": "Dispatch and Warehouse Assistant",
+   "testo_utile": true,
+   "famiglia": "Logistics",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "driver's license (patente)",
+    "employee assistance helpline (benefit)"
+   ],
+   "note": "'Full-Time' dichiarato, fino a 50 ore; esperienza 'preferred but not essential'"
+  },
+  {
+   "n": 13,
+   "id": "3adf7c3b-c660-46d7-8676-d7b98760317a",
+   "titolo": "Center-Based Behavior Technician",
+   "testo_utile": true,
+   "famiglia": "Healthcare",
+   "ambigua": "Social Services",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "CPR / First Aid / Tuberculosis test (abilitazioni e requisiti sanitari)",
+    "Rain / Benefit Hub (benefit)"
+   ],
+   "note": "tecnico ABA in centro, nessuna esperienza richiesta; paga 18-24 $/ora, contratto non dichiarato"
+  },
+  {
+   "n": 14,
+   "id": "e7d586f1-a193-45e1-abe0-b5d190b06d9c",
+   "titolo": "Senior Civil Designer",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "ambigua": "Construction",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "12d",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "12d Synergy",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "AutoCAD",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Civil3D",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "ProjectWise",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "Australian Standards (norme generiche)"
+   ],
+   "note": "'Senior', fa da mentore ai junior designer; 'hybrid work options'"
+  },
+  {
+   "n": 15,
+   "id": "adf28077-211f-4c25-8137-94690ba891d3",
+   "titolo": "Optometrist",
+   "testo_utile": true,
+   "famiglia": "Healthcare",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Licensed (or eligible) to practice Optometry (abilitazione)",
+    "malpractice insurance / CE Symposium (benefit)"
+   ],
+   "note": "'Licensed (or eligible)': accetta neolaureati, quindi ingresso; nessun anno richiesto"
+  },
+  {
+   "n": 16,
+   "id": "0d0660c9-76b4-43c7-b03e-74b04a8ba252",
+   "titolo": "Sales Assistant Appartenente alle Categorie Protette (L.68/99) _ Luxury Boutique",
+   "testo_utile": true,
+   "famiglia": "Retail",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "L.68/99 / CCNL Commercio (leggi e contratti collettivi)",
+    "ticket restaurant (benefit)"
+   ],
+   "note": "dichiarati sia 'Part Time 24h' sia 'a tempo determinato': per convenzione si etichetta la durata (temporary) e si annota l'orario (part_time); 'esperienza pregressa, anche breve'"
+  },
+  {
+   "n": 17,
+   "id": "4335ac0d-9c24-4a04-a95d-8c586c0d6485",
+   "titolo": "Manager Research Sr Analyst",
+   "testo_utile": true,
+   "famiglia": "Finance & Accounting",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Outlook",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PowerPoint",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Morningstar Direct",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "Series 7 & 66 / 63 & 65 (licenze personali)",
+    "prompt-based AI tools / AI-powered research tools (categorie senza nome)",
+    "401k (benefit)"
+   ],
+   "note": "5+ anni preferiti, 'Senior Analyst'; sede St. Louis con opzione New York, niente sul remoto"
+  },
+  {
+   "n": 18,
+   "id": "bed2fdda-6fc3-4209-b56e-f037e92b19c0",
+   "titolo": "Associate Talent Acquisition Partner",
+   "testo_utile": true,
+   "famiglia": "Human Resources",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Applicant Tracking System",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "ACE program (programma interno)",
+    "GED (titolo di studio)"
+   ],
+   "note": "3-6 mesi di esperienza amministrativa; orario 7-17 lun-ven ma il contratto non e' dichiarato"
+  },
+  {
+   "n": 19,
+   "id": "628d3b82-5141-4ba2-8dd1-595347de0e8d",
+   "titolo": "Foto-/Videograf (m/w/d)",
+   "testo_utile": true,
+   "famiglia": "Creative & Media",
+   "seniority": null,
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "gängige Schnitt- und Videobearbeitungsprogramme (categoria senza nome)",
+    "Jobrad / vermögenswirksame Leistungen (benefit)",
+    "Ausbildung Fotografie (titolo)"
+   ],
+   "note": "'in Vollzeit' dichiarato; esperienza richiesta senza livello"
+  },
+  {
+   "n": 20,
+   "id": "45d46e64-5f75-4683-b03b-9eb1533b7850",
+   "titolo": "Sales Representative",
+   "testo_utile": true,
+   "famiglia": "Sales",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "CRM",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "mobile tools (generico)",
+    "401(k) (benefit)"
+   ],
+   "note": "'Field-Based | Full-Time' dichiarato, solo provvigioni; nessuna esperienza richiesta, porta a porta"
+  }
+ ],
+ "convenzione_contratto": "quando sono dichiarati sia l'orario (full/part time) sia la durata (temporary/contract/internship/apprenticeship) si etichetta la durata e si annota l'orario nelle note"
+}

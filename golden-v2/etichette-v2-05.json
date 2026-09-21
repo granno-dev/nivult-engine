@@ -1,0 +1,540 @@
+{
+ "lotto": 5,
+ "etichettate_da": "Claude Fable 5.1 (giudice unico, 21/09/2026); da verificare a campione da una seconda persona",
+ "data": "2026-09-21",
+ "rubrica": "vedi etichette-v2-01.json e -02.json (stesse regole e convenzioni)",
+ "offerte": [
+  {
+   "n": 1,
+   "id": "dbf0ef1e-d4ae-4881-8db1-2aedb2fdbba7",
+   "titolo": "Elektroniker (m/w/d) in Tagesschicht in Bruchsal",
+   "testo_utile": true,
+   "famiglia": "Trades",
+   "seniority": null,
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Schaltschränke (il prodotto che si monta, non uno strumento)",
+    "IGZ (contratto collettivo)",
+    "Ausbildung Elektroniker (titolo)"
+   ],
+   "note": "agenzia di somministrazione; 'Vollzeit, 35-40 Stunden' dichiarato; esperienza richiesta senza livello"
+  },
+  {
+   "n": 2,
+   "id": "c01dd1ab-5f4b-4665-b034-afe221ff16b6",
+   "titolo": "Gestionnaire de mises en production en AQL / LQA Release Manager - INTERNAL",
+   "testo_utile": true,
+   "famiglia": "Technology",
+   "ambigua": "Software",
+   "seniority": "lead",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "MS Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "JIRA",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "TTP",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "DevTrack",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "SpiraTest",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "outils de test internes (categoria)"
+   ],
+   "note": "richiede esperienza da senior tester o team lead, coordina e forma il team di test: lead; annuncio bilingue, il francese ripete l'inglese"
+  },
+  {
+   "n": 3,
+   "id": "795131c8-4540-4b01-abe5-ff2373e7eff5",
+   "titolo": "Marketing Events Specialist",
+   "testo_utile": true,
+   "famiglia": "Marketing",
+   "ambigua": "Sales",
+   "seniority": "junior",
+   "contratto": "part_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "'Part-time, event-based schedule' dichiarato; nessuna esperienza richiesta"
+  },
+  {
+   "n": 4,
+   "id": "44f2bbd3-2822-4b5a-9121-0464ca17257d",
+   "titolo": "Associate Lab Director",
+   "testo_utile": true,
+   "famiglia": "Science & Research",
+   "seniority": "lead",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "PCR",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "next-gen sequencing",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "DNA/RNA library preparation / sample QC (metodi generici)",
+    "BS/MS (titoli)"
+   ],
+   "note": "supervisiona tecnici e associati, 3 anni di gestione di laboratorio: lead; 'full time' dichiarato"
+  },
+  {
+   "n": 5,
+   "id": "eff75b82-cd8d-4181-a509-51a78d054e1a",
+   "titolo": "Technical Delivery Manager, Government (Canberra)",
+   "testo_utile": true,
+   "famiglia": "Consulting",
+   "ambigua": "Technology",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [],
+   "escluse": [
+    "modern AI tools (categoria)",
+    "NV1 security clearance (abilitazione)"
+   ],
+   "note": "5-10+ anni; 'based in Canberra with hybrid work flexibility', remoto solo in via eccezionale"
+  },
+  {
+   "n": 6,
+   "id": "43f41dbb-faa5-49b1-8e7a-8d0db8493a95",
+   "titolo": "Bilanzbuchhalter (m/w/d)",
+   "testo_utile": true,
+   "famiglia": "Finance & Accounting",
+   "seniority": "mid",
+   "contratto": "full_time",
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "HGB / Umsatzsteuerrecht (leggi)",
+    "Bilanzbuchhalter (IHK) (titolo)",
+    "Bikeleasing / vermögenswirksame Leistungen (benefit)"
+   ],
+   "note": "qualifica avanzata (Bilanzbuchhalter IHK) con crescita a capo team possibile: mid; 'Unbefristete Festanstellung' = indeterminato, full_time; 'Homeoffice möglich' = ibrido; annuncio di agenzia"
+  },
+  {
+   "n": 7,
+   "id": "9f9bdf8e-3d0a-49e4-a038-d06ee461b63b",
+   "titolo": "Activity Leader with a Creative Streak for German Language Immersion Camp Freiburg - Breisgau DE",
+   "testo_utile": true,
+   "famiglia": "Education",
+   "ambigua": "Sports & Recreation",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Enhanced DBS check (abilitazione)",
+    "Driver's License (patente)"
+   ],
+   "note": "lavoro stagionale estivo 'full-time, seasonal': temporary per convenzione; vitto e alloggio in campo"
+  },
+  {
+   "n": 8,
+   "id": "a22fb0a4-98b5-4a44-ba9e-6404cd591f9f",
+   "titolo": "Managed Intelligence Transformation Consultant",
+   "testo_utile": true,
+   "famiglia": "Consulting",
+   "ambigua": "Sales",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [],
+   "escluse": [
+    "AI / data / new service models (categorie)",
+    "LinkedIn Learning (benefit)",
+    "Pax8 Marketplace (prodotto del datore)"
+   ],
+   "note": "'Substantial experience' con dirigenti di partner, senza anni: senior; 'HYBRID ROLE' dichiarato; la lingua nel record e' de ma il testo e' inglese"
+  },
+  {
+   "n": 9,
+   "id": "83815826-2acd-462c-9506-b916e6bb8956",
+   "titolo": "Animateurs / Animatrices Club Enfants F/H",
+   "testo_utile": true,
+   "famiglia": "Hospitality",
+   "ambigua": "Sports & Recreation",
+   "seniority": "junior",
+   "contratto": "temporary",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "animatori per la stagione estiva 2026 in campeggio: temporary; nessuna esperienza richiesta"
+  },
+  {
+   "n": 10,
+   "id": "39b0d89e-2b73-407f-b572-e689e3e136ee",
+   "titolo": "Sales Representative",
+   "testo_utile": true,
+   "famiglia": "Sales",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "CRM",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "pipeline management tools (categoria)",
+    "Bachelor's degree (titolo)"
+   ],
+   "note": "gestione di account strategici e negoziazione di contratti, senza anni: mid; viaggi fino al 60%, base Citta' del Messico"
+  },
+  {
+   "n": 11,
+   "id": "dfa9e73c-8d66-4949-97ad-1c1ecc04b57f",
+   "titolo": "Network Security Analyst",
+   "testo_utile": true,
+   "famiglia": "Technology",
+   "ambigua": "Security & Safety",
+   "seniority": null,
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [],
+   "note": "annuncio generico di un contractor federale (bacino di candidati, 'our job openings are dynamic'): nessun livello, nessun contratto"
+  },
+  {
+   "n": 12,
+   "id": "a7a13058-f896-48cb-849e-de6da3086b5d",
+   "titolo": "Customer Success Associate",
+   "testo_utile": true,
+   "famiglia": "Customer Service & Support",
+   "ambigua": "Marketing",
+   "seniority": "junior",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Wunderkind Analytics",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Looker",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Google Analytics",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Adobe Analytics",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "AI tooling (categoria)",
+    "Bachelor's degree (titolo)"
+   ],
+   "note": "0-1 anno; 'Located in the tri state area', uffici Indianapolis/New York, niente sul remoto; la piattaforma Wunderkind e' il prodotto del datore"
+  },
+  {
+   "n": 13,
+   "id": "1b886d6d-eb50-44e7-b0cc-e2a348bbc084",
+   "titolo": "Application Security Testing",
+   "testo_utile": true,
+   "famiglia": "Technology",
+   "ambigua": "Software",
+   "seniority": null,
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "OWASP Top 10",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "checkmark",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "fortify",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "CISSP (certificazione personale)"
+   ],
+   "note": "solo un elenco di requisiti (400 caratteri): nessun livello ne' contratto; 'checkmark' e' Checkmarx scritto male, si tiene la forma del testo"
+  },
+  {
+   "n": 14,
+   "id": "be2d6105-43fa-4a7a-9dfd-8a2edef6d9c0",
+   "titolo": "Environmental Services Technician - Per Diem/PRN, 7AM-3PM",
+   "testo_utile": true,
+   "famiglia": "Hospitality",
+   "ambigua": "Healthcare",
+   "seniority": null,
+   "contratto": "part_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "401(k) (benefit)",
+    "High School diploma (titolo)"
+   ],
+   "note": "'Per Diem (PRN)', sei turni ogni sei settimane: a chiamata, la piu' vicina e' part_time; esperienza richiesta senza livello; sede Saddle Brook nel testo, vuota nel record"
+  },
+  {
+   "n": 15,
+   "id": "483419d8-c05f-48ab-8aed-3e34ef9af044",
+   "titolo": "Semiconductor Assembly Process Development Engineer",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "ambigua": "Manufacturing",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "hybrid",
+   "tecnologie": [
+    {
+     "nome": "FCCSP",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "FCBGA",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "FCLGA",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "IATF",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "Molding / Strip Grinding / Package Sawing (processi)",
+    "ISO (generico, senza numero)",
+    "TOEIC (test di lingua)"
+   ],
+   "note": "minimo 5 anni: senior; il testo giapponese in coda dichiara il modello ibrido (2 giorni di remoto a settimana)"
+  },
+  {
+   "n": 16,
+   "id": "e56b4bf5-4211-4e1b-b7ef-80ebeb8d39c7",
+   "titolo": "Scheduler Secretary - PRN",
+   "testo_utile": true,
+   "famiglia": "Administrative",
+   "ambigua": "Healthcare",
+   "seniority": "junior",
+   "contratto": "part_time",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "MS Office",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PowerPoint",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "CPR certification (abilitazione)"
+   ],
+   "note": "un anno di esperienza; 'PRN' = a chiamata, etichettato part_time come il #14; ospedale di Atlanta, sede vuota nel record"
+  },
+  {
+   "n": 17,
+   "id": "ff351e58-7826-44a3-8a0c-b9e42e4e2512",
+   "titolo": "Transportation Intern - Summer 2027",
+   "testo_utile": true,
+   "famiglia": "Engineering",
+   "ambigua": "Transportation",
+   "seniority": "intern",
+   "contratto": "internship",
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Synchro",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "MicroStation",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "ArcGIS Pro",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "401(k) (benefit)"
+   ],
+   "note": "stage estivo in ufficio a Charlotte; 'hybrid work environment' e' boilerplate aziendale, non una dichiarazione per lo stage"
+  },
+  {
+   "n": 18,
+   "id": "d6878335-b406-4114-ba4b-d6aece319180",
+   "titolo": "Legal Assistant",
+   "testo_utile": true,
+   "famiglia": "Legal",
+   "ambigua": "Administrative",
+   "seniority": "mid",
+   "contratto": null,
+   "remoto": "onsite",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PowerPoint",
+     "ruolo": "richiesta"
+    }
+   ],
+   "escluse": [
+    "Blue Cross Blue Shield / Unum / Navia / Sun Life / The Standard (fornitori di benefit)"
+   ],
+   "note": "3-5 anni: mid; Tallahassee, niente sul remoto"
+  },
+  {
+   "n": 19,
+   "id": "25f30786-a15b-4046-9694-93a3a1ad1f18",
+   "titolo": "Hörakustikerin / Hörgeräteakustiker (m/w/d)",
+   "testo_utile": true,
+   "famiglia": "Healthcare",
+   "ambigua": "Retail",
+   "seniority": "junior",
+   "contratto": "full_time",
+   "remoto": "onsite",
+   "tecnologie": [],
+   "escluse": [
+    "Ausbildung Hörgeräteakustiker (titolo)",
+    "Personalrabatte (benefit)"
+   ],
+   "note": "qualifica richiesta, nessun anno: ingresso nella professione; 'Unbefristete Festanstellung' = indeterminato, full_time; annuncio di un portale di recruiting"
+  },
+  {
+   "n": 20,
+   "id": "c7edba02-f24e-46ed-af3b-6546c2c8d3ce",
+   "titolo": "Senior Full Stack Laravel Developer",
+   "testo_utile": true,
+   "famiglia": "Software",
+   "seniority": "senior",
+   "contratto": null,
+   "remoto": "remote",
+   "tecnologie": [
+    {
+     "nome": "Laravel",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "PHP",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "MYSQL",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "HTML5",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Css3",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "JavaScript",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Sass",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Git",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "VueJS",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Tailwind",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "SCSS",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "Blade",
+     "ruolo": "richiesta"
+    },
+    {
+     "nome": "AMP",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Elastic",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Algolia",
+     "ruolo": "preferita"
+    },
+    {
+     "nome": "Github",
+     "ruolo": "preferita"
+    }
+   ],
+   "escluse": [
+    "NoSQL / 3rd party APIs / search servers (categorie)",
+    "SEO principles (disciplina)"
+   ],
+   "note": "3-5+ anni e 'Senior': senior; 'Working remotely' dichiarato; 'Tailwind' e 'TailwindCSS' sono lo stesso nome, tenuto una volta"
+  }
+ ]
+}
