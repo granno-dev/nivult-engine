@@ -24,7 +24,9 @@ class Tec(Dataset):
     def __len__(self): return len(self.r)
     def __getitem__(self, i):
         r = self.r[i]
-        testo = (r["titolo"] + "\n" + r["testo"])[: 20000]
+        # niente taglio a caratteri: le righe piu' lunghe della finestra arrivano
+        # gia' spezzate in finestre dal costruttore (--finestra), come in produzione
+        testo = r["titolo"] + "\n" + r["testo"]
         sposta = len(r["titolo"]) + 1        # gli intervalli sono sul solo testo
         enc = self.tok(testo, truncation=True, max_length=self.max_len, return_offsets_mapping=True)
         et = [0] * len(enc["input_ids"])

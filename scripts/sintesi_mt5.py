@@ -20,6 +20,8 @@ from transformers import LogitsProcessor, LogitsProcessorList
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sintesi_ancorata import ripulisci                             # noqa: E402
+from sintesi_pezzi import sintesi_a_pezzi                          # noqa: E402
+from finestre import finestre_span                                 # noqa: E402
 
 MODELLO = "nivult-mt5"
 PERCORSO = os.environ.get("MT5", "/opt/nivult/mt5")
@@ -241,6 +243,64 @@ def main() -> int:
             else:
                 da_fare = []
 
+            # 1b. chi non ci sta nella finestra si legge A PEZZI (sintesi_pezzi.py):
+            # il 16% delle offerte attive supera i 2048 token e nel 24% di quelle la
+            # coda porta paga, orario o contratto. Misurato il 21/09/2026 su 65
+            # annunci lunghi: i fatti della coda ritrovati passano dal 28% al 50%,
+            # con una cifra inventata in piu' su 65 (che il filtro sotto toglie).
+            def prompt_di(x):
+                return (f"Titolo: {x[1] or ''}\nSede: {x[2] or ''} ({x[3] or '-'})\n"
+                        f"Lingua dell'annuncio: {x[4] or '?'}")
+            lunghi = [x for x in da_fare
+                      if len(tok(normalizza(f"{prompt_di(x)}\n\n{x[5]}"), add_special_tokens=False)["input_ids"]) > max_in - 2]
+            da_fare = [x for x in da_fare if x not in lunghi]
+
+            def genera_con_fiducia(prompts: list[str]) -> tuple[list[str], float]:
+                """Le sintesi dei pezzi e la fiducia piu' bassa fra loro."""
+                uscite, peggiore = [], 0.0
+                for k in range(0, len(prompts), a.lotto):
+                    enc = tok(prompts[k:k + a.lotto], return_tensors="pt", padding=True,
+                              truncation=True, max_length=max_in).to("cuda")
+                    fid = Fiducia(min(a.lotto, len(prompts) - k), tok.eos_token_id)
+                    with torch.no_grad():
+                        out = mod.generate(**enc, max_new_tokens=a.max_nuovi, num_beams=1, do_sample=False,
+                                           logits_processor=LogitsProcessorList([fid]))
+                    uscite += [t.strip() for t in tok.batch_decode(out, skip_special_tokens=True)]
+                    peggiore = min([peggiore] + list(fid.medie())) if uscite else peggiore
+                    del out, enc
+                return uscite, peggiore
+
+            for x in lunghi:
+                if grafica_piena() > TETTO_GRAFICA:
+                    print("FRENO sui lunghi: li lascio alla prossima", flush=True)
+                    tutti.remove(x[0])
+                    continue
+                fiducie = []
+
+                def genera(prompts, _f=fiducie):
+                    u, f = genera_con_fiducia(prompts)
+                    _f.append(f)
+                    return u
+                try:
+                    s, n_pezzi = sintesi_a_pezzi(tok, prompt_di(x), x[5], max_in, genera, finestre_span)
+                except (RuntimeError, torch.cuda.OutOfMemoryError) as e:   # noqa: BLE001
+                    print(f"PEZZI FALLITI ({type(e).__name__}: {str(e)[:120]}), alla prossima", flush=True)
+                    tutti.remove(x[0])
+                    torch.cuda.empty_cache()
+                    continue
+                st["modello"] += 1
+                st["pezzi"] = st.get("pezzi", 0) + 1
+                s = valida(s)
+                if not s:
+                    st["vuote"] += 1
+                    esiti.append((x[0], None, None, MODELLO + "+saltato:illeggibile", None, None, None))
+                    continue
+                p, tolte, _ = ripulisci(s, f"{x[1] or ''} {x[5]}")
+                if tolte:
+                    st["ripulite"] = st.get("ripulite", 0) + 1
+                scritte.append((x[0], s, min(fiducie) if fiducie else None, MODELLO + f"+pezzi:{n_pezzi}", x[6], p, tolte))
+                torch.cuda.empty_cache()
+
             # 2. il modello, a lotti piccoli: l'attenzione cresce col quadrato dei token
             for i in range(0, len(da_fare), a.lotto):
                 gruppo = da_fare[i:i + a.lotto]
@@ -315,6 +375,7 @@ def main() -> int:
             dt = max(time.time() - t0, 1e-6)
             print(f"mt5: viste {st['viste']} | modello {st['modello']} | gemelle {st['gemelle']} "
                   f"| scritte {st['scritte']} | vuote {st['vuote']} | senza testo {st['senza_testo']} "
+                  f"| a pezzi {st.get('pezzi', 0)} | ripulite {st.get('ripulite', 0)} "
                   f"| grafica {100*grafica_piena():.0f}% "
                   f"| {st['scritte']/dt:.2f}/s = {int(86400*st['scritte']/dt):,}/giorno", flush=True)
 
