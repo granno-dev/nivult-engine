@@ -378,6 +378,13 @@ def scrivi_scheda(c, company_id, fonte: str, scheda: dict | None) -> bool:
     if not scheda:
         return False
     riga = {k: scheda.get(k) for k in _CAMPI_SCHEDA}
+    # i registri incartano alcuni valori (PRH: website = {"url": ...}):
+    # un dict o una lista non entrano in una colonna di testo
+    for k, v in list(riga.items()):
+        if isinstance(v, dict):
+            riga[k] = next((v[x] for x in ("url", "value", "name", "description") if isinstance(v.get(x), str)), None)
+        elif isinstance(v, (list, tuple)):
+            riga[k] = next((x for x in v if isinstance(x, str)), None)
     f = riga.get("founded")
     if isinstance(f, str):
         f = f.strip()[:10]

@@ -38,27 +38,29 @@ from nivult.ats.testo import descrizione, evidenza_stage, pulito   # noqa: E402
 log = logging.getLogger("ripara_stage")
 STAGE = ("internship", "apprenticeship")
 
-SQL_CODA = """
-SELECT j.id, j.title, j.raw, j.lang, j.employment_type, j.seniority
-  FROM ats_jobs j
+# gli id si prendono UNA volta (138k uuid in memoria): a paginare per id
+# con il filtro dentro, ogni lotto rileggeva la tabella e il giro era legato
+# al disco (93 s di CPU in 546 s, prova del 21/09)
+SQL_IDS = """
+SELECT j.id FROM ats_jobs j
  WHERE j.expired_at IS NULL
    AND (j.employment_type IN ('internship', 'apprenticeship') OR j.seniority = 'intern')
-   AND j.id > %s
- ORDER BY j.id
- LIMIT %s
+"""
+SQL_CODA = """
+SELECT j.id, j.title, j.raw, j.lang, j.employment_type, j.seniority
+  FROM ats_jobs j WHERE j.id = ANY(%s::uuid[])
 """
 
 
 def ripara(dsn: str, lotto: int = 500, dry: bool = False) -> dict:
     st = {"viste": 0, "dichiarate": 0, "con_prova": 0, "contratto_tolto": 0, "seniority_tolta": 0, "in_coda": 0}
-    ultimo = "00000000-0000-0000-0000-000000000000"
     t0 = time.time()
     with psycopg.connect(dsn, autocommit=True) as c:
-        while True:
-            righe = c.execute(SQL_CODA, (ultimo, lotto)).fetchall()
-            if not righe:
-                break
-            ultimo = righe[-1][0]
+        c.execute("SET statement_timeout = '10min'")
+        ids = [r[0] for r in c.execute(SQL_IDS).fetchall()]
+        log.info("ripara_stage: %d offerte da esaminare", len(ids))
+        for i in range(0, len(ids), lotto):
+            righe = c.execute(SQL_CODA, (ids[i:i + lotto],)).fetchall()
             togli_con, togli_sen, coda = [], [], []
             for jid, titolo, raw, lang, con, sen in righe:
                 st["viste"] += 1
