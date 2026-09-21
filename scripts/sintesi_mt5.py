@@ -241,8 +241,13 @@ def main() -> int:
                     for jid in resto:
                         tutti.remove(jid)           # non marcarle: torneranno in coda
                     break
+                # Il testo entra INTERO: il taglio a 6.000 caratteri che stava qui era
+                # nato per il modello a 1024 token, e col modello a 2048 (ricetta.json)
+                # lascerebbe fuori cio' che il modello ora puo' leggere. Quel che
+                # supera max_in lo tronca ancora il tokenizer: e' il residuo da
+                # curare con la lettura a pezzi, non con un taglio a monte.
                 pr = [normalizza(f"Titolo: {x[1] or ''}\nSede: {x[2] or ''} ({x[3] or '-'})\n"
-                                 f"Lingua dell'annuncio: {x[4] or '?'}\n\n{x[5][:6000]}") for x in gruppo]
+                                 f"Lingua dell'annuncio: {x[4] or '?'}\n\n{x[5]}") for x in gruppo]
                 enc = tok(pr, return_tensors="pt", padding=True, truncation=True, max_length=max_in).to("cuda")
                 fid = Fiducia(len(gruppo), tok.eos_token_id)
                 # Il freno guarda PRIMA del lotto, ma la memoria si riempie DENTRO il
