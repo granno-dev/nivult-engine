@@ -33,6 +33,28 @@ SEARX = os.environ.get("SEARX_URL", "http://100.119.200.7:8899/search")
 MOTORI_SEARX = os.environ.get("MOTORI_SEARX", "google,yahoo")
 UA = "Mozilla/5.0 (compatible; nivult/1.0; +https://nivult.com)"
 
+
+def _chiave(nome: str) -> str:
+    """Una chiave API: dall'ambiente, o dai .env di Hetzner. Vuota = fonte spenta."""
+    if os.environ.get(nome):
+        return os.environ[nome]
+    for f in ("/opt/nivult/.env", "/opt/nivult/engine/.env"):
+        try:
+            m = re.search(rf"^{nome}=(.*)$", open(f).read(), re.M)
+            if m:
+                return m.group(1).strip()
+        except OSError:
+            pass
+    return ""
+
+
+def chiave_deepseek() -> str:
+    return _chiave("DEEPSEEK_API_KEY")
+
+
+def chiave_groq() -> str:
+    return _chiave("GROQ_API_KEY")
+
 # --- le bacheche, una per ATS: la radice dove sta il logo in testata ------------------
 BACHECA = {
  "lever":           lambda s, a, b: [f"https://jobs.lever.co/{s}"],
@@ -353,6 +375,76 @@ class Cacciatore:
                 fuori.append(h)
         return fuori[:5]
 
+    def da_llm(self, plat, slug, nome, paese) -> list[str]:
+        """Il nome e il dominio secondo un modello di lingua, dallo slug.
+
+        Il 21/09/2026 780 dei 1.356 tenant Workday senza dominio (785.000
+        offerte, un quinto del totale) NON avevano nemmeno il nome: solo lo
+        slug — «hpe», «paloaltonetworks», «pwc», «interpublic». Senza nome le
+        fonti per nome non partono. Un modello di lingua quegli slug li sa
+        sciogliere; ma resta una PROPOSTA: passa dallo stesso giudice degli
+        altri candidati (impronta della bacheca = livello 1), e se il giudice
+        tace vale al massimo il livello 2, col nome che il modello ha dato.
+        Costa ~0,0003 $ a tenant. Silenzio se il modello non e' sicuro.
+        """
+        self.nome_llm, self.errore_llm = None, None
+        # DeepSeek se ha credito (il 21/09 alle 15 era a zero: 402), altrimenti
+        # gpt-oss-120b su Groq, gratis a 8.000 token al minuto: una domanda da
+        # 200 token ne fa quaranta al minuto, piu' di quante il cacciatore ne pone.
+        fornitori = []
+        if chiave_deepseek():
+            fornitori.append(("https://api.deepseek.com/chat/completions", "deepseek-chat", chiave_deepseek()))
+        if chiave_groq():
+            fornitori.append(("https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b", chiave_groq()))
+        if not fornitori:
+            self.errore_llm = "nessuna chiave"
+            return []
+        d = None
+        for url, modello, chiave in fornitori:
+            d = self._chiedi_llm(url, modello, chiave, plat, slug, nome, paese)
+            if d is not None:
+                break
+        if d is None:
+            return []
+        self.nome_llm = (d.get("azienda") or "").strip() or None
+        h = dominio_di("https://" + str(d.get("dominio") or "").strip().removeprefix("https://").removeprefix("http://"))
+        if not h or "." not in h or NON_AZIENDA.search(h):
+            return []
+        return [h]
+
+    def _chiedi_llm(self, url, modello, chiave, plat, slug, nome, paese):
+        # 800 e non 120: gpt-oss ragiona prima di rispondere e i token del
+        # ragionamento contano nel tetto; a 120 restituiva «Failed to generate JSON»
+        body = json.dumps({"model": modello, "temperature": 0, "max_tokens": 800,
+                           "response_format": {"type": "json_object"},
+                           "messages": [{"role": "system", "content":
+                               "Ti do l'identificativo del tenant di un'azienda su una piattaforma di recruiting "
+                               "(ATS) e, se li abbiamo, nome e paese. Rispondi SOLO con JSON "
+                               '{"azienda": "nome ufficiale", "dominio": "sito ufficiale senza www"} '
+                               "oppure {\"azienda\": null, \"dominio\": null} se non sei sicuro. Non inventare: "
+                               "un dominio sbagliato e' peggio di nessun dominio."},
+                                        {"role": "user", "content":
+                               f"piattaforma: {plat}\nslug del tenant: {slug}\nnome (se noto): {nome or '-'}\n"
+                               f"paese (se noto): {paese or '-'}"}]}).encode()
+        try:
+            rq = urllib.request.Request(url, data=body, method="POST",
+                                        headers={"Content-Type": "application/json", "User-Agent": "nivult/1.0",
+                                                 "Authorization": f"Bearer {chiave}"})
+            with urllib.request.urlopen(rq, timeout=40) as r:
+                d = json.loads(json.load(r)["choices"][0]["message"]["content"])
+            return d if isinstance(d, dict) else None
+        except urllib.error.HTTPError as e:
+            corpo = ""
+            try:
+                corpo = e.read().decode("utf-8", "ignore")[:200]
+            except Exception:                                        # noqa: BLE001
+                pass
+            self.errore_llm = f"{modello}: {e.code} {corpo}"
+            return None
+        except Exception as e:                                       # noqa: BLE001
+            self.errore_llm = f"{modello}: {str(e)[:120]}"
+            return None
+
     def da_nome(self, nome, slug, paese) -> list[str]:
         basi = set()
         for s in (norm(nome), norm(slug).replace("-", " ")):
@@ -377,6 +469,9 @@ class Cacciatore:
             fonti.append(("email-annuncio", lambda: [email_dom]))
         fonti.append(("nome-generato", lambda: self.da_nome(nome, slug, paese)))
         fonti.append(("searxng", lambda: self.da_searx(nome or slug, paese or "")))
+        # ultima perche' costa (poco) e perche' e' una proposta, non una lettura
+        fonti.append(("llm-nome", lambda: self.da_llm(plat, slug, nome, paese)))
+        self.nome_llm = None
         visti = []                       # i candidati raccolti strada facendo
         for nome_fonte, prendi in fonti:
             candidati = prendi()
@@ -394,19 +489,27 @@ class Cacciatore:
         # Il nome dell'azienda, non lo slug del tenant: lo slug e' spesso una
         # storpiatura («Cvshealth», «Colliersinternationalemea») e farebbe
         # passare corrispondenze che non sono tali.
-        if nome:
+        # Il nome puo' venire dal tenant o, se il tenant non ce l'ha, dal modello
+        # di lingua (da_llm): «hpe» -> Hewlett Packard Enterprise.
+        nome_l2 = nome or getattr(self, "nome_llm", None)
+        if nome_l2:
             migliore, punteggio, da = None, 0.0, None
             for nome_fonte, dom in visti:
                 # `nome-generato` COSTRUISCE il dominio dal nome: confermarlo col
                 # nome sarebbe circolare. Valgono solo le fonti indipendenti.
                 if nome_fonte == "nome-generato":
                     continue
-                v = somiglia_al_nome(nome, dom)
+                v = somiglia_al_nome(nome_l2, dom)
+                # la proposta del modello di lingua vale anche se somiglia allo
+                # SLUG del tenant («paloaltonetworks» -> paloaltonetworks.com):
+                # lo slug lo ha scelto l'azienda, non il modello
+                if nome_fonte == "llm-nome" and slug:
+                    v = max(v, somiglia_al_nome(slug.replace("-", " "), dom))
                 if v > punteggio:
                     migliore, punteggio, da = dom, v, nome_fonte
             # e deve almeno esistere: il DNS costa nulla e non lo blocca nessuno
             if (migliore and punteggio >= SOGLIA_NOME
-                    and tld_plausibile(nome, migliore, paese) and esiste(migliore)):
+                    and tld_plausibile(nome_l2, migliore, paese) and esiste(migliore)):
                 return (cid, radice_sito(migliore), da, f"nome~{punteggio:.2f}", 2)
         return (cid, None, None, None, None)
 
