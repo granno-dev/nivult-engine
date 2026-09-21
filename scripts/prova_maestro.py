@@ -162,7 +162,7 @@ def main() -> int:
         j = json.load(open(p))
         for o in j["offerte"]:
             mano[o["id"]] = {t["nome"] for t in o["tecnologie"]}
-            fam[o["id"]] = j["famiglia"]
+            fam[o["id"]] = j.get("famiglia", "IT (golden-tec)")   # il primo golden non la dichiara
     testi = {}
     for linea in gzip.open(a.banco, "rt"):
         d = json.loads(linea)

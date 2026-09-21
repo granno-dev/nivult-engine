@@ -113,6 +113,15 @@ def main() -> int:
                        EXISTS (SELECT 1 FROM job_classifications x WHERE x.job_id = j.id) AS ha_famiglia
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
+                 -- LA GARA COL DETTAGLIO (21/09/2026): le offerte piu' nuove
+                 -- vengono prese per prime, e per meta' delle piattaforme il
+                 -- testo arriva DOPO, da un passo di dettaglio a parte. Senza
+                 -- questa riga v1 decideva famiglia, seniority, contratto e
+                 -- remoto dal SOLO TITOLO, marcava l'offerta come vista e non
+                 -- ci tornava piu' — indovinare non e' classificare. Senza
+                 -- testo si aspetta fino a 7 giorni, come la testa tecnologie.
+                 AND (EXISTS (SELECT 1 FROM unnest(ARRAY[j.raw->>'description', j.raw->>'content', j.raw->>'descriptionHtml', j.raw->>'descriptionPlain', j.raw->>'externalDescription', j.raw->>'jobDescription', j.raw->>'job_description', j.raw->>'Job_Description', j.raw->>'body', j.raw->>'content_html', j.raw->>'description_html', j.raw->>'descriptionBody', j.raw->>'text', j.raw->'_jobposting'->>'description', j.raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80)
+                      OR j.created_at < now() - interval '7 days')
                  -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
                  -- speso 295k letture per scriverne 22k, perche' rileggeva
                  -- offerte gia' classificate mentre l'arretrato senza famiglia

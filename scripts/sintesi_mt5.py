@@ -101,6 +101,15 @@ UPDATE ats_jobs j SET preso_mt5_at = now()
     WHERE k.expired_at IS NULL
       AND k.sintesi_mt5_at IS NULL
       AND (k.preso_mt5_at IS NULL OR k.preso_mt5_at < now() - interval '{scadenza} minutes')
+      -- LA GARA COL DETTAGLIO (21/09/2026). Meta' delle piattaforme mette il testo
+      -- solo nella pagina di dettaglio, che un altro passo va a prendere dopo la
+      -- lista. Questo demone prende le offerte piu' nuove per prime, quindi le
+      -- leggeva PRIMA del dettaglio, le marcava «senza testo» per sempre e non ci
+      -- tornava: 48.787 righe cosi', 15.721 delle quali attive e col testo arrivato
+      -- dopo. Regola della testa tecnologie: senza testo si aspetta fino a
+      -- {giorni} giorni, poi si prende atto che il testo non arrivera'.
+      AND (EXISTS (SELECT 1 FROM unnest(ARRAY[{campi_k}]) v WHERE length(v) >= 300)
+           OR k.created_at < now() - interval '{giorni} days')
       -- Le offerte che il 2B aveva gia' riassunto in modalita' piena (116.592 al
       -- 19/09/2026) non si rifanno: la sua sintesi vale 4,71 contro 4,44, e la vista
       -- `sintesi_finali` dara' comunque la precedenza alla sua. Sarebbe lavoro buttato.
@@ -112,7 +121,9 @@ UPDATE ats_jobs j SET preso_mt5_at = now()
 RETURNING j.id, j.title, coalesce(j.location, j.city, ''), j.country, j.lang,
        coalesce((SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 300 LIMIT 1), '')
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO),
-           scadenza=int(os.environ.get("SCADENZA_PRESA", "20")))
+           campi_k=", ".join(f"k.raw->>'{c}'" for c in CAMPI_TESTO),
+           scadenza=int(os.environ.get("SCADENZA_PRESA", "20")),
+           giorni=int(os.environ.get("GIORNI_ATTESA_TESTO", "7")))
 
 SQL_INSERISCI = ("INSERT INTO sintesi_mt5 "
                  "(job_id, sintesi, fiducia, modello, testo_hash, sintesi_pulita, frasi_tolte, pulita_at) "
