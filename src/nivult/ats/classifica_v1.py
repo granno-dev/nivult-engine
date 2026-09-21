@@ -144,7 +144,10 @@ def main() -> int:
         while st["viste"] < tetto:
             giro += 1
             righe = []
-            if not pareri and giro % 2:
+            # tre lotti di ripasso, poi uno dalla coda normale: la query normale
+            # ordina tutta la coda (2 minuti con 800k righe) e a giri alterni
+            # dimezzava il ritmo (5/s misurati alle 13:40 del 21/09)
+            if not pareri and giro % 4:
                 try:
                     righe = c.execute(SQL_RIPASSO).fetchall()
                 except psycopg.errors.UndefinedTable:
