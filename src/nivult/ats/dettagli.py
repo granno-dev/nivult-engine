@@ -422,11 +422,26 @@ SQL_SCRIVI = ("INSERT INTO offerte_dettagli (" + ", ".join(COLONNE) + ") VALUES 
 ADMIN1: dict[str, str] = {}      # «DE.07» -> «North Rhine-Westphalia», da geo_admin1 (migrazione 2026-09-21)
 
 
+def _schema(c) -> None:
+    """Il DDL solo se manca qualcosa. `ALTER TABLE ... ADD COLUMN IF NOT
+    EXISTS` prende il lock ESCLUSIVO su ats_jobs anche quando la colonna
+    c'e' gia': il 21/09 e' rimasto in coda dietro una lettura lunga e ha
+    messo in fila demoni, API ed export per quattro minuti. Se il DDL
+    serve davvero, non aspetta piu' di dieci secondi."""
+    tabella = c.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'offerte_dettagli'").fetchone()
+    colonna = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_jobs' AND column_name = 'dettagli_at'").fetchone()
+    if tabella and colonna:
+        return
+    c.execute("SET lock_timeout = '10s'")
+    c.execute(DDL)
+    c.execute("RESET lock_timeout")
+
+
 def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = False) -> dict:
     st = {"viste": 0, "urgenti": 0, "turni": 0, "benefit": 0, "salario_testo": 0, "scadenza": 0, "geo": 0, "recruiter": 0}
     t0 = time.time()
     with psycopg.connect(dsn, autocommit=True) as c:
-        c.execute(DDL)
+        _schema(c)
         try:
             ADMIN1.update(dict(c.execute("SELECT codice, nome FROM geo_admin1").fetchall()))
         except psycopg.errors.UndefinedTable:

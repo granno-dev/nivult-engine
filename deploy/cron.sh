@@ -108,6 +108,11 @@ RIGHE=$(cat <<'EOF'
 0 23 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 5400 .venv/bin/python -m nivult.ats.jsonld --scopri --limite 1500 --thread 4 >> /var/log/nivult-jsonld.log 2>&1
 15 22 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 1800 .venv/bin/python -m nivult.ats.radar_indeed --giro --limite 300 >> /var/log/nivult-radar-indeed.log 2>&1
 30 21 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 3600 .venv/bin/python -m nivult.ats.bilanci --esef --limite 400 >> /var/log/nivult-bilanci.log 2>&1
+40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
+0 9 * * * cd /opt/nivult/engine && ATS_DATABASE_URL="postgresql://nivult:$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-)@127.0.0.1:5432/nivult_ats" .venv/bin/python /opt/nivult/pulisci_domini.py >> /opt/nivult/logs/pulisci_domini.log 2>&1
+30 6 * * * find /opt/nivult/exports -type f -name "offerte-attive-*.jsonl.gz" -mtime +1 -delete
+5 6 * * * cd /opt/nivult/engine && LOTTO=2000 .venv/bin/python scripts/ripulisci_sintesi.py >> /opt/nivult/engine/logs/ripulisci-sintesi.log 2>&1
+50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
 EOF
 )
 

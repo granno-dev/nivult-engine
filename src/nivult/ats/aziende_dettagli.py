@@ -143,11 +143,24 @@ def _descrizione_e_url(righe) -> tuple[str | None, str | None, list[str]]:
     return None, None, urls
 
 
+def _schema(c) -> None:
+    """Il DDL solo se manca qualcosa: `ALTER TABLE ... ADD COLUMN IF NOT
+    EXISTS` prende il lock esclusivo su ats_companies anche quando la
+    colonna c'e' gia' (vedi dettagli._schema, 21/09)."""
+    tabella = c.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'aziende_dettagli'").fetchone()
+    colonna = c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_companies' AND column_name = 'dettagli_at'").fetchone()
+    if tabella and colonna:
+        return
+    c.execute("SET lock_timeout = '10s'")
+    c.execute(DDL)
+    c.execute("RESET lock_timeout")
+
+
 def applica(dsn: str, limite: int = 20000) -> dict:
     st = {"viste": 0, "fascia": 0, "sedi": 0, "descrizione": 0, "keywords": 0}
     t0 = time.time()
     with psycopg.connect(dsn, autocommit=True) as c:
-        c.execute(DDL)
+        _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
         # i dati del registro/GLEIF con indirizzo, se un giorno ci saranno, entrano qui:
         # oggi ats_companies non ha colonne d'indirizzo, quindi hq_da e' sempre «offerte»

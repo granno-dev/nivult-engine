@@ -61,8 +61,11 @@ def _riga(**kv) -> str:
                       ensure_ascii=False, default=str) + "\n"
 
 
-def attive(dsn: str) -> int:
-    percorso, f = _apri("offerte-attive")
+def attive(dsn: str, campione: int | None = None) -> int:
+    # --campione N: le prime N righe in un file a parte (collaudo di una
+    # modifica, o un assaggio da mandare a un compratore) senza toccare il
+    # file del giorno ne' il manifest
+    percorso, f = _apri("offerte-attive" + ("-campione" if campione else ""))
     n = 0
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
@@ -137,7 +140,9 @@ def attive(dsn: str) -> int:
                    -- cliente arriva il piu' vecchio di ciascun gruppo
                    AND NOT EXISTS (SELECT 1 FROM ats_jobs d
                                     WHERE d.duplicate_key = j.duplicate_key
-                                      AND d.expired_at IS NULL AND d.id < j.id)""")
+                                      AND d.expired_at IS NULL AND d.id < j.id)"""
+                        + (" LIMIT %s" if campione else ""),
+                        (campione,) if campione else None)
             for r in cur:
                 stima = {}
                 if r[13] is None and r[6] and r[20]:
@@ -225,16 +230,17 @@ def attive(dsn: str) -> int:
     manifest = {"date": dt.date.today().isoformat(), "rows": n,
                 "coverage": {k: round(100 * v / max(n, 1), 1)
                              for k, v in copertura.items()}}
-    with open(f"{CARTELLA}/manifest-ultimo.json.tmp", "w") as mf:
+    nome_manifest = "manifest-campione" if campione else "manifest-ultimo"
+    with open(f"{CARTELLA}/{nome_manifest}.json.tmp", "w") as mf:
         json.dump(manifest, mf, indent=1)
-    os.replace(f"{CARTELLA}/manifest-ultimo.json.tmp",
-               f"{CARTELLA}/manifest-ultimo.json")
+    os.replace(f"{CARTELLA}/{nome_manifest}.json.tmp",
+               f"{CARTELLA}/{nome_manifest}.json")
     log.info("manifest: %s", manifest["coverage"])
     return n
 
 
-def aziende(dsn: str) -> int:
-    percorso, f = _apri("aziende-segnali")
+def aziende(dsn: str, campione: int | None = None) -> int:
+    percorso, f = _apri("aziende-segnali" + ("-campione" if campione else ""))
     n = 0
     with psycopg.connect(dsn) as conn:
         # le competenze più chieste da ciascuna azienda: l'aggregato che
@@ -310,7 +316,9 @@ def aziende(dsn: str) -> int:
                   FROM ats_companies ac
                   LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
                   LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
-                 WHERE ac.is_active AND ac.job_count > 0""")
+                 WHERE ac.is_active AND ac.job_count > 0"""
+                        + (" ORDER BY ac.job_count DESC LIMIT %s" if campione else ""),
+                        (campione,) if campione else None)
             for r in cur:
                 cime = sorted(skill_per_azienda.get((r[0], r[1]), []),
                               reverse=True)[:15]
@@ -455,14 +463,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--flusso", action="store_true")
     ap.add_argument("--giorni", type=int, default=None,
                     help="per --scadute: solo le chiuse negli ultimi N giorni")
+    ap.add_argument("--campione", type=int, default=None,
+                    help="per --attive/--aziende: solo N righe, in un file "
+                         "«-campione» a parte (collaudo o assaggio)")
     args = ap.parse_args(argv)
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
     if args.attive:
-        print("attive:", attive(dsn))
+        print("attive:", attive(dsn, args.campione))
     if args.aziende:
-        print("aziende:", aziende(dsn))
+        print("aziende:", aziende(dsn, args.campione))
     if args.scadute:
         print("scadute:", scadute(dsn, args.giorni))
     if args.flusso:
