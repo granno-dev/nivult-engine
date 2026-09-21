@@ -5,12 +5,12 @@ Legge le offerte non ancora passate dal modello (marcatore `locale_v1_at`:
 prima le piu' recenti con data di fonte) e SCRIVE solo dove e' sicuro:
 
   - famiglia in job_classifications (model='nivult-v1', confidence) se
-    la confidenza supera la soglia del 95% misurata all'esame
-    (`soglie_95.family`, 0.75 il 07/09/2026); sotto, resta all'LLM;
-  - seniority / employment_type / remote SOLO dove la colonna e' NULL e
-    la confidenza supera SOGLIA_RIPIEGO (0.85): per queste teste nessuna
-    soglia ha raggiunto il 95% all'esame, quindi riempiono il vuoto, non
-    sovrascrivono mai un valore letto dalla fonte o da GLM;
+    la confidenza supera la soglia (dal 21/09/2026: al massimo 0,5 su ogni
+    testa, RIEMPI_V1 — un campo vuoto non si vende, un errore piccolo si
+    corregge; prima era la soglia del 95% misurata all'esame);
+  - seniority / employment_type / remote SOLO dove la colonna e' NULL:
+    riempiono il vuoto, non sovrascrivono mai un valore letto dalla fonte
+    o da GLM;
   - languages_required dove e' NULL, con le lingue a probabilita' >= 0.5
     (precisione misurata 0.875, copertura 0.808).
 
@@ -83,6 +83,18 @@ def main() -> int:
     soglia_sen = _soglia("seniority", SOGLIA_RIPIEGO)
     soglia_con = _soglia("employment_type", SOGLIA_CONTRATTO)
     soglia_rem = _soglia("remote", SOGLIA_RIPIEGO)
+    # RIEMPIRE, NON TACERE (decisione di Giuseppe, 21/09/2026). Sulle 40 righe
+    # del golden v2 lette col testo intero v1 aveva ragione sulla seniority 28
+    # volte su 35, ma la soglia 0,85 gliene lasciava scrivere DUE: su sei classi
+    # contigue la confidenza sta fra 0,5 e 0,7 anche quando ha ragione, e gli
+    # errori sono fra livelli vicini (senior/lead, junior/mid). Un campo vuoto
+    # non si vende; un errore piccolo si corregge. Tetto 0,5 su tutte e quattro
+    # le teste: sopra 0,5 la classe scelta e' comunque la piu' probabile con un
+    # margine. RIEMPI_V1=0 rimette le soglie al 95% di precisione.
+    if os.environ.get("RIEMPI_V1", "1") == "1":
+        tetto_soglia = float(os.environ.get("TETTO_SOGLIA_V1", "0.5"))
+        soglia_fam, soglia_sen = min(soglia_fam, tetto_soglia), min(soglia_sen, tetto_soglia)
+        soglia_con, soglia_rem = min(soglia_con, tetto_soglia), min(soglia_rem, tetto_soglia)
     print(f"soglie in uso: famiglia {soglia_fam} seniority {soglia_sen} "
           f"contratto {soglia_con} remoto {soglia_rem}", flush=True)
     st = {"viste": 0, "famiglie": 0, "seniority": 0, "contratto": 0, "remoto": 0,
