@@ -192,3 +192,40 @@ sapere quando si legge la precisione di chiunque.
 - **Uccidere il ciclo bash non uccide il python figlio.** Sei processi e tre
   modelli su una macchina da 8 GB: usare `deploy/riavvia_tec_mini.sh`.
 - **Su macOS «memoria libera» mente**: guardare `memory_pressure`.
+
+## v2 (21/09/2026): il maestro nuovo, e il buttafuori tolto dai pesi
+
+Il dataset v2 sostituisce le righe del 2B ovunque tranne nelle quattro famiglie
+informatiche (Software, Technology, Data & Analytics, Engineering, dove il 2B
+lasciava vuoto meno del 25%): **31.631 annunci** etichettati da DeepSeek con la
+stessa rubrica misurata sui golden, 1.000 per famiglia su tutte e 33, filtrati
+dalla rubrica (`filtro_rubrica.py`, che ora conosce anche le app di benessere e
+gli oggetti generici), spesa 9,23 $. Il maestro, misurato prima: sulle 200 righe
+IT precisione 71,1%, richiamo 88,9%; sulle 104 delle otto famiglie richiamo
+79,4%, Trades 28/28. Le righe più lunghe della finestra sono spezzate in
+finestre sovrapposte come in produzione (`--finestra 1024`), e il taglio a
+20.000 caratteri dell'addestramento è sparito.
+
+Addestrato su RunPod (A40, 3.000 passi, checkpoint ogni 250), esaminato **ogni
+checkpoint** sui due golden, tagliato e a finestre. Il picco è al passo
+**1.750**; dopo, il richiamo fuori dall'informatica cala (copia il maestro,
+compresi i silenzi). A finestre, come in produzione:
+
+| | precisione | richiamo | F1 |
+|---|---|---|---|
+| IT, v1 in produzione | 93,0% | 64,9% | 76,4% |
+| **IT, v2 ck-01750, soglia 0,40** | **89,9%** | **72,6%** | **80,4%** |
+| 8 famiglie, v1 in produzione | 91,7% | 31,9% | 47,3% |
+| **8 famiglie, v2 ck-01750, soglia 0,40** | **76,3%** | **65,2%** | **70,3%** |
+
+La soglia 0,40 è scelta per la precisione: a 0,30 l'F1 è lo stesso ma la
+precisione IT scende a 85,2% e quella delle otto famiglie a 69,7%. A 0,50 si
+risale (92,2% e 73,5%) pagando il richiamo (66,6% e 52,2%): è il bottone da
+girare se il prodotto preferisce dire meno cose e più sicure. **Il prezzo del
+richiamo fuori dall'informatica è la precisione**: da 92% a 76% su 104 righe
+(±9 punti), con un maestro che a sua volta sta al 70-80%. Il golden delle otto
+famiglie va allargato prima di stringere ancora.
+
+In produzione sul Mac mini dal 21/09 alle 16:38 (`tec-v2-ck01750`, soglia
+0,40, lotto 4 dopo un «MPS out of memory» a lotto 8): 406.000 offerte/giorno,
+1,9 nomi per annuncio contro 1,8 della v1 nello stesso flusso.
