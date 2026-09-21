@@ -67,7 +67,12 @@ def attive(dsn: str) -> int:
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
                                 "country", "skills", "employment_type",
-                                "contact_email")}
+                                "contact_email", "seniority", "remote",
+                                "technologies", "summary", "benefits",
+                                "shift_schedule", "work_hours",
+                                "management_level", "valid_through",
+                                "state", "geo", "recruiter", "job_sources",
+                                "department", "salary_text")}
     with psycopg.connect(dsn) as conn:
         # il benchmark in memoria: stima SOLO dove l'annuncio tace, in
         # campi SEPARATI e dichiarati — mai mescolata con l'osservato
@@ -90,12 +95,42 @@ def attive(dsn: str) -> int:
                                              j.fetched_at), j.fetched_at,
                        {_DESCR}, x.family,
                        j.employment_type, j.contact_email,
-                       j.languages_required
+                       j.languages_required,
+                       -- 21/09/2026: i campi che il mercato (Coresignal,
+                       -- TheirStack) espone e noi avevamo o abbiamo appena
+                       -- calcolato; tutti dichiarati per quello che sono
+                       j.external_id, j.department, j.orario, j.durata,
+                       j.salary_period, j.salary_da, j.posted_at_estimated,
+                       t.tecnologie, sf.sintesi, sf.da,
+                       d.management_level, d.is_decision_maker,
+                       d.shift_schedule, d.work_hours, d.is_urgently_hiring,
+                       d.benefits, d.salary_text, d.valid_through, d.state,
+                       d.postal_code, d.latitude, d.longitude, d.geo_da,
+                       d.applicants_count, d.is_easy_apply, d.recruiter,
+                       fo.job_sources
                   FROM ats_jobs j
                   LEFT JOIN ats_companies co
                          ON co.platform_id = j.platform_id
                         AND co.slug = j.slug
                   LEFT JOIN job_classifications x ON x.job_id = j.id
+                  LEFT JOIN tecnologie_v1 t ON t.job_id = j.id
+                  LEFT JOIN sintesi_finali sf ON sf.job_id = j.id
+                  LEFT JOIN offerte_dettagli d ON d.job_id = j.id
+                  -- le altre copie della stessa offerta (job_sources):
+                  -- correlata e non la vista offerte_fonti, che il
+                  -- pianificatore materializzerebbe per intero
+                  LEFT JOIN LATERAL (
+                       SELECT jsonb_agg(jsonb_build_object(
+                                'id', k.id, 'ats', k.platform_id,
+                                'company_slug', k.slug, 'url', k.url,
+                                'posted_at', k.posted_at,
+                                'status', CASE WHEN k.expired_at IS NULL
+                                               THEN 'active' ELSE 'expired' END)
+                                ORDER BY k.posted_at DESC NULLS LAST) AS job_sources
+                         FROM ats_jobs k
+                        WHERE j.duplicate_key IS NOT NULL
+                          AND k.duplicate_key = j.duplicate_key
+                          AND k.id <> j.id) fo ON true
                  WHERE j.expired_at IS NULL
                    -- un annuncio per chiave (titolo+azienda+citta'): nel
                    -- corpus i doppi restano (10.573 gruppi il 06/09), al
@@ -122,6 +157,13 @@ def attive(dsn: str) -> int:
                             "salary_estimate_basis":
                                 f"Nivult benchmark: {camp} observed "
                                 f"postings, {livello}"}
+                (ext_id, department, orario, durata, sal_period, sal_da,
+                 posted_est, tecnologie, sintesi, sintesi_da, mgmt,
+                 decisore, turni, ore, urgente, benefits, sal_testo,
+                 valid_through, state, cap, lat, lon, geo_da, candidati,
+                 easy, recruiter, fonti) = r[24:51]
+                geo = ({"latitude": lat, "longitude": lon, "source": geo_da}
+                       if lat is not None else None)
                 f.write(_riga(
                     id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
                     company=r[4], url=r[5], country=r[6], city=r[7],
@@ -133,7 +175,24 @@ def attive(dsn: str) -> int:
                     first_seen=r[17], last_seen=r[18], description=r[19],
                     category=r[20], employment_type=r[21],
                     contact_email=r[22],
-                    languages_required=list(r[23] or []), **stima))
+                    languages_required=list(r[23] or []), **stima,
+                    external_id=ext_id, department=department,
+                    hours_type=orario, duration_type=durata,
+                    salary_period=sal_period, salary_source=sal_da,
+                    salary_text=sal_testo,
+                    posted_at_estimated=True if posted_est else None,
+                    technologies=list(tecnologie or []),
+                    summary=sintesi, summary_source=sintesi_da,
+                    management_level=mgmt,
+                    is_decision_maker=True if decisore else None,
+                    shift_schedule=turni, work_hours=ore,
+                    is_urgently_hiring=True if urgente else None,
+                    benefits=list(benefits or []),
+                    valid_through=valid_through, state=state,
+                    postal_code=cap, geo=geo,
+                    applicants_count=candidati,
+                    is_easy_apply=True if easy else None,
+                    recruiter=recruiter, job_sources=list(fonti or [])))
                 n += 1
                 copertura["salary_observed"] += r[13] is not None
                 copertura["salary_estimate"] += bool(stima)
@@ -144,6 +203,21 @@ def attive(dsn: str) -> int:
                 copertura["skills"] += bool(r[12])
                 copertura["employment_type"] += r[21] is not None
                 copertura["contact_email"] += r[22] is not None
+                copertura["seniority"] += r[10] is not None
+                copertura["remote"] += r[11] is not None
+                copertura["technologies"] += bool(tecnologie)
+                copertura["summary"] += bool(sintesi)
+                copertura["benefits"] += bool(benefits)
+                copertura["shift_schedule"] += turni is not None
+                copertura["work_hours"] += ore is not None
+                copertura["management_level"] += mgmt is not None
+                copertura["valid_through"] += valid_through is not None
+                copertura["state"] += state is not None
+                copertura["geo"] += geo is not None
+                copertura["recruiter"] += bool(recruiter)
+                copertura["job_sources"] += bool(fonti)
+                copertura["department"] += bool(department)
+                copertura["salary_text"] += sal_testo is not None
     _chiudi(percorso, f, n)
     # il manifest: la copertura di ogni campo, dichiarata. I venditori
     # seri pubblicano i fill-rate; i buchi dichiarati sono un argomento
@@ -176,6 +250,19 @@ def aziende(dsn: str) -> int:
             for pid, slug, skill, cnt in cur:
                 skill_per_azienda.setdefault((pid, slug), []).append(
                     (cnt, skill))
+        # le tecnologie DELL'AZIENDA, con prima e ultima data in cui sono
+        # comparse in un suo annuncio (vista materializzata, rinfrescata
+        # ogni mattina da deploy/rinfresca-viste.sh)
+        tec_per_azienda: dict = {}
+        with conn.cursor(name="esp_tec") as cur:
+            cur.itersize = 5000
+            cur.execute("""
+                SELECT platform_id, slug, technology, annunci, annunci_attivi,
+                       first_verified_at, last_verified_at
+                  FROM azienda_tecnologie""")
+            for pid, slug, tec, tot, att, primo, ultimo in cur:
+                tec_per_azienda.setdefault((pid, slug), []).append(
+                    (att, tot, tec, primo, ultimo))
         with conn.cursor(name="esp_az") as cur:
             cur.itersize = 2000
             cur.execute("""
@@ -212,13 +299,30 @@ def aziende(dsn: str) -> int:
                        (SELECT array_agg(DISTINCT j.lang) FROM ats_jobs j
                          WHERE j.platform_id = ac.platform_id
                            AND j.slug = ac.slug AND j.expired_at IS NULL
-                           AND j.lang IS NOT NULL)
+                           AND j.lang IS NOT NULL),
+                       -- 21/09/2026: la scheda azienda (aziende_dettagli)
+                       ac.site_domain, ac.lei, ac.company_name_source,
+                       ad.size_range, ad.size_da, ad.locations,
+                       ad.n_locations, ad.hq_country, ad.hq_state,
+                       ad.hq_city, ad.hq_street, ad.hq_zipcode,
+                       ad.hq_full_address, ad.hq_da, ad.description,
+                       ad.description_da, ad.external_urls, ad.keywords
                   FROM ats_companies ac
                   LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
+                  LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
                  WHERE ac.is_active AND ac.job_count > 0""")
             for r in cur:
                 cime = sorted(skill_per_azienda.get((r[0], r[1]), []),
                               reverse=True)[:15]
+                tec = sorted(tec_per_azienda.get((r[0], r[1]), []),
+                             reverse=True)[:25]
+                (sito, lei, nome_da, size_range, size_da, sedi, n_sedi,
+                 hq_paese, hq_stato, hq_citta, hq_via, hq_cap, hq_indirizzo,
+                 hq_da, descr, descr_da, urls, keywords) = r[15:33]
+                hq = ({"country": hq_paese, "state": hq_stato,
+                       "city": hq_citta, "street": hq_via,
+                       "zipcode": hq_cap, "full_address": hq_indirizzo,
+                       "source": hq_da} if hq_da else None)
                 f.write(_riga(
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
                     domain=r[4], logo=r[5], active_jobs=r[6],
@@ -227,7 +331,17 @@ def aziende(dsn: str) -> int:
                     industry_source=r[12],
                     jobs_posted_30d=r[13],
                     languages=list(r[14] or []),
-                    top_skills=[{"skill": s, "jobs": c} for c, s in cime]))
+                    top_skills=[{"skill": s, "jobs": c} for c, s in cime],
+                    website=sito, lei=lei, company_name_source=nome_da,
+                    size_range=size_range, size_range_source=size_da,
+                    locations=list(sedi or []), n_locations=n_sedi,
+                    headquarters=hq, description=descr,
+                    description_source=descr_da,
+                    external_urls=list(urls or []), keywords=keywords,
+                    technologies=[{"technology": t, "active_jobs": a,
+                                   "jobs": tot, "first_verified_at": p,
+                                   "last_verified_at": u}
+                                  for a, tot, t, p, u in tec]))
                 n += 1
     _chiudi(percorso, f, n)
     return n

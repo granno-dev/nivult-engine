@@ -97,7 +97,7 @@ RIGHE=$(cat <<'EOF'
 30 6 * * * /opt/nivult/engine/deploy/passo-diurno.sh domini nivult.ats.domini_datori --limite 2000
 0 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh dettagli nivult.ats.dettagli --limite 400000
 40 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh aziende-dettagli nivult.ats.aziende_dettagli --limite 20000
-20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
+20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
 30 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito nivult.ats.scheda_sito --limite 400
 15 8 * * * /opt/nivult/engine/deploy/passo-diurno.sh loghi-dominio nivult.ats.loghi --da-dominio --limite 2500
 0 9 * * * /opt/nivult/engine/deploy/passo-diurno.sh glm-extra nivult.ats.estrai_extra --glm 600
@@ -148,6 +148,7 @@ altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" \
 # diff. Il ponte a 05:00 e' stato sostituito da quello ogni 30 minuti.
 OBSOLETE=$(cat <<'EOF'
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
+20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 EOF
 )
 
@@ -155,6 +156,13 @@ EOF
 # segnalano. E' la differenza fra «lo script e' la fonte di verita'» e
 # «lo script cancella cio' che non ha ancora imparato»: la seconda ha
 # gia' spento la sentinella una volta.
+# Una riga obsoleta senza `/opt/nivult/` nel testo (la REFRESH lanciata con
+# docker, 21/09) finiva fra le «altrui» e sopravviveva: si toglie anche da li'.
+altrui=$(while IFS= read -r r; do
+  [[ -n "$r" ]] && grep -Fqx "$r" <<<"$OBSOLETE" && continue
+  printf '%s\n' "$r"
+done <<<"$altrui")
+
 ignote=$(grep '/opt/nivult/' <<<"$attuale" | grep -v "^#" | while IFS= read -r r; do
   [[ -z "$r" ]] && continue
   grep -Fqx "$r" <<<"$RIGHE" && continue

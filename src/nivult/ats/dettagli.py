@@ -448,7 +448,19 @@ def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = Fals
             if not dry:
                 with c.cursor() as cur:
                     cur.executemany(SQL_SCRIVI, valori)
-                c.execute("UPDATE ats_jobs SET dettagli_at = now() WHERE id = ANY(%s::uuid[])", (ids,))
+                # ats_jobs e' aggiornata anche dai demoni (v1, ripassi) a lotti:
+                # il primo riempimento e' morto per deadlock alla riga 84.000
+                # (21/09). Id in ordine e ritentativi, come nelle migrazioni.
+                ids.sort()
+                for tentativo in range(10):
+                    try:
+                        c.execute("UPDATE ats_jobs SET dettagli_at = now() WHERE id = ANY(%s::uuid[])", (ids,))
+                        break
+                    except psycopg.errors.DeadlockDetected:
+                        log.warning("dettagli: deadlock su ats_jobs, tentativo %d", tentativo + 1)
+                        time.sleep(2 + 3 * tentativo)
+                else:
+                    raise RuntimeError("dettagli: deadlock persistente su ats_jobs")
             dt = time.time() - t0
             log.info("dettagli: %s", {**st, "al_secondo": round(st["viste"] / max(dt, 1e-6), 1)})
     return st
