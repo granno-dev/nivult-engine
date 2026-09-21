@@ -95,6 +95,8 @@ RIGHE=$(cat <<'EOF'
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
 50 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --mix
 30 6 * * * /opt/nivult/engine/deploy/passo-diurno.sh domini nivult.ats.domini_datori --limite 2000
+0 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh dettagli nivult.ats.dettagli --limite 400000
+20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 30 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito nivult.ats.scheda_sito --limite 400
 15 8 * * * /opt/nivult/engine/deploy/passo-diurno.sh loghi-dominio nivult.ats.loghi --da-dominio --limite 2500
 0 9 * * * /opt/nivult/engine/deploy/passo-diurno.sh glm-extra nivult.ats.estrai_extra --glm 600
