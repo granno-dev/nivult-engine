@@ -173,6 +173,8 @@ _DEMONI = (
      "rileva nuovi ATS, verifica i domini, elimina gli account morti"),
     ("certificati", "radar certificati",
      "ascolta i certificati HTTPS del mondo e coglie i career site nuovi"),
+    ("testi", "recupero del testo",
+     "scarica il testo di dettaglio dove l'elenco della piattaforma non lo porta"),
     ("api", "sito e cruscotto",
      "risponde al sito, a questa pagina e ai webhook"),
 )
@@ -340,12 +342,35 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
           FROM ats_companies WHERE is_active AND job_count > 0""")[0]
+    # i data point del 21/09/2026 (al pari di Coresignal): dettagli
+    # dell'annuncio, tecnologie dalla testa v2, altre copie della stessa
+    # offerta, reparto, orario/durata, testo del salario
+    extra = _righe(ats_dsn, """
+        SELECT count(j.duplicate_key), count(j.department), count(j.orario), count(j.durata),
+               count(d.benefits), count(d.shift_schedule), count(d.work_hours),
+               count(d.management_level), count(d.valid_through), count(d.state),
+               count(d.latitude), count(d.recruiter), count(d.salary_text),
+               count(*) FILTER (WHERE d.is_urgently_hiring)
+          FROM ats_jobs j LEFT JOIN offerte_dettagli d ON d.job_id = j.id
+         WHERE j.expired_at IS NULL""")[0]
+    tec = _uno(ats_dsn, """
+        SELECT count(*) FROM tecnologie_v1 t JOIN ats_jobs j ON j.id = t.job_id
+         WHERE j.expired_at IS NULL AND t.quante > 0""") or 0
     campi = [("paese", r[0]), ("descrizione", r[5]),
              ("lingua dell'annuncio", r[8]), ("lingue richieste", r[9]),
              ("seniority", r[2]),
              ("lavoro remoto", r[3]), ("competenze", r[4]),
              ("tipo di contratto", r[6]), ("contatto nell'annuncio", r[7]),
-             ("salario", r[1])]
+             ("salario", r[1]),
+             ("tecnologie (testa v2)", tec),
+             ("altre copie della stessa offerta", extra[0]),
+             ("reparto", extra[1]), ("orario (pieno/parziale)", extra[2]),
+             ("durata del rapporto", extra[3]), ("benefit", extra[4]),
+             ("turni", extra[5]), ("orario di lavoro", extra[6]),
+             ("livello manageriale", extra[7]), ("scadenza dichiarata", extra[8]),
+             ("regione/stato", extra[9]), ("coordinate", extra[10]),
+             ("recruiter", extra[11]), ("salario nel testo", extra[12]),
+             ("assunzione urgente", extra[13])]
     v = [{"campo": k, "n": n,
           "pct": round(100 * n / attive, 1) if attive else 0}
          for k, n in campi]
@@ -649,6 +674,64 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
             "SELECT count(*) FROM ats_jobs WHERE expired_at IS NOT NULL"),
         "paesi_memoria": _forse(
             "SELECT count(*) FROM azienda_paese"),
+        "offerte_dettagli": _forse("SELECT count(*) FROM offerte_dettagli"),
+        "schede_registro": _forse("SELECT count(*) FROM aziende_registro"),
+        "schede_azienda": _forse("SELECT count(*) FROM aziende_dettagli"),
+    }
+
+    # ── la scheda azienda (22/09/2026): quanto sappiamo di ogni azienda
+    # viva, campo per campo, con le fonti che il compratore vede ──
+    try:
+        tot_az = _uno(ats_dsn, "SELECT count(*) FROM ats_companies WHERE is_active AND job_count > 0") or 0
+        a = _righe(ats_dsn, """
+            SELECT count(ac.company_name),
+                   count(*) FILTER (WHERE ac.country IS NOT NULL OR EXISTS (SELECT 1 FROM azienda_paese ap WHERE ap.platform_id = ac.platform_id AND ap.slug = ac.slug)),
+                   count(coalesce(ac.industry_reg, ac.industry, ac.industry_site, ac.industry_mix)),
+                   count(ad.employees_best), count(*) FILTER (WHERE ad.employees_scope = 'group'),
+                   count(ad.size_range), count(ad.hq_city), count(ad.hq_street),
+                   count(ad.legal_form), count(ad.founded), count(ad.registration_id),
+                   count(ad.description), count(*) FILTER (WHERE ad.description_da LIKE 'sito%'),
+                   count(*) FILTER (WHERE ad.keywords ? 'tecnologie' AND jsonb_array_length(ad.keywords->'tecnologie') > 0),
+                   count(coalesce(ac.site_domain, ac.logo_domain)), count(ac.logo_url), count(ac.lei),
+                   count(*) FILTER (WHERE ad.n_locations > 1)
+              FROM ats_companies ac LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
+             WHERE ac.is_active AND ac.job_count > 0""")[0]
+        etich = ("nome", "paese (dichiarato o dalle offerte)", "settore", "dipendenti", "dipendenti del gruppo (non unità legale)",
+                 "fascia dimensionale", "sede (città)", "sede con via e CAP (registro)", "forma giuridica",
+                 "anno di fondazione", "identificativo di registro", "descrizione", "descrizione dal sito",
+                 "tecnologie usate", "sito web", "logo", "LEI", "più di una sede")
+        d["scheda_azienda"] = [{"campo": k, "n": n, "pct": round(100 * n / tot_az, 1) if tot_az else 0}
+                               for k, n in zip(etich, a)]
+        d["scheda_azienda_tot"] = tot_az
+        nomi_reg = {"companies_house": "Regno Unito · Companies House", "sirene": "Francia · SIRENE",
+                    "corporations_canada": "Canada · Corporations Canada (federali)", "edgar": "USA · SEC EDGAR (quotate)",
+                    "gleif": "GLEIF (chi ha un LEI)", "kbo": "Belgio · KBO/BCE", "brreg": "Norvegia · Brønnøysund",
+                    "prh": "Finlandia · PRH", "cvr": "Danimarca · CVR", "ares": "Cechia · ARES", "rpo": "Slovacchia · RPO"}
+        d["registri"] = [{"fonte": nomi_reg.get(f, f), "n": n} for f, n in
+                         _righe(ats_dsn, "SELECT fonte, count(*) FROM aziende_registro GROUP BY 1 ORDER BY 2 DESC")]
+    except Exception as e:                            # noqa: BLE001
+        log.warning("cruscotto: scheda azienda non leggibile (%s): %s", type(e).__name__, str(e)[:120])
+        d["scheda_azienda"], d["scheda_azienda_tot"], d["registri"] = [], 0, []
+
+    # ── i modelli in casa: ritmo e coda, letti dal database e non dai log ──
+    def _modello(sql_ultima, sql_24h, sql_coda):
+        try:
+            u = _uno(ats_dsn, sql_ultima)
+            return {"ultima": str(u or ""), "eta_min": int((time.time() - u.timestamp()) // 60) if u else None,
+                    "ore24": _uno(ats_dsn, sql_24h) or 0, "coda": _uno(ats_dsn, sql_coda) or 0}
+        except Exception as e:                        # noqa: BLE001
+            log.warning("cruscotto: modello non leggibile: %s", str(e)[:120])
+            return {}
+    d["modelli"] = {
+        "v1": _modello("SELECT max(locale_v1_at) FROM ats_jobs WHERE locale_v1_at > now() - interval '7 days'",
+                       "SELECT count(*) FROM ats_jobs WHERE locale_v1_at > now() - interval '24 hours'",
+                       "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL AND locale_v1_at IS NULL"),
+        "tec": _modello("SELECT max(creato_at) FROM tecnologie_v1 WHERE creato_at > now() - interval '7 days'",
+                        "SELECT count(*) FROM tecnologie_v1 WHERE creato_at > now() - interval '24 hours'",
+                        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL AND tec_v1_at IS NULL"),
+        "mt5": _modello("SELECT max(creato_at) FROM sintesi_mt5",
+                        "SELECT count(*) FROM sintesi_mt5 WHERE creato_at > now() - interval '24 hours'",
+                        "SELECT count(*) FROM sintesi_mt5"),
     }
 
     # ── completezza delle NUOVE (created_at esiste dal 04/09/26 sera:
@@ -674,7 +757,35 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
     return d
 
 
+# ── un solo calcolo alla volta (22/09/2026) ────────────────────────
+# Il tick della pagina arriva ogni 30 s e la parte «viva» fa scansioni
+# vere su ats_jobs (count su fetched_at, posted_at, attive). Con il
+# database sotto carico ogni tick durava piu' di 30 s, i tick si
+# accavallavano e alle 15:30 c'erano 23 sessioni attive dell'API, la piu'
+# vecchia da 8 minuti: il cruscotto stesso pesava sul database piu' dei
+# demoni. Ora un tick che trova un calcolo in corso riusa l'ultimo
+# risultato, e un risultato fresco (< 20 s) si serve senza ricalcolare.
+_CACHE_MET: dict = {"t": 0.0, "v": None}
+_LOCK_MET = __import__("threading").Lock()
+
+
 def metriche(ats_dsn: str, motore_dsn: str) -> dict:
+    if _CACHE_MET["v"] is not None and time.time() - _CACHE_MET["t"] < 20:
+        return _CACHE_MET["v"]
+    if not _LOCK_MET.acquire(blocking=False):
+        if _CACHE_MET["v"] is not None:
+            return _CACHE_MET["v"]
+        with _LOCK_MET:                     # primissimo giro: si aspetta
+            return _CACHE_MET["v"] if _CACHE_MET["v"] is not None else _metriche_calcola(ats_dsn, motore_dsn)
+    try:
+        v = _metriche_calcola(ats_dsn, motore_dsn)
+        _CACHE_MET.update(t=time.time(), v=v)
+        return v
+    finally:
+        _LOCK_MET.release()
+
+
+def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
     d: dict = {}
 
     # ── parte viva: fresca a ogni tick ──
@@ -781,8 +892,9 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
     for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
               "andamento", "freschezza", "per_scoperta", "attivazione",
               "nuove_aziende", "ats_pending", "arricchimento", "nuove24",
-              "raccolta_oraria", "magazzino"):
-        d[k] = pes[k]
+              "raccolta_oraria", "magazzino", "scheda_azienda",
+              "scheda_azienda_tot", "registri", "modelli"):
+        d[k] = pes.get(k)     # .get: la cache su disco puo' venire dal codice di prima
     d["salute"] = dict(pes["salute"])
     d["salute"]["offerte_attive"] = attive
 
@@ -1332,9 +1444,26 @@ async function tick(){
    +c(mg.aziende_con_settore,'aziende con settore','registri pubblici, Wikidata o mix delle offerte')
    +c(mg.aziende_con_organico,'aziende con organico','registri, Wikidata o dichiarato negli annunci')
    +c(mg.paesi_memoria,'coppie azienda-paese','per i segnali di espansione')
+   +c(mg.offerte_dettagli,'offerte con i dettagli','benefit, turni, livello, scadenza, geo, recruiter')
+   +c(mg.schede_azienda,'schede azienda','sede, fascia, forma giuridica, descrizione, tecnologie')
+   +c(mg.schede_registro,'schede dai registri','sede legale e forma giuridica certificate')
    +'</div>';})(d.magazzino)
- +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min</span></div>'
+ +'<div class="sect"><h2>Quanto sappiamo di ogni offerta</h2><span class="note">percentuale di offerte attive con quel dato · si aggiorna ogni 10 min · i dati nuovi del 21/09 salgono man mano che i riempimenti avanzano</span></div>'
  +copertura(d.arricchimento)
+ +`<div class="sect"><h2>Quanto sappiamo di ogni azienda</h2><span class="note">percentuale delle ${IT(d.scheda_azienda_tot)} aziende con offerte aperte · «dipendenti del gruppo» = Wikidata o sito, non l’unità legale del registro</span></div>`
+ +copertura(d.scheda_azienda)
+ +'<div class="cols">'
+ +'<div><div class="sect"><h2>Registri delle imprese</h2><span class="note">schede con sede legale e forma giuridica, per fonte</span></div>'+lista(d.registri,'fonte','n')+'</div>'
+ +(function(mo){if(!mo)return '<div></div>';
+   const riga=(m,nome,dove,nota)=>{if(!m||!m.ultima)return card('—',nome,nota||'nessun dato');
+     const fermo=m.eta_min==null||m.eta_min>180;const cl=fermo?'bad':'ok';
+     return card(`<span class="${cl}">${IT(m.ore24)}</span>`,nome+' · ultime 24h',`${dove} · ${fermo?'fermo da':'ultima'} ${m.eta_min==null?'—':m.eta_min<60?m.eta_min+' min':Math.round(m.eta_min/60)+' h'} · ${nota||('in coda '+IT(m.coda))}`);};
+   return '<div><div class="sect"><h2>I modelli in casa</h2><span class="note">offerte lette nelle ultime 24 ore, e quante ne restano</span></div><div class="grid">'
+   +riga(mo.v1,'v1 — famiglia, seniority, contratto, remoto','N5')
+   +riga(mo.tec,'tecnologie v2','Mac mini')
+   +(mo.mt5&&mo.mt5.ultima?card(IT(mo.mt5.coda),'sintesi mT5 in tabella','SPENTO per scelta dal 21/09: nessuno le legge · ultima '+esc(mo.mt5.ultima.slice(0,16))):'')
+   +'</div></div>';})(d.modelli)
+ +'</div>'
  +'<div class="cols3">'
  +'<div><div class="sect"><h2>Per piattaforma</h2></div>'+ciambella(d.per_fonte,'fonte','attive','offerte')+'</div>'
  +'<div><div class="sect"><h2>Per paese</h2></div>'+ciambella(d.per_paese,'paese','attive','offerte')+'</div>'
