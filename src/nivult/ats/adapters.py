@@ -2734,13 +2734,29 @@ class Eightfold(BaseAdapter):
                 if not pid or pid in visti:
                     continue
                 visti.add(pid)
-                luoghi = p.get("work_locations") or []
+                # 22/09/2026: il campo si chiama locations (non
+                # work_locations) sui tenant visti in produzione — e il
+                # paese stava nel grezzo senza essere letto (0% sulle
+                # attive). Forma: «Dublin,IE-L,Ireland» — citta', codice
+                # regione ISO-3166-2, paese per esteso.
+                luoghi = p.get("work_locations") or p.get("locations") or []
+                loc0 = luoghi[0] if luoghi else None
+                citta = paese = None
+                if loc0:
+                    pezzi = [x.strip() for x in loc0.split(",") if x.strip()]
+                    if pezzi:
+                        citta = pezzi[0]
+                        paese = _iso(pezzi[-1])
+                        if not paese and len(pezzi) > 1:
+                            m_reg = re.fullmatch(r"([A-Z]{2})-[A-Z0-9]{1,3}",
+                                                 pezzi[1])
+                            paese = m_reg.group(1) if m_reg else None
                 out.append(AtsJob(
                     platform_id=self.platform_id, slug=slug,
                     external_id=pid,
                     title=p.get("name") or "",
                     url=f"{base}/job/{pid}",
-                    location=luoghi[0] if luoghi else None,
+                    location=loc0, city=citta, country=paese,
                     raw=p))
             if len(posizioni) < self.PER_PAGINA:
                 break
