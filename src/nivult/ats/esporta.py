@@ -169,11 +169,18 @@ def attive(dsn: str, campione: int | None = None) -> int:
                           AND k.id <> j.id) fo ON true
                  WHERE j.expired_at IS NULL
                    -- un annuncio per chiave (titolo+azienda+citta'): nel
-                   -- corpus i doppi restano (10.573 gruppi il 06/09), al
-                   -- cliente arriva il piu' vecchio di ciascun gruppo
+                   -- corpus i doppi restano (10.573 gruppi il 06/09). Al
+                   -- cliente arriva il piu' VECCHIO di ciascun gruppo: il
+                   -- confronto e' sul first_seen (created_at, poi posted_at,
+                   -- poi fetched_at — mai NULL), non sull'id: e' un uuid4,
+                   -- e ordinarlo non ordina niente (fino al 22/09 arrivava
+                   -- un membro a caso del gruppo). Spareggio su id perche'
+                   -- la scelta resti unica e stabile fra due esportazioni.
                    AND NOT EXISTS (SELECT 1 FROM ats_jobs d
                                     WHERE d.duplicate_key = j.duplicate_key
-                                      AND d.expired_at IS NULL AND d.id < j.id)"""
+                                      AND d.expired_at IS NULL
+                                      AND (COALESCE(d.created_at, d.posted_at, d.fetched_at), d.id)
+                                          < (COALESCE(j.created_at, j.posted_at, j.fetched_at), j.id))"""
                         + (" LIMIT %s" if campione else ""),
                         (campione,) if campione else None)
             for r in cur:
