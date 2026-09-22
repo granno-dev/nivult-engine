@@ -22,19 +22,29 @@ LOCAL_DIR="$BASE/backups"
 STATE="$BASE/backup-state"
 CONTAINER=nivult-db-1
 DB_SUPERUSER=nivult
-# 3 giorni locali, non 14. Misurato il 13/09/2026: i backup pesano ~4,5 GB
-# e crescono di ~0,4 GB al giorno; a 14 giorni occupavano 24 GB su un disco
-# da 75 condiviso col database, arrivato al 98% con 1,5 GB liberi — meno di
-# un backup. Le copie esterne sono DUE e verificate: la Storage Box con
-# confronto sha256 fra i due lati (sotto), e il N5 che tira i file ogni
-# mattina alle 06:00 (deploy/copia-backup-n5.sh). Il ritardo massimo del N5
-# e' quindi tre ore: tre giorni locali coprono qualunque finestra di guasto.
+# Di fatto su Hetzner resta solo il backup di oggi: archivia-sul-n5.sh
+# (06:40) sposta tutto il resto sul N5 (22/09/2026, GIORNI_BACKUP=0). I 3
+# giorni qui sotto sono il tetto se l'archiviazione salta. Le copie esterne
+# sono DUE e verificate: la Storage Box con confronto sha256 fra i due lati
+# (sotto), e il N5 che tira i file ogni mattina alle 06:00
+# (deploy/copia-backup-n5.sh). Il ritardo massimo del N5 e' quindi tre ore:
+# tre giorni locali coprono qualunque finestra di guasto.
 LOCAL_KEEP_DAYS=3
 REMOTE_KEEP_DAYS=90
 MIN_BYTES=500
 
 log()  { echo "$(date -Is) $*"; logger -t nivult-backup -- "$*" || true; }
 die()  { log "ERRORE: $*"; printf 'failed\t%s\t%s\n' "$(date -Is)" "$*" > "$STATE"; exit 1; }
+
+# flock come in nightly.sh: il cron delle 03:00 e `runbook.sh backup`
+# (unità nivult-backup-runbook) possono altrimenti scrivere insieme sullo
+# stesso $OUT.part. Un doppione saltato NON e' un backup fallito: si esce
+# con 0 e senza toccare $STATE, o la sentinella aprirebbe un falso incidente.
+exec 9>/var/run/nivult-backup.lock
+if ! flock -n 9; then
+  log "un altro backup e' in corso: salto"
+  exit 0
+fi
 
 [ -r "$RECIPIENT" ] || die "certificato di cifratura assente: $RECIPIENT"
 mkdir -p "$LOCAL_DIR"
@@ -55,6 +65,19 @@ OUT="$LOCAL_DIR/nivult-$STAMP.sql.gz.enc"
 if [ "${SOLO_INVIO:-0}" = "1" ] && [ -s "$OUT" ]; then
   log "SOLO_INVIO: salto il dump, uso $OUT"
 else
+  # Preflight disco, PRIMA del dump. Il 22/09/2026 il dump da 7 GB ha
+  # riempito i 75 GB di Hetzner: Postgres ha perso il checkpointer e la
+  # notte e' saltata. Servono l'ultimo backup + un margine; se non bastano
+  # si muore rumorosi (die -> STATE failed -> la sentinella chiama) invece
+  # che a meta' dump, col database che scrive fino all'ultimo byte.
+  ultimo=$(ls -t "$LOCAL_DIR"/nivult-*.sql.gz.enc 2>/dev/null | head -1 || true)
+  if [ -n "$ultimo" ]; then
+    bisogno=$(( $(stat -c%s "$ultimo") * 13 / 10 ))
+  else
+    bisogno=$(( 8 * 1073741824 ))
+  fi
+  libero=$(df --output=avail -B1 / | tail -1)
+  [ "$libero" -ge "$bisogno" ] || die "disco insufficiente per il dump: $(( libero / 1073741824 )) GB liberi, ne servono ~$(( bisogno / 1073741824 )) (ultimo backup + 30%)"
   log "dump in corso -> $OUT"
   docker exec "$CONTAINER" pg_dumpall -U "$DB_SUPERUSER" \
     | gzip -9 \

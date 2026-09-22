@@ -70,8 +70,16 @@ while IFS= read -r f; do sposta "$f" gpu; done \
 # spostano quelle non toccate da GIORNI_MODELLI giorni, tranne quelle in produzione.
 GIORNI_MODELLI=${GIORNI_MODELLI:-3}
 if [ -x /opt/nivult/gpu/archivia-modelli.sh ]; then
-  freddi=$(find /opt/nivult/gpu -maxdepth 1 -type d -mtime +$GIORNI_MODELLI              -not -name gpu -not -name mt5-epoca2 -not -name v1-200k -not -name tecnologie-v1 2>/dev/null)
-  [ -n $freddi ] && /opt/nivult/gpu/archivia-modelli.sh $freddi >> $LOG 2>&1
+  # array con l'idioma while-read del file, non [ -n $freddi ]: non
+  # quotata, con due cartelle il test falliva («too many arguments») e i
+  # modelli freddi non partivano MAI; con zero partiva senza argomenti
+  freddi=()
+  while IFS= read -r d; do freddi+=("$d"); done \
+    < <(find /opt/nivult/gpu -maxdepth 1 -type d -mtime +$GIORNI_MODELLI \
+        -not -name gpu -not -name mt5-epoca2 -not -name v1-200k -not -name tecnologie-v1 2>/dev/null)
+  if [ ${#freddi[@]} -gt 0 ]; then
+    /opt/nivult/gpu/archivia-modelli.sh "${freddi[@]}" >> $LOG 2>&1
+  fi
 fi
 
 dopo=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
