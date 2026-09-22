@@ -50,8 +50,9 @@ def _tabella_ce(c, tabella: str) -> bool:
 
 # ── nomi: nocciolo e guardia anti-omonimi ───────────────────────────
 def _norm(s: str) -> str:
-    s = re.sub(r"\b(srl|spa|s\.p\.a\.|gmbh|ag|bv|b\.v\.|inc|llc|ltd|sa|"
+    s = re.sub(r"\b(srl|spa|s\.p\.a\.|gmbh|ag|bv|b\.v\.|inc|llc|ltd|limited|llp|sa|"
                r"s\.a\.|sas|sasu|oy|oyj|ab|as|asa|aps|a/s|plc|co|corp|"
+               r"s\.r\.o\.|a\.s\.|spol|"
                r"group|groupe|holding)\b\.?", " ", s.lower())
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
@@ -293,6 +294,136 @@ def _dk(cli: httpx.Client, nome: str):
     return (ris.get("industrydesc"), dip, fascia, scheda)
 
 
+# ── Regno Unito: Companies House (22/09/2026) ─────────────────────────
+# API gratuita con chiave (account sviluppatore di Giuseppe), 600 chiamate
+# ogni 5 minuti. La ricerca da' sede legale, tipo e data di costituzione; il
+# dettaglio i codici SIC 2007, che nelle prime due cifre coincidono con le
+# divisioni NACE Rev.2: la stessa mappa dei registri europei li traduce.
+_TIPI_GB = {
+    "ltd": "Private limited company", "plc": "Public limited company", "llp": "Limited liability partnership",
+    "private-unlimited": "Private unlimited company", "private-limited-guarant-nsc": "Private company limited by guarantee",
+    "private-limited-guarant-nsc-limited-exemption": "Private company limited by guarantee",
+    "oversea-company": "Overseas company (UK establishment)", "limited-partnership": "Limited partnership",
+    "scottish-partnership": "Scottish partnership", "royal-charter": "Royal charter company",
+    "charitable-incorporated-organisation": "Charitable incorporated organisation",
+    "registered-society-non-jurisdictional": "Registered society", "industrial-and-provident-society": "Industrial and provident society",
+    "unregistered-company": "Unregistered company", "european-public-limited-liability-company-se": "Societas Europaea",
+}
+
+
+def _chiave_env(nome: str) -> str | None:
+    import os
+    v = os.environ.get(nome)
+    if v:
+        return v.strip()
+    for f in ("/opt/nivult/engine/.env", "/opt/nivult/.env"):
+        try:
+            m = re.search(rf"^{nome}=(.*)$", open(f).read(), re.M)
+            if m:
+                return m.group(1).strip().strip('"')
+        except OSError:
+            pass
+    return None
+
+
+def _gb(cli: httpx.Client, nome: str):
+    chiave = _chiave_env("COMPANIES_HOUSE_KEY")
+    if not chiave:
+        raise RuntimeError("COMPANIES_HOUSE_KEY mancante")
+    auth = (chiave, "")
+    r = cli.get("https://api.company-information.service.gov.uk/search/companies",
+                params={"q": nome, "items_per_page": 5}, auth=auth)
+    if r.status_code == 429:
+        time.sleep(30)
+        r = cli.get("https://api.company-information.service.gov.uk/search/companies",
+                    params={"q": nome, "items_per_page": 5}, auth=auth)
+    r.raise_for_status()
+    for it in r.json().get("items", []):
+        if it.get("company_status") not in (None, "active", "open"):
+            continue
+        if not _combacia(nome, [it.get("title")]):
+            continue
+        num = it.get("company_number")
+        ind = it.get("address") or {}
+        settore = None
+        if num:
+            time.sleep(0.6)
+            d = cli.get(f"https://api.company-information.service.gov.uk/company/{num}", auth=auth)
+            if d.status_code == 200:
+                j = d.json()
+                sic = (j.get("sic_codes") or [None])[0]
+                settore = _nace(sic) if sic else None
+                ind = j.get("registered_office_address") or ind
+        via = ", ".join(x for x in (ind.get("premises"), ind.get("address_line_1"), ind.get("address_line_2")) if x) or None
+        scheda = _scheda(legal_name=it.get("title"), registro_id=num, legal_form_code=it.get("company_type"),
+                         legal_form=_TIPI_GB.get(it.get("company_type") or "", it.get("company_type")),
+                         street=via, postal_code=ind.get("postal_code"), city=ind.get("locality"), region=ind.get("region"),
+                         country="GB", founded=it.get("date_of_creation"),
+                         status="active" if it.get("company_status") in ("active", "open") else it.get("company_status"))
+        return (settore, None, None, scheda)
+    return None
+
+
+# ── Cechia: ARES (22/09/2026), senza chiave: sede, forma, fondazione, NACE ─
+_FORME_CZ = {"121": "Akciová společnost (a.s.)", "112": "Společnost s ručením omezeným (s.r.o.)", "111": "Veřejná obchodní společnost",
+             "113": "Komanditní společnost", "205": "Družstvo", "301": "Státní podnik", "421": "Odštěpný závod zahraniční osoby",
+             "101": "Fyzická osoba podnikající", "141": "Obecně prospěšná společnost", "161": "Ústav", "706": "Spolek",
+             "801": "Obec", "331": "Příspěvková organizace", "932": "Evropská společnost (SE)", "941": "Evropské hospodářské zájmové sdružení"}
+
+
+def _cz(cli: httpx.Client, nome: str):
+    r = cli.post("https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/ekonomicke-subjekty/vyhledat",
+                 json={"obchodniJmeno": nome, "pocet": 5})
+    r.raise_for_status()
+    for e in r.json().get("ekonomickeSubjekty", []):
+        if not _combacia(nome, [e.get("obchodniJmeno")]):
+            continue
+        sede = e.get("sidlo") or {}
+        nace = next((c for c in (e.get("czNace2008") or e.get("czNace") or []) if c and c != "00"), None)
+        forma = str(e.get("pravniForma") or "") or None
+        via = " ".join(str(x) for x in (sede.get("nazevUlice"), sede.get("cisloDomovni")) if x) or sede.get("textovaAdresa")
+        scheda = _scheda(legal_name=e.get("obchodniJmeno"), registro_id=e.get("ico"), legal_form_code=forma,
+                         legal_form=_FORME_CZ.get(forma or ""), street=via, postal_code=str(sede.get("psc") or "") or None,
+                         city=sede.get("nazevObce"), region=sede.get("nazevKraje"), country=sede.get("kodStatu") or "CZ",
+                         founded=e.get("datumVzniku"), status="inactive" if e.get("datumZaniku") else "active")
+        return (_nace(nace) if nace else None, None, None, scheda)
+    return None
+
+
+# ── Slovacchia: RPO (22/09/2026), senza chiave: sede e fondazione dalla
+# ricerca, forma giuridica dal dettaglio ─────────────────────────────────
+def _sk(cli: httpx.Client, nome: str):
+    r = cli.get("https://api.statistics.sk/rpo/v1/search", params={"fullName": nome, "onlyActive": "true"})
+    r.raise_for_status()
+    for e in r.json().get("results", []):
+        nomi = [n.get("value") for n in e.get("fullNames", []) if not n.get("validTo")]
+        if not _combacia(nome, [n for n in nomi if n]):
+            continue
+        ind = next((a for a in e.get("addresses", []) if not a.get("validTo")), {})
+        ico = next((i.get("value") for i in e.get("identifiers", []) if not i.get("validTo")), None)
+        forma = forma_cod = settore = None
+        try:
+            time.sleep(0.4)
+            d = cli.get(f"https://api.statistics.sk/rpo/v1/entity/{e.get('id')}")
+            if d.status_code == 200:
+                j = d.json()
+                lf = next((f.get("value") or {} for f in j.get("legalForms", []) if not f.get("validTo")), {})
+                forma, forma_cod = lf.get("value"), lf.get("code")
+                act = next((a for a in j.get("activities", []) if not a.get("validTo")), {})
+                settore = (act.get("economicActivityDescription") or act.get("value")) if isinstance(act, dict) else None
+                if isinstance(settore, dict):
+                    settore = settore.get("value")
+        except Exception:                        # noqa: BLE001
+            pass
+        via = " ".join(str(x) for x in (ind.get("street"), ind.get("buildingNumber")) if x) or None
+        scheda = _scheda(legal_name=nomi[0] if nomi else None, registro_id=ico, legal_form_code=forma_cod, legal_form=forma,
+                         street=via, postal_code=(ind.get("postalCodes") or [None])[0],
+                         city=(ind.get("municipality") or {}).get("value"), country="SK",
+                         founded=e.get("establishment"), status="inactive" if e.get("termination") else "active")
+        return (settore[:80] if isinstance(settore, str) else None, None, None, scheda)
+    return None
+
+
 class _Edgar:
     """SEC EDGAR: l'indice dei nomi si scarica UNA volta per giro
     (company_tickers.json, ~10k quotate), poi ogni match costa una
@@ -329,7 +460,10 @@ class _Edgar:
 
 
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
-          "DK": (_dk, 2.0)}          # fonte, secondi di pausa fra chiamate
+          "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
+          "SK": (_sk, 0.5)}          # fonte, secondi di pausa fra chiamate
+_FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
+          "GB": "companies_house", "CZ": "ares", "SK": "rpo"}
 
 
 DDL_REGISTRO = """
@@ -462,9 +596,7 @@ def arricchisci(dsn: str, limite: int = 1000,
                     time.sleep(0.3)
                 else:
                     fn, pausa = _PAESI[paese]
-                    esito, fonte = fn(cli, nome), {
-                        "FR": "sirene", "NO": "brreg",
-                        "FI": "prh", "DK": "cvr"}[paese]
+                    esito, fonte = fn(cli, nome), _FONTI[paese]
                     time.sleep(pausa)
             except Exception as exc:                  # noqa: BLE001
                 stats["errori"] += 1
