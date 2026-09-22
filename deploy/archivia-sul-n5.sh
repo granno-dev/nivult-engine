@@ -15,8 +15,12 @@
 # Ogni file si CANCELLA solo dopo aver verificato che la copia remota ha la stessa
 # dimensione. Se il N5 non risponde, lo script esce senza toccare nulla.
 set -uo pipefail
-GIORNI_EXPORT=${GIORNI_EXPORT:-1}
-GIORNI_BACKUP=${GIORNI_BACKUP:-1}
+# 22/09/2026: su Hetzner (75 GB, 4 liberi) restano SOLO il backup e l'export
+# di oggi; tutto cio' che ha piu' di 24 ore va sul N5 (6 TB liberi). Il
+# cron gira alle 06:40, DOPO backup (03:00) ed export (05:45): cosi' il
+# file di ieri ha passato le 24 ore e quello di oggi resta.
+GIORNI_EXPORT=${GIORNI_EXPORT:-0}
+GIORNI_BACKUP=${GIORNI_BACKUP:-0}
 GIORNI_GPU=${GIORNI_GPU:-1}
 N5=root@100.119.200.7; K=/root/.ssh/id_ed25519_n5
 SSH="ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i $K"
