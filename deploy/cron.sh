@@ -176,7 +176,9 @@ ignote=$(grep '/opt/nivult/' <<<"$attuale" | grep -v "^#" | while IFS= read -r r
   grep -Fqx "$r" <<<"$RIGHE" && continue
   grep -Fqx "$r" <<<"$OBSOLETE" && continue
   printf '%s\n' "$r"
-done)
+done || true)   # su una tabella senza righe /opt/nivult/ il primo grep esce 1:
+                # con pipefail lo script moriva QUI, prima di installare (caso
+                # ripristino: proprio quando serve). Come la riga 151.
 
 {
   [[ -n "$altrui" ]] && printf '%s\n' "$altrui"

@@ -13,8 +13,11 @@ Cambiarla qui senza riaddestrare = pesi che non si caricano, o peggio,
 che si caricano e predicono a caso.
 
 Il testo in ingresso deve essere formattato COME IN ADDESTRAMENTO:
-`titolo | localita`, a capo, descrizione pulita e tagliata a 1.200
-caratteri. Un formato diverso in inferenza e' un modello diverso.
+`titolo | localita`, a capo, descrizione pulita e INTERA: il taglio a
+1.200 caratteri e' stato tolto (costava dieci punti su contratto e
+remoto, che stanno in fondo all'annuncio — 16/09/2026); resta solo il
+tetto del tokenizzatore (`max_len`, 3072 in addestramento).
+Un formato diverso in inferenza e' un modello diverso.
 """
 from __future__ import annotations
 

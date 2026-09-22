@@ -263,12 +263,19 @@ def main() -> int:
                 lotto. Con executemany erano migliaia, e sulla Tailscale N5 →
                 Hetzner (30 ms l'uno) il modello aspettava il database: 3
                 offerte/s contro le 26 della GPU (misurato il 07/09/2026)."""
-                for _ in range(3):
+                for tentativo in range(3):
                     try:
                         c.execute(sql, params)
-                        break
+                        return
                     except psycopg.errors.DeadlockDetected:
+                        print(f"deadlock in scrivi, tentativo {tentativo + 1}",
+                              flush=True)
                         time.sleep(1)
+                # Come dettagli.py: un deadlock persistente fa RUMORE (il
+                # supervisore rilancia, il ripasso riprende dai marcatori
+                # committati). Ingoiarlo marcava il lotto come visto anche
+                # quando la scrittura non era avvenuta: perdita silenziosa.
+                raise RuntimeError("classifica_v1: deadlock persistente in scrivi")
 
             if not dry:
                 if fam_rows:
