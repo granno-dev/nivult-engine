@@ -105,7 +105,8 @@ def smartrecruiters(dsn: str, limite: int = 3000) -> dict:
 # digitalrecruiters).
 _DA_PAGINA = ("jazzhr", "breezy", "teamtailor", "applicantstack",
               "freshteam", "vincere", "digitalrecruiters", "hirehive",
-              "jobscore", "jobsoid", "join", "niceboard", "paylocity")
+              "jobscore", "jobsoid", "join", "niceboard", "paylocity",
+              "homerun", "taleez")
 
 _LD = re.compile(r"<script[^>]*ld\+json[^>]*>(.*?)</script>", re.S | re.I)
 
@@ -197,9 +198,11 @@ def da_pagina(dsn: str, limite: int = 3000, thread: int = 10,
 
 # Piattaforme dove la pagina NON offre il JSON-LD ma il testo c'e'
 # comunque: nell'HTML servito dal server (icims col trucco mobile=true,
-# catsone) o in un JSON incorporato negli script (werecruit, zoho).
+# catsone) o in un JSON incorporato negli script (werecruit, zoho;
+# comeet: «description»: «\u003Cp\u003E…» nella pagina, 22/09/2026).
 # Cornerstone resta fuori: guscio JS puro con API a token, cantiere a parte.
-_TESTO_PIATTAFORME = ("icims", "catsone", "werecruit", "zohorecruit")
+_TESTO_PIATTAFORME = ("icims", "catsone", "werecruit", "zohorecruit",
+                      "comeet")
 
 # "description":"..." dentro gli script: almeno 200 caratteri, con gli
 # escape JSON gestiti dal decoder vero (niente unescape a mano)
@@ -223,6 +226,23 @@ def _estrai_testo(pid: str, html: str) -> str:
     jp = _jobposting(html)
     if jp and jp.get("description"):
         return str(jp["description"])[:30000]
+    if pid == "comeet":
+        # il testo dell'offerta e' in custom_fields.details[].value;
+        # il «description» in cima e' il profilo dell'azienda (misurato:
+        # 661 caratteri lui, 4.414 il valore vero — 22/09/2026)
+        det = re.search(r'"custom_fields"\s*:', html)
+        if det:
+            parti = []
+            for m in re.finditer(r'"value"\s*:\s*("(?:\\.|[^"\\]){300,}?")',
+                                 html[det.start():]):
+                try:
+                    parti.append(json.loads(m.group(1)))
+                except ValueError:
+                    pass
+            if parti:
+                m0 = _JSON_DESCR.search(html)
+                testa = json.loads(m0.group(1)) if m0 else ""
+                return "\n\n".join([testa] + parti)[:30000]
     m = _JSON_DESCR.search(html)
     if m:
         try:
@@ -450,6 +470,73 @@ def rippling(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     return stats
 
 
+def eightfold(dsn: str, limite: int = 1500, thread: int = 6) -> dict:
+    """Eightfold: la search pcsx non porta il testo, ma l'endpoint pubblico
+    position_details?domain=…&position_id=… si' (data.jobDescription).
+    Il dominio si legge dalla pagina /careers del tenant, come fa
+    l'adapter alla raccolta. Trovato il 22/09/2026: 2,2k attive senza
+    testo. Un tenant irraggiungibile non avvelena gli altri: il dominio
+    si risolve per tenant e un fallimento conta come trasporto."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    domini: dict = {}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, slug, external_id FROM ats_jobs
+             WHERE platform_id = 'eightfold' AND expired_at IS NULL
+               AND NOT (raw ? 'description')
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, slug, eid = riga
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA,
+                                           "Accept": "application/json"}) as cli:
+                    if slug not in domini:
+                        try:
+                            r0 = cli.get(f"https://{slug}/careers")
+                            m = re.search(r'domain=([a-z0-9.-]+\.[a-z]{2,})',
+                                          r0.text) or re.search(
+                                r'"domain"\s*:\s*"([^"]+)"', r0.text)
+                            domini[slug] = m.group(1) if m else None
+                        except httpx.HTTPError:
+                            domini[slug] = None
+                    dom = domini[slug]
+                    if not dom:
+                        return jid, None      # tenant irrisolvibile: trasporto
+                    r = cli.get(f"https://{slug}/api/pcsx/position_details",
+                                params={"domain": dom, "position_id": eid})
+                    if r.status_code == 200:
+                        d = r.json().get("data") or {}
+                        return jid, str(d.get("jobDescription") or "")[:30000]
+                    if r.status_code in (404, 410):
+                        return jid, ""        # sparita: esito definitivo
+                    return jid, None
+            except (httpx.HTTPError, ValueError):
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1     # trasporto: resta in coda
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … eightfold %s", stats)
+    log.info("descrizioni eightfold: %s", stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -460,6 +547,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rippling", action="store_true")
     ap.add_argument("--bundesanstellung", action="store_true",
                     help="JobPosting dalle pagine pubbliche della BA (un host solo: pochi thread)")
+    ap.add_argument("--eightfold", action="store_true",
+                    help="position_details pcsx di Eightfold (dettaglio per offerta)")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
@@ -473,6 +562,8 @@ def main(argv: list[str] | None = None) -> int:
         print(bamboohr(dsn, args.limite))
     if args.rippling:
         print(rippling(dsn, args.limite))
+    if args.eightfold:
+        print(eightfold(dsn, args.limite))
     if args.bundesanstellung:
         print(da_pagina(dsn, args.limite, thread=2,
                         piattaforme=("bundesanstellung",)))
@@ -482,7 +573,8 @@ def main(argv: list[str] | None = None) -> int:
         print(da_testo(dsn, args.limite))
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
-                                    or args.rippling or args.bundesanstellung):
+                                    or args.rippling or args.bundesanstellung
+                                    or args.eightfold):
         print(smartrecruiters(dsn, args.limite))
     return 0
 

@@ -1278,7 +1278,9 @@ class Taleez(BaseAdapter):
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug, external_id=jid,
                 title=j.get("label") or "",
-                url=f"https://{slug}.taleez.com/o/{jslug}",
+                # 22/09/2026: l'URL pubblico e' taleez.com/apply/{slug} —
+                # la forma {tenant}.taleez.com/o/{slug} risponde 404
+                url=f"https://taleez.com/apply/{jslug}",
                 location=locstr, city=citta, country=_iso(paese),
                 posted_at=j.get("publishDate"),
                 raw={"contract": j.get("contract"), "remote": j.get("remote"),
@@ -1331,8 +1333,13 @@ class HeavenHR(BaseAdapter):
                 location=loc, city=loc,
                 posted_at=j.get("publicationDate"),
                 department=(j.get("department") or "").strip() or None,
-                raw={"employmentTypes": j.get("employmentTypes"),
-                     "location": loc, "seniority": j.get("seniority")}))
+                # 22/09/2026: la vacancy porta responsibilities,
+                # qualifications e incentives — conservate tutte, e composte
+                # in description: 1,6k offerte erano senza testo
+                raw=dict(j, description="\n\n".join(
+                    str(x) for x in (j.get("responsibilities"),
+                                     j.get("qualifications"),
+                                     j.get("incentives")) if x))))
         return out
 
 
