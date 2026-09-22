@@ -424,6 +424,37 @@ def _sk(cli: httpx.Client, nome: str):
     return None
 
 
+# ── Belgio: KBO/BCE (22/09/2026) ─────────────────────────────────────
+# Nessuna API: lo zip mensile scaricato da Giuseppe entra in `kbo_imprese`
+# con scripts/kbo_carica.py. Qui si cerca per nome normalizzato nella
+# tabella locale; la connessione la presta arricchisci() (_DB_LOCALE).
+_DB_LOCALE = None
+
+
+def _be(cli: httpx.Client, nome: str):
+    c = _DB_LOCALE
+    if c is None:
+        return None
+    chiave = _norm(nome)
+    if len(chiave) < 3:
+        return None
+    righe = c.execute("""SELECT numero, stato, forma_codice, forma, inizio, nome, nomi, via, civico, cap, comune, nace
+                           FROM kbo_imprese WHERE nome_norm = %s OR nome_norm LIKE %s LIMIT 20""",
+                      (chiave, chiave + " %")).fetchall()
+    # fra le omonime vince l'attiva con NACE e sede; i nomi si confrontano
+    # tutti (sociale, commerciale, abbreviazione)
+    righe.sort(key=lambda r: (r[1] != "AC", r[11] is None, r[7] is None))
+    for numero, stato, fcod, forma, inizio, nome_reg, nomi, via, civico, cap, comune, nace in righe:
+        if not _combacia(nome, [nome_reg] + [x for x in (nomi or "").split(" | ") if x]):
+            continue
+        scheda = _scheda(legal_name=nome_reg, registro_id=numero, legal_form_code=fcod, legal_form=forma,
+                         street=" ".join(x for x in (via, civico) if x) or None, postal_code=cap, city=comune,
+                         country="BE", founded=inizio.isoformat() if inizio else None,
+                         status="active" if stato == "AC" else "inactive")
+        return (_nace(nace) if nace else None, None, None, scheda)
+    return None
+
+
 class _Edgar:
     """SEC EDGAR: l'indice dei nomi si scarica UNA volta per giro
     (company_tickers.json, ~10k quotate), poi ogni match costa una
@@ -461,9 +492,9 @@ class _Edgar:
 
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
-          "SK": (_sk, 0.5)}          # fonte, secondi di pausa fra chiamate
+          "SK": (_sk, 0.5), "BE": (_be, 0.0)}   # fonte, secondi di pausa fra chiamate
 _FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
-          "GB": "companies_house", "CZ": "ares", "SK": "rpo"}
+          "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo"}
 
 
 DDL_REGISTRO = """
@@ -564,8 +595,10 @@ def arricchisci(dsn: str, limite: int = 1000,
                        follow_redirects=True)
     edgar = _Edgar(cli)
     ammessi = set(paesi or list(_PAESI) + ["US"])
+    global _DB_LOCALE
     with psycopg.connect(dsn, autocommit=True) as c:
         prepara(c)
+        _DB_LOCALE = c if _tabella_ce(c, "kbo_imprese") else None
         # il paese: quello dell'azienda, o quello dove pubblica di piu'
         con_geo = _tabella_ce(c, "azienda_paese")
         geo_sql = """coalesce(ac.country, (
