@@ -58,6 +58,9 @@ while true; do
   "$PY" -m nivult.ats.descrizioni --bamboohr --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --rippling --limite 1500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-pagina --limite 2500 2>&1 | tail -1 || true
+  # bundesanstellung: il JobPosting c'e' nella pagina pubblica, ma e' UN
+  # host solo (servizio federale): pochi thread, per gentilezza
+  "$PY" -m nivult.ats.descrizioni --bundesanstellung --limite 1200 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.

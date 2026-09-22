@@ -99,8 +99,13 @@ def smartrecruiters(dsn: str, limite: int = 3000) -> dict:
 # Piattaforme la cui PAGINA pubblica porta il JSON-LD JobPosting completo
 # (verificato a campione, una per una): un solo estrattore le copre tutte,
 # e oltre alla descrizione raccoglie paese, citta' e data quando mancano.
+# 22/09/2026: aggiunte le sette della «coda lunga a zero testo» la cui
+# pagina offerta emette JobPosting (sonda dal vivo: hirehive 48 KB di
+# JSON incorporato, join, niceboard, paylocity, jobscore, jobsoid,
+# digitalrecruiters).
 _DA_PAGINA = ("jazzhr", "breezy", "teamtailor", "applicantstack",
-              "freshteam", "vincere")
+              "freshteam", "vincere", "digitalrecruiters", "hirehive",
+              "jobscore", "jobsoid", "join", "niceboard", "paylocity")
 
 _LD = re.compile(r"<script[^>]*ld\+json[^>]*>(.*?)</script>", re.S | re.I)
 
@@ -119,12 +124,18 @@ def _jobposting(html: str) -> dict | None:
     return None
 
 
-def da_pagina(dsn: str, limite: int = 3000, thread: int = 10) -> dict:
+def da_pagina(dsn: str, limite: int = 3000, thread: int = 10,
+              piattaforme: tuple | None = None) -> dict:
     """Apre la pagina pubblica delle offerte senza descrizione e legge il
     JSON-LD. Ogni tenant vive sul suo sottodominio: il carico si spalma
     da solo. La chiave si scrive anche vuota SOLO se la pagina ha
-    risposto 200 senza JobPosting; un errore di rete non marca niente."""
+    risposto 200 senza JobPosting; un errore di rete non marca niente.
+
+    `piattaforme` sostituisce _DA_PAGINA: serve per la Bundesagentur,
+    un host SOLO (un sito federale, non centomila sottodomini): pochi
+    thread, per gentilezza e per non farsi bloccare."""
     from concurrent.futures import ThreadPoolExecutor
+    piattaforme = piattaforme or _DA_PAGINA
     stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0,
              "paesi": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
@@ -133,7 +144,7 @@ def da_pagina(dsn: str, limite: int = 3000, thread: int = 10) -> dict:
              WHERE platform_id = ANY(%s) AND expired_at IS NULL
                AND NOT (raw ? 'description') AND url IS NOT NULL
              ORDER BY posted_at DESC NULLS LAST
-             LIMIT %s""", (list(_DA_PAGINA), limite)).fetchall()
+             LIMIT %s""", (list(piattaforme), limite)).fetchall()
 
         def leggi(riga):
             jid, url, paese = riga
@@ -447,6 +458,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workday", action="store_true")
     ap.add_argument("--bamboohr", action="store_true")
     ap.add_argument("--rippling", action="store_true")
+    ap.add_argument("--bundesanstellung", action="store_true",
+                    help="JobPosting dalle pagine pubbliche della BA (un host solo: pochi thread)")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
@@ -460,13 +473,16 @@ def main(argv: list[str] | None = None) -> int:
         print(bamboohr(dsn, args.limite))
     if args.rippling:
         print(rippling(dsn, args.limite))
+    if args.bundesanstellung:
+        print(da_pagina(dsn, args.limite, thread=2,
+                        piattaforme=("bundesanstellung",)))
     if args.da_pagina:
         print(da_pagina(dsn, args.limite))
     if args.da_testo:
         print(da_testo(dsn, args.limite))
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
-                                    or args.rippling):
+                                    or args.rippling or args.bundesanstellung):
         print(smartrecruiters(dsn, args.limite))
     return 0
 
