@@ -53,6 +53,10 @@ while true; do
   "$PY" -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
   # tipo di contratto + contatto (estrai_extra): sull'operaio N5 dal 2026-09-06
   "$PY" -m nivult.ats.descrizioni --workday --limite 2500 2>&1 | tail -1 || true
+  # bamboohr e rippling: il testo sta negli endpoint di dettaglio trovati
+  # il 22/09/2026 (careers/{id}/detail; __NEXT_DATA__ della pagina)
+  "$PY" -m nivult.ats.descrizioni --bamboohr --limite 2500 2>&1 | tail -1 || true
+  "$PY" -m nivult.ats.descrizioni --rippling --limite 1500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-pagina --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)

@@ -329,12 +329,124 @@ def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     return stats
 
 
+def bamboohr(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
+    """BambooHR: la lista JSON non porta la descrizione, ma ogni offerta
+    risponde in JSON su /careers/{id}/detail (result.jobOpening.description).
+    Trovato il 22/09/2026: 60k attive senza testo. Ogni tenant e' un
+    sottodominio suo: il carico si spalma da solo."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, url FROM ats_jobs
+             WHERE platform_id = 'bamboohr' AND expired_at IS NULL
+               AND NOT (raw ? 'description') AND url IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, url = riga
+            url = url.split("?")[0].rstrip("/") + "/detail"
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA,
+                                           "Accept": "application/json"}) as cli:
+                    r = cli.get(url)
+                if r.status_code == 200:
+                    d = (r.json().get("result") or {}).get("jobOpening") or {}
+                    return jid, str(d.get("description") or "")[:30000]
+                if r.status_code in (404, 410):
+                    return jid, ""          # sparita: esito definitivo
+                return jid, None            # altro status: trasporto
+            except (httpx.HTTPError, ValueError):
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1     # trasporto: resta in coda
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … bamboohr %s", stats)
+    log.info("descrizioni bamboohr: %s", stats)
+    return stats
+
+
+_NEXT_RIP = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
+
+
+def rippling(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
+    """Rippling: la lista (NEXT_DATA) non porta il testo, ma la pagina
+    dell'offerta si': apiData.jobPost.description.{company,role,...}.
+    Trovato il 22/09/2026: 5,5k attive senza testo."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, url FROM ats_jobs
+             WHERE platform_id = 'rippling' AND expired_at IS NULL
+               AND NOT (raw ? 'description') AND url IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, url = riga
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA}) as cli:
+                    r = cli.get(url)
+                if r.status_code != 200:
+                    return jid, ("" if r.status_code in (404, 410) else None)
+                m = _NEXT_RIP.search(r.text)
+                if not m:
+                    return jid, ""
+                d = json.loads(m.group(1))
+                descr = ((d.get("props") or {}).get("pageProps") or {})
+                descr = (descr.get("apiData") or {}).get("jobPost") or {}
+                descr = descr.get("description") or {}
+                pezzi = [str(v) for v in descr.values()
+                         if isinstance(v, str) and len(v) > 40]
+                return jid, "\n\n".join(pezzi)[:30000]
+            except (httpx.HTTPError, ValueError):
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1     # trasporto: resta in coda
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … rippling %s", stats)
+    log.info("descrizioni rippling: %s", stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="nivult.ats.descrizioni")
     ap.add_argument("--smartrecruiters", action="store_true")
     ap.add_argument("--workday", action="store_true")
+    ap.add_argument("--bamboohr", action="store_true")
+    ap.add_argument("--rippling", action="store_true")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
@@ -344,12 +456,17 @@ def main(argv: list[str] | None = None) -> int:
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
     if args.workday:
         print(workday(dsn, args.limite))
+    if args.bamboohr:
+        print(bamboohr(dsn, args.limite))
+    if args.rippling:
+        print(rippling(dsn, args.limite))
     if args.da_pagina:
         print(da_pagina(dsn, args.limite))
     if args.da_testo:
         print(da_testo(dsn, args.limite))
     if args.smartrecruiters or not (args.workday or args.da_pagina
-                                    or args.da_testo):
+                                    or args.da_testo or args.bamboohr
+                                    or args.rippling):
         print(smartrecruiters(dsn, args.limite))
     return 0
 

@@ -775,9 +775,13 @@ class Recruiterbox(BaseAdapter):
                 posted_at=dt,
                 department=(it.findtext("job:team", namespaces=self._NS)
                             or "").strip() or None,
+                # 22/09/2026: il feed porta la descrizione COMPLETA in
+                # <description> (HTML escaped) — non leggerla lasciava
+                # 13k offerte senza testo
                 raw={"positionType": it.findtext(
                     "job:positionType", namespaces=self._NS),
-                    "state": state, "country": paese}))
+                    "state": state, "country": paese,
+                    "description": it.findtext("description")}))
         return out
 
 
@@ -1135,9 +1139,13 @@ class Crelate(BaseAdapter):
                 url=url or f"https://jobs.crelate.com/portal/{slug}/job/{jid}",
                 location=loc, city=city, country=_iso(paese),
                 posted_at=j.get("LastPostedOnDate") or j.get("LastPostedOn"),
+                # 22/09/2026: la API GetAllJobs porta gia' Description
+                # (e la retribuzione): non conservarla lasciava 6k offerte
+                # senza testo
                 raw={k: j.get(k) for k in
                      ("Id", "JobCode", "City", "State", "Country",
-                      "PostalCode")}))
+                      "PostalCode", "Compensation", "CompensationMinimum",
+                      "CompensationMaximum")} | {"description": j.get("Description")}))
         return out
 
 
@@ -1446,8 +1454,10 @@ class Traffit(BaseAdapter):
                     url=url,
                     location=locstr, city=citta, country=_iso(iso),
                     posted_at=j.get("validStart") or j.get("createdAt"),
-                    raw={"remote": j.get("remote"), "nrRef": j.get("nrRef"),
-                         "iso": iso, "locality": citta}))
+                    # 22/09/2026: la lista porta description, responsibilities,
+                    # requirements, additional_information — il grezzo intero,
+                    # non un sottoinsieme: 11,5k offerte erano senza testo
+                    raw=j))
             offset += 50
         return out
 

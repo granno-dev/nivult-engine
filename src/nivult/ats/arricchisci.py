@@ -147,11 +147,16 @@ def _estrai_microdata(html: str) -> dict:
 
 
 def _estrai_jsonld(html: str) -> dict:
-    """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata)."""
+    """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata).
+    Il JSON puo' essere una LISTA (Eploy: [{@type: JobPosting, ...}]) —
+    non leggerla ha tenuto 10k offerte senza testo fino al 22/09/2026."""
     for m in re.finditer(
             r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
         try:
             d = json.loads(m.group(1))
+            if isinstance(d, list):
+                d = next((x for x in d if isinstance(x, dict)
+                          and x.get("@type") == "JobPosting"), None)
             if isinstance(d, dict) and d.get("@type") == "JobPosting":
                 loc = d.get("jobLocation") or {}
                 if isinstance(loc, list):
