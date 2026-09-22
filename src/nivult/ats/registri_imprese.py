@@ -438,9 +438,12 @@ def _be(cli: httpx.Client, nome: str):
     chiave = _norm(nome)
     if len(chiave) < 3:
         return None
-    righe = c.execute("""SELECT numero, stato, forma_codice, forma, inizio, nome, nomi, via, civico, cap, comune, nace
-                           FROM kbo_imprese WHERE nome_norm = %s OR nome_norm LIKE %s LIMIT 20""",
-                      (chiave, chiave + " %")).fetchall()
+    try:
+        righe = c.execute("""SELECT numero, stato, forma_codice, forma, inizio, nome, nomi, via, civico, cap, comune, nace
+                               FROM kbo_imprese WHERE nome_norm = %s OR nome_norm LIKE %s LIMIT 20""",
+                          (chiave, chiave + " %")).fetchall()
+    except psycopg.errors.UndefinedTable:
+        return None
     # fra le omonime vince l'attiva con NACE e sede; i nomi si confrontano
     # tutti (sociale, commerciale, abbreviazione)
     righe.sort(key=lambda r: (r[1] != "AC", r[11] is None, r[7] is None))
@@ -452,6 +455,47 @@ def _be(cli: httpx.Client, nome: str):
                          country="BE", founded=inizio.isoformat() if inizio else None,
                          status="active" if stato == "AC" else "inactive")
         return (_nace(nace) if nace else None, None, None, scheda)
+    return None
+
+
+# ── Canada: Corporations Canada (22/09/2026), tabella locale ca_imprese
+# caricata da scripts/ca_carica.py (CSV federali aperti, ogni giorno). Solo
+# le societa' FEDERALI: le provinciali (Ontario, Québec) non ci sono.
+_LEGGI_CA = {"Canada Business Corporations Act": "Business corporation (CBCA)",
+             "Canada Not-for-profit Corporations Act": "Not-for-profit corporation",
+             "Canada Cooperatives Act": "Cooperative", "Boards of Trade Act - Part II": "Board of trade",
+             "Canada Corporations Act - Part II": "Corporation (CCA Part II)"}
+
+
+def _norm_ca(s: str) -> str:
+    s = re.sub(r"\b(inc|incorporated|ltd|limited|ltee|ltée|corp|corporation|co|company|llc|llp|"
+               r"group|groupe|holding|holdings|canada)\b\.?", " ", s.lower())
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+def _ca(cli: httpx.Client, nome: str):
+    c = _DB_LOCALE
+    if c is None:
+        return None
+    chiave = _norm_ca(nome)
+    if len(chiave) < 3:
+        return None
+    try:
+        righe = c.execute("""SELECT numero, nome, nome2, legge, stato, anniversario, via, citta, provincia, paese, cap
+                               FROM ca_imprese WHERE nome_norm = %s OR nome_norm LIKE %s LIMIT 20""",
+                          (chiave, chiave + " %")).fetchall()
+    except psycopg.errors.UndefinedTable:
+        return None
+    righe.sort(key=lambda r: (r[4] != "Active", r[6] is None))
+    for numero, nome_reg, nome2, legge, stato, ann, via, citta, prov, paese, cap in righe:
+        if not _combacia(nome, [x for x in (nome_reg, nome2) if x]):
+            continue
+        scheda = _scheda(legal_name=nome_reg, registro_id=numero, legal_form_code=legge,
+                         legal_form=_LEGGI_CA.get(legge or "", legge), street=via or None, postal_code=cap,
+                         city=citta, region=prov, country=paese or "CA",
+                         founded=ann.isoformat() if ann else None,
+                         status="active" if stato == "Active" else "inactive")
+        return (None, None, None, scheda)
     return None
 
 
@@ -492,9 +536,9 @@ class _Edgar:
 
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
-          "SK": (_sk, 0.5), "BE": (_be, 0.0)}   # fonte, secondi di pausa fra chiamate
+          "SK": (_sk, 0.5), "BE": (_be, 0.0), "CA": (_ca, 0.0)}   # fonte, secondi di pausa
 _FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
-          "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo"}
+          "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo", "CA": "corporations_canada"}
 
 
 DDL_REGISTRO = """
@@ -598,7 +642,7 @@ def arricchisci(dsn: str, limite: int = 1000,
     global _DB_LOCALE
     with psycopg.connect(dsn, autocommit=True) as c:
         prepara(c)
-        _DB_LOCALE = c if _tabella_ce(c, "kbo_imprese") else None
+        _DB_LOCALE = c            # per i registri caricati in tabella (BE, CA)
         # il paese: quello dell'azienda, o quello dove pubblica di piu'
         con_geo = _tabella_ce(c, "azienda_paese")
         geo_sql = """coalesce(ac.country, (
