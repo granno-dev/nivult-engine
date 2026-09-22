@@ -408,6 +408,11 @@ SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority, j.contact_email,
        coalesce((SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 80 LIMIT 1), '')
   FROM ats_jobs j
  WHERE j.expired_at IS NULL AND j.dettagli_at IS NULL
+   -- 22/09/2026: senza testo non si marca. Prima marcava comunque, e le
+   -- ~181.000 offerte delle piattaforme senza lettore hanno ricevuto una
+   -- riga vuota per sempre. Come il differimento di v1: chi non ha testo
+   -- resta in coda finche' il testo non arriva (lettori del dettaglio).
+   AND (SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 80 LIMIT 1) IS NOT NULL
  ORDER BY j.posted_at DESC NULLS LAST
  LIMIT %s
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO))
