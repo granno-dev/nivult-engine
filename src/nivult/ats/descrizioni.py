@@ -60,26 +60,34 @@ def smartrecruiters(dsn: str, limite: int = 3000) -> dict:
             stats["esaminate"] += 1
             t0 = time.monotonic()
             testo = None
+            letta = False
             try:
                 r = cli.get("https://api.smartrecruiters.com/v1/companies/"
                             f"{slug}/postings/{eid}")
                 if r.status_code == 200:
                     testo = _testo_jobad(r.json())
+                    letta = True
+                elif r.status_code in (404, 410):
+                    letta = True        # il dettaglio non c'e' piu': esito definitivo
                 elif r.status_code == 429:
                     log.warning("smartrecruiters 429: rallento")
                     time.sleep(20)
+                else:
+                    stats["errori"] += 1
             except (httpx.HTTPError, ValueError):
                 stats["errori"] += 1
-            # si scrive SEMPRE la chiave (anche vuota): cosi' l'offerta non
-            # viene ritentata a ogni giro se il dettaglio non ha testo.
-            c.execute("""UPDATE ats_jobs
-                            SET raw = jsonb_set(raw, '{description}',
-                                                to_jsonb(%s::text), true)
-                          WHERE id = %s""", (testo or "", jid))
-            if testo:
-                stats["riempite"] += 1
-            else:
-                stats["vuote"] += 1
+            # la chiave si scrive solo su una risposta vera (200, con o senza
+            # testo; 404/410 = sparita): un guasto di trasporto non e' un
+            # esito, l'offerta resta in coda (regola del 21/09)
+            if letta:
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo or "", jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
             resto = intervallo - (time.monotonic() - t0)
             if resto > 0:
                 time.sleep(resto)
@@ -289,11 +297,13 @@ def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
                         "User-Agent": _UA,
                         "Accept": "application/json"}) as cli:
                     r = cli.get(url)
-                if r.status_code != 200:
-                    return jid, None
-                testo = (r.json().get("jobPostingInfo") or {}) \
-                    .get("jobDescription") or ""
-                return jid, str(testo)[:30000]
+                if r.status_code == 200:
+                    testo = (r.json().get("jobPostingInfo") or {}) \
+                        .get("jobDescription") or ""
+                    return jid, str(testo)[:30000]
+                if r.status_code in (404, 410):
+                    return jid, ""      # sparita: esito definitivo, si marca
+                return jid, None        # altro status: trasporto, si riprova
             except (httpx.HTTPError, ValueError):
                 return jid, None
 
@@ -301,8 +311,10 @@ def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
             for jid, testo in pool.map(leggi, righe):
                 stats["esaminate"] += 1
                 if testo is None:
+                    # guasto di trasporto: niente marcatore, l'offerta
+                    # resta in coda (regola del 21/09)
                     stats["errori"] += 1
-                    testo = ""       # marcata comunque: niente retry eterni
+                    continue
                 c.execute("""UPDATE ats_jobs
                                 SET raw = jsonb_set(raw, '{description}',
                                                     to_jsonb(%s::text), true)

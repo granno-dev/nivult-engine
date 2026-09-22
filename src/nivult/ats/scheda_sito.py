@@ -53,8 +53,15 @@ def _colonna_manca(c, tabella: str, colonna: str) -> bool:
         (tabella, colonna)).fetchone() is None
 
 
-def _pagina(cli: httpx.Client, url: str) -> str:
-    r = cli.get(url)
+def _pagina(cli: httpx.Client, url: str) -> str | None:
+    """None = guasto di trasporto (rete o 5xx): non un esito, si riprova.
+    "" = risposta vera senza contenuto utile (404, non-HTML): esito."""
+    try:
+        r = cli.get(url)
+    except httpx.HTTPError:
+        return None
+    if r.status_code >= 500:
+        return None
     if r.status_code != 200 or "html" not in r.headers.get(
             "content-type", "html"):
         return ""
@@ -80,14 +87,17 @@ def descrizione_sito(html_pagina: str) -> str | None:
     return None
 
 
-def _testo_azienda(cli: httpx.Client, dominio: str, meta: dict | None = None) -> str:
+def _testo_azienda(cli: httpx.Client, dominio: str, meta: dict | None = None) -> str | None:
     """La home piu' l'eventuale pagina about: testo pulito, tetto 12k.
-    Se `meta` e' un dict ci mette la descrizione dall'intestazione."""
+    Se `meta` e' un dict ci mette la descrizione dall'intestazione.
+    None se la home non e' stata letta (trasporto): chi chiama non marca."""
     base = f"https://{dominio}"
     try:
         home = _pagina(cli, base)
     except Exception:                                # noqa: BLE001
-        return ""
+        return None
+    if home is None:
+        return None
     if meta is not None:
         meta["descrizione"] = descrizione_sito(home)
     pezzi = [home]
@@ -98,7 +108,9 @@ def _testo_azienda(cli: httpx.Client, dominio: str, meta: dict | None = None) ->
             link = base + link
         if link.startswith("http") and dominio in link:
             try:
-                pezzi.append(_pagina(cli, link))
+                about = _pagina(cli, link)
+                if about:
+                    pezzi.append(about)
             except Exception:                        # noqa: BLE001
                 pass
     testo = " ".join(_TAG_RX.sub(" ", p) for p in pezzi if p)
@@ -117,6 +129,9 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
     ko_di_fila = 0
     with psycopg.connect(dsn, autocommit=True) as c:
         if _colonna_manca(c, "ats_companies", "site_checked_at"):
+            # lock_timeout come nel blocco sotto: ADD COLUMN IF NOT EXISTS
+            # prende il lock esclusivo anche se la colonna esiste gia'
+            c.execute("SET lock_timeout = '10s'")
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS employees_site int")
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
@@ -125,6 +140,7 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
                       "EXISTS site_evidence text")
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS site_checked_at timestamptz")
+            c.execute("RESET lock_timeout")
         if _colonna_manca(c, "ats_companies", "site_description"):
             c.execute("SET lock_timeout = '10s'")
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description text")
@@ -145,6 +161,10 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
             meta: dict = {}
             testo = _testo_azienda(cli, dominio, meta)
             time.sleep(0.5)
+            if testo is None:
+                # sito non letto (trasporto): niente marcatore, si riprova
+                stats["errori_rete"] = stats.get("errori_rete", 0) + 1
+                continue
             if meta.get("descrizione"):
                 c.execute("UPDATE ats_companies SET site_description = %s, site_description_at = now() "
                           "WHERE platform_id=%s AND slug=%s", (meta["descrizione"], pid, slug))
@@ -227,7 +247,11 @@ def descrizioni(dsn: str, limite: int = 1500) -> dict:
             try:
                 home = _pagina(cli, f"https://{dominio}")
             except Exception:                        # noqa: BLE001
-                home = ""
+                home = None
+            if home is None:
+                # trasporto: niente UPDATE — scrivere NULL qui cancellava
+                # una site_description esistente al ricontrollo dei 90 giorni
+                continue
             d = descrizione_sito(home)
             c.execute("UPDATE ats_companies SET site_description = %s, site_description_at = now() "
                       "WHERE platform_id=%s AND slug=%s", (d, pid, slug))

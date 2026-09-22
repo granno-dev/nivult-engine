@@ -215,21 +215,26 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
         return stats
 
     def leggi(riga):
+        # Tre esiti distinti: il dict (anche {} = 200 senza JobPosting, o
+        # 404/410 = pagina sparita: letta davvero, si marca e non si riprova)
+        # oppure None = guasto di trasporto (timeout, 403, 429, 5xx): NON e'
+        # un esito, l'offerta resta in coda (regola del 21/09).
         jid, url, pid = riga[0], riga[1], (riga[2] if len(riga) > 2 else "?")
         try:
             with httpx.Client(timeout=15, follow_redirects=True,
                               headers={"User-Agent": "nivult-ats/0.1"}) as c:
                 r = c.get(url)
-                if r.status_code == 200:
-                    d = _estrai_jsonld(r.text)
-                    st_p = per_piatt.setdefault(pid, {"lette": 0, "testo": 0})
-                    st_p["lette"] += 1
-                    st_p["testo"] += 1 if d.get("description") else 0
-                    return jid, d
         except httpx.HTTPError:
-            pass
-        per_piatt.setdefault(pid, {"lette": 0, "testo": 0})["lette"] += 1
-        return jid, {}
+            return jid, None
+        if r.status_code == 200:
+            d = _estrai_jsonld(r.text)
+            st_p = per_piatt.setdefault(pid, {"lette": 0, "testo": 0})
+            st_p["lette"] += 1
+            st_p["testo"] += 1 if d.get("description") else 0
+            return jid, d
+        if r.status_code in (404, 410):
+            return jid, {}
+        return jid, None
 
     risultati = []
     with ThreadPoolExecutor(max_workers=thread) as pool:
@@ -238,9 +243,12 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
             try:
                 jid, dati = fut.result()
                 stats["viste"] += 1
-                if not dati:
+                if dati is None:
+                    # trasporto: niente marcatore, si riprova al prossimo giro
+                    stats["errori"] += 1
+                elif not dati:
                     risultati.append((jid, {}))   # letta e muta: non si riprova
-                if dati:
+                else:
                     stats["paesi"] += 1 if dati.get("country") else 0
                     stats["citta"] += 1 if dati.get("city") else 0
                     stats["date"] += 1 if dati.get("posted_at") else 0
