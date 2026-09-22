@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# ⚠ 22/09/2026 — I PASSI 2 E 5 SONO SUPERATI E PERICOLOSI. Il clone si
+# allinea al bare /opt/nivult/engine.git, fermo al 18/09 e divergente da
+# GitHub; il deploy (`officina deploy`) pusha al bare, il cui hook
+# post-receive farebbe `checkout -f` di quella base antica su
+# /opt/nivult/engine: giorni di produzione cancellati in silenzio.
+# NON LANCIARE con deploy prima che i passi 2 e 5 siano rieducati al
+# rilascio via scp (vedi CLAUDE.md, «Il deploy aggiorna i file»).
+# Con --senza-deploy resta utilizzabile per provare una riparazione.
+#
 # L'OFFICINA: un adapter e' rotto (i canarini tacciono, o il ripiego trova
 # in pagina offerte che l'adapter non vede) e Claude sul server lo ripara.
 #

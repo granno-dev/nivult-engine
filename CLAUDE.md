@@ -213,9 +213,17 @@ e descritti in `docs/manuale-guasti.md`:
    classe della piattaforma nel suo clone, il banco
    `scripts/prova_adapter.py` deve passare, la verifica impone il
    perimetro a macchina, poi deploy con canarini e rollback. **Deploy
-   automatico per decisione di Giuseppe (07/09/2026).** Dopo una
-   riparazione il bare del server è avanti rispetto a GitHub: dal Mac,
-   `git pull server main` prima di pushare.
+   automatico per decisione di Giuseppe (07/09/2026).**
+
+   ⚠ **Il deploy dell'officina è superato e pericoloso (scoperto il
+   22/09/2026):** il clone si allinea al bare (`officina.sh`, passo 2),
+   che è fermo al 18/09, e `officina deploy` pusha al bare
+   (`officina.py:353` e `:365`), il cui hook post-receive farebbe
+   `checkout -f` di quella base antica su `/opt/nivult/engine`. La
+   prossima riparazione automatica cancellerebbe dal codice in
+   produzione tutto ciò che è arrivato dopo il 18/09. Prima di riaprire
+   l'officina va rieducata al rilascio via scp (o disinnescato l'hook):
+   **decisione di Giuseppe, non va presa in fretta né da soli.**
 
 ### Il paese si assegna all'ingresso, e non si azzera mai
 
@@ -1272,8 +1280,17 @@ sudo deploy/cron.sh --check               # verifica che ci siano tutti, esce 1 
 
 ### Il deploy aggiorna i file, NON riavvia niente
 
-`git push server main` e `git push n5 main` fanno solo il checkout: i
-processi già in esecuzione tengono in memoria il codice con cui sono
+**Il rilascio NON passa più da git** (misurato il 22/09/2026): il bare
+`/opt/nivult/engine.git` è fermo al 18/09 e **divergente** da GitHub (ha
+commit suoi mai arrivati sul Mac, e gli mancano quattro giorni di lavoro),
+`/opt/nivult/engine` non è nemmeno più un repository. Il suo hook
+post-receive fa `checkout -f` di quella base antica sul worktree: un push
+lì cancella giorni di produzione. Il rilascio è `scp` dei file toccati
+**più confronto delle impronte** (`sha1sum` sulle due sponde); per il N5
+si passa da `docker cp` nel container `nivult-operaio` (percorso
+`/opt/nivult/engine/...`), stesso confronto.
+
+I processi già in esecuzione tengono in memoria il codice con cui sono
 partiti, e continuano a girare con quello finché non li si riavvia. È
 un errore che non dà segnale: nessun log, nessun allarme, e il
 comportamento vecchio che sembra un guasto nuovo.
@@ -1284,7 +1301,7 @@ giorno prima. `nivult-api` era partita alle 07:21, l'adapter era stato
 aggiunto alle 14:35, e Python teneva `adapters.py` in `sys.modules`.
 Nello stesso giro tre demoni giravano ancora col codice del 7.
 
-**Dopo ogni push, riavviare ciò che tocca:**
+**Dopo ogni rilascio, riavviare ciò che tocca:**
 
 | Cosa hai cambiato | Cosa riavviare |
 |---|---|
