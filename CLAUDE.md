@@ -285,11 +285,26 @@ offerte/s misurate) con il suo marcatore `locale_v1_at`. Esame a mano:
 famiglia 90,1% (passa il cancello del 90%), seniority 83,9%, contratto
 83,9%, remoto 94,1%, lingue precisione 87,5%.
 
-**Scrive solo dove è sicuro.** La famiglia sopra la soglia del 95% di
-precisione (`soglie_95.family` = 0,75 in `config-v1.json`), e solo dove
-non c'è; seniority, contratto e remoto **solo dove la colonna è vuota** e
-sopra 0,85 — per quelle teste nessuna soglia raggiunge il 95%, quindi
-riempiono, non sovrascrivono mai la fonte o GLM. Il modello sta in
+**Scrive solo dove la colonna è vuota**, mai sopra la fonte o GLM.
+Fino al 21/09/2026 scriveva anche solo sopra soglie alte (0,75 sulla
+famiglia, 0,85 sulle altre teste) e il risultato era un campo vuoto nella
+maggior parte delle offerte: sulle 100 righe del golden v2 la seniority
+era **giusta 28 volte su 35 ma scritta 2**. Decisione di Giuseppe: «un
+piccolo errore è meglio di un campo vuoto che poi non si vende». Ora
+`RIEMPI_V1=1` (default) abbassa tutte e quattro le soglie a
+`TETTO_SOGLIA_V1` = 0,5: famiglia 94% di precisione al 95% di copertura,
+seniority 88/92, contratto 85/97, remoto 99/99.
+
+**Ma una etichetta rara vuole una prova nel testo.** Con le soglie a 0,5
+il contratto «internship» compariva su 72.000 offerte attive, 30.000
+senza una sola parola da stage nel titolo («Head of Global Product
+Quality»). Dal 21/09 `internship`, `apprenticeship` e la seniority
+`intern` si scrivono solo se `testo.evidenza_stage()` trova la prova (una
+parola nel titolo, due nel testo, venti lingue); altrimenti il demone
+scrive la **seconda scelta** del modello, se supera la soglia, o niente.
+`modello_v1.predici` restituisce per questo anche `<testa>_2`. La
+riparazione dello storico è in
+`scripts/migrazioni/2026-09-22/ripara_stage.py`. Il modello sta in
 `/opt/nivult/modelli/nivult-v1/` sul N5 (pesi, tokenizer, `config-v1.json`,
 `esame-v1.json`); l'addestramento su Colab con `addestra_v1.py`, che
 rifiuta un checkpoint di un altro dataset (è così che l'anteprima è
@@ -1178,6 +1193,55 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
   offerte sono multilingua. La semantica la porta BGE-M3. La colonna
   `jobs.text_search_config` e il trigger `jobs_derive_fields` sono già
   predisposti per passare a una configurazione per lingua.
+
+### I campi che si vendono, e chi li riempie
+
+Dal 21/09/2026 il magazzino ha i campi che il mercato (Coresignal,
+TheirStack) espone e noi non avevamo. Tutto **CPU su Hetzner**: nessun
+modello, nessuna GPU, i due demoni di casa restano liberi.
+
+| tabella | modulo | cron | cosa contiene |
+|---|---|---|---|
+| `offerte_dettagli` | `nivult.ats.dettagli` | 07:00 | livello manageriale, turni, orario, urgenza, benefit (16 tag canonici), testo del salario, scadenza, regione (GeoNames `admin1`), CAP, coordinate, recruiter |
+| `offerte_fonti` (vista) | migrazione 21/09 | — | le altre copie della stessa offerta per `duplicate_key` |
+| `azienda_tecnologie` (matview) | `deploy/rinfresca-viste.sh` | 07:20 | tecnologie per tenant con prima e ultima comparsa |
+| `aziende_dettagli` | `nivult.ats.aziende_dettagli` | 07:40 | fascia dimensionale, sedi, sede principale, descrizione, keywords, forma giuridica, fondazione |
+| `aziende_registro` | `nivult.ats.registri_imprese`, `nivult.ats.gleif` | 05:45, 08:35 | sede legale, forma giuridica, identificativo, costituzione, **con la fonte** |
+| `kbo_imprese`, `ca_imprese` | `scripts/kbo_carica.py`, `scripts/ca_carica.py` | a mano / 15 s | i registri belga e canadese caricati in locale |
+
+Tre regole che valgono più dei campi:
+
+- **il testo si vende piano.** `testo.pulito()` decodifica le entità HTML
+  fino a tre volte (Greenhouse le codifica due), toglie tag e script,
+  conserva gli a capo. **Non taglia mai** — vedi la regola di Giuseppe sul
+  non accorciare gli annunci.
+- **un numero porta la sua portata.** I registri contano l'unità legale
+  (Veolia 1.499, Renault 4). `aziende_dettagli.dipendenti()` è l'**unica**
+  funzione che decide: Wikidata → sito → registro → dichiarato, con
+  `employees_scope` (`group`/`legal_entity`/`self_declared`) e la
+  categoria INSEE che corregge la fascia. L'export la importa da lì: due
+  copie della stessa regola divergono sempre.
+- **la copertura si dichiara.** Il manifest dell'export e il cruscotto
+  pubblicano la percentuale di ogni campo: i buchi dichiarati sono un
+  argomento di vendita, quelli scoperti dal cliente sono un rimborso.
+
+`nivult.ats.esporta` scrive 50 chiavi per offerta e 36 per azienda;
+`--campione N` produce un file «-campione» a parte per collaudare senza
+toccare i 4 GB del giorno.
+
+### Il disco di Hetzner è piccolo, e l'archivio è il N5
+
+75 GB totali: database 26 GB e in crescita, un backup cifrato 7 GB, gli
+export 4 GB al giorno. **Il 22/09/2026 alle 03:44 il backup ha riempito
+il disco**: Postgres non ha più potuto scrivere, il checkpointer è morto
+con SIGABRT, il database è andato in recupero e *tutti* i passi della
+manutenzione notturna sono falliti con «connection refused». La
+sentinella ha visto solo i passi falliti, non la causa.
+
+`archivia-sul-n5.sh` (06:40, **dopo** backup ed export) tiene su Hetzner
+solo il backup e l'export **di oggi** e manda il resto sul N5, che ha
+6 TB liberi. Il database non si sposta: deve stare accanto ai demoni che
+lo interrogano migliaia di volte al minuto.
 
 ## Comandi
 

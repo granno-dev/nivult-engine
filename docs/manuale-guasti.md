@@ -46,6 +46,13 @@ in italiano, numeri veri.
 - **Postgres e l'API non devono mai essere le vittime del kernel** (sono a
   −900); se vedi uccisioni per memoria di `postgres` o `uvicorn`, è grave:
   segnala subito.
+- **Il disco è piccolo e il backup è grande.** 75 GB in tutto: database 26
+  e in crescita, un backup cifrato 7, gli export 4 al giorno. Il
+  22/09/2026 alle 03:44 il backup ha riempito il disco, Postgres ha
+  perso il checkpointer (signal 6) ed è andato in recupero: backup
+  fallito, notturna tutta fallita, un processo ucciso per memoria alle
+  03:50. `archivia-sul-n5.sh` gira alle 06:40 e tiene solo il backup e
+  l'export di oggi; fra le 03:00 e le 06:40 il margine è di pochi GB.
 - **Le competenze ESCO sono spente**; se ricompaiono etichette come
   «compile airport certification manuals» qualcuno le ha riaccese.
 - **Il backup vive in tre posti** (server, Storage Box, N5), cifrato con
@@ -64,7 +71,8 @@ in italiano, numeri veri.
 | `scadenze anomale` | `sql` sulle scadute 2h con `fetched_at` recente, per piattaforma | NON curare: segnala con i numeri |
 | `scadenze di massa` / `scadenze rifiutate` | `sql "SELECT platform_id, count(*) FROM ats_jobs WHERE expired_at > now()-interval '1 hour' GROUP BY 1 ORDER BY 2 DESC LIMIT 5"`; poi 3-4 URL a caso di quella piattaforma | NON curare. Quasi sempre è un adapter che non legge più il template (JazzHR il 06/09: 33.344 offerte vive). Segnala piattaforma, numeri, e se le pagine rispondono |
 | `memoria esaurita` | `stato` (chi è morto) | niente; se la vittima è postgres/uvicorn → urgente |
-| `disco quasi pieno` | `stato` | niente: segnala (i backup locali sono in /opt/nivult/backups) |
+| `disco quasi pieno` | `stato`, poi `df -h /` | **guarda subito**: sotto i 10 GB liberi il backup delle 03:00 (7 GB) può riempire il disco e far cadere Postgres. Cura ammessa: `/opt/nivult/archivia-sul-n5.sh`, che sposta sul N5 export e backup più vecchi di oggi. Se il N5 è muto, segnala: non cancellare nulla a mano |
+| `tutti i passi della notturna FALLITI` | `log ats-nightly 60`; se dice «the database system is in recovery mode», **la causa è a monte**: `docker logs nivult-db-1 --since <ora>` e cerca «No space left on device» o «terminated by signal» | niente sui passi: si ripetono da soli la notte dopo. Cura la causa (disco) e segnala l'orario del crash |
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
 | `nuove offerte quasi senza descrizione/paese` | `log arricchisci-continua 30` | `riavvia arricchisci` se il loop è fermo; altrimenti segnala |
 

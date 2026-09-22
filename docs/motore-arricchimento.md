@@ -1,6 +1,6 @@
 # Il motore di arricchimento — come funziona oggi
 
-Aggiornato al **19 settembre 2026**.
+Aggiornato al **22 settembre 2026**.
 
 Questo documento spiega cosa gira, su quale macchina, e perché. La raccolta delle
 offerte è raccontata in [raccolta-ats.md](raccolta-ats.md); qui si parla di cosa
@@ -20,9 +20,15 @@ a cui agganciarla e le tecnologie che usa.
 
 | macchina | cosa ci gira | resa misurata |
 |---|---|---|
-| **N5** (casa, Radeon 890M) | `v1` tutti i campi strutturati + `mT5` tutte le sintesi | ~95.000 sintesi/giorno |
-| **Mac mini** (M2, 8 GB) | `2B` solo tecnologie | ~65.000 offerte/giorno |
-| **Hetzner** | cacciatore di domini + SearXNG + database | ~1.800 aziende/ora |
+| **N5** (casa, Radeon 890M) | `v1`: famiglia, seniority, contratto, remoto, lingue | 530.000 offerte/giorno |
+| **Mac mini** (M2, 8 GB) | testa tecnologie `v2` | 400.000 offerte/giorno |
+| **Hetzner** | cacciatore di domini, registri, dettagli, schede azienda, database | ~1.800 aziende/ora · 80 offerte/s sui dettagli |
+
+Dal 21/09 **niente generativi in produzione**: mT5 è spento (nessuno legge le
+sintesi) e il 2B lo era già dal 20/09, sostituito dalla testa tecnologie `v2`
+che gira sullo stesso mmBERT di `v1`. Tutto ciò che resta è estrattivo o
+deterministico, e questo è il motivo per cui il motore oggi regge il flusso
+senza arretrato.
 
 Ogni macchina esegue la tecnologia che le è propria: torch sulla Radeon,
 llama.cpp su Metal. Niente conversioni, e soprattutto **mai due motori
@@ -32,15 +38,21 @@ ore il 16/09.
 
 ### I tre modelli, e perché sono divisi così
 
-| | cosa fa | qualità | velocità |
+| | cosa fa | qualità | stato |
 |---|---|---|---|
-| **v1** (mmBERT-base) | famiglia, seniority, contratto, remoto, lingue | famiglia 92,3% · contratto 94,2% · remoto 99,1% | non è mai il collo di bottiglia |
-| **mT5** (582M) | la sintesi di ogni offerta | 4,44/5 | 95.000/giorno |
-| **2B** (Qwen GGUF) | le tecnologie, e il ripasso delle sintesi incerte | 4,71/5 sulle sintesi | 65.000/giorno sulle sole tecnologie |
+| **v1** (mmBERT-base, 5 teste) | famiglia, seniority, contratto, remoto, lingue | famiglia 92,3% · contratto 94,2% · remoto 99,1% | in produzione sul N5 |
+| **tec v2** (testa sullo stesso mmBERT) | le tecnologie citate nell'annuncio | IT F1 80,4% · otto famiglie non informatiche F1 70,3% | in produzione sul Mac mini dal 21/09 |
+| **mT5** (582M) | la sintesi di ogni offerta | 4,44/5 | **spento dal 21/09**: nessun consumatore |
+| **2B** (Qwen GGUF) | tecnologie, prima di `tec v2` | F1 65,4% sulle tecnologie | **spento dal 20/09**: la testa lo batte |
 
-Il 2B scriveva anche le sintesi, e **il 93% di quello che scriveva era la
-sintesi**: togliergliela lo ha reso 2,5 volte più veloce sulle tecnologie, che è
-l'unica cosa che solo lui sa fare.
+La testa `v2` batte il generativo da 2 miliardi di parametri (F1 74,5% contro
+65,4% al primo esame, 80,4% oggi): **il guadagno viene dai dati etichettati, non
+dalla dimensione del modello**. Ed è venti volte più veloce.
+
+mT5 scriveva 95.000 sintesi al giorno per nessuno: il digest B2C usa GLM sulle
+poche offerte già scremate, non le nostre sintesi, e i concorrenti che vendono
+dati (Coresignal, TheirStack) le sintesi non le offrono. Le 172.735 già scritte
+restano in tabella, il modello e il codice sono pronti a riaccendersi.
 
 ### Il ripasso, e perché oggi è spento
 
@@ -58,7 +70,7 @@ lo aspetta, ordinata dalla sintesi meno convinta in avanti.
 
 ### Il buttafuori
 
-Non ha senso far cercare tecnologie al 2B in un annuncio per camerieri. `v1`
+Non ha senso cercare tecnologie in un annuncio per camerieri. `v1`
 classifica la famiglia professionale al 92,3%, e si usa come cancello: otto
 famiglie — Agriculture, Social Services, Retail, Sports & Recreation, Food &
 Beverage, Transportation, Trades, Healthcare — saltano il modello e ricevono
@@ -72,7 +84,7 @@ rende 0,65 tecnologie per offerta (SAP, gestionali di magazzino) e
 *Manufacturing* 0,54.
 
 Le righe escluse si scrivono con `tecnologie = []` — una risposta, non un buco —
-ma con `modello = 'nivult-2b+famiglia-esclusa'`: fra il 5% e il 21% di quelle
+ma con un `modello` che dice «famiglia esclusa»: fra il 5% e il 21% di quelle
 offerte una tecnologia ce l'ha davvero, e se cambiamo idea sappiamo quali righe
 tornare a leggere.
 
@@ -162,6 +174,83 @@ un nome.
   capofila dev'essere **vendibile**, o sparisce tutto il gruppo; e le catene
   A→B→C vanno sciolte.
 
+## I campi che si vendono (21–22 settembre 2026)
+
+Il confronto con Coresignal — 104 campi contro i nostri 33 — ha prodotto una
+regola semplice: **tutto ciò che si può leggere senza una fonte chiusa, si
+legge.** Nessun modello e nessuna GPU: SQL, espressioni regolari multilingua e
+registri pubblici, su Hetzner, mentre N5 e Mac mini restano liberi.
+
+| tabella | chi la riempie | cosa contiene |
+|---|---|---|
+| `offerte_dettagli` | `nivult.ats.dettagli`, cron 07:00, ~80 righe/s | livello manageriale, turni, orario, urgenza, benefit (16 tag), testo del salario, scadenza dichiarata, regione (GeoNames admin1), CAP, coordinate, recruiter |
+| `offerte_fonti` (vista) | `duplicate_key` | le altre copie della stessa offerta, con piattaforma, url e stato |
+| `azienda_tecnologie` (materializzata) | `deploy/rinfresca-viste.sh`, 07:20 | le tecnologie **dell'azienda**, con prima e ultima comparsa |
+| `aziende_dettagli` | `nivult.ats.aziende_dettagli`, cron 07:40 | fascia dimensionale, sedi viste nelle offerte, sede principale, descrizione, keywords, forma giuridica, fondazione |
+| `aziende_registro` | `nivult.ats.registri_imprese`, `nivult.ats.gleif` | sede legale, forma giuridica, identificativo, data di costituzione, **con la fonte** |
+
+`nivult.ats.esporta` porta tutto nei due JSONL giornalieri: 50 chiavi per
+offerta, 36 per azienda, e un manifest che dichiara la copertura di ogni campo.
+`--campione N` scrive N righe in un file a parte per collaudare una modifica
+senza toccare il file del giorno (4 GB compressi).
+
+**Fuori per scelta:** la traduzione degli annunci e i dati di finanziamento
+(nessuna fonte libera). `applicants_count` e `is_easy_apply` esistono come
+colonne ma restano vuoti: nessuna fonte li dichiara, e un campo vuoto dichiarato
+è meglio di un campo inventato.
+
+### Le tre regole che tengono onesto il dato
+
+**Il testo si vende piano, non in HTML.** Tutte le 200.000 offerte Greenhouse
+uscivano con le entità HTML codificate (35.000 due volte), le altre piattaforme
+con i tag dentro. `testo.pulito()` decodifica fino a tre volte, toglie tag e
+script, conserva gli a capo degli elenchi — e **non taglia mai**.
+
+**Una etichetta rara vuole una prova nel testo.** Con le soglie a 0,5 `v1`
+scriveva «internship» su 72.000 offerte attive, 30.000 delle quali senza una sola
+parola da stage nel titolo: fra queste «Head of Global Product Quality» e
+«Senior Alliance Manager». Ora `testo.evidenza_stage()` cerca in venti lingue
+(una parola nel titolo, due nel testo) e, se la prova manca, `v1` scrive la sua
+**seconda scelta** oppure niente. La riparazione ha esaminato 137.981 offerte:
+15.323 dichiarate dalla piattaforma, 75.445 con la prova, 47.213 ripulite e
+rimesse in coda.
+
+**Un numero porta la sua portata.** I registri contano l'**unità legale**:
+SIRENE dà Veolia Environnement a 1.499 dipendenti, Renault a 4, Eurofins a 374,
+mentre il gruppo ne ha rispettivamente 220.000, 179.000 e 62.000. Una sola
+funzione decide (`aziende_dettagli.dipendenti`): Wikidata, poi il sito, poi il
+registro, poi ciò che l'annuncio dichiara; ogni numero esce con
+`employees_scope` (`group` / `legal_entity` / `self_declared`) e il registro
+resta visibile a parte come `employees_legal_entity`. La categoria INSEE
+(PME/ETI/GE), definita a livello d'impresa, corregge la fascia.
+
+## I registri delle imprese
+
+Sede legale, forma giuridica, data di costituzione e identificativo: i campi che
+un compratore di dati aziendali si aspetta, presi dalle fonti ufficiali. Il
+match è per nome col nocciolo normalizzato (`_norm` toglie le forme societarie),
+e **un nome che non combacia non entra**: meglio un buco che la sede di
+un'altra azienda.
+
+| fonte | paese | accesso | dà anche |
+|---|---|---|---|
+| Companies House | Regno Unito | chiave gratuita (`COMPANIES_HOUSE_KEY`) | SIC 2007 → settore |
+| SIRENE | Francia | aperto | categoria INSEE, coordinate, fascia dipendenti |
+| Corporations Canada | Canada | CSV aperti, ricaricati con `scripts/ca_carica.py` | solo società federali |
+| KBO/BCE | Belgio | zip mensile scaricato a mano, `scripts/kbo_carica.py` | NACE principale |
+| Brønnøysund | Norvegia | aperto | dipendenti esatti, sito |
+| PRH | Finlandia | aperto | forma giuridica |
+| CVR | Danimarca | aperto | dipendenti, settore |
+| ARES | Cechia | aperto | NACE, forma |
+| RPO | Slovacchia | aperto | ricerca per nome debole |
+| SEC EDGAR | USA | aperto | solo società quotate |
+| GLEIF | ovunque | aperto | sede operativa e forma per chi ha un LEI |
+
+**Senza via d'uscita gratuita:** Germania (4.271 tenant, 257.000 offerte),
+Paesi Bassi, Spagna, Italia, Svezia, Austria, India. Per loro restano GLEIF e
+Wikidata. In attesa di credenziali: Zefix (Svizzera, richiesta via
+`zefix@bj.admin.ch`), ABN Lookup (Australia), CRO (Irlanda).
+
 ## Come si opera
 
 ```bash
@@ -177,12 +266,23 @@ python scripts/costruisci_aziende.py [--bacheche]
 # i domini di fornitore (rippling.com & co.) — gira anche da cron alle 9
 python scripts/pulisci_domini.py [--dry-run]
 
+# i campi che si vendono (tutti e tre girano anche da cron, la mattina)
+python -m nivult.ats.dettagli --limite 400000        # dettagli dell'offerta
+python -m nivult.ats.aziende_dettagli [--tutte]      # la scheda azienda
+python -m nivult.ats.registri_imprese --paesi GB --limite 4000
+python -m nivult.ats.gleif --limite 300
+python scripts/ca_carica.py --scarica                # registro canadese, 15 s
+python scripts/kbo_carica.py --carica kbo.tsv.gz     # registro belga, mensile
+
+# un assaggio dell'export senza toccare il file del giorno
+python -m nivult.ats.esporta --attive --aziende --campione 300
+
 # dare un nome alle aziende che non ce l'hanno, solo dove c'e' una prova
 python scripts/battezza_aziende.py [--dry-run]
 ```
 
-I supervisori stanno in `deploy/`: `nivult-n5.sh` (v1+mT5), `nivult-mini.sh`
-(2B), `nivult-caccia-hetzner.sh` (cacciatore). Ognuno rilancia il proprio demone
+I supervisori stanno in `deploy/`: `nivult-n5.sh` (v1), `nivult-mini-tec.sh`
+(testa tecnologie sul Mac mini), `nivult-caccia-hetzner.sh` (cacciatore). Ognuno rilancia il proprio demone
 se muore — **prima non era così**, e il 19/09 l'estrattore del N5 è rimasto morto
 per ore senza che nessuno se ne accorgesse.
 
