@@ -1,4 +1,14 @@
 #!/bin/bash
+#
+# ⚠ SUPERATO — NON USARE. Il cacciatore gira su Hetzner dalla sera del
+# 19/09/2026: lo script vivo e' `deploy/nivult-caccia-hetzner.sh`, e sul server
+# ne esiste una copia chiamata `/opt/nivult/nivult-caccia.sh` (stesso contenuto,
+# nome diverso: e' quella che viene lanciata). Le motivazioni qui sotto NON
+# valgono piu': HomeShield del router bloccava le verifiche e falsificava
+# l'archivio (4.557 aziende rimesse in coda a mano), e mT5, con cui il
+# cacciatore doveva convivere, e' spento dal 21/09. Si conserva solo per
+# riaccendere il cacciatore in casa se un giorno servisse.
+#
 # Il cacciatore di domini, in produzione dal 19/09/2026.
 #
 # Perche' qui e non su Hetzner: non usa la scheda grafica — fa richieste HTTP e
