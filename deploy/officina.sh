@@ -35,6 +35,14 @@ PID="${1:?piattaforma}"; shift
 SLUG=""; CAMP=""; DEPLOY=1; MOTIVO="adapter $PID: i canarini o il ripiego dicono che non legge piu' la bacheca"
 while [ $# -gt 0 ]; do case "$1" in
   --slug) SLUG="$2"; shift 2 ;; --campione) CAMP="$2"; shift 2 ;; --senza-deploy) DEPLOY=0; shift ;; --motivo) MOTIVO="$2"; shift 2 ;; *) shift ;; esac; done
+# Guardia del 22/09/2026: il deploy via bare e' disinnescato (hook
+# post-receive spento, bare fermo al 18/09 — vedi la testa di questo
+# script). Una scritta in testa non ferma niente, questa si': con deploy
+# si esce subito. La riparazione resta provabile con --senza-deploy.
+if [ "$DEPLOY" -eq 1 ]; then
+  echo "officina: deploy via bare disinnescato il 22/09/2026; usa --senza-deploy per provare una riparazione." >&2
+  exit 1
+fi
 INIZIO=$(date +%s)
 log() { echo "$(date -Is) [$PID] $*" >> "$LOG"; }
 telegram() { cd "$BASE" && "$PY" -c "
