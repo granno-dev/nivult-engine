@@ -530,6 +530,78 @@ def eightfold(dsn: str, limite: int = 1500, thread: int = 6) -> dict:
     return stats
 
 
+def adp(dsn: str, limite: int = 1000, thread: int = 4) -> dict:
+    """ADP Workforce Now: la lista job-requisitions non porta il testo,
+    ma il dettaglio pubblico si': /job-requisitions/{itemID}?cid=… da'
+    requisitionDescription. Il cid si ricava dalla pagina carriere del
+    tenant, come fa l'adapter alla raccolta (22/09/2026)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from nivult.ats.adapters import ADP
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    cids: dict = {}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, slug, external_id FROM ats_jobs
+             WHERE platform_id = 'adp' AND expired_at IS NULL
+               AND NOT (raw ? 'description')
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, slug, eid = riga
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA}) as cli:
+                    if slug not in cids:
+                        cid = None
+                        for host in (f"https://{slug}", f"https://www.{slug}"):
+                            for path in ADP.PERCORSI:
+                                try:
+                                    r0 = cli.get(f"{host}{path}")
+                                except httpx.HTTPError:
+                                    continue
+                                m = re.search(
+                                    r'workforcenow\.adp\.com[^"]*?cid=([0-9a-f-]{36})',
+                                    r0.text)
+                                if m:
+                                    cid = m.group(1)
+                                    break
+                            if cid:
+                                break
+                        cids[slug] = cid
+                    cid = cids[slug]
+                    if not cid:
+                        return jid, None    # tenant irrisolvibile: trasporto
+                    r = cli.get("https://workforcenow.adp.com/mascsr/default/"
+                                "careercenter/public/events/staffing/v1/"
+                                f"job-requisitions/{eid}", params={"cid": cid})
+                    if r.status_code == 200:
+                        return jid, str((r.json() or {}).get(
+                            "requisitionDescription") or "")[:30000]
+                    if r.status_code in (404, 410):
+                        return jid, ""
+                    return jid, None
+            except (httpx.HTTPError, ValueError):
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1     # trasporto: resta in coda
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+    log.info("descrizioni adp: %s", stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -542,6 +614,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="JobPosting dalle pagine pubbliche della BA (un host solo: pochi thread)")
     ap.add_argument("--eightfold", action="store_true",
                     help="position_details pcsx di Eightfold (dettaglio per offerta)")
+    ap.add_argument("--adp", action="store_true",
+                    help="requisitionDescription di ADP Workforce Now (dettaglio per offerta)")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
@@ -557,6 +631,8 @@ def main(argv: list[str] | None = None) -> int:
         print(rippling(dsn, args.limite))
     if args.eightfold:
         print(eightfold(dsn, args.limite))
+    if args.adp:
+        print(adp(dsn, args.limite))
     if args.bundesanstellung:
         print(da_pagina(dsn, args.limite, thread=2,
                         piattaforme=("bundesanstellung",)))
@@ -567,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
                                     or args.rippling or args.bundesanstellung
-                                    or args.eightfold):
+                                    or args.eightfold or args.adp):
         print(smartrecruiters(dsn, args.limite))
     return 0
 
