@@ -94,8 +94,9 @@ RIGHE=$(cat <<'EOF'
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
 # il DuckDB dei clienti, DAGLI EXPORT appena scritti: /v1 legge da qui,
-# mai dal Postgres di produzione (23/09/2026)
-55 5 * * * cd /opt/nivult/engine && .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+# mai dal Postgres di produzione. Sul volume dedicato (23/09/2026: il
+# disco di root non regge il file da 15 GB + il ciclo notturno).
+55 5 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
 0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 600000
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
@@ -163,6 +164,7 @@ OBSOLETE=$(cat <<'EOF'
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
 20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
+20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
 EOF
 )
 

@@ -1202,6 +1202,35 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
   `jobs.text_search_config` e il trigger `jobs_derive_fields` sono già
   predisposti per passare a una configurazione per lingua.
 
+### L'API dei clienti B2B (la «porta», 23/09/2026)
+
+Il dataset si vende da `/v1` sulla stessa app del sito: `jobs`, `companies`,
+`companies/{ats}/{slug}`, `changes` (il delta feed, `since` obbligatorio),
+`exports/latest` (+ download dei file del giorno), `coverage` (il manifest
+dei fill-rate — l'argomento di vendita dichiarato), `usage`.
+
+Le regole non negoziabili, scritte nel codice e qui:
+
+- **I dati NON vengono dal Postgres di produzione**: un DuckDB ricostruito
+  ogni mattina alle 05:55 DAGLI EXPORT (`nivult.api_clienti.aggiorna`,
+  in `deploy/cron.sh`), atomico (tmp + os.replace), letto read-only. Vive
+  sul **volume dedicato** `/mnt/HC_Volume_106941692/` — il 23/09 il file da
+  15,4 GB non stava sul disco da 75 GB insieme al ciclo backup+export:
+  misurato, non ipotizzato. Il path sta in `API_CLIENTI_DB` (in
+  `/opt/nivult/.env` e nella riga cron), non nel codice.
+- **Chiave nell'header `X-Api-Key`, mai in URL** (le URL finiscono nei log):
+  in tabella solo lo sha256 (`api_chiavi`, migrazione 0062). La chiave si
+  stampa una volta sola: `python -m nivult.api_clienti.chiavi nuova
+  --etichetta "cliente X" --crediti 10000` (anche `lista` e `revoca --id`).
+  Una chiamata = un credito, contatore mensile con reset a lettura.
+- **I campi si aggiungono, non si rinominano e non si tolgono mai**: le
+  risposte sono le righe dell'export così come sono.
+- Il builder legge i .jsonl.gz con `read_json`/`read_csv` nativi (il giro
+  Python riga-per-riga sul corpus reale non finiva mai: misurato); il raw è
+  la riga verbatim dell'export, non riserializzata.
+- Il flusso (`novita-*`) si conserva **7 giorni**, non 48 ore: il delta feed
+  del weekend non si perde per chi legge il lunedì.
+
 ### I campi che si vendono, e chi li riempie
 
 Dal 21/09/2026 il magazzino ha i campi che il mercato (Coresignal,
