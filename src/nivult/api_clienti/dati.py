@@ -28,13 +28,15 @@ import binascii
 import datetime as dt
 import json
 import logging
+import os
 import threading
 
 import duckdb
 
 log = logging.getLogger("nivult.api_clienti.dati")
 
-PERCORSO = "/opt/nivult/exports/api-clienti.duckdb"
+PERCORSO = os.environ.get("API_CLIENTI_DB",
+                          "/opt/nivult/exports/api-clienti.duckdb")
 LIMITE_MAX = 500  # oltre, il cliente vuole un export bulk, non un'API
 
 _con: duckdb.DuckDBPyConnection | None = None

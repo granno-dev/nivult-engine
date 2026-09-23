@@ -38,43 +38,14 @@ log = logging.getLogger("nivult.api_clienti.aggiorna")
 
 CARTELLA = "/opt/nivult/exports"
 NOME_DB = "api-clienti.duckdb"
-LOTTO = 5000  # righe per executemany: sotto, la conversione Python->DuckDB domina
+# dove vive il db dell'API: di default accanto agli export, ma il disco di
+# Hetzner e' piccolo e il file e' grande — su un volume dedicato si
+# configura con API_CLIENTI_DB, senza toccare il codice (23/09/2026)
+DB_PATH = os.environ.get("API_CLIENTI_DB",
+                         os.path.join(CARTELLA, NOME_DB))
 
 _DATA_RX = re.compile(r"-(\d{4}-\d{2}-\d{2})\.jsonl\.gz$")
 _FLUSSO_RX = re.compile(r"novita-(\d{4})(\d{2})(\d{2})-")
-
-
-def _ts(v) -> dt.datetime | None:
-    """ISO -> datetime NAIVE in UTC; None se assente o illeggibile.
-
-    Negli export le date arrivano sia col «T» (isoformat, es. il flusso)
-    sia con lo spazio (str(datetime) di Postgres, es. posted_at):
-    fromisoformat di 3.11 le legge entrambe, e anche la «Z». Una data
-    senza fuso la trattiamo come UTC: in produzione nasce da un
-    timestamptz di un server in UTC, e un'ipotesi dichiarata batte un
-    fuso ereditato dalla macchina che gira.
-
-    Naive perche' TIMESTAMPTZ in duckdb-python tira dentro pytz, che
-    non e' tra le nostre dipendenze: normalizziamo a UTC NOI al
-    confine (qui nel builder, di nuovo nel lettore coi parametri) e nel
-    db restano istanti UTC confrontabili senza fusi.
-    """
-    if not isinstance(v, str) or not v:
-        return None
-    try:
-        d = dt.datetime.fromisoformat(v)
-    except ValueError:
-        return None
-    if d.tzinfo:
-        return d.astimezone(dt.timezone.utc).replace(tzinfo=None)
-    return d
-
-
-def _intero(v) -> int | None:
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return None
 
 
 def _ultimo(cartella: str, prefisso: str) -> str | None:
@@ -108,62 +79,94 @@ def _crea_tabelle(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("CREATE TABLE meta(chiave VARCHAR, valore VARCHAR)")
 
 
-def _carica(con: duckdb.DuckDBPyConnection, percorso: str, sql: str,
-            mappa) -> int:
-    """Un file .jsonl.gz in una tabella, a lotti.
+# ── il caricamento nativo: DuckDB legge il .jsonl.gz in C++ ──────────
+# La via Python riga-per-riga (executemany a lotti) sul corpus reale e'
+# stata misurata il 23/09/2026: MAI finita in 2 ore (fsync su disco
+# lento, 60 GB scritti per un file da 8, e il kernel l'ha uccisa una
+# volta per memoria). read_json fa tutto nel motore: minuti, memoria
+# piatta. La riga resta in `raw` VERBATIM (lettura a due passate sul
+# file, unite per numero di riga): la ri-serializzazione con
+# to_json(struct_pack) la gonfiava quasi doppia (\uXXXX per l'unicode)
+# e la cambiava di forma (23/09/2026).
+_READ = ("SELECT row_number() OVER () AS rn, * "
+         "FROM read_json(?, format='newline_delimited', compression='gzip')")
+# la riga com'e': read_csv con un delimitatore che il JSONL non puo'
+# contenere e quoting spento. Il gzip si legge solo in sequenza, quindi
+# l'ordine delle due passate e' identico e il join per rn e' esatto.
+_READT = ("SELECT row_number() OVER () AS rn, linea FROM read_csv(?, "
+          "delim='\\x01', header=false, columns={'linea': 'VARCHAR'}, "
+          "quote='', escape='', "
+          # il JSONL reale ha righe da 3 MB (immagini base64 dentro le
+          # descrizioni): il tetto di linea di default (2 MB) tagliava
+          # il flusso a meta' (23/09/2026)
+          "max_line_size=20000000)")
 
-    Con 800k righe gli INSERT a una a una fanno un round-trip a riga e
-    il giro dura minuti; a lotti il collo di bottiglia torna la lettura
-    gzip, che e' quella giusta. Una riga col JSON rotto si salta: non
-    deve fermare il giro di tutto il dataset.
+# I timestamp dell'export (Postgres «2026-09-23 07:00:00+00:00» o ISO col
+# fuso): TIMESTAMPTZ converte davvero («+02:00» diventa l'istante UTC,
+# non troncato), ::TIMESTAMP toglie il fuso senza dover importare pytz.
+_TS_SQL = "TRY_CAST(TRY_CAST({c} AS TIMESTAMPTZ)::TIMESTAMP AS TIMESTAMP)"
+
+_COLONNE_OFFERTE = (
+    ("id", '"id"', ("id",)), ("title", '"title"', ("title",)),
+    ("ats", '"ats"', ("ats",)), ("company_slug", '"company_slug"', ("company_slug",)),
+    ("company", '"company"', ("company",)), ("country", '"country"', ("country",)),
+    ("city", '"city"', ("city",)), ("language", '"language"', ("language",)),
+    ("seniority", '"seniority"', ("seniority",)),
+    ("remote", '"remote"::VARCHAR', ("remote",)),
+    ("category", '"category"', ("category",)),
+    ("posted_at", _TS_SQL.format(c='"posted_at"'), ("posted_at",)),
+    ("technologies", '"technologies"', ("technologies",)),
+)
+_COLONNE_AZIENDE = (
+    ("ats", '"ats"', ("ats",)), ("company_slug", '"company_slug"', ("company_slug",)),
+    ("company", '"company"', ("company",)), ("country", '"country"', ("country",)),
+    ("industry", '"industry"', ("industry",)),
+    ("employees", 'TRY_CAST("employees" AS BIGINT)', ("employees",)),
+    # l'export aziende ha technologies come lista di {technology, ...}:
+    # in colonna i nomi soli (servono al filtro); il resto resta in raw
+    ("technologies", 'list_transform("technologies", x -> x.technology)',
+     ("technologies",)),
+)
+# (nome colonna, espressione SQL o callable(set_sorgente)->SQL, colonne
+# della sorgente che servono): se NESSUNA delle colonne servite esiste nel
+# file, la colonna e' NULL. L'espressione puo' dipendere da PIU' colonne
+# (la «t» del flusso): il callable riceve le colonne presenti e ripiega
+# su NULL per quelle assenti — un file di sole «new» non ha closed_at.
+_COLONNE_FLUSSO = (
+    ("t",
+     lambda disp: "COALESCE("
+         + _TS_SQL.format(c='"first_seen"' if "first_seen" in disp else "NULL")
+         + ", "
+         + _TS_SQL.format(c='"closed_at"' if "closed_at" in disp else "NULL")
+         + ")",
+     ("first_seen", "closed_at")),
+    ("id", '"id"', ("id",)), ("event", '"event"', ("event",)),
+)
+
+
+def _carica_nativa(con: duckdb.DuckDBPyConnection, percorso: str,
+                   tabella: str, colonne: tuple, dove: str = "") -> int:
+    """Un file .jsonl.gz in una tabella, tutto nel motore DuckDB.
+
+    `colonne`: (nome, espressione o callable, colonne della sorgente che
+    servono); una colonna le cui fonti mancano tutte diventa NULL — lo
+    schema dell'export si evolve senza rompere il builder. `raw` e' la
+    riga VERBATIM dell'export (lettura testuale parallela, join per rn).
     """
-    n = 0
-    lotto: list = []
-    with gzip.open(percorso, "rt", encoding="utf-8") as f:
-        for linea in f:
-            try:
-                r = json.loads(linea)
-            except json.JSONDecodeError:
-                continue
-            riga = mappa(r, linea.strip())
-            if riga is None:
-                continue
-            lotto.append(riga)
-            if len(lotto) >= LOTTO:
-                con.executemany(sql, lotto)
-                n += len(lotto)
-                lotto.clear()
-    if lotto:
-        con.executemany(sql, lotto)
-        n += len(lotto)
-    return n
-
-
-def _mappa_offerta(r: dict, raw: str) -> tuple:
-    return (r.get("id"), r.get("title"), r.get("ats"), r.get("company_slug"),
-            r.get("company"), r.get("country"), r.get("city"), r.get("language"),
-            r.get("seniority"), r.get("remote"), r.get("category"),
-            _ts(r.get("posted_at")),
-            [t for t in r.get("technologies") or [] if isinstance(t, str)],
-            raw)
-
-
-def _mappa_azienda(r: dict, raw: str) -> tuple:
-    # technologies dell'azienda sono {technology, active_jobs, ...}: in
-    # colonna va solo il nome, per il filtro; il resto resta in raw
-    return (r.get("ats"), r.get("company_slug"), r.get("company"),
-            r.get("country"), r.get("industry"), _intero(r.get("employees")),
-            [t["technology"] for t in r.get("technologies") or []
-             if isinstance(t, dict) and t.get("technology")],
-            raw)
-
-
-def _mappa_flusso(r: dict, raw: str) -> tuple | None:
-    # new -> first_seen, closed -> closed_at: ogni evento ha solo il suo
-    t = _ts(r.get("first_seen") or r.get("closed_at"))
-    if t is None:
-        return None  # senza tempo non si puo' ne' ordinare ne' filtrare: fuori
-    return (t, r.get("id"), r.get("event"), raw)
+    disponibili = {r[0] for r in con.execute(
+        f"DESCRIBE {_READ}", [percorso]).fetchall()}
+    disponibili.discard("rn")     # la colonna tecnica, non dell'export
+    sel = ", ".join(f"{(expr(disponibili) if callable(expr) else expr)} AS {nome}"
+                    if any(f in disponibili for f in fonti)
+                    else f"NULL AS {nome}"
+                    for nome, expr, fonti in colonne)
+    interna = (f"SELECT {sel}, r.linea AS raw "
+               f"FROM ({_READ}) j JOIN ({_READT}) r USING (rn)")
+    if dove:
+        interna = f"SELECT * FROM ({interna}) WHERE {dove}"
+    n = con.execute(f"INSERT INTO {tabella} {interna}",
+                    [percorso, percorso]).fetchone()
+    return int(n[0]) if n else 0
 
 
 def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
@@ -178,14 +181,14 @@ def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
     """
     taglio = dt.date.today() - dt.timedelta(days=giorni)
     n = 0
-    sql = "INSERT INTO flusso VALUES (?, ?, ?, ?)"
     for percorso in sorted(glob.glob(
             os.path.join(cartella, "flusso", "novita-*.jsonl.gz"))):
         m = _FLUSSO_RX.search(os.path.basename(percorso))
         if not m or dt.date(*map(int, m.groups())) < taglio:
             continue
         try:
-            n += _carica(con, percorso, sql, _mappa_flusso)
+            n += _carica_nativa(con, percorso, "flusso", _COLONNE_FLUSSO,
+                                dove="t IS NOT NULL")
         except OSError as e:
             log.warning("flusso: %s illeggibile (%s), salto", percorso, e)
     return n
@@ -205,9 +208,14 @@ def _carica_copertura(con: duckdb.DuckDBPyConnection, cartella: str) -> dict:
     return manifest
 
 
-def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 30) -> dict:
-    os.makedirs(cartella, exist_ok=True)
-    destinazione = os.path.join(cartella, NOME_DB)
+def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
+               db_path: str | None = None) -> dict:
+    # dove finisce il db: l'argomento vince, poi l'ambiente, poi il
+    # default accanto agli export. I banchi passano --cartella e restano
+    # nella loro sabbia; in produzione API_CLIENTI_DB manda sul volume.
+    destinazione = (db_path or os.environ.get("API_CLIENTI_DB")
+                    or os.path.join(cartella, NOME_DB))
+    os.makedirs(os.path.dirname(destinazione), exist_ok=True)
     tmp = destinazione + ".tmp"
     for p in (tmp, tmp + ".wal"):  # resti di un giro morto a meta'
         try:
@@ -225,13 +233,18 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 30) -> dict:
         log.warning("export mancanti: %s — costruisco comunque il db, "
                     "con le tabelle vuote e lo stato dichiarato", mancanti)
     con = duckdb.connect(tmp)
+    # il builder gira su Hetzner (7,6 GB in tutto, con Postgres accanto):
+    # DuckDB per default si prende l'80% della RAM e il 23/09/2026 il
+    # kernel ha ucciso il giro a 4,1 GB di RSS. Tetto dichiarato a 2 GB
+    # (oltre si riversa su disco, come deve essere) e niente ordine di
+    # inserzione da preservare: l'ordine lo da' l'export, non il db.
+    con.execute("SET memory_limit = '2GB'")
+    con.execute("SET preserve_insertion_order = false")
     _crea_tabelle(con)
-    n_offerte = _carica(con, f_offerte,
-                        "INSERT INTO offerte VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        _mappa_offerta) if f_offerte else 0
-    n_aziende = _carica(con, f_aziende,
-                        "INSERT INTO aziende VALUES (?,?,?,?,?,?,?,?)",
-                        _mappa_azienda) if f_aziende else 0
+    n_offerte = _carica_nativa(con, f_offerte, "offerte",
+                               _COLONNE_OFFERTE) if f_offerte else 0
+    n_aziende = _carica_nativa(con, f_aziende, "aziende",
+                               _COLONNE_AZIENDE) if f_aziende else 0
     n_flusso = _carica_flusso(con, cartella, flusso_giorni)
     manifest = _carica_copertura(con, cartella)
     meta = {
@@ -264,8 +277,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.api_clienti.aggiorna")
     ap.add_argument("--cartella", default=CARTELLA,
                     help="dove stanno gli export (default %(default)s)")
-    ap.add_argument("--flusso-giorni", type=int, default=30,
-                    help="quanti giorni di delta feed tenere (default %(default)s)")
+    ap.add_argument("--flusso-giorni", type=int, default=7,
+                    help="quanti giorni di delta feed tenere (default %(default)s; "
+                         "il cron conserva i file novita per 7 giorni)")
     args = ap.parse_args(argv)
     print(json.dumps(costruisci(args.cartella, args.flusso_giorni),
                      ensure_ascii=False))
