@@ -42,9 +42,11 @@ sposta() {   # $1 file, $2 sottocartella
   dire "dimensione diversa per $nome ($dim vs $remota): NON cancello"; return 1
 }
 
-# 1. export freddi
+# 1. export freddi (daystart: «vecchi di oggi» — con -mtime +0 il file delle
+# 07:13 di ieri alle 06:40 ha 23h e NON si muoveva: due giorni di export
+# restavano sul disco, 8 GB. Misurato il 23/09/2026)
 while IFS= read -r f; do sposta "$f" exports; done \
-  < <(find /opt/nivult/exports -maxdepth 1 -name "*.jsonl.gz" -mtime +$GIORNI_EXPORT -type f | sort)
+  < <(find /opt/nivult/exports -maxdepth 1 -name "*.jsonl.gz" -daystart -mtime +$GIORNI_EXPORT -type f | sort)
 
 # 2. backup: solo quelli gia' verificati sullo spazio remoto
 set -a; . /opt/nivult/backup.env 2>/dev/null; set +a
@@ -59,7 +61,7 @@ while IFS= read -r f; do
   else
     dire "backup $nome NON confermato sul remoto: lo lascio"
   fi
-done < <(find /opt/nivult/backups -name "nivult-*.sql.gz.enc" -mtime +$GIORNI_BACKUP -type f | sort)
+done < <(find /opt/nivult/backups -name "nivult-*.sql.gz.enc" -daystart -mtime +$GIORNI_BACKUP -type f | sort)
 
 # 3. modelli e dataset raffreddati
 while IFS= read -r f; do sposta "$f" gpu; done \
