@@ -148,35 +148,29 @@ def _estrai_microdata(html: str) -> dict:
 
 def _estrai_jsonld(html: str) -> dict:
     """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata).
-    Il JSON puo' essere una LISTA (Eploy: [{@type: JobPosting, ...}]) —
-    non leggerla ha tenuto 10k offerte senza testo fino al 22/09/2026."""
-    for m in re.finditer(
-            r'<script type="application/ld\+json">(.*?)</script>', html, re.S):
+    Il parser e' UNO, condiviso (testo.jobposting_da_html): una copia
+    divergente che non apriva le liste ha tenuto eploy senza testo per
+    settimane (22/09/2026)."""
+    from nivult.ats.testo import jobposting_da_html
+    d = jobposting_da_html(html)
+    if d:
+        loc = d.get("jobLocation") or {}
+        if isinstance(loc, list):
+            loc = loc[0] if loc else {}
+        addr = loc.get("address") or {}
+        paese = _iso(addr.get("addressCountry"))
+        citta = addr.get("addressLocality")
+        data = d.get("datePosted")
         try:
-            d = json.loads(m.group(1))
-            if isinstance(d, list):
-                d = next((x for x in d if isinstance(x, dict)
-                          and x.get("@type") == "JobPosting"), None)
-            if isinstance(d, dict) and d.get("@type") == "JobPosting":
-                loc = d.get("jobLocation") or {}
-                if isinstance(loc, list):
-                    loc = loc[0] if loc else {}
-                addr = loc.get("address") or {}
-                paese = _iso(addr.get("addressCountry"))
-                citta = addr.get("addressLocality")
-                data = d.get("datePosted")
-                try:
-                    dt = datetime.fromisoformat(data) if data else None
-                except ValueError:
-                    dt = None
-                # la descrizione viaggia nello stesso JSON-LD: buttarla
-                # e' stata la differenza fra 0% e 90% su phenom
-                descr = _testo_pulito(d.get("description"))
-                if paese or citta or dt or descr:
-                    return {"country": paese, "city": citta,
-                            "posted_at": dt, "description": descr}
-        except (json.JSONDecodeError, KeyError):
-            continue
+            dt = datetime.fromisoformat(data) if data else None
+        except ValueError:
+            dt = None
+        # la descrizione viaggia nello stesso JSON-LD: buttarla
+        # e' stata la differenza fra 0% e 90% su phenom
+        descr = _testo_pulito(d.get("description"))
+        if paese or citta or dt or descr:
+            return {"country": paese, "city": citta,
+                    "posted_at": dt, "description": descr}
     return _estrai_microdata(html)
 
 

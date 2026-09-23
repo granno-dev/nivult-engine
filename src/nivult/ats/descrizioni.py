@@ -112,17 +112,10 @@ _LD = re.compile(r"<script[^>]*ld\+json[^>]*>(.*?)</script>", re.S | re.I)
 
 
 def _jobposting(html: str) -> dict | None:
-    for blocco in _LD.findall(html):
-        try:
-            d = json.loads(blocco.strip())
-        except json.JSONDecodeError:
-            continue
-        if isinstance(d, list):
-            d = next((x for x in d if isinstance(x, dict)
-                      and x.get("@type") == "JobPosting"), None)
-        if isinstance(d, dict) and d.get("@type") == "JobPosting":
-            return d
-    return None
+    """Deprecato come copia: il parser e' UNO, in testo.py (22/09/2026).
+    Resta il nome per compatibilita' coi chiamanti di questo modulo."""
+    from nivult.ats.testo import jobposting_da_html
+    return jobposting_da_html(html)
 
 
 def da_pagina(dsn: str, limite: int = 3000, thread: int = 10,

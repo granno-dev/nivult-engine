@@ -12,6 +12,31 @@ from __future__ import annotations
 
 import re
 
+# ── il JSON-LD JobPosting dalla pagina: UN estrattore solo ────────────
+# Fino al 22/09/2026 ce n'erano due divergenti (arricchisci._estrai_jsonld
+# e descrizioni._jobposting): quello di arricchisci non apriva le LISTE
+# [{...}] e eploy e' rimasta senza testo per settimane. Chi cerca un
+# JobPosting passa da qui.
+_LD_RX = re.compile(r'<script[^>]*ld\+json[^>]*>(.*?)</script>', re.S | re.I)
+
+
+def jobposting_da_html(pagina: str) -> dict | None:
+    """Il primo blocco ld+json di tipo JobPosting, o None. Apre anche le
+    liste ([{...}]) e i blocchi malformati non fermano la ricerca."""
+    import json as _json
+    for m in _LD_RX.finditer(pagina or ""):
+        try:
+            d = _json.loads(m.group(1).strip())
+        except _json.JSONDecodeError:
+            continue
+        if isinstance(d, list):
+            d = next((x for x in d if isinstance(x, dict)
+                      and x.get("@type") == "JobPosting"), None)
+        if isinstance(d, dict) and d.get("@type") == "JobPosting":
+            return d
+    return None
+
+
 CHIAVI = ('description', 'content', 'descriptionHtml', 'descriptionPlain', 'externalDescription', 'jobDescription', 'job_description', 'Job_Description', 'body', 'content_html', 'description_html', 'descriptionBody', 'text')
 
 # per le query SQL: il PRIMO campo con almeno 80 caratteri. Non COALESCE:
