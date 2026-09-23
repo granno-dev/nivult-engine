@@ -20,6 +20,7 @@ dependencies = [
   "pypdf>=5",           # estrai_testo: i CV in PDF
   "python-docx>=1.1",   # estrai_testo: i CV in DOCX
   "geonamescache>=2.0", # geografia.py: citta' -> paese, offline
+  "duckdb>=1.1",        # api_clienti: il dato servito ai clienti, fuori dal Postgres di produzione
 ]
 
 [project.optional-dependencies]

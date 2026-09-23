@@ -37,6 +37,7 @@ from pydantic import BaseModel, EmailStr, Field
 from nivult import auth, oauth
 from nivult import crypto, cv, gdpr, ponte_ats, storage
 from nivult.api import cruscotto as cruscotto_mod
+from nivult.api_clienti import v1 as api_clienti_v1
 from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
@@ -2074,6 +2075,12 @@ def create_app() -> FastAPI:
                         (nome or "cv").replace('"', "").replace("\r", "")
                                       .replace("\n", "")[:120]),
             })
+
+    # L'API dei clienti B2B (dataset di offerte e aziende), versionata nel
+    # percorso come /v1. E' l'unico router incluso: tutto il resto qui sono
+    # decoratori, ma il /v1 ha regole proprie (chiavi, crediti, campi che
+    # non si rinominano mai) e vive in un modulo suo.
+    app.include_router(api_clienti_v1.router)
 
     return app
 

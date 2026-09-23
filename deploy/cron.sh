@@ -84,12 +84,18 @@ RIGHE=$(cat <<'EOF'
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
 */5 * * * * cd /opt/nivult/engine && .venv/bin/python -m nivult.ats.sentinella >> /var/log/nivult-sentinella.log 2>&1
 0 0,6,12,18 * * * /opt/nivult/engine/deploy/salute.sh >> /var/log/nivult-salute.log 2>&1
-20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
+# il flusso si tiene 7 giorni (era 48 ore): /v1/changes serve il delta feed
+# da questi file, e un cliente che non legge nel weekend non deve perdere
+# i cambiamenti del sabato (23/09/2026)
+20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +10080 -delete
 15 6 * * * find /opt/nivult/exports -name "*.jsonl.gz" -mtime +7 -delete
 30 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.wikidata_ditte --limite 1500 >> /var/log/nivult-esporta.log 2>&1
 35 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.benchmark_salari >> /var/log/nivult-esporta.log 2>&1
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
+# il DuckDB dei clienti, DAGLI EXPORT appena scritti: /v1 legge da qui,
+# mai dal Postgres di produzione (23/09/2026)
+55 5 * * * cd /opt/nivult/engine && .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
 0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 600000
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
