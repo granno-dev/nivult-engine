@@ -247,7 +247,7 @@ def _giri(ATS_DSN_CRUSCOTTO: str = "") -> dict:
 # ora: RAM, carico, disco, uccisioni per memoria nelle 24h, backup,
 # sprint GLM; per il N5 cio' che il suo battito scrive in operaio_battiti.
 
-def _macchine(ats_dsn: str) -> dict:
+def _macchine(ats_dsn: str, sprint_ultima_ora=None) -> dict:
     import json as _json
     import shutil
     import subprocess
@@ -294,8 +294,11 @@ def _macchine(ats_dsn: str) -> dict:
         righe = [l for l in log.splitlines() if " offerte, " in l]
         sp["ultima"] = righe[-1][:110] if righe else None
         sp["in_coda"] = _uno(ats_dsn, "SELECT count(*) FROM sprint_coda")
-        sp["ultima_ora"] = _uno(ats_dsn, "SELECT count(*) FROM ats_jobs "
-                                         "WHERE sprint_at > now() - interval '1 hour'")
+        # la conta dell'ultima ora viene dalla cache di sfondo (lenta
+        # sotto carico); solo se manca si calcola qui
+        sp["ultima_ora"] = sprint_ultima_ora if sprint_ultima_ora is not None \
+            else _uno(ats_dsn, "SELECT count(*) FROM ats_jobs "
+                               "WHERE sprint_at > now() - interval '1 hour'")
         srv["sprint"] = sp
     except Exception:                                # noqa: BLE001
         srv["sprint"] = None
@@ -407,7 +410,7 @@ def _carica_cache_da_disco() -> None:
         pass
 
 
-def _pesanti(ats_dsn: str, attive: int) -> dict:
+def _pesanti(ats_dsn: str) -> dict:
     """Cache con ricalcolo in sfondo: il tick non aspetta mai. Se la
     cache e' scaduta si serve comunque la versione vecchia e un thread
     la rinfresca; solo la primissima chiamata (cache vuota) blocca."""
@@ -417,7 +420,7 @@ def _pesanti(ats_dsn: str, attive: int) -> dict:
         if time.time() - _CACHE_PES["t"] >= 240 and not _CACHE_PES["in_corso"]:
             _CACHE_PES["in_corso"] = True
             threading.Thread(target=_ricalcola_pesanti,
-                             args=(ats_dsn, attive), daemon=True).start()
+                             args=(ats_dsn,), daemon=True).start()
         return _CACHE_PES["v"]
     if _CACHE_PES["in_corso"]:
         # un altro tick sta gia' calcolando: si aspetta il suo risultato
@@ -426,13 +429,13 @@ def _pesanti(ats_dsn: str, attive: int) -> dict:
             if _CACHE_PES["v"] is not None:
                 return _CACHE_PES["v"]
     _CACHE_PES["in_corso"] = True
-    return _ricalcola_pesanti(ats_dsn, attive)
+    return _ricalcola_pesanti(ats_dsn)
 
 
-def _ricalcola_pesanti(ats_dsn: str, attive: int) -> dict:
+def _ricalcola_pesanti(ats_dsn: str) -> dict:
     import json as _json
     try:
-        d = _calcola_pesanti(ats_dsn, attive)
+        d = _calcola_pesanti(ats_dsn)
         _CACHE_PES.update(t=time.time(), v=d)
         try:
             with open(_CACHE_FILE + ".tmp", "w") as f:
@@ -445,8 +448,14 @@ def _ricalcola_pesanti(ats_dsn: str, attive: int) -> dict:
         _CACHE_PES["in_corso"] = False
 
 
-def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
+def _calcola_pesanti(ats_dsn: str) -> dict:
     d: dict = {}
+
+    # I conteggi pieni stanno QUI, nel giro in sfondo: sotto carico il 23/09
+    # la conta delle attive costava 7,6 s e quella delle viste 5 s, e nel
+    # tick tenevano la pagina bianca per 12-20 secondi dopo ogni riavvio.
+    attive = _uno(ats_dsn,
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL") or 0
 
     senza_paese = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
@@ -455,6 +464,13 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
         "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
         "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL") or 0
     d["salute"] = {
+        "offerte_attive": attive,
+        "offerte_viste_24h": _uno(ats_dsn,
+            "SELECT count(*) FROM ats_jobs "
+            "WHERE fetched_at > now() - interval '24 hours'"),
+        "sprint_ultima_ora": _uno(ats_dsn,
+            "SELECT count(*) FROM ats_jobs "
+            "WHERE sprint_at > now() - interval '1 hour'"),
         "senza_paese": senza_paese,
         "senza_paese_pct": round(100 * senza_paese / attive, 1) if attive else 0,
         "non_classificate": non_class,
@@ -815,13 +831,13 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
         "aziende_scrapate_1h": _uno(ats_dsn,
             "SELECT count(*) FROM ats_companies "
             "WHERE last_fetch_at > now() - interval '1 hour'"),
-        "offerte_viste_24h": _uno(ats_dsn,
-            "SELECT count(*) FROM ats_jobs "
-            "WHERE fetched_at > now() - interval '24 hours'"),
     }
 
-    attive = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL") or 0
+    # ── parte pesante PRIMA del resto: i conteggi pieni (attive, viste
+    # 24h, sprint/ora) vengono da li', gia' pronti dalla cache di sfondo ──
+    pes = _pesanti(ats_dsn)
+    attive = (pes["salute"].get("offerte_attive") or 0) if pes else 0
+    d["stato"]["offerte_viste_24h"] = pes["salute"].get("offerte_viste_24h") if pes else None
 
     # ── board live: le offerte piu' recenti per data di pubblicazione,
     # col tempo relativo, come il flusso continuo di Fantastic.
@@ -864,7 +880,8 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
             "posted": str(pa) if pa else None})
 
     d["giri"] = _giri(ats_dsn)
-    d["macchine"] = _macchine(ats_dsn)
+    d["macchine"] = _macchine(ats_dsn, sprint_ultima_ora=(
+        pes["salute"].get("sprint_ultima_ora") if pes else None))
 
     try:
         d["motore"] = {
@@ -903,8 +920,8 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
     except psycopg.Error:
         d["motore"], d["cluster"], d["iscritti"] = {}, [], []
 
-    # ── parte pesante (cache 4 minuti) ──
-    pes = _pesanti(ats_dsn, attive)
+    # ── parte pesante (cache 4 minuti) — gia' chiamata sopra, qui si
+    # consuma soltanto ──
     for k in ("per_fonte", "per_paese", "per_famiglia", "agenzie",
               "andamento", "freschezza", "per_scoperta", "attivazione",
               "nuove_aziende", "ats_pending", "arricchimento", "nuove24",
@@ -912,6 +929,15 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
               "scheda_azienda_tot", "registri", "modelli", "copertura"):
         d[k] = pes.get(k)     # .get: la cache su disco puo' venire dal codice di prima
     d["salute"] = dict(pes["salute"])
+    if not attive:
+        # la cache su disco del codice precedente non ha i conteggi nuovi:
+        # si misurano una volta qui, dal prossimo giro arrivano dalla cache
+        attive = _uno(ats_dsn,
+            "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL") or 0
+        if d["stato"].get("offerte_viste_24h") is None:
+            d["stato"]["offerte_viste_24h"] = _uno(ats_dsn,
+                "SELECT count(*) FROM ats_jobs "
+                "WHERE fetched_at > now() - interval '24 hours'")
     d["salute"]["offerte_attive"] = attive
 
     d["salute"]["pubblicate_1h"] = _uno(ats_dsn,
@@ -1208,7 +1234,9 @@ function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style=
 // copertura per piattaforma: la barra e' il testo, rossa sotto il 50%;
 // a lato il paese. Un buco di campo deve saltare all'occhio, non
 // aspettare che qualcuno lo misuri a mano (22/09/2026).
-function copertura(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
+// NOME DIVERSO dalla copertura() dei campi: due function con lo stesso
+// nome nello stesso script si sovrascrivono (l'ultima vince ovunque).
+function copertura_piattaforme(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
  return '<div class="panel">'+rows.map(r=>{const c=r.testo<50?'#e0705a':'';
   return `<div class="row"><div class="k">${esc(r.piattaforma)}</div>`+
   `<div class="track"><i style="width:${Math.round(r.testo)}%${c?';background:'+c:''}"></i></div>`+
@@ -1494,7 +1522,7 @@ async function tick(){
  +'<div><div class="sect"><h2>Per famiglia professionale</h2></div>'+ciambella(d.per_famiglia,'famiglia','attive','offerte')+'</div>'
  +'</div>'
  +'<div class="sect"><h2>Copertura dei campi per piattaforma</h2><span class="note">campione del 5% delle attive, ogni 4 minuti — in rosso chi ha meno della meta&rsquo; del testo</span></div>'
- +copertura(d.copertura)
+ +copertura_piattaforme(d.copertura)
  +(d.agenzie&&d.agenzie.length?'<div class="cols"><div><div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive')+'</div><div></div></div>':'')
 
  +gband('iscritti','Iscritti','il motore visto dai clienti')
