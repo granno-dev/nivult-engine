@@ -1176,7 +1176,11 @@ padding:6px 12px;border-radius:20px;background:var(--card2);border:1px solid var
 .bbar{width:100%;max-width:26px;background:linear-gradient(180deg,var(--acc),#2a5cbf);
 border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .bbar.hot{background:linear-gradient(180deg,var(--warn),#b97c1e)}
-.bcol .bx{font-size:10px;color:var(--dim);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* etichette dell'asse: ruotate a 45°, non troncate — «23/09» si legge,
+  «2...» no (prima erano ellipsis a due caratteri) */
+.bcol .bx{font-size:9.5px;color:var(--dim);margin-top:14px;white-space:nowrap;
+transform:rotate(-45deg);transform-origin:top right}
+.bars{margin-bottom:26px}
 .bcol .bv{font-size:10px;color:var(--dim);margin-bottom:4px;font-variant-numeric:tabular-nums}
 .stage{padding:9px 14px}
 .stage .sh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
@@ -1193,6 +1197,7 @@ border-radius:4px 4px 0 0;min-height:2px;transition:opacity .12s}
 .db .dt{height:8px;background:#0c1117;border-radius:5px;position:relative;overflow:hidden}
 .db .dt .cen{position:absolute;left:0;top:0;height:100%;background:#2c3a52;border-radius:5px}
 .db .dt .att{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#3a6fd8,var(--acc));border-radius:5px}
+.db .dt .low{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#b0453a,#e0705a);border-radius:5px}
 .spark{width:100%;height:auto;display:block}
 .spark .sa{fill:url(#sag);stroke:none}
 .spark .sl{fill:none;stroke:var(--ok);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
@@ -1257,11 +1262,12 @@ function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style=
 // aspettare che qualcuno lo misuri a mano (22/09/2026).
 // NOME DIVERSO dalla copertura() dei campi: due function con lo stesso
 // nome nello stesso script si sovrascrivono (l'ultima vince ovunque).
+// Stesso stile delle altre barre della pagina (db/dh/dk/dv/dt).
 function copertura_piattaforme(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
- return '<div class="panel">'+rows.map(r=>{const c=r.testo<50?'#e0705a':'';
-  return `<div class="row"><div class="k">${esc(r.piattaforma)}</div>`+
-  `<div class="track"><i style="width:${Math.round(r.testo)}%${c?';background:'+c:''}"></i></div>`+
-  `<div class="v" style="min-width:150px;text-align:right">testo ${r.testo}% · paese ${r.paese}%</div></div>`}).join('')+'</div>'}
+ return '<div class="panel">'+rows.map(r=>{const c=r.testo<50?' class="att low"':' class="att"';
+  return `<div class="db"><div class="dh"><span class="dk">${esc(r.piattaforma)}</span>`+
+  `<span class="dv"><b>${r.testo}%</b> testo · ${r.paese}% paese</span></div>`+
+  `<div class="dt"><span${c} style="width:${Math.max(0.5,r.testo)}%"></span></div></div>`}).join('')+'</div>'}
 let _and=[];
 function mostraDettaglio(i){
  const r=_and[i];if(!r)return;
