@@ -28,6 +28,7 @@ import httpx
 import psycopg
 
 from nivult import oauth as _oauth
+from nivult.ats.testo import SQL_HA_TESTO
 
 log = logging.getLogger("nivult.cruscotto")
 
@@ -522,6 +523,21 @@ def _calcola_pesanti(ats_dsn: str, attive: int) -> dict:
     d["per_fonte"] = [{"fonte": p, "attive": n} for p, n in _righe(ats_dsn,
         "SELECT platform_id, count(*) FROM ats_jobs "
         "WHERE expired_at IS NULL GROUP BY 1 ORDER BY 2 DESC LIMIT 25")]
+    # ── copertura per piattaforma: testo e paese, campione 5% ──
+    # Il 22/09/2026 il controllo fatto a mano ha trovato SETTE piattaforme a
+    # zero testo da settimane (bamboohr, traffit...): mai piu' un buco che
+    # si scopre per caso. Campione, non censimento: la query gira in sfondo
+    # ogni 4 minuti, e a queste dimensioni l'errore di campionamento non
+    # cambia nessuna decisione.
+    d["copertura"] = [{"piattaforma": p, "n": n, "testo": float(t),
+                       "paese": float(pa)} for p, n, t, pa in _righe(ats_dsn,
+        "SELECT platform_id, count(*), "
+        "round(100.0*count(*) FILTER (WHERE ha_testo)/count(*),1), "
+        "round(100.0*count(*) FILTER (WHERE ha_paese)/count(*),1) "
+        "FROM (SELECT platform_id, " + SQL_HA_TESTO + " AS ha_testo, "
+        "      country IS NOT NULL AS ha_paese "
+        "      FROM ats_jobs TABLESAMPLE SYSTEM (5) WHERE expired_at IS NULL) t "
+        "GROUP BY 1 HAVING count(*) >= 20 ORDER BY 2 DESC")]
     d["per_paese"] = [{"paese": p or "—", "attive": n} for p, n in _righe(ats_dsn,
         "SELECT country, count(*) FROM ats_jobs WHERE expired_at IS NULL "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 20")]
@@ -893,7 +909,7 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
               "andamento", "freschezza", "per_scoperta", "attivazione",
               "nuove_aziende", "ats_pending", "arricchimento", "nuove24",
               "raccolta_oraria", "magazzino", "scheda_azienda",
-              "scheda_azienda_tot", "registri", "modelli"):
+              "scheda_azienda_tot", "registri", "modelli", "copertura"):
         d[k] = pes.get(k)     # .get: la cache su disco puo' venire dal codice di prima
     d["salute"] = dict(pes["salute"])
     d["salute"]["offerte_attive"] = attive
@@ -1189,6 +1205,14 @@ function lista(rows,k,vk){if(!rows||!rows.length)return '<div class="sub" style=
  return '<div class="panel">'+rows.map(r=>`<div class="row"><div class="k">${esc(r[k])}</div>`+
   `<div class="track"><i style="width:${Math.round(100*r[vk]/max)}%"></i></div>`+
   `<div class="v">${IT(r[vk])}</div></div>`).join('')+'</div>'}
+// copertura per piattaforma: la barra e' il testo, rossa sotto il 50%;
+// a lato il paese. Un buco di campo deve saltare all'occhio, non
+// aspettare che qualcuno lo misuri a mano (22/09/2026).
+function copertura(rows){if(!rows||!rows.length)return '<div class="sub" style="padding:12px 14px">nessun dato</div>';
+ return '<div class="panel">'+rows.map(r=>{const c=r.testo<50?'#e0705a':'';
+  return `<div class="row"><div class="k">${esc(r.piattaforma)}</div>`+
+  `<div class="track"><i style="width:${Math.round(r.testo)}%${c?';background:'+c:''}"></i></div>`+
+  `<div class="v" style="min-width:150px;text-align:right">testo ${r.testo}% · paese ${r.paese}%</div></div>`}).join('')+'</div>'}
 let _and=[];
 function mostraDettaglio(i){
  const r=_and[i];if(!r)return;
@@ -1469,6 +1493,8 @@ async function tick(){
  +'<div><div class="sect"><h2>Per paese</h2></div>'+ciambella(d.per_paese,'paese','attive','offerte')+'</div>'
  +'<div><div class="sect"><h2>Per famiglia professionale</h2></div>'+ciambella(d.per_famiglia,'famiglia','attive','offerte')+'</div>'
  +'</div>'
+ +'<div class="sect"><h2>Copertura dei campi per piattaforma</h2><span class="note">campione del 5% delle attive, ogni 4 minuti — in rosso chi ha meno della meta&rsquo; del testo</span></div>'
+ +copertura(d.copertura)
  +(d.agenzie&&d.agenzie.length?'<div class="cols"><div><div class="sect"><h2>Agenzie per il lavoro</h2></div>'+lista(d.agenzie,'agenzia','attive')+'</div><div></div></div>':'')
 
  +gband('iscritti','Iscritti','il motore visto dai clienti')
