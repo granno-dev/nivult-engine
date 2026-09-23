@@ -405,14 +405,15 @@ def dettagli(riga) -> dict:
 
 SQL_CODA = """
 SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority, j.contact_email,
-       coalesce((SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 80 LIMIT 1), '')
+       coalesce(t.v, '')
   FROM ats_jobs j
+  -- 23/09/2026: LATERAL, non la subquery doppia — il testo si valuta UNA
+  -- volta per riga (la versione con la subquery nel WHERE la pagava due,
+  -- e sotto carico la coda prendeva 6 minuti). Il JOIN filtra le senza
+  -- testo: restano in coda finche' il testo non arriva.
+  JOIN LATERAL (SELECT v FROM unnest(ARRAY[{campi}]) v
+                WHERE length(v) >= 80 LIMIT 1) t ON true
  WHERE j.expired_at IS NULL AND j.dettagli_at IS NULL
-   -- 22/09/2026: senza testo non si marca. Prima marcava comunque, e le
-   -- ~181.000 offerte delle piattaforme senza lettore hanno ricevuto una
-   -- riga vuota per sempre. Come il differimento di v1: chi non ha testo
-   -- resta in coda finche' il testo non arriva (lettori del dettaglio).
-   AND (SELECT v FROM unnest(ARRAY[{campi}]) v WHERE length(v) >= 80 LIMIT 1) IS NOT NULL
  ORDER BY j.posted_at DESC NULLS LAST
  LIMIT %s
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO))

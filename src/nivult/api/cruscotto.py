@@ -143,13 +143,19 @@ def sessione_valida(cookie: str) -> bool:
 
 # ── le metriche: ogni voce una query vera ───────────────────────────
 
-def _righe(dsn: str, sql: str) -> list[tuple]:
+def _righe(dsn: str, sql: str, timeout_s: int | None = None) -> list[tuple]:
     with psycopg.connect(dsn, connect_timeout=10) as c:
+        if timeout_s:
+            # una query lenta sotto carico muore e il giro si chiude lo
+            # stesso: la pagina serve la cache, non una pagina bianca
+            # (23/09/2026: conteggi da 5+ minuti tenevano il ricalcolo
+            # in ostaggio e la cache su disco invecchiava fino a morire)
+            c.execute(f"SET statement_timeout = '{int(timeout_s)}s'")
         return c.execute(sql).fetchall()
 
 
-def _uno(dsn: str, sql: str):
-    r = _righe(dsn, sql)
+def _uno(dsn: str, sql: str, timeout_s: int | None = None):
+    r = _righe(dsn, sql, timeout_s)
     return r[0][0] if r and r[0] else None
 
 
@@ -341,7 +347,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(lang),
                count(*) FILTER (WHERE languages_required IS NOT NULL
                                   AND array_length(languages_required, 1) > 0)
-          FROM ats_jobs WHERE expired_at IS NULL""")[0]
+          FROM ats_jobs WHERE expired_at IS NULL""", timeout_s=60)[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
@@ -356,7 +362,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(d.latitude), count(d.recruiter), count(d.salary_text),
                count(*) FILTER (WHERE d.is_urgently_hiring)
           FROM ats_jobs j LEFT JOIN offerte_dettagli d ON d.job_id = j.id
-         WHERE j.expired_at IS NULL""")[0]
+         WHERE j.expired_at IS NULL""", timeout_s=60)[0]
     tec = _uno(ats_dsn, """
         SELECT count(*) FROM tecnologie_v1 t JOIN ats_jobs j ON j.id = t.job_id
          WHERE j.expired_at IS NULL AND t.quante > 0""") or 0
@@ -395,17 +401,22 @@ _CACHE_FILE = "/opt/nivult/cruscotto-cache.json"
 
 def _carica_cache_da_disco() -> None:
     """Un riavvio dell'API non deve ripartire freddo: la parte pesante
-    salvata dall'ultimo giro si ricarica dal disco se ha meno di 15
-    minuti — la pagina apre subito, il ricalcolo avviene in sfondo.
+    salvata dall'ultimo giro si ricarica dal disco, di qualunque eta' —
+    la pagina apre subito, il ricalcolo avviene in sfondo.
     (Successo: riavvio + database sotto tre passate = minuti di pagina
-    bianca e Giuseppe convinto che fosse rotta.)"""
+    bianca e Giuseppe convinto che fosse rotta. E il 23/09/2026, di nuovo:
+    sotto carico estremo il ricalcolo falliva per ore, la cache su disco
+    invecchiava oltre i 15 minuti ammessi, e il cruscotto moriva.)"""
     import json as _json
     if _CACHE_PES["v"] is not None:
         return
     try:
         d = _json.load(open(_CACHE_FILE))
-        if time.time() - d["t"] < 900:
-            _CACHE_PES.update(t=d["t"], v=d["v"])
+        # 23/09/2026: niente piu' limite dei 15 minuti — una cache vecchia
+        # si VEDE (i pannelli portano i loro orari), una pagina bianca no:
+        # sotto carico il ricalcolo puo' fallire per ore e il limite
+        # trasformava ogni riavvio in un cruscotto morto.
+        _CACHE_PES.update(t=d["t"], v=d["v"])
     except Exception:                                # noqa: BLE001
         pass
 
@@ -444,6 +455,14 @@ def _ricalcola_pesanti(ats_dsn: str) -> dict:
         except Exception:                            # noqa: BLE001
             pass
         return d
+    except Exception as e:                           # noqa: BLE001
+        # una query morta per timeout non ammazza il giro: resta la cache
+        # precedente (in memoria o da disco) e si riprova al prossimo tick
+        log.warning("cruscotto: ricalcolo pesante fallito, servo la cache: %s",
+                    str(e).splitlines()[0][:160])
+        if _CACHE_PES["v"] is not None:
+            return _CACHE_PES["v"]
+        raise
     finally:
         _CACHE_PES["in_corso"] = False
 
@@ -455,22 +474,24 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
     # la conta delle attive costava 7,6 s e quella delle viste 5 s, e nel
     # tick tenevano la pagina bianca per 12-20 secondi dopo ogni riavvio.
     attive = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL") or 0
+        "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL",
+        timeout_s=60) or 0
 
     senza_paese = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
-        "AND country IS NULL") or 0
+        "AND country IS NULL", timeout_s=60) or 0
     non_class = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
-        "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL") or 0
+        "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL",
+        timeout_s=60) or 0
     d["salute"] = {
         "offerte_attive": attive,
         "offerte_viste_24h": _uno(ats_dsn,
             "SELECT count(*) FROM ats_jobs "
-            "WHERE fetched_at > now() - interval '24 hours'"),
+            "WHERE fetched_at > now() - interval '24 hours'", timeout_s=60),
         "sprint_ultima_ora": _uno(ats_dsn,
             "SELECT count(*) FROM ats_jobs "
-            "WHERE sprint_at > now() - interval '1 hour'"),
+            "WHERE sprint_at > now() - interval '1 hour'", timeout_s=60),
         "senza_paese": senza_paese,
         "senza_paese_pct": round(100 * senza_paese / attive, 1) if attive else 0,
         "non_classificate": non_class,
@@ -553,7 +574,7 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
         "FROM (SELECT platform_id, " + SQL_HA_TESTO + " AS ha_testo, "
         "      country IS NOT NULL AS ha_paese "
         "      FROM ats_jobs TABLESAMPLE SYSTEM (5) WHERE expired_at IS NULL) t "
-        "GROUP BY 1 HAVING count(*) >= 20 ORDER BY 2 DESC")]
+        "GROUP BY 1 HAVING count(*) >= 20 ORDER BY 2 DESC", timeout_s=90)]
     d["per_paese"] = [{"paese": p or "—", "attive": n} for p, n in _righe(ats_dsn,
         "SELECT country, count(*) FROM ats_jobs WHERE expired_at IS NULL "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 20")]
