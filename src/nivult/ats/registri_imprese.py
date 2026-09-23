@@ -499,6 +499,68 @@ def _ca(cli: httpx.Client, nome: str):
     return None
 
 
+# ── Australia: ABN Lookup (23/09/2026) ─────────────────────────────
+# API gratuita con GUID registrato (env ABN_LOOKUP_GUID, di Giuseppe —
+# in .env, mai nel repo). Risponde in JSONP (callback({...})). La
+# ricerca per nome da' i candidati col punteggio; il dettaglio da'
+# EntityName, tipo societario, stato (NSW/VIC/...), CAP. La data di
+# fondazione NON c'e': il campo Gst e' la registrazione IVA, non la
+# costituzione — non si scambia per quella.
+def _jsonp(t: str):
+    m = re.match(r"^callback\((.*)\)\s*$", t, re.S)
+    return json.loads(m.group(1)) if m else {}
+
+
+def _prefisso(nome: str, candidato: str) -> bool:
+    """Il nocciolo e' il nome, o il suo inizio. «Qantas» ha come primo
+    candidato PAC CONSTRUCTIONS PTY LTD, titolare di QANTAS come business
+    name; «The Trustee for WESTPAC BUCKLAND FUND» contiene Westpac ma
+    non e' Westpac. «QANTAS LIMITED» e «WESTPAC BANKING CORPORATION»
+    passano, i due sopra no."""
+    core, cn = _norm(nome), _norm(candidato or "")
+    return len(core) >= 4 and (cn == core or cn.startswith(core + " "))
+
+
+def _au(cli: httpx.Client, nome: str):
+    guid = _chiave_env("ABN_LOOKUP_GUID")
+    if not guid:
+        raise RuntimeError("ABN_LOOKUP_GUID mancante")
+    r = cli.get("https://abr.business.gov.au/json/MatchingNames.aspx",
+                params={"name": nome, "guid": guid})
+    r.raise_for_status()
+    # i nomi famosi sono sepolti sotto i Trading Name di piccoli titolari
+    # (Telstra: il gruppo e' settimo per punteggio): prima Entity e
+    # Business Name, poi il resto. La guardia _prefisso filtra comunque.
+    candidati = [c for c in (_jsonp(r.text).get("Names") or [])
+                 if c.get("IsCurrent") and c.get("Name")]
+    preferiti = [c for c in candidati if c.get("NameType") in
+                 ("Entity Name", "Business Name")]
+    altri = [c for c in candidati if c.get("NameType") not in
+             ("Entity Name", "Business Name")]
+    for cand in (preferiti + altri)[:8]:
+        if not _prefisso(nome, cand.get("Name")):
+            continue
+        time.sleep(0.6)
+        d = cli.get("https://abr.business.gov.au/json/AbnDetails.aspx",
+                    params={"abn": cand.get("Abn"), "guid": guid})
+        d.raise_for_status()          # trasporto: NON si marca (regola 6)
+        j = _jsonp(d.text)
+        if j.get("AbnStatus") != "Active":
+            continue                  # cancellato (Bunnings NT): il prossimo
+        legale = j.get("EntityName") or cand.get("Name")
+        if not _prefisso(nome, legale):
+            continue                  # titolare del business name ≠ l'azienda
+        scheda = _scheda(legal_name=legale,
+                         registro_id=str(j.get("Abn") or cand.get("Abn") or ""),
+                         legal_form_code=j.get("EntityTypeCode"),
+                         legal_form=j.get("EntityTypeName"),
+                         postal_code=j.get("AddressPostcode"),
+                         region=j.get("AddressState"), country="AU",
+                         status="active")
+        return (None, None, None, scheda)
+    return None
+
+
 class _Edgar:
     """SEC EDGAR: l'indice dei nomi si scarica UNA volta per giro
     (company_tickers.json, ~10k quotate), poi ogni match costa una
@@ -536,9 +598,11 @@ class _Edgar:
 
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
-          "SK": (_sk, 0.5), "BE": (_be, 0.0), "CA": (_ca, 0.0)}   # fonte, secondi di pausa
+          "SK": (_sk, 0.5), "BE": (_be, 0.0), "CA": (_ca, 0.0),
+          "AU": (_au, 1.0)}   # fonte, secondi di pausa
 _FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
-          "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo", "CA": "corporations_canada"}
+          "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo",
+          "CA": "corporations_canada", "AU": "abn_lookup"}
 
 
 DDL_REGISTRO = """
