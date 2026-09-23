@@ -159,7 +159,7 @@ class BaseAdapter:
     def __init__(self):
         self.ultima_pagina: str | None = None
         self.ultimo_status: int | None = None
-        self.lettura_parziale: bool = False   # True se l'elenco letto e' incompleto (tetto di pagine)
+        self.lettura_parziale: bool = False   # True se l'elenco letto e' incompleto: tetto di pagine O errore a meta' loop (22/09/2026)
         self.client = httpx.Client(timeout=30, follow_redirects=True,
                                    headers={"User-Agent": "nivult-ats/0.1"},
                                    event_hooks={"response": [self._dopo_risposta]})
@@ -383,6 +383,8 @@ class Workday(BaseAdapter):
                 "appliedFacets": {}, "limit": self.LIMITE_PAGINA,
                 "offset": pagina * self.LIMITE_PAGINA})
             if r.status_code != 200:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             postings = r.json().get("jobPostings", [])
             if not postings:
@@ -824,8 +826,11 @@ class Icims(BaseAdapter):
             try:
                 r = self.client.get(url, headers={"User-Agent": self._UA})
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if r.status_code != 200:
+                self.lettura_parziale = True
                 break
             cards = self._CARD.findall(r.text)
             if not cards:
@@ -1373,8 +1378,11 @@ class Niceboard(BaseAdapter):
                     "User-Agent": self._UA, "Accept": "application/json"})
                 d = r.json()
             except (httpx.HTTPError, ValueError):
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if not isinstance(d, dict):
+                self.lettura_parziale = True
                 break
             jobs = d.get("jobs") or []
             if not jobs:
@@ -1436,8 +1444,11 @@ class Traffit(BaseAdapter):
                     headers={"User-Agent": self._UA,
                              "Accept": "application/json"}).json()
             except (httpx.HTTPError, ValueError):
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if not isinstance(d, dict):
+                self.lettura_parziale = True
                 break
             count = d.get("count") if count is None else count
             items = d.get("items") or []
@@ -1500,8 +1511,11 @@ class Vincere(BaseAdapter):
             try:
                 r = self.client.get(url, headers={"User-Agent": self._UA})
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if r.status_code != 200:
+                self.lettura_parziale = True
                 break
             blocchi = r.text.split('<article class="job">')[1:]
             if not blocchi:
@@ -1564,8 +1578,11 @@ class DigitalRecruiters(BaseAdapter):
                     headers={"User-Agent": self._UA,
                              "Accept": "application/json"}).json()
             except (httpx.HTTPError, ValueError):
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if not isinstance(d, dict):
+                self.lettura_parziale = True
                 break
             count = d.get("count") if count is None else count
             items = d.get("items") or []
@@ -1831,6 +1848,8 @@ class Join(BaseAdapter):
             r = self.client.get(
                 f"https://{slug}.join.com/" + (f"?page={pagina}" if pagina > 1 else ""))
             if r.status_code != 200:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
                           r.text, re.S)
@@ -1841,6 +1860,7 @@ class Join(BaseAdapter):
                 jobs = stato.get("jobs") or {}
                 items = jobs.get("items") or []
             except (json.JSONDecodeError, KeyError):
+                self.lettura_parziale = True
                 break
             if not items:
                 break
@@ -2137,8 +2157,11 @@ class Radancy(BaseAdapter):
             try:
                 r = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if r.status_code != 200:
+                self.lettura_parziale = True
                 break
             trovate = 0
             for href, _, id_offerta in self.RX_OFFERTA.findall(r.text):
@@ -2428,6 +2451,9 @@ class SuccessFactors(BaseAdapter):
                 rp = self._get(f"{base}/search/?q=&sortColumn=referencedate"
                                f"&sortDirection=desc&startrow={pagina * 25}")
                 if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
+                    # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                    if rp is None:
+                        self.lettura_parziale = True
                     break
             else:
                 self.lettura_parziale = True   # tetto toccato: elenco incompleto
@@ -2446,6 +2472,8 @@ class SuccessFactors(BaseAdapter):
                 rt = self._get(f"{base}/tile-search-results/?q=&sortColumn=referencedate"
                                f"&sortDirection=desc&startrow={inizio}")
                 if rt is None or not self._tile(slug, base, rt.text, visti, out):
+                    if rt is None:
+                        self.lettura_parziale = True
                     break
             else:
                 self.lettura_parziale = True   # tetto toccato: elenco incompleto
@@ -2460,6 +2488,8 @@ class SuccessFactors(BaseAdapter):
                     for pagina in range(self.MAX_PAGINE):
                         rp = self._get(f"{base}{bacheca}" + (f"{pagina * 25}/" if pagina else ""))
                         if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
+                            if rp is None:
+                                self.lettura_parziale = True
                             break
                     else:
                         self.lettura_parziale = True   # tetto toccato: elenco incompleto
@@ -2577,12 +2607,16 @@ class OracleRecruiting(BaseAdapter):
             try:
                 rr = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rr.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 items = rr.json().get("items") or []
             except ValueError:
+                self.lettura_parziale = True
                 break
             rl = items[0].get("requisitionList") or [] if items else []
             if not rl:
@@ -2726,13 +2760,17 @@ class Eightfold(BaseAdapter):
             try:
                 rr = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rr.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 dati = rr.json().get("data") or {}
                 posizioni = dati.get("positions") or []
             except (ValueError, AttributeError):
+                self.lettura_parziale = True
                 break
             if not posizioni:
                 break
@@ -2856,13 +2894,17 @@ class Cornerstone(BaseAdapter):
                              "Origin": f"https://{tenant}.csod.com"},
                     json=body)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rr.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 dati = rr.json().get("data") or {}
                 requisitions = dati.get("requisitions") or []
             except (ValueError, AttributeError):
+                self.lettura_parziale = True
                 break
             if not requisitions:
                 break
@@ -3755,8 +3797,11 @@ class TalentSoft(BaseAdapter):
             try:
                 rp = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rp.status_code != 200:
+                self.lettura_parziale = True
                 break
             righe = re.findall(
                 r'href="(/offre-de-emploi/(?:emploi-)?([a-z0-9-]+)_(\d+)\.aspx)"',
@@ -3826,12 +3871,16 @@ class ADP(BaseAdapter):
             try:
                 rr = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rr.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 jr = rr.json().get("jobRequisitions") or []
             except ValueError:
+                self.lettura_parziale = True
                 break
             if not jr:
                 break
@@ -3912,12 +3961,16 @@ class Carerix(BaseAdapter):
             try:
                 rr = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if rr.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 dati = rr.json().get("data") or []
             except ValueError:
+                self.lettura_parziale = True
                 break
             if not dati:
                 break
@@ -4025,13 +4078,17 @@ class Jibe(BaseAdapter):
             try:
                 r = self.client.get(url)
             except httpx.HTTPError:
+                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+                self.lettura_parziale = True
                 break
             if r.status_code != 200:
+                self.lettura_parziale = True
                 break
             try:
                 d = r.json()
                 jobs = d.get("jobs") or []
             except ValueError:
+                self.lettura_parziale = True
                 break
             if not jobs:
                 break
