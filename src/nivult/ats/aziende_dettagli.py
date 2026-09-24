@@ -254,12 +254,15 @@ _VERBI3P = (r"('s)?\b.{0,80}?\b(is|are|has|have|offers?|provides?|specializes?|"
 
 # ccTLD geografici non ambigui -> ISO 3166-1 alpha-2 (B5, 24/09/2026).
 # Fuori: com/org/net/edu/gov (generici), io/ai/co/app/dev (di moda, non
-# dicono il paese), eu (regionale). Misura sulla coda senza paese: ~700
-# aziende su 11.969, coperte gratis e dichiarate.
+# dicono il paese), eu (regionale). «uk» mappa a GB, che e' il codice
+# ISO e quello usato ovunque nel motore (companies_house, export).
+# Misura sulla coda senza paese: ~700 aziende su 11.969, coperte gratis
+# e dichiarate.
 _CCTLD = {c: c.upper() for c in (
-    "de fr nl it es se at ch be pl no dk fi ie pt uk ca au nz br za in jp "
+    "de fr nl it es se at ch be pl no dk fi ie pt ca au nz br za in jp "
     "cz sk hu ro gr il ae sg hk my mx ar cl us tr kr tw th vn id ph sa eg "
     "ng ke ma tn gh ua by kz bg hr rs si lt lv ee is lu mt cy").split()}
+_CCTLD["uk"] = "GB"
 
 
 def _boilerplate_azienda(c, pid: str, slug: str, nome: str | None) -> str | None:
