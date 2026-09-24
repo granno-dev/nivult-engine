@@ -229,3 +229,23 @@ famiglie va allargato prima di stringere ancora.
 In produzione sul Mac mini dal 21/09 alle 16:38 (`tec-v2-ck01750`, soglia
 0,40, lotto 4 dopo un «MPS out of memory» a lotto 8): 406.000 offerte/giorno,
 1,9 nomi per annuncio contro 1,8 della v1 nello stesso flusso.
+
+## v3 (24/09/2026): piu' dati dallo STESSO maestro non battono il maestro
+
+Esperimento completo, chiuso in giornata: 22.947 annunci nuovi delle 8
+famiglie deboli etichettati da DeepSeek ($5,83, 0 muti), dataset ricostruito
+(72.750 righe, 504 golden escluse), 3.000 passi su A40 RunPod in 1,33 h
+(~$1), esame di OGNI checkpoint sui due golden allargati (200 IT + 304
+famiglie, stesso banco, stesse finestre, soglia di produzione 0,40):
+
+| | IT P/R/F1 | 8 famiglie P/R/F1 |
+|---|---|---|
+| v2 ck01750 (produzione) | 89,9 / 72,6 / 80,4 | 58,0 / 70,1 / 63,5 |
+| v3 ck-01250 (migliore) | 84,0 / 78,1 / 81,0 | 49,3 / 77,1 / 60,1 |
+
+IT migliora di mezzo punto ma la precisione cade di 6; sulle famiglie
+PERDE 3,4 punti. **Non rilasciata.** La lezione confermata: l'allievo non
+batte il maestro — piu' volume dallo stesso maestro sposta solo il rumore.
+Il salto vero richiede il maestro migliore (gpt-oss-120b col filtro stava
+a 74,0% sulle 104; da rimisurare sulle 304). Artefatti: esami e ck-01250
+archiviati, pod RunPod eliminato a fine lavoro.
