@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.nivult.operaio</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>exec "$HOME/nivult/nivult-mini-tec.sh"</string>
+  </array>
+  <!-- 24/09/2026: puntava a nivult-mini.sh (il 2B, SPENTO il 20/09) e al
+       riavvio e' ripartito il generativo pensionato al posto della testa.
+       Ora lancia la testa tec-v2. Parte all'accensione e si rialza se muore. -->
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>StandardOutPath</key><string>/tmp/nivult-operaio.out</string>
+  <key>StandardErrorPath</key><string>/tmp/nivult-operaio.err</string>
+  <key>ProcessType</key><string>Background</string>
+</dict>
+</plist>
