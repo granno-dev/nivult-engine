@@ -1,0 +1,317 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Social Services",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "e6826bae-8ce1-4fb0-9588-382e3e32258a",
+   "titolo": "Rehabilitation Counselor II - Targeted - Lewiston",
+   "tecnologie": [
+    {
+     "nome": "PRISM",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "AWARE",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "YouTube (link a video informativo, non strumento di lavoro)",
+    "STEM OPT (regime di visto)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "7c2cc0b3-fd8c-4fd0-ad65-7ab660b7dcab",
+   "titolo": "MENTAL HEALTH WORKER / C.N.A. PT Eves R3",
+   "tecnologie": [],
+   "escluse": [
+    "electronic medical record (termine generico, nessun prodotto nominato)",
+    "C.N.A. (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "6e173ff7-4d14-4bf2-a334-5baaf6f9017c",
+   "titolo": "Personal Support Worker (Part Time Day Shift)",
+   "tecnologie": [
+    {
+     "nome": "Point Click Care",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "MS Office",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Workday",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "CPR (abilitazione personale)",
+    "Gentle Persuasive Approach (GPA) (programma di formazione, non strumento)",
+    "U-First (programma di formazione)",
+    "CPI (programma di formazione)",
+    "cinese (lingua naturale)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "6f90a4e9-accb-4a03-b5ee-a1b5f0fb2c43",
+   "titolo": "Clinical Support Attendant",
+   "tecnologie": [],
+   "escluse": [
+    "Trauma Informed Practice (approccio di cura, non strumento)",
+    "Appreciative Inquiry (approccio, non strumento)",
+    "First Aid (abilitazione personale)",
+    "CPR (abilitazione personale)",
+    "Internal Career Portal (portale generico, senza nome proprio)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "43ffd316-06c9-42b0-a531-471e10ebd558",
+   "titolo": "Eligibility Specialist",
+   "tecnologie": [],
+   "escluse": [
+    "WIRC Act 2013 (legge)",
+    "WorkSafe (ente regolatore, non un prodotto software)",
+    "investigative tools (generico, nessun nome proprio)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "893389b6-b9d0-40f2-bb5b-c9b494615ae9",
+   "titolo": "Personlig assistent i Piteå",
+   "tecnologie": [
+    {
+     "nome": "BankID",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "trakealkanyl (dispositivo medico generico, senza nome proprio)",
+    "sond (dispositivo medico generico)",
+    "körkort (abilitazione personale)",
+    "svenska (lingua naturale)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "80e00690-f12c-4bb3-9586-27e3017a7dac",
+   "titolo": "MENTAL HEALTH WORKER w/ CNA Preferred FT Eves D2",
+   "tecnologie": [],
+   "escluse": [
+    "C.N.A. (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "7855ace6-8bcf-4354-93de-46ef522c9e13",
+   "titolo": "DHHS Program Specialist",
+   "tecnologie": [],
+   "escluse": [
+    "CASA (programma di servizio, non strumento)",
+    "TANF-CEDARS (programma/finanziamento)",
+    "LB 945 (provvedimento legislativo)",
+    "shared email inbox (generico, nessun prodotto)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "28643051-cc04-4468-a60d-ff3bb5498185",
+   "titolo": "Assistant Residential Manager 2nd shift/Every Other Weekend- Starting Pay $23",
+   "tecnologie": [],
+   "escluse": [
+    "CARF (regime di accreditamento, non norma tecnica d'impianto)",
+    "ISP (piano di cura, documento di processo)",
+    "DSP (mansione/competenze, non strumento)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "c2a03e36-3655-489c-bbb0-c157e8b38130",
+   "titolo": "Family Model Provider",
+   "tecnologie": [],
+   "escluse": [
+    "Driver's License (abilitazione personale)",
+    "Innovative Services and Technologies (slogan generico, nessun nome proprio)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "457d86e7-4119-45a4-8414-af6eefa0dfa3",
+   "titolo": "Heilerziehungspfleger*in - Früh-/Spätdienst (m/w/d)",
+   "tecnologie": [],
+   "escluse": [
+    "EDV (conoscenza informatica generica, nessun prodotto)",
+    "TV-L (contratto collettivo/retribuzione)",
+    "ÖPNV-Ticket (benefit)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "d2d735a1-db6a-4b23-9337-6aaea9cf3503",
+   "titolo": "Fachkraft in der Eingliederungshilfe (m/w/d) in Oppenheim",
+   "tecnologie": [],
+   "escluse": [
+    "Fahrradleasing (benefit)",
+    "Ausbildung als Heilerziehungspfleger (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "70c4a61e-2818-486b-9f25-f4992e74a66d",
+   "titolo": "Residential Care Advisor",
+   "tecnologie": [],
+   "escluse": [
+    "Act 33/34/73 (nulla osta previsti dalla legge)",
+    "403B (benefit)",
+    "Driver license (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "bd32e1f1-f197-4c90-ac6d-af0fc270895a",
+   "titolo": "Ser du verdien av å være en viktig støtte i andres hverdag?",
+   "tecnologie": [],
+   "escluse": [
+    "politiattest (nulla osta legale)",
+    "norsk B2 (lingua naturale)",
+    "BPA (modello di organizzazione dell'assistenza, non strumento)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "55295d9f-e2a7-48e7-8c06-2d97cd3a5c74",
+   "titolo": "Auxiliaire de Vie (H/F) Douzy",
+   "tecnologie": [],
+   "escluse": [
+    "chèques déjeuner (benefit)",
+    "téléphone (dotazione generica, senza nome proprio)",
+    "gants jetables (materiale di consumo)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "2347337c-685b-45be-990b-bdc92b9e4117",
+   "titolo": "Ausbildung zur sozialpädagogischen Assistenz (m/w/d) in den Werkstätten in Alzey",
+   "tecnologie": [],
+   "escluse": [
+    "Berufsreife (titolo di studio)",
+    "Fahrradleasing (benefit)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "3d7a14bf-f089-4598-a626-191a178f4d41",
+   "titolo": "Residential Care Advisor",
+   "tecnologie": [],
+   "escluse": [
+    "Act 33/34/73 (nulla osta previsti dalla legge)",
+    "403B (benefit)",
+    "Driver license (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "890269cc-895e-465d-8023-6938645cbab0",
+   "titolo": "Social Club Manager",
+   "tecnologie": [],
+   "escluse": [
+    "CHSP (programma governativo)",
+    "Aged Care Act (legge)",
+    "Aged Care Quality Standards (regime di conformità regolatorio)",
+    "Certificate IV (abilitazione personale)",
+    "EAP (benefit)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "a1fe57bc-3222-4d4a-ac24-4c42b0baa86d",
+   "titolo": "SOCIAL SERVICE CLINICIAN FT Days",
+   "tecnologie": [],
+   "escluse": [
+    "Bachelor's/Master's in Social Work (abilitazione personale)",
+    "ERO (organizzazioni esterne di revisione, enti)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "aa078a3f-49da-460e-9a2a-90ebe14c540e",
+   "titolo": "Licensed Clinical Social Worker / PRN",
+   "tecnologie": [],
+   "escluse": [
+    "LCSW (abilitazione personale)",
+    "BLS (abilitazione personale)",
+    "CPR (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "d4929b07-ff81-4767-8f11-8bcf66b606e7",
+   "titolo": "Freiwilliger (m/w/d) im Freiwilligen Sozialen Jahr in Winnweiler",
+   "tecnologie": [],
+   "escluse": [
+    "Fahrradleasing (benefit)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "b0b5f809-e3d6-4de3-a7e8-d44fea7b55a8",
+   "titolo": "Family Centered DSP",
+   "tecnologie": [],
+   "escluse": [
+    "Driver's License (abilitazione personale)",
+    "Innovative Services and Technologies (slogan generico, nessun nome proprio)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "ba391e68-60e1-4660-8227-1bf99a43b89c",
+   "titolo": "Grades 9-12 Counselor",
+   "tecnologie": [],
+   "escluse": [
+    "Abilities Model (modello pedagogico proprietario, processo)",
+    "technology use (tema di benessere, non strumento)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "d5fa1817-5092-4232-a58d-fe28a400b1d7",
+   "titolo": "DSP - Riverdale Avenue",
+   "tecnologie": [],
+   "escluse": [
+    "OPWDD (ente/regime regolatorio)",
+    "COA (regime di accreditamento)",
+    "SCIP (formazione/abilitazione personale)",
+    "AMAP (abilitazione personale)",
+    "CPR/first aid (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "8814b4c2-f112-45ce-93f0-009fc722dc12",
+   "titolo": "Subsidized Employment Program (SEP) - Job Developer",
+   "tecnologie": [],
+   "escluse": [
+    "W-9 (modulo fiscale, documento)",
+    "database of employers (generico, nessun prodotto nominato)",
+    "SBA/WIC/SETA (enti e programmi, non strumenti)"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,491 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Trades",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "a8b49763-34c7-49fb-aabc-05a05c3da9b9",
+   "titolo": "Kitter I",
+   "tecnologie": [
+    {
+     "nome": "SAP",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "401(k) (benefit)",
+    "HVAC (settore/disciplina)",
+    "diploma (abilitazioni personali)",
+    "artificial intelligence (generico, strumento del processo di selezione)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "3a47e5c3-900f-40b8-b22f-eb7b01d90097",
+   "titolo": "Meccanico autofficina",
+   "tecnologie": [],
+   "escluse": [
+    "Gi Pro Mechanics 4.0 (marchio/reparto dell'agenzia)",
+    "diploma tecnico (abilitazioni personali)",
+    "meccatronica (disciplina)",
+    "manutenzione auto (processo)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "3a06e05c-0a62-4b13-af56-4717fc03e038",
+   "titolo": "Seasonal Tire Technician",
+   "tecnologie": [
+    {
+     "nome": "TPMS",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "patente di guida (abilitazioni personali)",
+    "basic computer skills (competenza generica, nessun software nominato)",
+    "nitrogen (materiale/prodotto)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "5b019198-e91b-4d02-bf8c-d12a4aec134c",
+   "titolo": "Arborist Climber",
+   "tecnologie": [
+    {
+     "nome": "chainsaw",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "aerial lift",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "patente di guida (abilitazioni personali)",
+    "PPE (dotazione generica)",
+    "Arboriculture/Forestry (discipline)",
+    "climbing system (generico, senza nome proprio)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "95d039b3-fb8a-43ad-9576-5b308889f423",
+   "titolo": "Housekeeper (Full-time, Evening)",
+   "tecnologie": [
+    {
+     "nome": "Da Vinci XI",
+     "ruolo": "servizio"
+    },
+    {
+     "nome": "ExcelsiusGPS",
+     "ruolo": "servizio"
+    },
+    {
+     "nome": "Stealth Navigation",
+     "ruolo": "servizio"
+    }
+   ],
+   "escluse": [
+    "AI-powered diagnostics (generico, nessun prodotto nominato)",
+    "robotic-assisted surgery (descrizione di servizio)",
+    "High School Diploma (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "339ef057-4061-436e-b15f-690e02debeaf",
+   "titolo": "Laundry Worker (Part Time, Flexible Availability)",
+   "tecnologie": [],
+   "escluse": [
+    "PNC EarnedIt (benefit)",
+    "PNC Workplace Banking (benefit)",
+    "telemedicine (benefit)",
+    "laundry equipment (generico, nessun tipo nominato)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "839377cc-140f-4ebd-928d-9f7851977f26",
+   "titolo": "Kfz-Mechatroniker Karosserietechnik (m/w/d)",
+   "tecnologie": [],
+   "escluse": [
+    "Hydraulik/Pneumatik (discipline)",
+    "Elektrotechnik (disciplina)",
+    "mittlere Reife (abilitazioni personali)",
+    "BRABUS (azienda)",
+    "Maschinen zur Metallbearbeitung (generico)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "dfe18664-7759-4e08-8bed-57991d283c39",
+   "titolo": "Janitorial Cleaner - Empleado de limpieza-39408",
+   "tecnologie": [
+    {
+     "nome": "floor scrubber",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "401K (benefit)",
+    "buffer (generico/ambiguo)",
+    "vacuum (generico)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "c041c15a-459d-4536-84db-03605a7b05de",
+   "titolo": "chef d'équipe poseur menuiserie bois, pvc, aluminium, acier F/H",
+   "tecnologie": [],
+   "escluse": [
+    "PVC/aluminium/acier (materiali)",
+    "volets roulants/portes (prodotti)",
+    "RGPD (legge)",
+    "Intelligence Artificielle (generico, strumento del recruiter)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "c2bf5903-889c-463a-9c60-75363a6ae3c8",
+   "titolo": "Senior Lead Maintenance Technician",
+   "tecnologie": [
+    {
+     "nome": "dock leveler",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "compactor",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "pallet wrapper",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "refrigeration system",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "PIT (sigla non sciolta nel testo, ambiguo)",
+    "OSHA (legge/ente regolatorio)",
+    "USDA (regime governativo)",
+    "AIB (regime di ispezione alimentare)",
+    "HVAC (settore/disciplina)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "26569aff-a791-4370-a2e8-abbcd0ab3ddb",
+   "titolo": "Commercial Carpenter",
+   "tecnologie": [],
+   "escluse": [
+    "OSHA 10 (abilitazione personale su normativa)",
+    "drywall/metal studs (materiali)",
+    "PPE (dotazione generica)",
+    "401(k) (benefit)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "8211329a-4626-4a13-a9e3-b57d9da2788a",
+   "titolo": "Technician",
+   "tecnologie": [],
+   "escluse": [
+    "CDL (abilitazione personale)",
+    "DOT/FMCSA (ente/normativa)",
+    "OAR (sigla non sciolta nel testo, ambiguo)",
+    "PMI (processo: Preventative Maintenance Inspection)",
+    "GED (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "e2068ec4-6d46-44c9-ac02-bcc922b4166e",
+   "titolo": "Environmental Services Representative",
+   "tecnologie": [],
+   "escluse": [
+    "OSHA (legge)",
+    "HCAHPS (programma di valutazione/metrica)",
+    "GED (abilitazioni personali)",
+    "FLSA (legge)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "8e058f03-c294-4851-a052-4b3f3e0dd20f",
+   "titolo": "Service Technician",
+   "tecnologie": [
+    {
+     "nome": "puente grúa",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "polipasto",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "montacargas",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "SAT (sigla non sciolta nel testo, ambiguo)",
+    "Konecranes/Demag (aziende)",
+    "carné de conducir (abilitazione personale)",
+    "electromecánica (disciplina)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "bb21f559-32a5-4848-aec1-40dd67e58e56",
+   "titolo": "Technician - Truck Shop",
+   "tecnologie": [
+    {
+     "nome": "Detroit Diesel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Cummins ISB",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Cummins ISM",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Cummins ISX",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Cummins Insite",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "multimeter",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "Adobe (prodotto non specificato, ambiguo)",
+    "CDL (abilitazione personale)",
+    "OEM (categoria di prodotto, non strumento)",
+    "diagnostic software (generico, nessun nome)",
+    "GED (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "bbb36cec-d0a4-4b1d-9b80-b48c10a78e85",
+   "titolo": "Elektroniker / Sicherheitstechniker - Gebiet Bochum (w/m/div.)",
+   "tecnologie": [
+    {
+     "nome": "Brandmeldeanlage",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Einbruchmeldeanlage",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "MS-Office",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Word",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "PKW-Führerschein (abilitazione personale)",
+    "Deutsch B2 (lingua naturale)",
+    "EGYM Wellpass (benefit)",
+    "Elektrotechnik (disciplina/formazione)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "2fe18943-5603-4ee0-9953-505d79e46ac4",
+   "titolo": "Diesel Technician/ Mechanic",
+   "tecnologie": [],
+   "escluse": [
+    "ASE Certification (abilitazione personale)",
+    "DOT (ente/normativa)",
+    "401(k) (benefit)",
+    "Amerit University (programma aziendale di formazione)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "db6198b4-f6ee-4296-b787-d79c7b7b4ebb",
+   "titolo": "VERNICIATORE",
+   "tecnologie": [
+    {
+     "nome": "pistola a spruzzo",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "aerografo",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "cabina di verniciatura",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "vernici/smalti/catalizzatori (materiali)",
+    "acciaio/alluminio (materiali)",
+    "DPI (dotazione generica)",
+    "verniciatura a spruzzo (processo)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "df69f0c7-0e3e-4adc-b4a9-72aaaab462e7",
+   "titolo": "Service Techniker",
+   "tecnologie": [
+    {
+     "nome": "Krananlage",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Hebezeug",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Elektrotechnik/Mechatronik (discipline)",
+    "Service-Auto (benefit)",
+    "Konecranes (azienda)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "5094640e-18d8-41aa-8ef1-6e1f8be6dc9b",
+   "titolo": "Warehouse Maintenance Technician 1st Shift",
+   "tecnologie": [
+    {
+     "nome": "Forklift",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Cherry Picker",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "401 K (benefit)",
+    "hand tools (generico)",
+    "parts inventory system (generico, nessun software nominato)",
+    "high school diploma (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "4bb20787-d754-4db9-aecd-4648db51acbd",
+   "titolo": "Aide ménager / aide ménagère (H/F)",
+   "tecnologie": [],
+   "escluse": [
+    "mutuelle (benefit)",
+    "congés payés (benefit)",
+    "repassage (processo)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "3fd82daf-1097-4b4f-990b-de64b1c720b8",
+   "titolo": "Maintenance Course",
+   "tecnologie": [],
+   "escluse": [
+    "E-Verify (programma governativo di verifica)",
+    "401(k) (benefit)",
+    "golf course equipment (generico)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "428df938-3388-48d6-a2e8-cecf36ca559a",
+   "titolo": "Custodian",
+   "tecnologie": [],
+   "escluse": [
+    "patente di guida (abilitazione personale)",
+    "GED (abilitazioni personali)",
+    "tools of the trade (generico)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "84ec1ce0-5e86-463f-8c90-c8f8f2d41b5e",
+   "titolo": "Addetta/o montaggio meccanico e collaudo",
+   "tecnologie": [],
+   "escluse": [
+    "avvitatori e chiavi dinamometriche (utensili a mano, senza tipo riconoscibile)",
+    "valvole e distributori (prodotti/componenti)",
+    "diploma (abilitazioni personali)",
+    "oleodinamica (settore/disciplina)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "80455522-2b58-466d-b466-33fc7511c231",
+   "titolo": "Compressor Service Technicians (5)",
+   "tecnologie": [
+    {
+     "nome": "air compressor",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Kaeser",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "Atlas Copco",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "pneumatic systems (generico)",
+    "diesel engines (generico)",
+    "diploma/laurea (abilitazioni personali)",
+    "patente di guida (abilitazione personale)"
+   ]
+  }
+ ]
+}

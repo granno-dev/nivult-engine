@@ -1,0 +1,407 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Transportation",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "dc125799-b5b9-442f-9701-b2b6738a64ad",
+   "titolo": "Helicopter Pilot",
+   "tecnologie": [
+    {
+     "nome": "B407",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "VFR (regime di volo)",
+    "FAR (regolamento/legge)",
+    "AIM (manuale aeronautico)",
+    "GOM (manuale operativo interno)",
+    "ACCRA (indice retributivo)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "9de74f9e-862e-468e-963a-acf20cf84113",
+   "titolo": "E-Biker Delivery Driver (8087) - 426 Granby St",
+   "tecnologie": [
+    {
+     "nome": "e-bike",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "computers (dispositivo generico)",
+    "pizza cutter (utensile generico)",
+    "telephones (dispositivo generico)",
+    "pizza peel (utensile generico)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "2d9a9358-547b-46e9-ae84-a98ea6eb19d2",
+   "titolo": "Delivery Driver(06916) - 3312 N. Buckner Blvd., Suite 207",
+   "tecnologie": [
+    {
+     "nome": "GPS",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "driver's license (abilitazione personale)",
+    "MVR check (verifica documentale)",
+    "walk-in cooler (impianto generico)",
+    "auto insurance (documento personale)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "1b109e27-c9d0-4d36-acee-5d0cdec1cf22",
+   "titolo": "Courier I",
+   "tecnologie": [],
+   "escluse": [
+    "tracking assistants (apparato generico/ambiguo)",
+    "REAL ID (documento personale)",
+    "401(K) (benefit)",
+    "FedEx/UPS (aziende)",
+    "USPS regulations (regolamento)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "fb0ffdef-e197-4c8f-a78c-c8234f7d5f26",
+   "titolo": "CDL Driver",
+   "tecnologie": [
+    {
+     "nome": "forklift",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CDL (abilitazione personale)",
+    "DOT (regolamento)",
+    "OSHA (ente/legge sicurezza)",
+    "26' trucks (veicolo generico)",
+    "safety shoes (DPI generici)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "140d83bf-9056-4c67-9032-9a39730bbd1a",
+   "titolo": "Customer Delivery Driver/Picker",
+   "tecnologie": [],
+   "escluse": [
+    "our app (app senza nome proprio)",
+    "Full UK Manual Driving Licence (abilitazione personale)",
+    "DBS checks (verifica, non tecnologia)",
+    "coldstore (ambiente/impianto generico)",
+    "van (veicolo generico)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "67775633-0047-4743-87fc-cfbbc4458936",
+   "titolo": "chauffeur pl toupie F/H",
+   "tecnologie": [
+    {
+     "nome": "toupie",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Permis C/EC (abilitazione personale)",
+    "FIMO (abilitazione personale)",
+    "carte conducteur (documento personale)",
+    "béton (materiale)",
+    "code de la route (legge)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "7917911b-0e01-49e4-b681-b8c1dfcbc471",
+   "titolo": "Truck Driver CDL B Home Daily",
+   "tecnologie": [
+    {
+     "nome": "Pallet Jack",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Stair Walkers",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CDL (abilitazione personale)",
+    "TWIC card (abilitazione personale)",
+    "Straight Truck (veicolo generico)",
+    "401(k) (benefit)",
+    "DOT physical (visita/certificato personale)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "2e6850fa-7a0a-44d1-9904-cadc705c5b5b",
+   "titolo": "E-Biker Delivery Driver (8089) - 3501 Holland Rd suite 104",
+   "tecnologie": [
+    {
+     "nome": "e-bike",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "computers (dispositivo generico)",
+    "pizza cutter (utensile generico)",
+    "telephones (dispositivo generico)",
+    "pizza peel (utensile generico)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "cca2f796-1882-4c10-beef-670c41d1b07e",
+   "titolo": "Driver - Edmonton",
+   "tecnologie": [
+    {
+     "nome": "2-way radio",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Class 5 driver's license (abilitazione personale)",
+    "cellular phone (dispositivo generico)",
+    "Enterprise Rent-A-Car (azienda/marchio)",
+    "bus (veicolo generico)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "f884d892-b3af-4968-b883-f08be8110b2a",
+   "titolo": "Postbote für Pakete und Briefe m w d",
+   "tecnologie": [],
+   "escluse": [
+    "Pkw-Fahrerlaubnis (abilitazione personale)",
+    "vollelektrische Fahrzeuge (veicolo generico)",
+    "Fahrradleasing (benefit)",
+    "betriebliche Altersvorsorge (benefit)",
+    "Geschäftsfahrzeuge (veicolo generico)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "0b7c93dd-ee7d-4a5a-8d39-4814b5daf3de",
+   "titolo": "Yard Driver - Class A",
+   "tecnologie": [
+    {
+     "nome": "People Net",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CDL w Air Brakes (abilitazione personale)",
+    "DVIR/DVCR booklets (moduli/documenti)",
+    "Dock Signal Light (apparato citato solo in policy di sicurezza)",
+    "DOT log regulations (regolamento)",
+    "DOT Med Cert (certificato personale)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "4c72c8dc-5674-416a-95f6-86f11995b833",
+   "titolo": "Delivery Driver(06479) - 1043 Hickory Creek Blvd",
+   "tecnologie": [],
+   "escluse": [
+    "computer keyboard/touch screen (dispositivi generici)",
+    "calculator (strumento generico)",
+    "walk-in cooler (impianto generico)",
+    "driver's license (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "41fc287a-927b-4e20-a2c1-2cb8015a7312",
+   "titolo": "REACH Helicopter Pilot - HAA",
+   "tecnologie": [
+    {
+     "nome": "EC130/H130",
+     "ruolo": "gradita"
+    },
+    {
+     "nome": "AS350/H125",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "FAA Commercial Certificate (abilitazione personale)",
+    "helicopter instrument rating (abilitazione personale)",
+    "FAR (regolamento)",
+    "FAA Class II Medical Certificate (certificato personale)",
+    "HAA/HEMS (categoria di servizio)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "502d631a-42e3-4039-abeb-565901a7421a",
+   "titolo": "Marine Oiler",
+   "tecnologie": [],
+   "escluse": [
+    "MMC (abilitazione personale)",
+    "TWIC (abilitazione personale)",
+    "Employee Self Service (portale candidature, non del ruolo)",
+    "oil filtration and centrifuge equipment (macchinario generico senza identità)",
+    "USCG regulations (regolamento)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "3b06487e-2c04-4e36-83c6-ea53a7bb8af2",
+   "titolo": "E-Biker Delivery Driver (4214) - 2716 Virginia Beach Blvd",
+   "tecnologie": [
+    {
+     "nome": "e-bike",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "computers (dispositivo generico)",
+    "pizza cutter (utensile generico)",
+    "telephones (dispositivo generico)",
+    "pizza peel (utensile generico)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "c69bdb6e-67ac-43be-b310-9a5ff9b3e8cc",
+   "titolo": "★1日当たり固定報酬23,450円 ★CARAVELはAmazonのオフィシャル配送サービスパートナーだから安心！ ★人間関係のストレスゼロ。完全1人作業で集中できる環境です",
+   "tecnologie": [],
+   "escluse": [
+    "専用アプリ/配送アプリ (app senza nome proprio)",
+    "Amazon (azienda)",
+    "普通自動車免許 (abilitazione personale)",
+    "インボイス制度 (regime fiscale)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "e5d6c613-12cc-431d-ae43-1ad28d86281b",
+   "titolo": "Domino's Delivery Driver -  Lake Oswego, OR (9385)",
+   "tecnologie": [],
+   "escluse": [
+    "Domino's Delivery Driver in store app (app senza nome proprio)",
+    "driver's license (abilitazione personale)",
+    "walk-in cooler (impianto generico)",
+    "personal phone (dispositivo generico)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "150a3a77-3a28-4be0-b4dd-c0ef579c42fd",
+   "titolo": "Driver I CDL",
+   "tecnologie": [],
+   "escluse": [
+    "CDL (abilitazione personale)",
+    "Good Manufacturing Practices (regime regolatorio)",
+    "DOT regulations (regolamento)",
+    "OSHA (ente/legge sicurezza)",
+    "material-handling equipment (attrezzatura generica)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "42f70bed-123c-44f9-b6e9-3809fa3668b7",
+   "titolo": "Delivery Driver(06749) - 3380 Long Prarie Rd",
+   "tecnologie": [],
+   "escluse": [
+    "computer keyboard/touch screen (dispositivi generici)",
+    "calculator (strumento generico)",
+    "walk-in cooler (impianto generico)",
+    "driver's license (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "0a4f9569-0f83-4f7c-bef4-f005f2169417",
+   "titolo": "Truck Driver CDL A Local Home Daily",
+   "tecnologie": [
+    {
+     "nome": "Pallet Jack",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CDL (abilitazione personale)",
+    "Day Cabs (veicolo generico)",
+    "Dry Van 53' (rimorchio generico)",
+    "Rolling Carts (attrezzatura generica)",
+    "401(k) (benefit)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "88176473-d519-453d-afe7-b431e8493024",
+   "titolo": "Delivery Driver(08682) - 6622 Irvine Center Drive",
+   "tecnologie": [
+    {
+     "nome": "hand truck",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "computer keyboard/touch screen (dispositivi generici)",
+    "calculator (strumento generico)",
+    "dollies (attrezzatura generica)",
+    "driver's license (abilitazione personale)",
+    "walk-in cooler (impianto generico)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "adc4e8e2-7787-4ff3-93a8-c6e483bb0564",
+   "titolo": "Delivery Driver (06869) - 2927 Bingle Rd - Hiring All Shifts",
+   "tecnologie": [],
+   "escluse": [
+    "store technology (generico, senza nome proprio)",
+    "driver's license (abilitazione personale)",
+    "technology (termine generico)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "c9df28cd-60e6-4c27-aef4-f5513d16c868",
+   "titolo": "Valet Driver",
+   "tecnologie": [],
+   "escluse": [
+    "manual transmission (componente veicolo generico)",
+    "driver's license (abilitazione personale)",
+    "G.E.D. (titolo di studio)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "27e08cb7-216e-4673-b9c2-fb60ac290983",
+   "titolo": "Helicopter Pilot",
+   "tecnologie": [
+    {
+     "nome": "EC130",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "VFR (regime di volo)",
+    "FAR (regolamento/legge)",
+    "AIM (manuale aeronautico)",
+    "GOM (manuale operativo interno)",
+    "401(k) (benefit)"
+   ]
+  }
+ ]
+}

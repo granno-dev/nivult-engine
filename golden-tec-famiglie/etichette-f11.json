@@ -1,0 +1,413 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Healthcare",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "f378bab5-012f-4a2b-8af0-50e347eab542",
+   "titolo": "Medical Nurse Practitioner",
+   "tecnologie": [],
+   "escluse": [
+    "APRN (abilitazione personale)",
+    "RN (abilitazione personale)",
+    "board certification (abilitazione personale)",
+    "primary care (disciplina/settore)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "8cf64e7b-f11e-446b-94ee-9ecc3324df4a",
+   "titolo": "Occupational Therapy Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "401(k) (benefit)",
+    "occupational therapy (disciplina)",
+    "case management (processo)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "fd57e997-694f-4c4b-95b4-5d51efc1896e",
+   "titolo": "Dosimetrist, Radiation Oncology, Part-Time, (32 Hour Week), Days",
+   "tecnologie": [
+    {
+     "nome": "CT",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "MRI",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "MDCB (certificazione personale)",
+    "IAMTAC (formazione/abilitazione personale)",
+    "ARRT (certificazione personale)",
+    "radiation oncology (disciplina)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "a41a0e01-bc84-400d-99cf-b0eb36398268",
+   "titolo": "Chirurgien-Dentiste - Omnipratique H/F- BORDEAUX",
+   "tecnologie": [
+    {
+     "nome": "Invisalign",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Smilers",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "3Shape",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Medit",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "cône beam",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "moteur d'implantologie",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "ETK (marca di impianti, prodotto)",
+    "Biotech (marca di impianti, prodotto)",
+    "Geistlich (biomateriali, prodotto)",
+    "DPC (formazione continua obbligatoria)",
+    "implantologia (disciplina)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "d182a935-b8bd-4edb-ad7b-512962b63e2a",
+   "titolo": "10 -16 Patients, No Call - Outpatient Physician - Baton Rouge, LA",
+   "tecnologie": [],
+   "escluse": [
+    "BCLS (abilitazione personale)",
+    "DEA (registrazione personale)",
+    "401k (benefit)",
+    "family medicine (disciplina)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "a7ba5d80-0641-4b06-9566-102105ce1ba0",
+   "titolo": "Clinical Pharmacist",
+   "tecnologie": [],
+   "escluse": [
+    "BLS-CPR (abilitazione personale)",
+    "ACLS (abilitazione personale)",
+    "Code Blue (protocollo/processo)",
+    "Magnet (riconoscimento/regime)",
+    "NAPBC (accreditamento)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "d22d5a43-540e-426f-bc1a-40db69e6c016",
+   "titolo": "Medical Assistant Clinic",
+   "tecnologie": [
+    {
+     "nome": "EKG",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "Medical Assistant Certification (abilitazione personale)",
+    "phlebotomy (procedura/mestiere)",
+    "electronic medical records (descrizione generica, nessun sistema nominato)",
+    "GED (titolo di studio)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "f1c44c02-a22f-4611-ab8f-90c2ea566213",
+   "titolo": "Registered Nurse (RN), Telemetry/PCU",
+   "tecnologie": [],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "ACLS (abilitazione personale)",
+    "PCCN (certificazione personale)",
+    "DNV (regime di accreditamento)",
+    "telemetry (reparto/specialità)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "c3040287-ab3f-4880-8e89-a81f8b79ce85",
+   "titolo": "Team Manager | Healthcare",
+   "tecnologie": [],
+   "escluse": [
+    "proprietary technology (generica, senza nome)",
+    "PIP (processo HR)",
+    "insurance sales (settore)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "0e3c9425-981c-4ad6-ba1d-af865f938312",
+   "titolo": "RN II",
+   "tecnologie": [],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "ACLS (abilitazione personale)",
+    "PALS (abilitazione personale)",
+    "Joint Commission (regime di accreditamento)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "61eeac80-e555-436a-8157-79bcd3ac3974",
+   "titolo": "Dentist",
+   "tecnologie": [],
+   "escluse": [
+    "DDS (titolo/abilitazione personale)",
+    "BLS CPR (abilitazione personale)",
+    "DEA (registrazione personale)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "d880a28a-8a06-4201-a300-1b10442795ee",
+   "titolo": "Occupational Therapist",
+   "tecnologie": [],
+   "escluse": [
+    "401(k) (benefit)",
+    "OBRA (legge)",
+    "occupational therapy (disciplina)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "e18eec0b-337e-41aa-8976-d3253dffd6dc",
+   "titolo": "Chirurgien-Dentiste - Remplaçant H/F- SAINTE-MAXIME",
+   "tecnologie": [
+    {
+     "nome": "Invisalign",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Smilers",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "3Shape",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Medit",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "cône beam",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "moteur d'implantologie",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "ETK (marca di impianti, prodotto)",
+    "Biotech (marca di impianti, prodotto)",
+    "Geistlich (biomateriali, prodotto)",
+    "DPC (formazione continua obbligatoria)",
+    "implantologia (disciplina)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "2c34d6a1-ae9f-43ad-b349-c39e1145ecc8",
+   "titolo": "Sonographer-NE City",
+   "tecnologie": [
+    {
+     "nome": "fluoroscopy",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "MQSA (legge)",
+    "ACR (ente di accreditamento)",
+    "Joint Commission (regime di accreditamento)",
+    "ALARA (principio di radioprotezione)",
+    "CMS (ente regolatorio)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "62ce9068-3a79-42c9-b650-3688d7096ccb",
+   "titolo": "Registered Nurse (RN) - Same Day Surgery and PACU - Full time",
+   "tecnologie": [
+    {
+     "nome": "EPIC",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "ACLS (abilitazione personale)",
+    "PALS (abilitazione personale)",
+    "457B (benefit)",
+    "spagnolo (lingua naturale)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "bb0ac234-38c4-4852-8ec2-3101e1b2c67a",
+   "titolo": "Caregiver/PCA/Home Health Aide",
+   "tecnologie": [],
+   "escluse": [
+    "401K (benefit)",
+    "EAP (benefit)",
+    "patente di guida (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "3ec1a5c0-9762-44e0-b204-6e4891abda2f",
+   "titolo": "Care Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "Blue Light Card (benefit)",
+    "patente di guida (abilitazione personale)",
+    "Care Skills Academy (formazione interna)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "c930f87b-9bb7-4fa9-944a-d0d597ef52de",
+   "titolo": "Phlebotomist",
+   "tecnologie": [],
+   "escluse": [
+    "AHA-BLS (abilitazione personale)",
+    "PHLEB-AMT (certificazione personale)",
+    "PHLEB-ASCP (certificazione personale)",
+    "phlebotomy (mestiere/procedura)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "5d09cd06-4def-4387-a4c5-878f95870e01",
+   "titolo": "Registered Nurse (RN), Telemetry/PCU",
+   "tecnologie": [],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "ACLS (abilitazione personale)",
+    "PCCN (certificazione personale)",
+    "DNV (regime di accreditamento)",
+    "telemetry (reparto/specialità)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "88c29b4f-abdf-424c-9f5b-eb985b1504a0",
+   "titolo": "Student Radiologic Tech",
+   "tecnologie": [
+    {
+     "nome": "X-rays",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "CT",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "MRI",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "BLS (abilitazione personale)",
+    "JRCERT (ente di accreditamento)",
+    "contrast media (materiale/prodotto)",
+    "Medical Radiographer Temporary (licenza personale)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "5d63f8fd-76f2-4cb0-bbc1-7d82f1e4b5c5",
+   "titolo": "PCT Rebid",
+   "tecnologie": [
+    {
+     "nome": "EKG",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Virginia Mason Production System",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "BLS/CPR (abilitazione personale)",
+    "CNA (abilitazione personale)",
+    "RQI (programma di certificazione)",
+    "blood glucose monitoring (procedura/test generico)",
+    "PC (hardware generico)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "e907aaa4-be92-4c86-8ba6-7169019eb644",
+   "titolo": "Health Care Aide (HCA-CA02-010) - Bethany Calgary",
+   "tecnologie": [],
+   "escluse": [
+    "Health Care Aide certificate (abilitazione personale)",
+    "CLHA (registrazione professionale)",
+    "inglese (lingua naturale)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "6bae2c79-f835-40e1-9189-01da5b29e299",
+   "titolo": "Care Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "Care Certificate (abilitazione personale)",
+    "NVQ (qualifica personale)",
+    "Blue Light Card (benefit)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "eca2492e-63df-4c80-85ff-7f6e67e28615",
+   "titolo": "Registered Nurse - Infectious Diseases Clinic",
+   "tecnologie": [],
+   "escluse": [
+    "Nurse Practice Act (legge)",
+    "244 CMR (regolamento/legge)",
+    "ANA Standards of Practice (codice professionale, non norma tecnica)",
+    "Lahey Clinic Professional Practice Model (modello organizzativo interno)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "a9ff141f-bff1-4d82-a4b5-df8f4bc3224e",
+   "titolo": "Dermatology Nurse Practitioner or Physician Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "NP/PA license (abilitazione personale)",
+    "cryotherapy (procedura)",
+    "biopsia (procedura)"
+   ]
+  }
+ ]
+}

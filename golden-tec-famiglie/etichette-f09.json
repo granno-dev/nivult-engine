@@ -1,0 +1,430 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Agriculture",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "a0709195-6461-47c5-9f3b-866387f17021",
+   "titolo": "Herdsperson - Farm 76871",
+   "tecnologie": [
+    {
+     "nome": "Workday",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "tractor",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "mower",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "GED (abilitazione personale)",
+    "high pressure equipment (apparato generico)",
+    "truck/bus (veicoli generici)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "9e8dc7c3-1faf-4278-990f-59e7b2a3bf75",
+   "titolo": "Seasonal Grain Facility Laborer",
+   "tecnologie": [
+    {
+     "nome": "dryer",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "OSHA (legge sicurezza)",
+    "ISO (sigla ambigua, senza numero di norma)",
+    "PPE (attrezzatura generica)",
+    "grain elevator (impianto/stabilimento)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "a39dd8db-2ade-41ba-93ca-a33f114df792",
+   "titolo": "Lider de Grupo",
+   "tecnologie": [
+    {
+     "nome": "motosierra",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "astilladora",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "elevador aéreo",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "DdRT/SRT (tecniche di arrampicata)",
+    "CDL (abilitazione personale)",
+    "401k (benefit)",
+    "EPI (attrezzatura generica)",
+    "Instagram (menzione promozionale)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "8b9f633e-29b6-4e90-aebf-06367c185338",
+   "titolo": "Ouvrier avicole (H/F)",
+   "tecnologie": [],
+   "escluse": [
+    "permis B (abilitazione personale)",
+    "matériel mécanisé (attrezzatura generica)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "6c84c45b-00ca-4923-9ef5-9db21bb26743",
+   "titolo": "Assistant Horticulturist - Outdoor Gardens (Saudi Arabia)",
+   "tecnologie": [
+    {
+     "nome": "Integrated Pest Management",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "horticultural databases (generico)",
+    "Bachelor's degree (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "492e20fc-6d73-493c-b804-b2303bfcc4b2",
+   "titolo": "Autonomous Spray Technician",
+   "tecnologie": [
+    {
+     "nome": "autonomous orchard sprayer",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "GPS",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "precision agriculture (disciplina)",
+    "geofencing (funzione tecnica, non prodotto)",
+    "tablets/mobile app (dispositivi generici)",
+    "driver's license (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "5096c19e-6875-4b91-b57b-4a0ad1b3a197",
+   "titolo": "Forester",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "ArcGIS",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Sustainable Forestry Initiative",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "bachelor's degree (abilitazione personale)",
+    "driver's license (abilitazione personale)",
+    "inventory and mapping software (generico)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "dab357ae-97d0-4dba-b86a-59c354ee9bd7",
+   "titolo": "Palm Tree Supervisor - Agriculture",
+   "tecnologie": [],
+   "escluse": [
+    "fertigation (processo)",
+    "Diploma/Bachelor (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "7eb3f572-7398-497b-a5ab-402e5e25452c",
+   "titolo": "Jardinier / Jardinière d'espaces verts (H/F)",
+   "tecnologie": [
+    {
+     "nome": "grue",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CAP/BEP/BAC pro (abilitazioni personali)",
+    "permis VL/PL (abilitazioni personali)",
+    "EPI (attrezzatura generica)",
+    "système d'arrosage automatique (apparato generico)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "3e806ef1-67ed-454b-b0fb-c50e653f9b81",
+   "titolo": "Field Operations Monitor",
+   "tecnologie": [
+    {
+     "nome": "UNIX",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "CACFP (programma/regime governativo)",
+    "DOH (ente)",
+    "online meal entry system (generico)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "8c54ed79-8b71-43f9-9791-a22c690a0c6a",
+   "titolo": "RESPONSABLE SECTEUR SUD PARIS F/H",
+   "tecnologie": [],
+   "escluse": [
+    "Bleu-Blanc-Cœur (marchio/ente)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "a1b6abcc-9530-42a7-8752-7ca87e3b4b11",
+   "titolo": "Animal Care Associate (Part-Time)",
+   "tecnologie": [],
+   "escluse": [
+    "High school diploma (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "bea7081c-9923-479b-a907-42dc9c6c5572",
+   "titolo": "Líder de Grupo Arborista",
+   "tecnologie": [
+    {
+     "nome": "motosierra",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "astilladora",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "elevador aéreo",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "DdRT/SRT (tecniche di arrampicata)",
+    "CDL (abilitazione personale)",
+    "401k (benefit)",
+    "EPI (attrezzatura generica)",
+    "Instagram (menzione promozionale)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "07dff785-39c8-4fa1-ba3c-6fac65ffc1b2",
+   "titolo": "Trädgårdsarbetare hos företagskund i Göteborg",
+   "tecnologie": [
+    {
+     "nome": "handgräsklippare",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "redskapsbärare",
+     "ruolo": "gradita"
+    }
+   ],
+   "escluse": [
+    "handverktyg (attrezzi generici)",
+    "svenska (lingua naturale)",
+    "maskiner (generico)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "6897d52a-236d-4c40-b5df-8a07102a788b",
+   "titolo": "Schülerpraktikum (m/w/d) im agrarwirtschaftlichen Bereich",
+   "tecnologie": [],
+   "escluse": [
+    "LinkedIn (menzione promozionale)",
+    "Jobportal (generico)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "6773df98-c2d8-4fc6-916a-df4ab25a52d1",
+   "titolo": "Livestock Caretaker",
+   "tecnologie": [],
+   "escluse": [
+    "DailyPay (benefit)",
+    "golf cart (veicolo generico)",
+    "driver's license (abilitazione personale)",
+    "401(k) (benefit)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "51aac5d9-a587-4f38-9bda-57a86e1a6152",
+   "titolo": "M26346 Ayudante de campo (Reclutamiento Local)",
+   "tecnologie": [],
+   "escluse": [
+    "Wheat Wide Crossing (reparto/progetto)",
+    "maquinaria agrícola (generico)",
+    "equipo de riego (apparato generico)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "1b6e3084-e5a3-4323-ba32-dd3d09f00adb",
+   "titolo": "Landwirt oder Landwirt (m/w/d) mit gleichzeitigem Erwerb der Fachhochschulreife",
+   "tecnologie": [],
+   "escluse": [
+    "Fachhochschulreife (titolo di studio)",
+    "Agrartechnik (generico)",
+    "Computertechnik (generico)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "5d26790a-a012-49ee-88d2-290bbbbd9d5f",
+   "titolo": "Opérateur de production avicole H/F",
+   "tecnologie": [],
+   "escluse": [
+    "Permis de conduire (abilitazione personale)",
+    "13ème mois (benefit)",
+    "CSE (benefit)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "0d14e9ea-f5a4-4fed-a4ad-5f2c2acf344f",
+   "titolo": "Arborista Trepador",
+   "tecnologie": [
+    {
+     "nome": "motosierra",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "astilladora",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "elevador aéreo",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "DdRT/SRT (tecniche di arrampicata)",
+    "CDL (abilitazione personale)",
+    "401k (benefit)",
+    "Instagram (menzione promozionale)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "54f3ade4-f861-4da2-9c78-4d265cf48d50",
+   "titolo": "Boom Truck Operator & Arborist Crew Leader",
+   "tecnologie": [
+    {
+     "nome": "Boom Truck",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "RPP (benefit)",
+    "driver's license (abilitazione personale)",
+    "PPE (attrezzatura generica)",
+    "Instagram (menzione promozionale)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "c0fd8232-0fd9-465a-bdea-0ce76aa9afae",
+   "titolo": "Herdsperson Mt Erie",
+   "tecnologie": [
+    {
+     "nome": "Workday",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "tractor",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "mower",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "GED (abilitazione personale)",
+    "high pressure equipment (apparato generico)",
+    "truck/bus (veicoli generici)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "6c0adb70-da43-4538-97a9-ddbd1ce8acf1",
+   "titolo": "UNION Animal Technician LG4 M-F 7:00am - 3:30pm",
+   "tecnologie": [
+    {
+     "nome": "fork truck",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "GxP (regime regolatorio)",
+    "AAALAC (regime di accreditamento)",
+    "USDA (ente/normativa)",
+    "ALAT/LAT (certificazioni personali)",
+    "GED (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "4fc8cbd3-db1d-4ddd-8357-3934725ccd9f",
+   "titolo": "BD Farmer",
+   "tecnologie": [
+    {
+     "nome": "CRM",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "99Pay",
+     "ruolo": "servizio"
+    }
+   ],
+   "escluse": [
+    "99 (nome azienda)",
+    "DiDi (azienda)",
+    "QBR (processo)",
+    "funil de vendas (processo)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "28d82d98-e071-46d2-901f-dc0fd98b1011",
+   "titolo": "Value Chain Development and Farmer Aggregation Officer",
+   "tecnologie": [],
+   "escluse": [
+    "KoBoToolbox (solo URL di candidatura)"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,328 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Sports & Recreation",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "abe10dee-5e34-4328-986b-a871c9fcd025",
+   "titolo": "Swim Teacher - Part Time - Kettering Swimming Pool",
+   "tecnologie": [],
+   "escluse": [
+    "Level 2 swimming teaching qualification (abilitazione personale)",
+    "Enhanced DBS check (controllo personale, requisito legale)",
+    "Employee Assistance Programme (benefit)",
+    "My Staff Shop (benefit)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "882bc0a9-6f60-4ab4-bafa-155a96626645",
+   "titolo": "Ledare Djungelgympa - Sprid rörelseglädje för barn 2-6 år i Uppsala HT26",
+   "tecnologie": [],
+   "escluse": [
+    "Djungelgympa (programma proprio dell'azienda, non strumento)",
+    "gymnastik (disciplina sportiva)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "e8ea7347-69be-46ad-930f-7959657aad4a",
+   "titolo": "Boys Baseball Head Coach",
+   "tecnologie": [],
+   "escluse": [
+    "equipment/uniforms (apparati generici senza nome)",
+    "baseball (disciplina sportiva)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "a5a8f6b1-0aef-439e-8103-78b109aa5047",
+   "titolo": "Certified Strength and Conditioning Specialist (CSCS) - Human Performance, Germany Relocation",
+   "tecnologie": [],
+   "escluse": [
+    "NSCA CSCS (certificazione personale)",
+    "NSCA TSAC-F (certificazione personale)",
+    "AFSPECWAR/SOF/POTFF/H2F (sigle di programmi militari, ambigue)",
+    "security clearance (abilitazione personale)",
+    "exercise science (disciplina)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "23e189e5-4643-430b-aab2-537bbebc7026",
+   "titolo": "Histoire du sport et de l'activité physique au Canada - CUPE - Automne 2026 - APA2702 (LEC)",
+   "tecnologie": [],
+   "escluse": [
+    "CUPE (sindacato, non tecnologia)",
+    "baccalauréat (abilitazione personale)",
+    "français (lingua naturale)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "fcb1e7af-226a-41ef-a84d-5fac06433c9e",
+   "titolo": "Personal Trainer",
+   "tecnologie": [],
+   "escluse": [
+    "CPR/AED (abilitazione personale)",
+    "First Aid (abilitazione personale)",
+    "ACE/ACSM/NASM (certificazioni personali)",
+    "exercise science (disciplina)",
+    "GED (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "e5996a22-ed2e-47a0-a498-1ca92c5d4353",
+   "titolo": "HOLIDAY CLUB PLAYWORKER - Staines TW19",
+   "tecnologie": [],
+   "escluse": [
+    "Enhanced DBS check (controllo personale)",
+    "Children's Barred List Check (controllo personale)",
+    "Rehabilitation of Offenders Act 1974 (legge)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "ebfc9af3-7d59-4575-8159-724b661d2dd7",
+   "titolo": "Professional Dance Coach",
+   "tecnologie": [],
+   "escluse": [
+    "dance curriculum (programma interno senza nome proprio)",
+    "Fred Astaire Certified (certificazione interna dell'azienda)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "0f507149-d3f1-4acf-930f-f0a819409927",
+   "titolo": "Référent maison hantée H/F",
+   "tecnologie": [],
+   "escluse": [
+    "contrôle de billets (mansione/processo)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "10158299-8dab-494d-a091-cf49deea3666",
+   "titolo": "Performing Arts Professional",
+   "tecnologie": [],
+   "escluse": [
+    "dance curriculum (programma interno senza nome proprio)",
+    "Fred Astaire Certified (certificazione interna dell'azienda)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "b7cab33a-0597-41bf-8cae-bd3ad1f8401f",
+   "titolo": "Assistant Coach, Track, Boys, Senior",
+   "tecnologie": [],
+   "escluse": [
+    "International Baccalaureate (programma di studio offerto dal distretto, non strumento del ruolo)",
+    "Montessori (metodo pedagogico citato tra le offerte del distretto, non usato nel ruolo)",
+    "STEM (settore)",
+    "laptop/tablet (hardware generico senza nome)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "87fc32ae-1a1e-48bb-91be-e416583287be",
+   "titolo": "Fitness Coach - Outpatient Physical Therapy Clinic",
+   "tecnologie": [],
+   "escluse": [
+    "ACE/ISSA/NASM (certificazioni personali)",
+    "Exercise Physiology (disciplina)",
+    "physical therapy (settore)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "6ada009e-241b-4241-838c-c2a761c44ffe",
+   "titolo": "Independent End Point Assessor- Sports Coach",
+   "tecnologie": [
+    {
+     "nome": "NCFE Apprenticeship Services EPA platform",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Teams",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Microsoft Office Suite",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Level 4 Sports Coach (standard di apprendistato/qualifica)",
+    "Assessor qualification (abilitazione personale)",
+    "driving licence (abilitazione personale)",
+    "IT skills (competenza generica)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "ea5e0980-51a3-4342-8690-3a084ffb445c",
+   "titolo": "Swimming Pool Service Technician I",
+   "tecnologie": [],
+   "escluse": [
+    "water testing (processo)",
+    "chemical balancing (processo)",
+    "pool cover (apparato generico senza nome)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "100e7fc6-1ce0-4e31-89f0-1795886a2677",
+   "titolo": "Lifeguard",
+   "tecnologie": [],
+   "escluse": [
+    "403b Retirement Savings Plan (benefit)",
+    "CPR (abilitazione personale)",
+    "lifeguard certification (abilitazione personale)",
+    "first aid (abilitazione personale)",
+    "YMCA Aquatics Standard Operating Procedures (procedure interne)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "7760bfcf-068d-4572-a47a-dd00102f1874",
+   "titolo": "Gruppträningsinstruktör",
+   "tecnologie": [
+    {
+     "nome": "Les Mills",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Actics egna klasser (classi interne senza nome proprio)",
+    "gruppträning (attività)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "3287661a-e83c-4d3d-b9b5-917785220f84",
+   "titolo": "Children's Holiday Activities Assistant - Casual - Crowborough Leisure Centre",
+   "tecnologie": [],
+   "escluse": [
+    "Holiday Camp (programma interno dell'azienda)",
+    "Employee Assistance Programme (benefit)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "9bc02884-4dc6-47c3-be70-6ad9d2279262",
+   "titolo": "Nutritional Health Coach",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Office",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Excel",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Outlook",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "nutrition/dietetics (disciplina)",
+    "NHC (sigla interna della mansione, ambigua)",
+    "CE (formazione continua, processo)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "7bf05b50-dfd2-4c27-8020-e195e4744674",
+   "titolo": "Fitness Instructor- The Village at Sherman Oaks",
+   "tecnologie": [],
+   "escluse": [
+    "401(k) (benefit)",
+    "ACSM/ACE/NASM/NSCA (certificazioni personali)",
+    "First aid e CPR (abilitazioni personali)",
+    "computer skills (competenza generica senza nome)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "652e347d-db31-4c82-a486-d0c76aeff9c5",
+   "titolo": "Basketball Coach",
+   "tecnologie": [],
+   "escluse": [
+    "high school diploma (abilitazione personale)",
+    "basketball (disciplina sportiva)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "c98f6988-53b2-490f-8f11-5382292d1eb2",
+   "titolo": "Assistant Swim Coach",
+   "tecnologie": [],
+   "escluse": [
+    "StarGuard Elite Lifeguard Certification (abilitazione personale di bagnino)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "1b695f3e-68f6-4f36-827f-e1436019231b",
+   "titolo": "Realty Project Coach",
+   "tecnologie": [],
+   "escluse": [
+    "project management (disciplina)",
+    "space management (disciplina/processo)",
+    "data analysis (processo)",
+    "Bachelor's degree (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "0baaf20f-32d8-422f-b7cc-bfc2ed61c2cc",
+   "titolo": "Part-Time Fitness Attendant",
+   "tecnologie": [],
+   "escluse": [
+    "cash register (apparato generico senza nome/tipo)",
+    "wifi (servizio offerto agli ospiti, non strumento del lavoratore)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "3fbed775-91e1-4618-a018-8c0152cdda3f",
+   "titolo": "Employment Coach",
+   "tecnologie": [],
+   "escluse": [
+    "ACCS (sigla di programma statale, ambigua)",
+    "CIES (sigla di programma, ambigua)",
+    "computer knowledge (competenza generica)",
+    "driver's license (abilitazione personale)",
+    "BA/BS degree (abilitazione personale)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "76dd1ea6-6712-4dd9-a30d-f1d5ea35273c",
+   "titolo": "CLEAR Language Coach, French (Student)",
+   "tecnologie": [],
+   "escluse": [
+    "Workday (piattaforma di candidatura, non strumento del ruolo)",
+    "Federal Work Study (programma di finanziamento, regime)",
+    "French (lingua naturale)"
+   ]
+  }
+ ]
+}

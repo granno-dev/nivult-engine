@@ -1,0 +1,327 @@
+{
+ "lotto": "famiglie-02",
+ "famiglia": "Food & Beverage",
+ "rubrica": "docs/rubrica-tecnologie.md",
+ "etichettate_da": "kimi (agente), lettura cieca (senza vedere le uscite dei modelli)",
+ "data": "2026-09-24",
+ "note_di_metodo": [
+  "Secondo lotto: il primo (13 per famiglia) era troppo piccolo per misurare la testa per-classe (+-13 punti).",
+  "25 offerte per famiglia, pescate dalle 400 attive piu' recenti con testo di almeno 1.500 caratteri.",
+  "Stessa rubrica e stessa forma del primo lotto: i voti si sommano (38 per famiglia in tutto).",
+  "Il testo letto e' tagliato a 4.000 caratteri, la finestra che la testa vede in produzione (1.024 token).",
+  "Molte offerte fuori IT non citano nessuno strumento con nome proprio: il 'richiamo basso' della testa li' e' anche strutturale, non solo un difetto."
+ ],
+ "dubbi": [],
+ "offerte": [
+  {
+   "n": 1,
+   "id": "769eeac2-4ed8-42bf-92ff-8ef2be86d1ac",
+   "titolo": "Senior Assistant Restaurant Manager",
+   "tecnologie": [],
+   "escluse": [
+    "401(k) (benefit)",
+    "GED (abilitazioni personali)",
+    "EAP (benefit)",
+    "financial accounting (disciplina)"
+   ]
+  },
+  {
+   "n": 2,
+   "id": "058e8153-9d66-4e96-9082-0376c34271f0",
+   "titolo": "Boca Raton #33 Line Cook",
+   "tecnologie": [
+    {
+     "nome": "POS",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "Slicer",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "food safety certification (abilitazioni personali)",
+    "401K Plan (benefit)",
+    "inglese (lingua naturale)",
+    "Stove (elettrodomestico generico)"
+   ]
+  },
+  {
+   "n": 3,
+   "id": "1611d274-1cc0-4923-bb55-e47d3036220b",
+   "titolo": "Cook",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)",
+    "high school diploma (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 4,
+   "id": "8ef1db20-2184-4510-98d6-076f313a67d0",
+   "titolo": "Bartender | Part-Time | The Hobby Center",
+   "tecnologie": [],
+   "escluse": [
+    "TABC (abilitazioni personali)",
+    "TIPS (abilitazioni personali)",
+    "ServSafe Alcohol (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 5,
+   "id": "cff034dd-59d0-47e7-9463-bbb0b7ae342a",
+   "titolo": "Bartender",
+   "tecnologie": [],
+   "escluse": [
+    "related system (ambiguo: nessun sistema nominato)",
+    "Arabic & English (lingue naturali)",
+    "F&B product knowledge (conoscenza di prodotti)"
+   ]
+  },
+  {
+   "n": 6,
+   "id": "4ff4ffdb-c45c-444d-8ef6-ebcb50aeabb5",
+   "titolo": "CHEF DE PARTIE",
+   "tecnologie": [],
+   "escluse": [
+    "Wizcare (benefit: piattaforma benessere dipendenti)",
+    "E-learning (modalità formativa)",
+    "Carte Heartist (benefit)",
+    "fiches techniques (documento di lavoro, non tecnologia)"
+   ]
+  },
+  {
+   "n": 7,
+   "id": "07854fd5-2c57-4c3f-a299-71d1292a22b2",
+   "titolo": "Kitchen Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "Wagestream (benefit)",
+    "employee assistance program (benefit)",
+    "apprenticeship (percorso formativo)"
+   ]
+  },
+  {
+   "n": 8,
+   "id": "aacbda09-c83f-425b-bfb4-e7c5a79684f2",
+   "titolo": "Plongeur.euse (F/H) - Abbaye des Vaux de Cernay",
+   "tecnologie": [
+    {
+     "nome": "HACCP",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "lave-vaisselle",
+     "ruolo": "usata"
+    },
+    {
+     "nome": "sécheuse",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "FOODLES (benefit)",
+    "pass Navigo (benefit)",
+    "fours e batteurs (materiale da lavare, non strumento del ruolo)"
+   ]
+  },
+  {
+   "n": 9,
+   "id": "4280a184-05b6-44a5-bf32-76831fe412ae",
+   "titolo": "Dishwasher",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)"
+   ]
+  },
+  {
+   "n": 10,
+   "id": "463b4154-3ed7-4bec-9bef-f5e30356419e",
+   "titolo": "Dietary Aide",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)"
+   ]
+  },
+  {
+   "n": 11,
+   "id": "d64a8a51-6ce2-4404-a745-7cd821f52c83",
+   "titolo": "Dietary Aide",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)"
+   ]
+  },
+  {
+   "n": 12,
+   "id": "af2539f6-93e3-4fd8-b88c-2c4e57884c9f",
+   "titolo": "Bartender - Koshu Club",
+   "tecnologie": [],
+   "escluse": [
+    "Shoes for Crews (benefit)",
+    "401k (benefit)",
+    "knowledge of wine, sake, and cocktail service (conoscenza di prodotti e mestiere)"
+   ]
+  },
+  {
+   "n": 13,
+   "id": "41444085-55f1-4610-a7de-17c22e663b60",
+   "titolo": "Room Service Attendant, University, Per Diem",
+   "tecnologie": [],
+   "escluse": [
+    "Workday (portale di candidatura, non strumento del ruolo)",
+    "computerized menu planning system (sistema non nominato)",
+    "dumbwaiters ed elevators (infrastruttura dell'edificio)"
+   ]
+  },
+  {
+   "n": 14,
+   "id": "3b2bc03e-93e2-4e61-a3e1-fef4546c8431",
+   "titolo": "Line Cook",
+   "tecnologie": [],
+   "escluse": [
+    "401k (benefit)",
+    "cook-to-order experience (esperienza di mestiere)"
+   ]
+  },
+  {
+   "n": 15,
+   "id": "abec5cec-6e0b-4fe0-a094-45cee84d9ef2",
+   "titolo": "Sous Chef - Nobu",
+   "tecnologie": [
+    {
+     "nome": "HACCP",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Certificate III in Commercial Cookery (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 16,
+   "id": "d8297149-f6e5-4245-a1a0-6a96459f9561",
+   "titolo": "Deli Clerk",
+   "tecnologie": [
+    {
+     "nome": "slicer",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Food Handlers permit (abilitazioni personali)",
+    "Weights and Measures regulations (regolamento, legge)",
+    "401(K) (benefit)",
+    "ovens e microwaves (elettrodomestici generici)",
+    "scales (strumento generico)"
+   ]
+  },
+  {
+   "n": 17,
+   "id": "ab60cb00-0ecc-4f90-9430-8b473da54467",
+   "titolo": "Ausbildung zum Hotelfachmann / Hotelfachfrau (m/w/d)",
+   "tecnologie": [
+    {
+     "nome": "Microsoft Office 365",
+     "ruolo": "usata"
+    }
+   ],
+   "escluse": [
+    "Accor Academy Learning Plattform (piattaforma formativa interna)",
+    "Tablet (dispositivo generico, benefit)"
+   ]
+  },
+  {
+   "n": 18,
+   "id": "4f00980c-3378-48ef-b2c5-eccacd01aa38",
+   "titolo": "Dish Washer",
+   "tecnologie": [],
+   "escluse": [
+    "Food Safety (disciplina)",
+    "Brand Standards (standard interni aziendali)"
+   ]
+  },
+  {
+   "n": 19,
+   "id": "24a55ce8-8c8b-4630-8fb2-ba94e0e6d46a",
+   "titolo": "Bartender - Quality Hotel Edvard Grieg",
+   "tecnologie": [],
+   "escluse": [
+    "lover knyttet til helse, miljø og sikkerhet (legge)"
+   ]
+  },
+  {
+   "n": 20,
+   "id": "e6e219a3-a546-4788-832e-2d44e54fc045",
+   "titolo": "Commis Chef",
+   "tecnologie": [],
+   "escluse": [
+    "catering qualification (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 21,
+   "id": "05c85c9c-2889-4bdf-bbb5-b47d7657fd83",
+   "titolo": "Dietary Aide",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)"
+   ]
+  },
+  {
+   "n": 22,
+   "id": "14f28156-10b3-4e2c-8d1c-8cccd7399105",
+   "titolo": "Nutrition Assistant",
+   "tecnologie": [],
+   "escluse": [
+    "Arizona ServSafe Certification (abilitazioni personali)",
+    "Arizona Food Handler Permit (abilitazioni personali)",
+    "GED (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 23,
+   "id": "8bdc3c95-8513-4826-ba92-4a53eb7587ae",
+   "titolo": "Superviseur Petit-Déjeuner (H/F)",
+   "tecnologie": [],
+   "escluse": [
+    "français et anglais (lingue naturali)",
+    "techniques de service (mestiere)"
+   ]
+  },
+  {
+   "n": 24,
+   "id": "d904988f-2438-4bd0-a3af-f206b04dcb51",
+   "titolo": "Cook",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)",
+    "high school diploma (abilitazioni personali)"
+   ]
+  },
+  {
+   "n": 25,
+   "id": "c5901628-1421-4729-bab4-15aa93d2b30b",
+   "titolo": "Cook",
+   "tecnologie": [],
+   "escluse": [
+    "ServSafe (abilitazioni personali)",
+    "Food Handler certification (abilitazioni personali)",
+    "PNC EarnedIt (benefit)",
+    "high school diploma (abilitazioni personali)"
+   ]
+  }
+ ]
+}
