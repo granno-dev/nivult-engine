@@ -127,6 +127,11 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
                        follow_redirects=True)
     modello = _glm_flash()
     ko_di_fila = 0
+    # quando GLM e' giu' (credito a zero, misurato il 23/09/2026) la corsa
+    # NON deve fermarsi ne' buttare cio' che le regole trovano: si passa in
+    # modalita' «solo regole» — il numero deterministico si scrive, settore
+    # e citazione restano vuoti, e GLM non si chiama piu' finche' non torna.
+    solo_regex = False
     with psycopg.connect(dsn, autocommit=True) as c:
         if _colonna_manca(c, "ats_companies", "site_checked_at"):
             # lock_timeout come nel blocco sotto: ADD COLUMN IF NOT EXISTS
@@ -186,31 +191,36 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
             nums = _numeri(testo)
             if nums:
                 dip = max(nums)
-            try:
-                r = modello.chat([{"role": "user", "content":
-                                   _PROMPT.format(t=testo[:8000])}],
-                                 max_tokens=150)
-                g = json.loads(re.search(r"\{.*\}", r, re.S).group(0))
-                if isinstance(g.get("employees"), int) \
-                        and 10 <= g["employees"] <= 3_000_000:
-                    # GLM vince solo se concorda con una dichiarazione
-                    # regex o se la regex tace: mai un numero senza
-                    # un'eco nel testo
-                    if dip is None or g["employees"] in nums:
-                        dip = g["employees"]
-                if isinstance(g.get("industry"), str) \
-                        and 2 < len(g["industry"]) < 60:
-                    sett = g["industry"]
-                if isinstance(g.get("evidence"), str):
-                    prova = g["evidence"][:300]
-                ko_di_fila = 0
-            except Exception:                        # noqa: BLE001
-                stats["errori_glm"] += 1
-                ko_di_fila += 1
-                if ko_di_fila >= 3:
-                    log.warning("GLM giu': mi fermo, righe non marcate")
-                    break
-                continue
+            if not solo_regex:
+                try:
+                    r = modello.chat([{"role": "user", "content":
+                                       _PROMPT.format(t=testo[:8000])}],
+                                     max_tokens=150)
+                    g = json.loads(re.search(r"\{.*\}", r, re.S).group(0))
+                    if isinstance(g.get("employees"), int) \
+                            and 10 <= g["employees"] <= 3_000_000:
+                        # GLM vince solo se concorda con una dichiarazione
+                        # regex o se la regex tace: mai un numero senza
+                        # un'eco nel testo
+                        if dip is None or g["employees"] in nums:
+                            dip = g["employees"]
+                    if isinstance(g.get("industry"), str) \
+                            and 2 < len(g["industry"]) < 60:
+                        sett = g["industry"]
+                    if isinstance(g.get("evidence"), str):
+                        prova = g["evidence"][:300]
+                    ko_di_fila = 0
+                except Exception:                        # noqa: BLE001
+                    stats["errori_glm"] += 1
+                    ko_di_fila += 1
+                    if ko_di_fila >= 3:
+                        solo_regex = True
+                        log.warning("GLM giu': da qui in poi SOLO regole — "
+                                    "i numeri deterministici si scrivono comunque, "
+                                    "i primi %d buttati si rileggeranno al prossimo giro",
+                                    ko_di_fila)
+            # si scrive SEMPRE (anche in modalita' solo regole): il numero
+            # deterministico non si butta piu' per un modello che non risponde
             c.execute("""UPDATE ats_companies
                             SET employees_site = %s, industry_site = %s,
                                 site_evidence = %s, site_checked_at = now()
