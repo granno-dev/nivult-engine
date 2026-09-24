@@ -252,6 +252,15 @@ _VERBI3P = (r"('s)?\b.{0,80}?\b(is|are|has|have|offers?|provides?|specializes?|"
             r"manufactures?|empowers?|connects?|enables?|employs?|launched|created|started|"
             r"raised|earned|grown|expanded|leads?)\b")
 
+# ccTLD geografici non ambigui -> ISO 3166-1 alpha-2 (B5, 24/09/2026).
+# Fuori: com/org/net/edu/gov (generici), io/ai/co/app/dev (di moda, non
+# dicono il paese), eu (regionale). Misura sulla coda senza paese: ~700
+# aziende su 11.969, coperte gratis e dichiarate.
+_CCTLD = {c: c.upper() for c in (
+    "de fr nl it es se at ch be pl no dk fi ie pt uk ca au nz br za in jp "
+    "cz sk hu ro gr il ae sg hk my mx ar cl us tr kr tw th vn id ph sa eg "
+    "ng ke ma tn gh ua by kz bg hr rs si lt lv ee is lu mt cy").split()}
+
 
 def _boilerplate_azienda(c, pid: str, slug: str, nome: str | None) -> str | None:
     """Il blocco «chi siamo» dalle 3 offerte piu' recenti dell'azienda:
@@ -314,8 +323,8 @@ def applica(dsn: str, limite: int = 20000) -> dict:
         _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
         for cid, e_reg, e_site, e_self, e_wd, band, paese, descr_sito in tenants:
-            pid, slug, nome_az = c.execute(
-                "SELECT platform_id, slug, company_name FROM ats_companies WHERE id = %s",
+            pid, slug, nome_az, logo_domain = c.execute(
+                "SELECT platform_id, slug, company_name, logo_domain FROM ats_companies WHERE id = %s",
                 (cid,)).fetchone()
             st["viste"] += 1
             try:
@@ -342,6 +351,18 @@ def applica(dsn: str, limite: int = 20000) -> dict:
                       "street": None, "zipcode": None, "full_address": None, "lat": None, "lon": None, "da": "offerte"}
             else:
                 hq = None
+            # il paese mancante lo puo' dire il ccTLD del dominio: il .de
+            # dice dove il dominio vive, non la sede — «meglio un piccolo
+            # errore di un campo vuoto», ma la fonte si dichiara (24/09)
+            iso = _CCTLD.get((logo_domain or "").rsplit(".", 1)[-1].lower())
+            if iso:
+                if hq and not hq["country"]:
+                    hq["country"] = iso
+                    hq["da"] += "+cctld"
+                elif not hq:
+                    hq = {"country": iso, "state": None, "city": None, "street": None,
+                          "zipcode": None, "full_address": None, "lat": None, "lon": None,
+                          "da": "dominio (cctld)"}
             fam = [f for f, _ in c.execute(SQL_FAMIGLIE, (pid, slug)).fetchall()]
             try:
                 tec = [t for t, _ in c.execute(SQL_TEC, (pid, slug)).fetchall()]

@@ -354,7 +354,10 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                        ad.legal_form, ad.legal_form_code, ad.registration_id,
                        ad.founded, ad.hq_latitude, ad.hq_longitude,
                        ac.employees_reg, ac.employees_wd, ac.employees_site,
-                       ac.employees_self_n
+                       ac.employees_self_n,
+                       -- la forza del segnale quando industry viene dal mix
+                       -- delle offerte (23/09): chi compra vede la quota
+                       ac.industry_mix_share
                   FROM ats_companies ac
                   LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
                   LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
@@ -395,6 +398,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                     employees_legal_entity_band=r[9],
                     employees_legal_entity_source=r[11],
                     industry_source=r[12],
+                    industry_mix_share=r[46],
                     legal_name=legal_name, legal_form=legal_form,
                     legal_form_code=legal_form_code,
                     registration_id=reg_id, founded=fondata,
