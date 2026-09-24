@@ -321,7 +321,8 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                                 ac.employees_site, ac.employees_self,
                                 cd.employees),
                        COALESCE(ac.industry_reg, ac.industry,
-                                ac.industry_site, ac.industry_mix),
+                                ac.industry_site, ac.pdl_industry,
+                                ac.industry_mix),
                        ac.employees_reg_band, ac.reg_source,
                        -- la fonte dei dipendenti la decide la regola unica
                        -- (aziende_dettagli.dipendenti): qui solo il nome
@@ -332,6 +333,8 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                             WHEN ac.industry IS NOT NULL THEN 'wikidata'
                             WHEN ac.industry_site IS NOT NULL
                             THEN 'company_site'
+                            WHEN ac.pdl_industry IS NOT NULL
+                            THEN 'pdl (free dataset)'
                             WHEN ac.industry_mix IS NOT NULL
                             THEN 'job_mix' END,
                        (SELECT count(*) FROM ats_jobs j
@@ -357,7 +360,13 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                        ac.employees_self_n,
                        -- la forza del segnale quando industry viene dal mix
                        -- delle offerte (23/09): chi compra vede la quota
-                       ac.industry_mix_share
+                       ac.industry_mix_share,
+                       -- la fonte della fondata (24/09): registro o PDL,
+                       -- che da' il solo anno e lo dichiara
+                       ad.founded_da,
+                       -- la fascia PDL per la regola unica quando la scheda
+                       -- manca ancora (tenant nuovo)
+                       ac.pdl_size
                   FROM ats_companies ac
                   LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
                   LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
@@ -378,7 +387,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                 # regola unica si applica qui, sugli stessi ingressi
                 if dip_best is None and size_range is None:
                     dip_best, dip_da, dip_scope, size_range, size_da = dipendenti(
-                        e_reg, e_site, e_self, e_wd, r[9], None)
+                        e_reg, e_site, e_self, e_wd, r[9], None, r[48])
                 else:
                     # la fonte del NUMERO: quella il cui valore e' il numero
                     # scelto (la fascia puo' venire da un'altra, es. INSEE GE)
@@ -399,6 +408,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                     employees_legal_entity_source=r[11],
                     industry_source=r[12],
                     industry_mix_share=r[46],
+                    founded_source=r[47],
                     legal_name=legal_name, legal_form=legal_form,
                     legal_form_code=legal_form_code,
                     registration_id=reg_id, founded=fondata,

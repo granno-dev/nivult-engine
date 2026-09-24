@@ -88,7 +88,7 @@ def fascia(n: int | None) -> str | None:
     return None
 
 
-def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int | None, str | None, str | None, str | None, str | None]:
+def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None, pdl_size=None) -> tuple[int | None, str | None, str | None, str | None, str | None]:
     """LA regola dei dipendenti, una sola per scheda ed export (21/09/2026).
 
     Il registro conta l'UNITA' LEGALE: SIRENE dava Veolia Environnement SA a
@@ -101,7 +101,9 @@ def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int |
     piccola. Restituisce (numero, fonte del numero, portata del numero,
     fascia, fonte della fascia): il numero resta quello della sua fonte con
     la sua portata (1.499 = unita' legale), la fascia puo' venire da un'altra
-    (INSEE GE = 5001+)."""
+    (INSEE GE = 5001+). Dal 24/09 la fascia PDL (dichiarata dall'azienda,
+    stessa forma delle fasce LinkedIn) chiude i buchi dopo la fascia di
+    registro: e' l'ultima spiaggia prima del vuoto dichiarato."""
     best, da, portata = None, None, None
     for n, fonte, scope in ((e_wd, "wikidata", "group"), (e_site, "sito", "group"),
                             (e_reg, "registro", "legal_entity"), (e_self, "dichiarato", "self_declared")):
@@ -113,6 +115,8 @@ def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None) -> tuple[int |
         size, size_da = band, "registro (fascia)"
         if not da:
             portata = "legal_entity"
+    if not size and pdl_size:
+        size, size_da = pdl_size, "pdl (free dataset)"
     if categoria == "GE" and (best or 0) < 5000:
         size, size_da = "5001+", "INSEE catégorie GE (impresa, non unità legale)"
     elif categoria == "ETI" and (best or 0) < 250:
@@ -161,7 +165,7 @@ SELECT j.raw->'hiringOrganization', j.raw->'jobAd'->'sections'->'companyDescript
 """
 COLONNE = ("company_id", "size_range", "size_da", "employees_best", "employees_scope", "locations", "n_locations",
            "hq_country", "hq_state", "hq_city", "hq_street", "hq_zipcode", "hq_full_address", "hq_da",
-           "hq_latitude", "hq_longitude", "legal_name", "legal_form", "legal_form_code", "registration_id", "founded",
+           "hq_latitude", "hq_longitude", "legal_name", "legal_form", "legal_form_code", "registration_id", "founded", "founded_da",
            "description", "description_da", "external_urls", "keywords")
 SQL_SCRIVI = ("INSERT INTO aziende_dettagli (" + ", ".join(COLONNE) + ") VALUES (" + ", ".join(["%s"] * len(COLONNE)) + ") "
               "ON CONFLICT (company_id) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in COLONNE[1:]) + ", calcolato_at = now()")
@@ -307,7 +311,8 @@ def _schema(c) -> None:
     # aziende_dettagli, che nessun demone legge
     presenti = {r[0] for r in c.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'aziende_dettagli'")}
     for col, tipo in (("employees_scope", "text"), ("legal_name", "text"), ("legal_form", "text"), ("legal_form_code", "text"),
-                      ("registration_id", "text"), ("founded", "date"), ("hq_latitude", "real"), ("hq_longitude", "real")):
+                      ("registration_id", "text"), ("founded", "date"), ("hq_latitude", "real"), ("hq_longitude", "real"),
+                      ("founded_da", "text")):
         if col not in presenti:
             c.execute(f"ALTER TABLE aziende_dettagli ADD COLUMN {col} {tipo}")
     # site_description la scrive scheda_sito; se non e' ancora passato, la
@@ -326,9 +331,9 @@ def applica(dsn: str, limite: int = 20000) -> dict:
         _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
         for cid, e_reg, e_site, e_self, e_wd, band, paese, descr_sito in tenants:
-            pid, slug, nome_az, logo_domain = c.execute(
-                "SELECT platform_id, slug, company_name, logo_domain FROM ats_companies WHERE id = %s",
-                (cid,)).fetchone()
+            pid, slug, nome_az, logo_domain, pdl_size, pdl_founded = c.execute(
+                "SELECT platform_id, slug, company_name, logo_domain, pdl_size, pdl_founded "
+                "FROM ats_companies WHERE id = %s", (cid,)).fetchone()
             st["viste"] += 1
             try:
                 registri = c.execute(SQL_REGISTRO, (cid,)).fetchall()
@@ -338,7 +343,15 @@ def applica(dsn: str, limite: int = 20000) -> dict:
                             "city", "region", "country", "latitude", "longitude", "founded", "website", "categoria"),
                            registri[0])) if registri else {}
             categoria = next((r[14] for r in registri if r[14]), None)
-            best, dip_da, portata, size, size_da = dipendenti(e_reg, e_site, e_self, e_wd, band, categoria)
+            best, dip_da, portata, size, size_da = dipendenti(e_reg, e_site, e_self, e_wd, band, categoria, pdl_size)
+            # fondata: il registro (data vera) vince; PDL da' il solo anno e
+            # la fonte lo dichiara (founded_da, export founded_source)
+            if reg.get("founded"):
+                fondata, fondata_da = reg["founded"], reg["fonte"]
+            elif pdl_founded and str(pdl_founded).strip()[:4].isdigit():
+                fondata, fondata_da = f"{str(pdl_founded).strip()[:4]}-01-01", "pdl (free dataset, solo anno)"
+            else:
+                fondata, fondata_da = None, None
             sedi = c.execute(SQL_SEDI, (pid, slug)).fetchall()
             locs = [{"city": ci or None, "country": co or None, "state": s or None, "offerte": n, "is_primary": i == 0}
                     for i, (ci, co, s, n) in enumerate(sedi) if ci or co]
@@ -388,7 +401,7 @@ def applica(dsn: str, limite: int = 20000) -> dict:
                                    (hq or {}).get("country") or paese, (hq or {}).get("state"), (hq or {}).get("city"),
                                    (hq or {}).get("street"), (hq or {}).get("zipcode"), (hq or {}).get("full_address"), (hq or {}).get("da"),
                                    (hq or {}).get("lat"), (hq or {}).get("lon"),
-                                   reg.get("legal_name"), reg.get("legal_form"), reg.get("legal_form_code"), reg.get("registro_id"), reg.get("founded"),
+                                   reg.get("legal_name"), reg.get("legal_form"), reg.get("legal_form_code"), reg.get("registro_id"), fondata, fondata_da,
                                    desc, desc_da, json.dumps(urls) if urls else None, json.dumps(kw, ensure_ascii=False) if kw else None))
             c.execute("UPDATE ats_companies SET dettagli_at = now() WHERE id = %s", (cid,))
             st["fascia"] += bool(size); st["sedi"] += bool(locs); st["descrizione"] += bool(desc); st["keywords"] += bool(kw)
