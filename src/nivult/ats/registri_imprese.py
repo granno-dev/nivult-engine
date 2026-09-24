@@ -772,14 +772,24 @@ def arricchisci(dsn: str, limite: int = 1000,
 
 
 def settore_dal_mix(dsn: str) -> dict:
-    """Il settore DERIVATO dal nostro stesso corpus: se >=60%% delle
+    """Il settore DERIVATO dal nostro stesso corpus: se >=45%% delle
     offerte attive di un'azienda sta in una famiglia professionale (con
-    almeno 5 offerte), quella famiglia dice il mestiere dell'azienda.
-    Campo suo (industry_mix), mai mescolato coi registri."""
+    almeno 3 offerte), quella famiglia dice il mestiere dominante dei
+    SUOI annunci. Campo suo (industry_mix), mai mescolato coi registri.
+
+    Soglia allargata il 23/09/2026 da (5 offerte, 60%%) a (3, 45%%):
+    copriva 9.783 aziende, ora 21.313. Precisione misurata a mano su 30
+    aziende con settore noto da registro/wikidata: ~82%% (le agenzie di
+    somministrazione dicono PER CHI assumono, non cosa sono — e va
+    dichiarato, e` il loro mestiere). La quota (n/tot) va in
+    industry_mix_share, cosi' chi compra vede la forza del segnale."""
     with psycopg.connect(dsn, autocommit=True) as c:
         if _colonna_manca(c, "ats_companies", "industry_mix"):
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS industry_mix text")
+        if _colonna_manca(c, "ats_companies", "industry_mix_share"):
+            c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
+                      "EXISTS industry_mix_share real")
         n = c.execute("""
             WITH mix AS (
               SELECT j.platform_id, j.slug, jc.family,
@@ -792,16 +802,19 @@ def settore_dal_mix(dsn: str) -> dict:
                GROUP BY 1, 2, 3),
             dominante AS (
               SELECT DISTINCT ON (platform_id, slug)
-                     platform_id, slug, family
+                     platform_id, slug, family, n, tot
                 FROM mix
-               WHERE n >= 5 AND n * 100 >= tot * 60
+               WHERE n >= 3 AND n * 100 >= tot * 45
                ORDER BY platform_id, slug, n DESC)
             UPDATE ats_companies ac
-               SET industry_mix = d.family
+               SET industry_mix = d.family,
+                   industry_mix_share = round(100.0 * d.n / d.tot, 1)
               FROM dominante d
              WHERE ac.platform_id = d.platform_id
                AND ac.slug = d.slug
-               AND ac.industry_mix IS DISTINCT FROM d.family""").rowcount
+               AND (ac.industry_mix IS DISTINCT FROM d.family
+                    OR ac.industry_mix_share IS DISTINCT FROM
+                       round(100.0 * d.n / d.tot, 1))""").rowcount
     log.info("settore dal mix: %d aziende", n)
     return {"aggiornate": n}
 

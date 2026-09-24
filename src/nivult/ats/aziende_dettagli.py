@@ -32,6 +32,7 @@ giorno, niente modelli, niente GPU.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import logging
 import os
@@ -206,6 +207,81 @@ def _descrizione_e_url(righe) -> tuple[str | None, str | None, list[str]]:
     return None, None, urls
 
 
+# ── la descrizione «chi siamo» presa dal boilerplate degli annunci ────
+# Banchi del 23-24/09/2026, tre giri: (1) 18 aziende scelte, 88%% giuste;
+# (2) giro reale su 40 in coda: 5 estrazioni su 6 erano schede di annuncio
+# (filtro ruoli troppo stretto); (3) 80 a caso: 11 su 24 ancora ruolo, per
+# lo piu' il NOME che compare dentro una frase di ruolo («Positionner HYDAC
+# comme...», «compliance with the Dignio QMS») o forme di seconda persona
+# non coperte (vous, je, candidate, your). Regola finale: il nome da solo
+# non basta, deve fare da SOGGETTO (seguito da un verbo alla terza
+# persona) oppure servire una formula esplicita (about us, we are...), e
+# la frase non deve parlare al candidato (_SECONDA_RX).
+_ABOUT_RX = re.compile(
+    r"\b(about us|chi siamo|who we are|über uns|a propos|la nostra (azienda|societ)|"
+    r"notre (mission|entreprise|société)|our (company|mission|team|story)|"
+    r"we (\w+ly )?(are|believe|build|exist|serve|offer|provide|specialize|help|"
+    r"make|deliver|develop|design|manufacture|empower|connect|enable|strive|"
+    r"founded|started|create)|nosotros|nous sommes)\b", re.I)
+_RUOLO_RX = re.compile(
+    r"\b(you will|your role|reports to|job type|position summary|job summary|"
+    r"we are (currently )?(looking|recruiting|hiring|seeking)|"
+    r"(is|are) (currently |always |actively )?(recruiting|hiring|looking|seeking)|"
+    r"what (we|we're|we are) (are )?looking for|"
+    r"join our (team|quest|crew|mission|journey)|responsible for|"
+    r"responsibilities|requirements|your profile|qualifications|"
+    r"years? of (related |professional )?experience|experi[êe]ncia|requisitos|"
+    r"apply (now|today|here)|click (below|here)|per candidatur|candidati|"
+    r"il tuo ruolo|si cerca|requisiti|aufgaben|anforderungen|wir suchen|"
+    r"tentative start|work location|job description|high level of|"
+    r"401\(k|dental insurance|health insurance|vision insurance|life insurance|"
+    r"paid time off|employee referral|equal opportunity|foundational role|"
+    r"this (is a|role)|plays a (significant |key )?role|"
+    r"bewirb|bewerbung|deine unterlagen|gehaltsvorstellung|"
+    r"karriereseite|vi s[öo]ker|kompetenskrav|s[öo]ker dig|"
+    r"minimum of \d+ years|why this role|will not be considered)\b|"
+    r"\b(job type|sector|location|salary|experience|start date|contract|industry)\s*:", re.I)
+# la frase che parla al candidato non descrive l'azienda, in nessuna lingua
+_SECONDA_RX = re.compile(
+    r"\b(you|your|yours|candidate|candidat|kandidat|vous|vos|votre|"
+    r"du|dein|deine|dich|uw|jouw|jij|je|haz|tienes)\b", re.I)
+# il nome dell'azienda conta solo da SOGGETTO: seguito entro poche parole
+# da un verbo alla terza persona (costruita in _boilerplate_azienda)
+_VERBI3P = (r"('s)?\b.{0,80}?\b(is|are|has|have|offers?|provides?|specializes?|"
+            r"founded|helps?|builds?|makes?|delivers?|operates?|serves?|develops?|designs?|"
+            r"manufactures?|empowers?|connects?|enables?|employs?|launched|created|started|"
+            r"raised|earned|grown|expanded|leads?)\b")
+
+
+def _boilerplate_azienda(c, pid: str, slug: str, nome: str | None) -> str | None:
+    """Il blocco «chi siamo» dalle 3 offerte piu' recenti dell'azienda:
+    il primo paragrafo denso che nomina l'azienda o le formule da
+    boilerplate, mai un paragrafo di ruolo (filtro _RUOLO_RX)."""
+    righe = c.execute("""
+        SELECT raw->>'description' FROM ats_jobs
+         WHERE platform_id = %s AND slug = %s AND expired_at IS NULL
+           AND raw ? 'description'
+         ORDER BY posted_at DESC NULLS LAST LIMIT 3""", (pid, slug)).fetchall()
+    # nome di riserva: molti tenant non hanno company_name, ma lo slug
+    # («aesseal») e' spesso il nome che compare nel testo
+    n_norm = re.sub(r"[^a-z0-9]+", " ", (nome or (slug or "").replace("-", " ")).lower()).strip()
+    soggetto_rx = re.compile(re.escape(n_norm) + _VERBI3P, re.I) if n_norm else None
+    for (descr,) in righe:
+        if not descr:
+            continue
+        # alcune piattaforme salvano l'HTML gia' escaped (&lt;p&gt;):
+        # senza unescape il filtro dei tag non prende niente e resta zuppa
+        t = re.sub(r"<[^>]+>", " ", html.unescape(descr))
+        t = html.unescape(re.sub(r"\s+", " ", t))
+        for frase in re.split(r"(?<=[.!?])\s+(?=[A-ZÀ-Ü])", t)[:14]:
+            f = frase.strip()
+            if len(f) < 150 or _RUOLO_RX.search(f) or _SECONDA_RX.search(f):
+                continue
+            if _ABOUT_RX.search(f) or (soggetto_rx and soggetto_rx.search(f.lower())):
+                return f[:1500]
+    return None
+
+
 def _schema(c) -> None:
     """Il DDL solo se manca qualcosa: `ALTER TABLE ... ADD COLUMN IF NOT
     EXISTS` prende il lock esclusivo su ats_companies anche quando la
@@ -238,7 +314,9 @@ def applica(dsn: str, limite: int = 20000) -> dict:
         _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
         for cid, e_reg, e_site, e_self, e_wd, band, paese, descr_sito in tenants:
-            pid, slug = c.execute("SELECT platform_id, slug FROM ats_companies WHERE id = %s", (cid,)).fetchone()
+            pid, slug, nome_az = c.execute(
+                "SELECT platform_id, slug, company_name FROM ats_companies WHERE id = %s",
+                (cid,)).fetchone()
             st["viste"] += 1
             try:
                 registri = c.execute(SQL_REGISTRO, (cid,)).fetchall()
@@ -272,6 +350,12 @@ def applica(dsn: str, limite: int = 20000) -> dict:
             desc, desc_da, urls = _descrizione_e_url(c.execute(SQL_ORG, (pid, slug)).fetchall())
             if not desc and descr_sito:
                 desc, desc_da = descr_sito, "sito (meta description)"
+            if not desc:
+                # il boilerplate «chi siamo» degli annunci: fonte
+                # dichiarata, copre chi non ha jsonld ne' sito (23/09)
+                desc = _boilerplate_azienda(c, pid, slug, nome_az)
+                if desc:
+                    desc_da = "annunci (boilerplate)"
             if reg.get("website") and not any(reg["website"].split("/")[-1] in u for u in urls):
                 w = reg["website"] if reg["website"].startswith("http") else "https://" + reg["website"]
                 urls.append(w[:200])
