@@ -9,6 +9,13 @@
 /data/
 *.cv.json
 
+# Dati ESCO v1.2.1: ~180 MB di raw + 31 MB di jsonl, si rigenerano con
+# scripts/costruisci_esco.py (fonte documentata nel docstring). Non si versionano.
+/dati/esco/raw/
+/dati/esco/occupazioni.jsonl
+/dati/esco/cache-embedding-*.pt
+/dati/esco/banco-risultati.json
+
 __pycache__/
 *.py[cod]
 .venv/
