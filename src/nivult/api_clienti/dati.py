@@ -29,6 +29,7 @@ import datetime as dt
 import json
 import logging
 import os
+import re
 import threading
 
 import duckdb
@@ -245,11 +246,11 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
     return json.loads(r[0]) if r else None
 
 
-def demo_tecnologie(q: str) -> list[dict]:
-    """La demo della vetrina pubblica: le aziende che assumono con la
-    tecnologia q. Sola lettura, parametrizzata, otto righe al massimo,
-    solo i campi che la pagina mostra. L'input e' gia' passato dalla
-    whitelist caratteri della route (v1.demo_tecnologie)."""
+def demo_tecnologie(q: str) -> dict:
+    """La demo della vetrina pubblica: quante aziende assumono con la
+    tecnologia q, e DUE esempi. Il resto si sblocca con la chiave di
+    prova: se la pagina mostrasse la lista intera regaleremmo il
+    prodotto (25/09/2026, decisione di Giuseppe)."""
     with _lock:
         righe = _conn().execute("""
             SELECT company, country, industry,
@@ -260,10 +261,25 @@ def demo_tecnologie(q: str) -> list[dict]:
                                   x -> contains(lower(x), lower($q)))) > 0
                AND company IS NOT NULL
              ORDER BY employees DESC NULLS LAST, company
-             LIMIT 8""", {"q": q}).fetchall()
-    return [{"company": c, "country": paese, "industry": settore,
-             "technologies": list(tec)[:5]}
-            for c, paese, settore, tec in righe]
+             LIMIT 24""", {"q": q}).fetchall()
+        totale = _conn().execute("""
+            SELECT count(DISTINCT company)
+              FROM aziende
+             WHERE len(list_filter(technologies,
+                                  x -> contains(lower(x), lower($q)))) > 0
+               AND company IS NOT NULL""", {"q": q}).fetchone()[0]
+    # niente tenant duplicati ne' id Wikidata non risolti («Q689791»)
+    visti: set[str] = set()
+    out = []
+    for c, paese, settore, tec in righe:
+        if c.lower() in visti or re.fullmatch(r"Q\d+", c):
+            continue
+        visti.add(c.lower())
+        out.append({"company": c, "country": paese, "industry": settore,
+                    "technologies": list(tec)[:5]})
+        if len(out) == 2:
+            break
+    return {"totale_aziende": totale, "esempi": out}
 
 
 def cambiamenti(da: str, cursore: str | None,

@@ -442,9 +442,25 @@ async function mostraLive(f){
   if(!r.ok) throw new Error(r.status);
   const d=await r.json();
   fonte.textContent="live from the Nivult index";
-  ris.innerHTML=d.data.length?d.data.map(a=>riga({nome:a.company,dominio:null,paese:a.country||'',size:null,
-      tecnologie:(a.technologies||[]).slice(0,5)})).join('')
-    :`<div class="py-6 text-center text-sm text-slate-500">No company found for «${f}». Try a broader term.</div>`;
+  if(!d.data.length){
+    ris.innerHTML=`<div class="py-6 text-center text-sm text-slate-500">No company found for «${f}». Try a broader term.</div>`;
+    return;
+  }
+  const restanti=Math.max(0,(d.totale_aziende||2)-d.data.length);
+  /* la merce non si regala: due esempi chiari, il resto sfocato */
+  const chiare=d.data.map(a=>riga({nome:a.company,dominio:null,paese:a.country||'',size:null,
+      tecnologie:(a.technologies||[]).slice(0,5)})).join('');
+  const sfocate = restanti>0 ? `
+    <div class="relative rounded-xl border border-slate-100 overflow-hidden">
+      <div class="blur-sm select-none pointer-events-none px-4 py-3 flex items-center justify-between">
+        <div><b class="text-[14.5px]">████████</b><div class="text-[12.5px] text-slate-500">██ · ████████</div></div>
+        <div class="flex gap-1.5"><span class="rounded-lg px-2 py-0.5 text-[11.5px] font-bold bg-slate-100">████</span><span class="rounded-lg px-2 py-0.5 text-[11.5px] font-bold bg-slate-100">█████</span></div>
+      </div>
+      <div class="absolute inset-0 grid place-items-center bg-white/55 backdrop-blur-[2px]">
+        <button onclick="apriModale()" class="rounded-lg bg-brand-500 px-4 py-2 text-[12.5px] font-bold text-white shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition">+ ${restanti.toLocaleString('en-US')} more companies · unlock with a trial key</button>
+      </div>
+    </div>` : '';
+  ris.innerHTML = chiare + sfocate;
 }
 function cerca(f){
   spin.classList.remove('hidden');

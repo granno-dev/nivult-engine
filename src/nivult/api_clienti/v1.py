@@ -204,5 +204,7 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
         raise HTTPException(429, "troppo veloce: riprova tra un minuto")
     finestra.append(ora)
     _demo_finestra[ip] = finestra
-    return {"query": q, "data": dati.demo_tecnologie(q),
-            "campione": "demo pubblica: 8 aziende, campi della vetrina"}
+    d = dati.demo_tecnologie(q)
+    return {"query": q, "data": d["esempi"],
+            "totale_aziende": d["totale_aziende"],
+            "campione": "demo pubblica: 2 aziende su %d. La lista intera e' nella API con chiave." % d["totale_aziende"]}
