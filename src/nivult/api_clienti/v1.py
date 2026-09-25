@@ -18,6 +18,8 @@ Contratto atteso da `dati.stato_export()`:
 from __future__ import annotations
 
 import os
+import re
+import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -176,3 +178,31 @@ def usage(cliente=Depends(_cliente)):
     return {"crediti_mensili": mensili, "usati": usati,
             "residui": max(0, mensili - usati),
             "mese_uso": str(cliente["mese_uso"])}
+
+
+# ── la demo pubblica della vetrina (25/09/2026) ──────────────────────
+# Senza chiave, ma non senza difese: whitelist di caratteri (l'iniezione
+# SQL e' impossibile per costruzione), otto righe al massimo, trenta
+# chiamate al minuto per IP, e solo i campi che la pagina mostra.
+_DEMO_RX = re.compile(r"^[A-Za-z0-9 .+#&()/'À-ÿ\-]{2,40}$")
+_demo_finestra: dict[str, list[float]] = {}
+
+
+@router.get("/demo/tecnologie")
+def demo_tecnologie(request: Request, q: str = Query(default="")):
+    """Quali aziende assumono con la tecnologia q — la demo della landing.
+
+    Risponde anche senza chiave perche' e' la porta d'ingresso pubblica:
+    i campi restituiti sono quelli della vetrina, niente di piu'."""
+    q = q.strip()
+    if not _DEMO_RX.fullmatch(q):
+        raise HTTPException(400, "caratteri non ammessi nella ricerca")
+    ora = time.time()
+    ip = request.client.host if request.client else "?"
+    finestra = [t for t in _demo_finestra.get(ip, []) if ora - t < 60]
+    if len(finestra) >= 30:
+        raise HTTPException(429, "troppo veloce: riprova tra un minuto")
+    finestra.append(ora)
+    _demo_finestra[ip] = finestra
+    return {"query": q, "data": dati.demo_tecnologie(q),
+            "campione": "demo pubblica: 8 aziende, campi della vetrina"}

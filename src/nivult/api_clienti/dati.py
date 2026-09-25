@@ -245,6 +245,27 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
     return json.loads(r[0]) if r else None
 
 
+def demo_tecnologie(q: str) -> list[dict]:
+    """La demo della vetrina pubblica: le aziende che assumono con la
+    tecnologia q. Sola lettura, parametrizzata, otto righe al massimo,
+    solo i campi che la pagina mostra. L'input e' gia' passato dalla
+    whitelist caratteri della route (v1.demo_tecnologie)."""
+    with _lock:
+        righe = _conn().execute("""
+            SELECT company, country, industry,
+                   list_filter(technologies,
+                               x -> contains(lower(x), lower($q))) AS tec
+              FROM aziende
+             WHERE len(list_filter(technologies,
+                                  x -> contains(lower(x), lower($q)))) > 0
+               AND company IS NOT NULL
+             ORDER BY employees DESC NULLS LAST, company
+             LIMIT 8""", {"q": q}).fetchall()
+    return [{"company": c, "country": paese, "industry": settore,
+             "technologies": list(tec)[:5]}
+            for c, paese, settore, tec in righe]
+
+
 def cambiamenti(da: str, cursore: str | None,
                 limite: int) -> tuple[list[dict], str | None]:
     limite = _limite(limite)
