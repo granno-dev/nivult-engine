@@ -249,3 +249,14 @@ batte il maestro — piu' volume dallo stesso maestro sposta solo il rumore.
 Il salto vero richiede il maestro migliore (gpt-oss-120b col filtro stava
 a 74,0% sulle 104; da rimisurare sulle 304). Artefatti: esami e ck-01250
 archiviati, pod RunPod eliminato a fine lavoro.
+
+## v4-pilota (25/09/2026): la qualita' del maestro senza il volume non basta
+
+Il campionato dei maestri sulle 104 golden indipendenti aveva eletto gli
+agenti Kimi (F1 87,0% contro 74,0% di gpt-oss-120b e ~65% di DeepSeek).
+Ma il pilota addestrato SOLO sulle 5.596 etichette Kimi (+ IT dal 2B):
+miglior checkpoint famiglie 62,0%, IT 77,3% — SOTTO la v2 (63,5 / 80,4).
+Cinque volte meno dati di qualita' migliore pareggiano quasi, ma non
+bastano: il volume serve, come diceva UniversalNER (decine di migliaia,
+non migliaia). La via v4: campagna agenti a volume pieno (~30k), o
+l'equivalente veloce a pagamento. Pod spento a fine esame (~$1).
