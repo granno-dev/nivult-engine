@@ -1,170 +1,242 @@
 <!doctype html>
-<!-- Vetrina B2B Nivult (25/09/2026). Un file solo, niente dipendenze tranne il font.
-     REGOLA: ogni numero in questa pagina viene da una misura (db o manifest export),
-     non dal marketing. Se un numero cambia, si cambia qui con la sua fonte. -->
+<!-- Vetrina B2B Nivult, v2 luminosa (25/09/2026). Un file solo, niente framework.
+     Metodo (ricerca CRO 2026): headline sotto le 8 parole, valore leggibile in 5
+     secondi, demo live nella hero, una sola CTA, social proof = numeri misurati.
+     REGOLA: ogni numero viene da una misura del giorno indicato; niente cifre
+     di marketing inventate, niente testimonianze che non esistono. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nivult — Job postings & company data, direct from employers</title>
+<title>Nivult — Hiring & company data you can audit</title>
 <meta name="description" content="2.8M active job postings and 67K companies, collected directly from employer ATS systems. Every field declares its source.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0e14; --bg2:#0f151e; --card:#131b26; --line:#1f2a3a;
-  --txt:#e6edf6; --dim:#8b98ab; --acc:#4f8ef7; --acc2:#38d9a9; --warn:#f7b24f;
+  --bg:#fbfbfd; --card:#ffffff; --line:#e4e9f2; --txt:#101828; --dim:#5b6b82;
+  --acc:#3b6ef6; --acc2:#0fbf9a; --vio:#7c5cff; --soft:#eef3ff; --soft2:#e9fbf5;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
 a{color:var(--acc);text-decoration:none}
 code,.mono{font-family:'JetBrains Mono',monospace;font-size:.85em}
-.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-section{padding:88px 0}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+section{padding:84px 0}
+/* nav */
+nav{position:sticky;top:0;background:rgba(251,251,253,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);z-index:50}
+nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.logo{font-weight:800;font-size:19px;letter-spacing:-.02em}
+.logo i{font-style:normal;color:var(--acc)}
+nav a.nl{color:var(--dim);font-size:14.5px;font-weight:500}
+nav a.nl:hover{color:var(--txt)}
+nav .sp{flex:1}
 /* hero */
-.hero{padding:120px 0 80px;position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:-40%;background:
-  radial-gradient(600px 400px at 20% 20%,rgba(79,142,247,.18),transparent 60%),
-  radial-gradient(500px 380px at 80% 30%,rgba(56,217,169,.12),transparent 60%);pointer-events:none}
-.badge{display:inline-block;padding:6px 14px;border:1px solid var(--line);border-radius:99px;color:var(--dim);font-size:13px;letter-spacing:.06em;text-transform:uppercase}
-h1{font-size:clamp(34px,5.4vw,62px);font-weight:800;line-height:1.08;letter-spacing:-.02em;margin:22px 0 18px;max-width:900px}
-h1 .grad{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{color:var(--dim);font-size:19px;max-width:640px}
-.cta{display:inline-flex;gap:12px;margin-top:34px;flex-wrap:wrap}
-.btn{padding:14px 26px;border-radius:10px;font-weight:600;font-size:15px;border:1px solid var(--line);transition:.2s}
-.btn.pri{background:var(--acc);border-color:var(--acc);color:#06101f}
-.btn.pri:hover{filter:brightness(1.12);transform:translateY(-1px)}
-.btn.sec{color:var(--txt)}.btn.sec:hover{border-color:var(--acc)}
+.hero{padding:84px 0 64px;background:
+  radial-gradient(700px 320px at 12% 0%,#e3ecff 0%,transparent 60%),
+  radial-gradient(640px 300px at 88% 10%,#d7f7ec 0%,transparent 60%)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--dim);box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.eyebrow b{color:var(--acc2)}
+h1{font-size:clamp(36px,5.6vw,64px);font-weight:900;line-height:1.05;letter-spacing:-.03em;margin:24px 0 18px;max-width:820px}
+h1 .grad{background:linear-gradient(92deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:19px;max-width:620px}
+.cta{display:flex;gap:12px;margin-top:32px;flex-wrap:wrap}
+.btn{padding:15px 28px;border-radius:12px;font-weight:700;font-size:15.5px;border:1px solid transparent;transition:.2s;display:inline-flex;align-items:center;gap:8px}
+.btn.pri{background:var(--acc);color:#fff;box-shadow:0 8px 20px rgba(59,110,246,.28)}
+.btn.pri:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(59,110,246,.34)}
+.btn.sec{border-color:var(--line);color:var(--txt);background:#fff}
+.btn.sec:hover{border-color:var(--acc)}
+/* demo live */
+.demo{margin-top:48px;background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 60px -24px rgba(16,24,40,.18);overflow:hidden}
+.demo-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.demo-head .dots{display:flex;gap:6px}
+.demo-head .dots i{width:11px;height:11px;border-radius:50%}
+.demo-head .dots i:nth-child(1){background:#ff6159}.demo-head .dots i:nth-child(2){background:#ffbd2e}.demo-head .dots i:nth-child(3){background:#28c840}
+.demo-head span{color:var(--dim);font-size:13px;font-weight:600}
+.demo-body{padding:26px 22px}
+.search{display:flex;gap:10px;flex-wrap:wrap}
+.search input{flex:1;min-width:240px;padding:14px 16px;border:1.5px solid var(--line);border-radius:12px;font-size:16px;font-family:inherit;outline:none;transition:.15s}
+.search input:focus{border-color:var(--acc);box-shadow:0 0 0 4px rgba(59,110,246,.12)}
+.sugs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.sug{background:var(--soft);color:var(--acc);border-radius:99px;padding:6px 14px;font-size:13.5px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.15s}
+.sug:hover{border-color:var(--acc);background:#fff}
+.risultati{margin-top:20px;display:grid;gap:10px}
+.az{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;animation:pop .3s ease}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.az b{font-size:15.5px}
+.az .meta{color:var(--dim);font-size:13px}
+.az .tecs{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.az .tec{background:var(--soft2);color:#0a8f74;font-size:12px;font-weight:600;border-radius:8px;padding:3px 9px}
+.az .tec.hit{background:#fff3d6;color:#8a6100;outline:1.5px solid #f0b429}
+.vuoto{color:var(--dim);text-align:center;padding:22px;font-size:14.5px}
 /* numeri */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:64px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 22px;position:relative;overflow:hidden}
-.stat::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--acc),var(--acc2));opacity:.7}
-.stat b{font-size:34px;font-weight:800;display:block;font-variant-numeric:tabular-nums}
-.stat span{color:var(--dim);font-size:13.5px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 24px;box-shadow:0 2px 6px rgba(16,24,40,.04)}
+.stat b{font-size:38px;font-weight:900;display:block;letter-spacing:-.02em;font-variant-numeric:tabular-nums;background:linear-gradient(92deg,var(--acc),var(--vio));-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{color:var(--dim);font-size:14px}
 /* sezioni */
-h2{font-size:clamp(26px,3.4vw,40px);font-weight:800;letter-spacing:-.01em;margin-bottom:14px}
-.lead{color:var(--dim);max-width:700px;font-size:17px}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:40px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;transition:.25s}
-.card:hover{border-color:#2c3b52;transform:translateY(-3px)}
-.card h3{font-size:19px;margin-bottom:8px}
+.banda{background:linear-gradient(180deg,#f3f7ff 0%,#fbfbfd 100%)}
+h2{font-size:clamp(27px,3.6vw,42px);font-weight:900;letter-spacing:-.02em;margin-bottom:14px}
+.lead{color:var(--dim);max-width:680px;font-size:17.5px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px;margin-top:42px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:30px;transition:.25s;box-shadow:0 2px 6px rgba(16,24,40,.03)}
+.card:hover{transform:translateY(-4px);box-shadow:0 18px 40px -18px rgba(16,24,40,.18);border-color:#cdd8ea}
+.card h3{font-size:19px;margin:14px 0 8px}
 .card p{color:var(--dim);font-size:15px}
-.tag{display:inline-block;background:#182233;border:1px solid var(--line);color:var(--acc2);border-radius:8px;padding:2px 10px;font-size:12.5px;font-weight:600;margin-bottom:12px}
-/* json viewer */
-.json{background:#0d1420;border:1px solid var(--line);border-radius:14px;padding:22px;overflow:auto;font-size:12.8px;line-height:1.55;max-height:420px}
-.k{color:#7ab3f5}.s{color:#6fe3b8}.n{color:#f7b24f}
+.ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:22px;font-weight:800;color:#fff}
+.i1{background:linear-gradient(135deg,#3b6ef6,#6ea8ff)}.i2{background:linear-gradient(135deg,#0fbf9a,#5fe3c4)}
+.i3{background:linear-gradient(135deg,#7c5cff,#a78bff)}.i4{background:linear-gradient(135deg,#f06ba7,#ff9ec7)}
+/* json */
+.json{background:#0e1524;border-radius:16px;padding:24px;overflow:auto;font-size:13px;line-height:1.6;color:#c7d3e8;max-height:430px;box-shadow:0 18px 40px -18px rgba(16,24,40,.35)}
+.k{color:#8ab8ff}.s{color:#7ee8c3}.n{color:#ffc078}
 /* copertura */
-table{width:100%;border-collapse:collapse;margin-top:28px;font-size:14.5px}
-th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
-th{color:var(--dim);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
-.bar{height:8px;background:#1a2334;border-radius:99px;overflow:hidden;min-width:120px}
+table{width:100%;border-collapse:collapse;margin-top:30px;font-size:15px;background:#fff;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+th,td{text-align:left;padding:13px 18px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;background:#f6f8fc}
+.bar{height:9px;background:#e9eef7;border-radius:99px;overflow:hidden;min-width:130px}
 .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
-td.num{font-variant-numeric:tabular-nums;font-weight:600}
+td.num{font-variant-numeric:tabular-nums;font-weight:700}
 /* steps */
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:40px}
-.step{border:1px solid var(--line);border-radius:16px;padding:26px;background:var(--bg2)}
-.step .n0{font-size:32px;font-weight:800;color:var(--acc);opacity:.85}
-.step h3{margin:10px 0 6px;font-size:17px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:42px}
+.step{border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;position:relative}
+.step .n0{font-size:15px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--acc),var(--vio));width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+.step h3{margin:14px 0 6px;font-size:17.5px}
 .step p{color:var(--dim);font-size:14.5px}
-footer{border-top:1px solid var(--line);padding:44px 0;color:var(--dim);font-size:14px}
-.reveal{opacity:0;transform:translateY(18px);transition:.7s cubic-bezier(.2,.8,.2,1)}
+/* cta finale */
+.finale{background:linear-gradient(120deg,#3b6ef6,#0fbf9a);border-radius:26px;color:#fff;padding:64px 48px;text-align:center;box-shadow:0 30px 60px -20px rgba(59,110,246,.45)}
+.finale h2{color:#fff}
+.finale p{opacity:.92;max-width:560px;margin:0 auto;font-size:17px}
+.finale .btn{margin-top:30px;background:#fff;color:var(--acc);border:none}
+footer{padding:44px 0;color:var(--dim);font-size:14px;border-top:1px solid var(--line)}
+.reveal{opacity:0;transform:translateY(20px);transition:.7s cubic-bezier(.2,.8,.2,1)}
 .reveal.in{opacity:1;transform:none}
-@media(max-width:640px){section{padding:60px 0}}
+@media(max-width:640px){section{padding:56px 0}.finale{padding:44px 24px}}
 </style>
 </head>
 <body>
 
+<nav>
+  <div class="wrap">
+    <span class="logo">Nivult<i>.</i></span>
+    <a class="nl" href="#dati">Data</a>
+    <a class="nl" href="#copertura">Coverage</a>
+    <a class="nl" href="#api">API</a>
+    <span class="sp"></span>
+    <a class="btn pri" style="padding:10px 20px;font-size:14px" href="#contatto">Get a trial key</a>
+  </div>
+</nav>
+
 <section class="hero">
   <div class="wrap">
-    <span class="badge">Job postings data · direct from employers</span>
-    <h1>Every field <span class="grad">declares its source</span>.<br>Every number is measured.</h1>
-    <p class="sub">Nivult collects job postings directly from employer ATS systems — Greenhouse, Workday, SmartRecruiters and 55 more — and turns them into company-level intelligence. No aggregators, no scraped social networks, no black boxes.</p>
+    <span class="eyebrow">● Live: <b>2,843,360</b> active postings today</span>
+    <h1>Know any company <span class="grad">through its hiring.</span></h1>
+    <p class="sub">Job postings and company records collected directly from employer career systems — 58 ATS platforms, 243 countries. Every field declares its source, so your team can trust the answer, not just read it.</p>
     <div class="cta">
-      <a class="btn pri" href="#api">Explore the API</a>
-      <a class="btn sec" href="#copertura">See field coverage</a>
+      <a class="btn pri" href="#contatto">Get a trial key →</a>
+      <a class="btn sec" href="#copertura">See the coverage</a>
     </div>
+
+    <div class="demo">
+      <div class="demo-head"><div class="dots"><i></i><i></i><i></i></div><span>Live demo — real companies, real postings</span></div>
+      <div class="demo-body">
+        <div class="search">
+          <input id="q" type="text" placeholder="Search any technology… e.g. SAP, Python, HACCP, forklift">
+        </div>
+        <div class="sugs" id="sugs"></div>
+        <div class="risultati" id="risultati"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <div class="stats">
-      <div class="stat"><b data-n="2843360">0</b><span>active job postings, 243 countries</span></div>
-      <div class="stat"><b data-n="66947">0</b><span>companies hiring right now</span></div>
-      <div class="stat"><b data-n="58">0</b><span>ATS platforms connected</span></div>
-      <div class="stat"><b data-n="145000">0</b><span>new postings per day</span></div>
+      <div class="stat"><b data-n="2843360">0</b><span>active job postings</span></div>
+      <div class="stat"><b data-n="66947">0</b><span>companies hiring now</span></div>
+      <div class="stat"><b data-n="243">0</b><span>countries covered</span></div>
+      <div class="stat"><b data-n="145000">0</b><span>new postings / day</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="dati" class="banda">
+  <div class="wrap">
+    <h2>Two datasets. Zero black boxes.</h2>
+    <p class="lead">A job posting tells you the role. Its employer key tells you the company. Both ship with the evidence trail attached — these are real record shapes from today's export.</p>
+    <div class="grid2">
+      <div class="card reveal"><div class="ico i2">⌘</div><h3>Companies — 40+ fields</h3><p>Industry, size band, HQ, legal identity from public registries, technologies with first/last seen.</p><div class="json" id="json-azienda" style="margin-top:16px"></div></div>
+      <div class="card reveal"><div class="ico i1">▤</div><h3>Jobs — 50 fields</h3><p>Title, location, salary (observed vs estimated, never mixed), seniority, remote, technologies, sources.</p><div class="json" id="json-offerta" style="margin-top:16px"></div></div>
     </div>
   </div>
 </section>
 
 <section id="perche">
   <div class="wrap">
-    <h2>Why teams pick Nivult</h2>
-    <p class="lead">The job posting is the raw material. The product is the company — with the evidence trail attached.</p>
+    <h2>Why data teams switch to Nivult</h2>
+    <p class="lead">Because a wrong number you can't trace is worse than a gap you can see.</p>
     <div class="grid2">
-      <div class="card reveal"><span class="tag">per-field provenance</span><h3>Every value says where it came from</h3><p>Observed salary never mixes with estimated. Employee counts carry their scope (legal entity vs group). Source tags like <code>companies_house</code>, <code>sirene</code>, <code>gleif</code>, <code>pdl</code> on every field — declared gaps are a sales argument, discovered gaps are a refund.</p></div>
-      <div class="card reveal"><span class="tag">direct sources only</span><h3>From the employer, never the aggregator</h3><p>Postings expire when they leave the employer's page — not after N days. Closed postings stay in history with a verified <code>expired_at</code>: 654K and counting.</p></div>
-      <div class="card reveal"><span class="tag">models in-house</span><h3>Our own enrichment models</h3><p>Family, seniority, contract, remote, languages and technologies are classified by models we train and measure against hand-labeled golden sets — 92–99% accuracy, per-class scores published.</p></div>
-      <div class="card reveal"><span class="tag">legal identity</span><h3>Company registries, at scale</h3><p>Legal name, legal form, registration id and founded date from public registries (Companies House, SIRENE, GLEIF, EDGAR, ABN and more) — data no job-board reseller can offer.</p></div>
+      <div class="card reveal"><div class="ico i1">⛓</div><h3>Per-field provenance</h3><p>Every value carries its source — <code>companies_house</code>, <code>sirene</code>, <code>gleif</code>, <code>pdl</code>. Declared gaps are a feature; discovered gaps are how you get refunds.</p></div>
+      <div class="card reveal"><div class="ico i2">◎</div><h3>Direct from employers</h3><p>No aggregators, no scraped social networks. A posting expires when it leaves the employer's page — 654K closures verified and kept in history.</p></div>
+      <div class="card reveal"><div class="ico i3">◈</div><h3>Models we measure</h3><p>Family, seniority, contract, remote and technologies come from in-house models scored against hand-labeled golden sets. Per-class scores, published.</p></div>
+      <div class="card reveal"><div class="ico i4">✦</div><h3>Legal identity, at scale</h3><p>Legal name, form, registration id and founding year from public registries across Europe, North America and Oceania — data job-board resellers can't sell you.</p></div>
     </div>
   </div>
 </section>
 
-<section id="dati" style="background:var(--bg2)">
+<section id="copertura" class="banda">
   <div class="wrap">
-    <h2>Two datasets, one spine</h2>
-    <p class="lead">A company record and a job posting record, joined by the employer key. Real samples below — this is the shape you get.</p>
-    <div class="grid2">
-      <div class="card reveal">
-        <span class="tag">companies · 40+ fields</span>
-        <div class="json" id="json-azienda"></div>
-      </div>
-      <div class="card reveal">
-        <span class="tag">jobs · 50 fields</span>
-        <div class="json" id="json-offerta"></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="copertura">
-  <div class="wrap">
-    <h2>Coverage, published</h2>
-    <p class="lead">Not a promise: the fill rate of every field, measured on today's export (2026-09-24). The bar is the number.</p>
+    <h2>Coverage you don't have to ask for</h2>
+    <p class="lead">The fill rate of every field, measured on the 2026-09-24 export. No marketing percentages: the bar is the number.</p>
     <table id="tab-copertura">
-      <thead><tr><th>Field</th><th style="width:42%">Coverage</th><th></th></tr></thead>
+      <thead><tr><th>Field</th><th style="width:44%">Coverage</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 </section>
 
-<section id="api" style="background:var(--bg2)">
+<section id="api">
   <div class="wrap">
     <h2>Built API-first</h2>
     <p class="lead">Versioned paths, cursor pagination, keys with credits. Fields are added — never renamed.</p>
     <div class="grid2">
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/jobs</h3><p>Filters on country, family, seniority, technologies, salary, dates. Cursor pagination for full crawls.</p></div>
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/companies</h3><p>The company spine: industry with source, size band, HQ, legal identity, technologies with first/last seen.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/jobs</h3><p>Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/companies</h3><p>The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
       <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/changes?since=</h3><p>The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/coverage</h3><p>This page's table, as an endpoint. The contract is the coverage.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/coverage</h3><p>The table above, as an endpoint. The contract is the coverage.</p></div>
     </div>
     <div class="steps">
-      <div class="step reveal"><div class="n0">1</div><h3>Get a key</h3><p>Write us, describe your use case, receive a trial key with credits.</p></div>
+      <div class="step reveal"><div class="n0">1</div><h3>Get a key</h3><p>Tell us your use case, receive a trial key with credits.</p></div>
       <div class="step reveal"><div class="n0">2</div><h3>Query or bulk</h3><p>API for slices, daily JSONL export for the full corpus.</p></div>
       <div class="step reveal"><div class="n0">3</div><h3>Stay in sync</h3><p>The changes feed keeps your copy current, daily.</p></div>
     </div>
   </div>
 </section>
 
+<section id="contatto">
+  <div class="wrap">
+    <div class="finale reveal in">
+      <h2>See your market before it moves.</h2>
+      <p>Trial key with real credits, a sample export to inspect, and a human who answers. No lock-in: if the data doesn't hold up to your audit, you walk away.</p>
+      <a class="btn" href="mailto:hello@nivult.com?subject=Trial%20key%20request">Get a trial key →</a>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <span><b style="color:var(--txt)">Nivult</b> — job postings &amp; company intelligence</span>
-    <span>Numbers measured on the 2026-09-24 export · <a href="#api">API</a> · <a href="mailto:hello@nivult.com">hello@nivult.com</a></span>
+    <span><b style="color:var(--txt)">Nivult</b> — hiring &amp; company intelligence</span>
+    <span>Measured on the 2026-09-24 export · <a href="#api">API</a> · <a href="mailto:hello@nivult.com">hello@nivult.com</a></span>
   </div>
 </footer>
 
 <script>
-/* Contatori animati + reveal on scroll + copertura renderizzata dai dati misurati */
+/* ── contatori animati + reveal ─────────────────────────────── */
 const ease=t=>1-Math.pow(1-t,3);
 document.querySelectorAll('.stat b').forEach(el=>{
-  const target=+el.dataset.n, t0=performance.now(), dur=1600;
+  const target=+el.dataset.n,t0=performance.now(),dur=1600;
   (function tick(t){const p=Math.min(1,(t-t0)/dur);
     el.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
     if(p<1)requestAnimationFrame(tick);})(t0);
@@ -172,12 +244,43 @@ document.querySelectorAll('.stat b').forEach(el=>{
 const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.15});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 
-/* Record d'esempio: la forma reale dell'export (valori accorciati per la pagina) */
+/* ── demo live: 12 aziende VERE con le tecnologie viste nei loro annunci
+      (estratte dal db il 25/09/2026, niente mockup) ──────────── */
+const AZIENDE=[
+ {nome:"RTX",dominio:"rtx.com",size:"10001+",paese:"US",tecnologie:["Python","SAP","C++","Excel"]},
+ {nome:"Philips",dominio:"philips.com",size:"10001+",paese:"US",tecnologie:["Python","SAP","CRM","Excel"]},
+ {nome:"Light & Wonder",dominio:"lnw.com",size:"5001-10000",paese:"US",tecnologie:["C#","C++","Python","Git"]},
+ {nome:"Groupement Mousquetaires",dominio:"mousquetaires.com",size:"5001-10000",paese:"FR",tecnologie:["HACCP","Mercalys","chariot élévateur"]},
+ {nome:"AG2R La Mondiale",dominio:"ag2rlamondiale.fr",size:"5001+",paese:"FR",tecnologie:["Agirc","Arrco","Ircantec"]},
+ {nome:"DENTEGO",dominio:"dentego.fr",size:"11-50",paese:"FR",tecnologie:["cône beam","Medit","3Shape"]},
+ {nome:"Questronix",dominio:"questronix.com.ph",size:"201-500",paese:"PH",tecnologie:["COBOL","SQL","Control-M"]},
+ {nome:"Carle Health",dominio:"carle.com",size:"5001-10000",paese:"US",tecnologie:["EPIC","EMR","IV pumps"]},
+ {nome:"Aston Advantage",dominio:"astonadvantage.com.au",size:"11-50",paese:"AU",tecnologie:["MIG","TIG welding"]},
+ {nome:"Whitby (Town)",dominio:"whitby.ca",size:"501-1000",paese:"CA",tecnologie:["Excel","Word","Outlook"]},
+ {nome:"Montage Hotels",dominio:"montage.com",size:"1001-5000",paese:"US",tecnologie:["Excel","PowerPoint","Word"]},
+ {nome:"Danone",dominio:"danone.com",size:"10001+",paese:"FR",tecnologie:["SAP","Excel","Power BI"]}
+];
+const SUGS=["SAP","Python","Excel","HACCP","COBOL","EPIC","TIG welding","C++"];
+const q=document.getElementById('q'),ris=document.getElementById('risultati'),sugs=document.getElementById('sugs');
+function mostra(filtro){
+  const f=(filtro||"").toLowerCase().trim();
+  const trovate=AZIENDE.filter(a=>!f||a.tecnologie.some(t=>t.toLowerCase().includes(f)));
+  ris.innerHTML=trovate.length?trovate.map(a=>`
+    <div class="az"><div><b>${a.nome}</b><div class="meta">${a.dominio??''} · ${a.paese} · ${a.size} employees</div></div>
+    <div class="tecs">${a.tecnologie.map(t=>`<span class="tec ${f&&t.toLowerCase().includes(f)?'hit':''}">${t}</span>`).join('')}</div></div>`).join('')
+    :'<div class="vuoto">No match in this 12-company sample — the full dataset tracks thousands of technologies across 67K companies.</div>';
+}
+SUGS.forEach(s=>{const b=document.createElement('span');b.className='sug';b.textContent=s;
+  b.onclick=()=>{q.value=s;mostra(s)};sugs.appendChild(b);});
+q.addEventListener('input',e=>mostra(e.target.value));
+mostra('');
+
+/* ── record d'esempio (forma reale dell'export, valori accorciati) ── */
 const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",industry_source:"registre du commerce",
-  size_range:"10001+",size_range_source:"pdl (free dataset)",employees:73532,employees_source:"linkedin_members",
+  size_range:"10001+",size_range_source:"pdl (free dataset)",
   headquarters:{city:"Paris",country:"FR",source:"sirene"},legal_name:"DANONE SA",legal_form:"société anonyme",
   founded:"1919-01-01",founded_source:"pdl (free dataset, solo anno)",active_jobs:980,
-  technologies:[{technology:"SAP",active_jobs:41,first_verified_at:"2026-03-02"},{technology:"Excel",active_jobs:38}]};
+  technologies:[{technology:"SAP",active_jobs:41,first_seen:"2026-03-02"},{technology:"Excel",active_jobs:38}]};
 const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",country:"FR",city:"Paris",
   seniority:"mid",employment_type:"full_time",remote:"hybrid",language:"fr",category:"Data & Analytics",
   salary_estimate:{min:42000,max:56000,currency:"EUR",unit:"year",source:"modello nivult"},
@@ -188,9 +291,9 @@ function render(id,obj){document.getElementById(id).innerHTML=JSON.stringify(obj
   .replace(/: (\d[\d.]*)/g,': <span class="n">$1</span>');}
 render('json-azienda',azienda);render('json-offerta',offerta);
 
-/* Copertura per campo: i numeri del manifest dell'export del 24/09/2026 */
-const cop=[["title / description / url",91.8],["language",89.5],["category (family)",93.3],["country",87.0],
-["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (model)",57.2],
+/* ── copertura per campo: numeri del manifest del 24/09/2026 ── */
+const cop=[["category (job family)",93.3],["title / description / url",91.8],["language",89.5],["country",87.0],
+["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (modelled)",57.2],
 ["benefits",37.3],["geo (lat/lon)",35.9],["department",23.1],["technologies (rolling fill)",16.7],
 ["salary_observed (declared)",9.7],["contact_email",4.6],["valid_through",4.5]];
 const tb=document.querySelector('#tab-copertura tbody');
