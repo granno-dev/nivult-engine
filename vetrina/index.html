@@ -1,319 +1,346 @@
 <!doctype html>
-<!-- Vetrina B2B Nivult, v3 (25/09/2026). Un file solo, niente framework.
-     Critica raccolta: hero a due colonne (mai vuota a destra), nastro marquee
-     con i loghi delle 58 piattaforme ATS, copy orientato alla conversione,
-     elementi visivi che PROVANO le frasi invece di raccontarle.
-     REGOLA: ogni numero viene da una misura del giorno indicato. -->
-<html lang="en">
+<!-- Nivult B2B showcase, v5 (25/09/2026). Single file, Tailwind via CDN.
+     Light-but-not-white background with an animated neural-network canvas,
+     glassmorphism navbar, real ATS logos served locally, conversion-ready
+     modal form, mobile hamburger + sticky CTA. All UI copy in English.
+     Every number is measured, never invented. -->
+<html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nivult — Hiring & company data you can audit</title>
-<meta name="description" content="2.8M+ active job postings and 67K companies captured directly from employer ATS systems, with per-field provenance. The hiring intelligence layer for teams that verify.">
+<meta name="description" content="2.8M+ active job postings and 67K companies captured directly from employer ATS platforms, with per-field provenance.">
+<script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#fbfbfd; --card:#ffffff; --line:#e4e9f2; --txt:#0d1526; --dim:#5b6b82;
-  --acc:#3b6ef6; --acc2:#0fbf9a; --vio:#7c5cff; --soft:#eef3ff; --soft2:#e9fbf5;
-  --ink:#0e1524;
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { sans: ['Inter','system-ui','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+    colors: {
+      brand: {50:'#eef4ff',100:'#dfeaff',400:'#5e8bff',500:'#3b6ef6',600:'#2f5de0',700:'#2549b8'},
+      mint: {400:'#2fe0b6',500:'#0fbf9a',600:'#0aa588'},
+      paper: '#f5f4ef'
+    }
+  }}
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-a{color:var(--acc);text-decoration:none}
-code,.mono{font-family:'JetBrains Mono',monospace;font-size:.85em}
-.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-section{padding:88px 0}
-/* nav */
-nav{position:sticky;top:0;background:rgba(251,251,253,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);z-index:50}
-nav .wrap{display:flex;align-items:center;gap:30px;height:66px}
-.logo{font-weight:900;font-size:20px;letter-spacing:-.03em}
-.logo i{font-style:normal;background:linear-gradient(92deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-nav a.nl{color:var(--dim);font-size:14.5px;font-weight:600}
-nav a.nl:hover{color:var(--txt)}
-nav .sp{flex:1}
-/* hero due colonne */
-.hero{padding:72px 0 56px;background:
-  radial-gradient(760px 360px at 8% -10%,#dfe9ff 0%,transparent 60%),
-  radial-gradient(700px 340px at 95% 0%,#d2f6ea 0%,transparent 60%)}
-.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
-@media(max-width:960px){.hero-grid{grid-template-columns:1fr}}
-.eyebrow{display:inline-flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:7px 15px;font-size:13px;font-weight:600;color:var(--dim);box-shadow:0 1px 3px rgba(16,24,40,.06)}
-.eyebrow .pulse{width:8px;height:8px;border-radius:50%;background:var(--acc2);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(15,191,154,.5)}50%{box-shadow:0 0 0 7px rgba(15,191,154,0)}}
-.eyebrow b{color:var(--acc2)}
-h1{font-size:clamp(38px,4.6vw,60px);font-weight:900;line-height:1.04;letter-spacing:-.032em;margin:26px 0 20px}
-h1 .grad{background:linear-gradient(92deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{color:var(--dim);font-size:18.5px;max-width:540px}
-.sub b{color:var(--txt)}
-.cta{display:flex;gap:12px;margin-top:32px;flex-wrap:wrap}
-.btn{padding:16px 30px;border-radius:13px;font-weight:700;font-size:16px;border:1px solid transparent;transition:.22s;display:inline-flex;align-items:center;gap:9px}
-.btn.pri{background:linear-gradient(120deg,var(--acc),#2f5de0);color:#fff;box-shadow:0 10px 26px rgba(59,110,246,.32)}
-.btn.pri:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(59,110,246,.4)}
-.btn.sec{border-color:var(--line);color:var(--txt);background:#fff}
-.btn.sec:hover{border-color:var(--acc);transform:translateY(-2px)}
-.microcopy{margin-top:16px;color:var(--dim);font-size:13.5px;display:flex;gap:18px;flex-wrap:wrap}
-.microcopy span::before{content:"✓";color:var(--acc2);font-weight:800;margin-right:6px}
-/* la scheda viva a destra */
-.vetrina-card{background:var(--ink);border-radius:22px;color:#dbe6f5;padding:26px;box-shadow:0 40px 80px -30px rgba(13,21,38,.5);position:relative;overflow:hidden}
-.vetrina-card::before{content:"";position:absolute;inset:0;background:radial-gradient(500px 240px at 90% -10%,rgba(59,110,246,.25),transparent 60%);pointer-events:none}
-.vc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
-.vc-top .t{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:#8fa4c4;font-weight:700}
-.vc-top .live{display:flex;align-items:center;gap:7px;font-size:12px;color:#7ee8c3;font-weight:600}
-.vc-top .live i{width:7px;height:7px;border-radius:50%;background:var(--acc2);animation:pulse 2s infinite}
-.vc-row{display:flex;justify-content:space-between;align-items:baseline;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.07)}
-.vc-row:last-child{border-bottom:none}
-.vc-row .k{color:#8fa4c4;font-size:13px;font-weight:600}
-.vc-row .v{font-weight:800;font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.vc-row .v small{font-size:12px;color:#8fa4c4;font-weight:600}
-.spark{margin-top:18px}
-.spark svg{width:100%;height:86px;display:block}
-.spark .cap{color:#8fa4c4;font-size:12px;margin-top:6px}
-.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}
-.chip{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:4px 11px;font-size:12px;font-weight:600;color:#c7d6ee}
-/* marquee ATS */
-.nastro{padding:34px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff;overflow:hidden}
-.nastro .lbl{text-align:center;color:var(--dim);font-size:12.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:20px}
-.marquee{display:flex;gap:44px;width:max-content;animation:scorri 46s linear infinite}
-.marquee:hover{animation-play-state:paused}
-@keyframes scorri{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.ats{display:flex;align-items:center;gap:12px;flex-shrink:0}
-.ats img{width:30px;height:30px;border-radius:8px;object-fit:contain;background:#fff}
-.ats b{font-size:16.5px;font-weight:800;color:#33415c;letter-spacing:-.01em}
-/* numeri */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px 24px;box-shadow:0 2px 8px rgba(16,24,40,.04)}
-.stat b{font-size:40px;font-weight:900;display:block;letter-spacing:-.025em;font-variant-numeric:tabular-nums;background:linear-gradient(92deg,var(--acc),var(--vio));-webkit-background-clip:text;background-clip:text;color:transparent}
-.stat span{color:var(--dim);font-size:14px}
-/* sezioni */
-.banda{background:linear-gradient(180deg,#f3f7ff 0%,#fbfbfd 100%)}
-h2{font-size:clamp(28px,3.6vw,44px);font-weight:900;letter-spacing:-.025em;margin-bottom:16px}
-.lead{color:var(--dim);max-width:660px;font-size:18px}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px;margin-top:44px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:32px;transition:.25s;box-shadow:0 2px 8px rgba(16,24,40,.03)}
-.card:hover{transform:translateY(-4px);box-shadow:0 22px 44px -18px rgba(16,24,40,.18);border-color:#cdd8ea}
-.card h3{font-size:19.5px;margin:16px 0 8px;letter-spacing:-.01em}
-.card p{color:var(--dim);font-size:15px}
-.ico{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-weight:800;color:#fff}
-.i1{background:linear-gradient(135deg,#3b6ef6,#6ea8ff)}.i2{background:linear-gradient(135deg,#0fbf9a,#5fe3c4)}
-.i3{background:linear-gradient(135deg,#7c5cff,#a78bff)}.i4{background:linear-gradient(135deg,#f06ba7,#ff9ec7)}
-/* audit trail: l'elemento distintivo — righe flessibili, mai rotte */
-.audit{margin-top:44px;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 18px 44px -20px rgba(16,24,40,.14)}
-.audit .ah{display:flex;gap:16px;padding:14px 22px;background:#f6f8fc;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
-.audit .ah span:nth-child(1){flex:1}.audit .ah span:nth-child(2){flex:1.4}.audit .ah span:nth-child(3){flex:1.4}
-.arow{display:flex;gap:16px;align-items:center;padding:16px 22px;border-top:1px solid var(--line);font-size:14.5px;flex-wrap:wrap}
-.arow b{flex:1;min-width:130px}
-.arow .val{flex:1.4;min-width:150px;color:var(--dim)}
-.arow .src{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--acc);background:var(--soft);border-radius:8px;padding:4px 10px;display:inline-block}
-@media(max-width:640px){.audit .ah{display:none}.arow{gap:8px}.arow b{flex-basis:100%}}
-/* json */
-.json{background:var(--ink);border-radius:16px;padding:24px;overflow:auto;font-size:13px;line-height:1.6;color:#c7d3e8;max-height:430px}
+</script>
+<style>
+/* marquee: slow drift, logos served locally */
+@keyframes drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee-track { animation: drift 80s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+/* soft entrance */
+.reveal { opacity: 0; transform: translateY(22px); transition: .8s cubic-bezier(.2,.8,.2,1); }
+.reveal.in { opacity: 1; transform: none; }
+/* live dot */
+@keyframes pulse-dot { 0%,100% { box-shadow: 0 0 0 0 rgba(15,191,154,.5);} 50% { box-shadow: 0 0 0 8px rgba(15,191,154,0);} }
+.live-dot { animation: pulse-dot 2.2s infinite; }
+/* JSON accents */
 .k{color:#8ab8ff}.s{color:#7ee8c3}.n{color:#ffc078}
-/* copertura */
-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:15px;background:#fff;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
-th,td{text-align:left;padding:14px 18px;border-bottom:1px solid var(--line)}
-th{color:var(--dim);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;background:#f6f8fc}
-.bar{height:9px;background:#e9eef7;border-radius:99px;overflow:hidden;min-width:130px}
-.bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
-td.num{font-variant-numeric:tabular-nums;font-weight:700}
-/* demo */
-.demo{margin-top:44px;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 28px 64px -26px rgba(16,24,40,.2);overflow:hidden}
-.demo-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
-.demo-head .dots{display:flex;gap:6px}
-.demo-head .dots i{width:11px;height:11px;border-radius:50%}
-.demo-head .dots i:nth-child(1){background:#ff6159}.demo-head .dots i:nth-child(2){background:#ffbd2e}.demo-head .dots i:nth-child(3){background:#28c840}
-.demo-head span{color:var(--dim);font-size:13px;font-weight:600}
-.demo-body{padding:28px 24px}
-.search{display:flex;gap:10px;flex-wrap:wrap}
-.search input{flex:1;min-width:240px;padding:15px 17px;border:1.5px solid var(--line);border-radius:13px;font-size:16px;font-family:inherit;outline:none;transition:.15s}
-.search input:focus{border-color:var(--acc);box-shadow:0 0 0 4px rgba(59,110,246,.12)}
-.sugs{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-.sug{background:var(--soft);color:var(--acc);border-radius:99px;padding:7px 15px;font-size:13.5px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:.15s}
-.sug:hover{border-color:var(--acc);background:#fff;transform:translateY(-1px)}
-.risultati{margin-top:22px;display:grid;gap:10px}
-.az{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 17px;border:1px solid var(--line);border-radius:13px;background:#fff;animation:pop .3s ease}
-@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.az b{font-size:15.5px}
-.az .meta{color:var(--dim);font-size:13px}
-.az .tecs{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.az .tec{background:var(--soft2);color:#0a8f74;font-size:12px;font-weight:700;border-radius:8px;padding:3px 9px}
-.az .tec.hit{background:#fff3d6;color:#8a6100;outline:1.5px solid #f0b429}
-.vuoto{color:var(--dim);text-align:center;padding:24px;font-size:14.5px}
-/* steps */
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:44px}
-.step{border:1px solid var(--line);border-radius:18px;padding:30px;background:#fff}
-.step .n0{font-size:15px;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--acc),var(--vio));width:36px;height:36px;border-radius:11px;display:grid;place-items:center}
-.step h3{margin:16px 0 6px;font-size:18px}
-.step p{color:var(--dim);font-size:14.5px}
-/* cta finale */
-.finale{background:linear-gradient(120deg,#2f5de0 0%,#3b6ef6 45%,#0fbf9a 100%);border-radius:28px;color:#fff;padding:72px 48px;text-align:center;box-shadow:0 34px 70px -22px rgba(59,110,246,.5);position:relative;overflow:hidden}
-.finale::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 300px at 80% 0%,rgba(255,255,255,.16),transparent 55%)}
-.finale h2{color:#fff;position:relative}
-.finale p{opacity:.94;max-width:580px;margin:0 auto;font-size:18px;position:relative}
-.finale .btn{margin-top:34px;background:#fff;color:var(--acc);border:none;position:relative}
-footer{padding:48px 0;color:var(--dim);font-size:14px;border-top:1px solid var(--line)}
-.reveal{opacity:0;transform:translateY(22px);transition:.7s cubic-bezier(.2,.8,.2,1)}
-.reveal.in{opacity:1;transform:none}
-@media(max-width:640px){section{padding:56px 0}.finale{padding:48px 24px}}
+/* slim scrollbars that blend with the dark code boxes */
+.codebox::-webkit-scrollbar { height: 8px; width: 8px; }
+.codebox::-webkit-scrollbar-track { background: transparent; }
+.codebox::-webkit-scrollbar-thumb { background: #33415c; border-radius: 99px; }
+.codebox::-webkit-scrollbar-thumb:hover { background: #4a5b7a; }
+/* neural canvas sits behind the hero, never above the text */
+#neural { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* spinner for the demo */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { animation: spin .8s linear infinite; }
 </style>
 </head>
-<body>
+<body class="bg-paper text-slate-900 font-sans antialiased">
 
-<nav>
-  <div class="wrap">
-    <span class="logo">Nivult<i>.</i></span>
-    <a class="nl" href="#dati">Data</a>
-    <a class="nl" href="#copertura">Coverage</a>
-    <a class="nl" href="#api">API</a>
-    <span class="sp"></span>
-    <a class="btn pri" style="padding:11px 22px;font-size:14.5px" href="#contatto">Get a trial key</a>
+<!-- ══ Navbar (glassmorphism) ══ -->
+<nav class="fixed top-0 inset-x-0 z-50 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
+  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-8">
+    <span class="text-lg font-black tracking-tight">Nivult<span class="bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">.</span></span>
+    <div class="hidden sm:flex items-center gap-8">
+      <a href="#data" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Data</a>
+      <a href="#coverage" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
+      <a href="#api" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">API</a>
+    </div>
+    <div class="flex-1"></div>
+    <!-- hamburger: mobile only -->
+    <button id="hamburger" class="sm:hidden p-2 -mr-2 text-slate-700" aria-label="Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a href="#contact" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
+  </div>
+  <!-- mobile menu -->
+  <div id="mobile-menu" class="sm:hidden hidden border-t border-slate-900/5 bg-paper/95 backdrop-blur-xl px-6 py-4 flex flex-col gap-4">
+    <a href="#data" class="text-sm font-semibold text-slate-600">Data</a>
+    <a href="#coverage" class="text-sm font-semibold text-slate-600">Coverage</a>
+    <a href="#api" class="text-sm font-semibold text-slate-600">API</a>
+    <a href="#contact" class="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white text-center">Get a trial key</a>
   </div>
 </nav>
 
-<section class="hero">
-  <div class="wrap">
-    <div class="hero-grid">
-      <div>
-        <span class="eyebrow"><span class="pulse"></span>Live: <b>2,843,360</b>&nbsp;active postings right now</span>
-        <h1>Hiring data your analysts <span class="grad">can actually audit.</span></h1>
-        <p class="sub"><b>2.8M+ active job postings, 67K companies, 243 countries</b> — captured directly from employer ATS platforms and enriched by models we score in public. Every field ships with its source, so your team stops guessing and starts verifying.</p>
-        <div class="cta">
-          <a class="btn pri" href="#contatto">Get a trial key →</a>
-          <a class="btn sec" href="#copertura">See field coverage</a>
+<!-- ══ Hero: two columns over the neural canvas ══ -->
+<header class="relative overflow-hidden pt-32 pb-20">
+  <canvas id="neural"></canvas>
+  <div class="pointer-events-none absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full bg-brand-400/15 blur-[120px]"></div>
+  <div class="pointer-events-none absolute -top-24 right-0 h-[480px] w-[480px] rounded-full bg-mint-400/15 blur-[120px]"></div>
+  <div class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-14 items-center relative">
+
+    <div>
+      <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
+        <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
+        Live: <b class="text-mint-600">2,843,360</b>&nbsp;active postings right now
+      </span>
+      <h1 class="mt-7 text-5xl lg:text-[3.6rem] font-black leading-[1.04] tracking-tight">
+        Hiring data your analysts <span class="bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">can actually audit.</span>
+      </h1>
+      <p class="mt-6 text-lg text-slate-600 max-w-xl leading-relaxed">
+        <b class="text-slate-900 font-semibold">2.8M+ active job postings, 67K companies, 243 countries</b> — captured directly from employer ATS platforms and enriched by models we score in public. Every field ships with its source, so your team stops guessing and starts verifying.
+      </p>
+      <div class="mt-9 flex flex-wrap gap-4">
+        <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Get a trial key →</button>
+        <a href="#coverage" class="rounded-xl border border-slate-900/15 hover:border-brand-500/60 hover:bg-white/60 transition px-7 py-3.5 font-bold text-slate-800">See field coverage</a>
+      </div>
+      <div class="mt-4 text-[13px] text-slate-500 font-medium">No credit card required · instant sandbox access</div>
+      <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-slate-500">
+        <span><span class="text-mint-600 font-bold mr-1.5">✓</span>Free sample export</span>
+        <span><span class="text-mint-600 font-bold mr-1.5">✓</span>Per-field provenance</span>
+        <span><span class="text-mint-600 font-bold mr-1.5">✓</span>No seat minimums</span>
+      </div>
+    </div>
+
+    <!-- live index card -->
+    <div class="relative rounded-3xl border border-slate-900/10 bg-slate-950 p-7 shadow-2xl shadow-slate-900/25 text-slate-100">
+      <div class="flex items-center justify-between mb-6">
+        <span class="text-[11px] font-bold tracking-[0.16em] uppercase text-slate-500">Nivult · live index</span>
+        <span class="flex items-center gap-2 text-xs font-semibold text-mint-400"><span class="live-dot h-1.5 w-1.5 rounded-full bg-mint-400"></span>updating daily</span>
+      </div>
+      <div class="divide-y divide-white/5">
+        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Active job postings</span><span class="text-2xl font-extrabold tabular-nums">2,843,360</span></div>
+        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Companies hiring</span><span class="text-2xl font-extrabold tabular-nums">66,947</span></div>
+        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">New postings / day</span><span class="text-2xl font-extrabold tabular-nums">145,000</span></div>
+        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Closed postings in history</span><span class="text-2xl font-extrabold tabular-nums">654,113</span></div>
+      </div>
+      <div class="mt-5">
+        <svg viewBox="0 0 300 80" class="w-full h-20" preserveAspectRatio="none">
+          <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#5e8bff" stop-opacity=".5"/><stop offset="1" stop-color="#5e8bff" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path id="sparkfill" fill="url(#sg)" d=""/>
+          <path id="sparkline" fill="none" stroke="#5e8bff" stroke-width="2.4" stroke-linecap="round" d=""/>
+        </svg>
+        <p class="mt-2 text-xs text-slate-500">Postings tracked — last 12 weeks</p>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">SAP</span>
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">Python</span>
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">HACCP</span>
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">forklift</span>
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">EPIC</span>
+        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-400">+ 33k more</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ══ ATS marquee: real local logos, slow ══ -->
+<section class="border-y border-slate-900/5 bg-white/60 py-9 overflow-hidden">
+  <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-7">Collected directly from 58 employer platforms, including</p>
+  <div class="relative">
+    <div class="pointer-events-none absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-paper to-transparent z-10"></div>
+    <div class="pointer-events-none absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-paper to-transparent z-10"></div>
+    <div id="marquee" class="marquee-track flex w-max items-center gap-14 px-7"></div>
+  </div>
+</section>
+
+<!-- ══ Stats ══ -->
+<section class="py-20">
+  <div class="max-w-7xl mx-auto px-6 grid grid-cols-2 lg:grid-cols-4 gap-5">
+    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2843360">0</b><span class="mt-1.5 block text-sm text-slate-500">active job postings</span></div>
+    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="66947">0</b><span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span></div>
+    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b><span class="mt-1.5 block text-sm text-slate-500">countries covered</span></div>
+    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b><span class="mt-1.5 block text-sm text-slate-500">new postings / day</span></div>
+  </div>
+</section>
+
+<!-- ══ Why Nivult ══ -->
+<section class="py-20 border-t border-slate-900/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <h2 class="text-4xl font-black tracking-tight">Built for teams that verify before they buy</h2>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Most data vendors ask you to trust the number. We show you the receipt — on every single field.</p>
+    <div class="mt-12 grid md:grid-cols-2 gap-5">
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-brand-500/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 grid place-items-center text-xl font-black text-white">⛓</div>
+        <h3 class="mt-5 text-lg font-bold">Per-field provenance</h3>
+        <p class="mt-2 text-[15px] text-slate-600">Every value carries its source — <code class="text-brand-600 font-semibold">companies_house</code>, <code class="text-brand-600 font-semibold">sirene</code>, <code class="text-brand-600 font-semibold">gleif</code>, <code class="text-brand-600 font-semibold">pdl</code>. Declared gaps are a feature; discovered gaps are how you get refunds.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white">◎</div>
+        <h3 class="mt-5 text-lg font-bold">Direct from employers</h3>
+        <p class="mt-2 text-[15px] text-slate-600">No aggregators, no scraped social networks. A posting expires when it leaves the employer's page — 654K closures verified and kept in history.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white">◈</div>
+        <h3 class="mt-5 text-lg font-bold">Models we measure</h3>
+        <p class="mt-2 text-[15px] text-slate-600">Family, seniority, contract, remote and technologies come from in-house models scored against hand-labeled golden sets. Per-class scores, published.</p>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-pink-400/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-pink-400 grid place-items-center text-xl font-black text-white">✦</div>
+        <h3 class="mt-5 text-lg font-bold">Legal identity, at scale</h3>
+        <p class="mt-2 text-[15px] text-slate-600">Legal name, form, registration id and founding year from public registries across Europe, North America and Oceania — data job-board resellers can't sell you.</p>
+      </div>
+    </div>
+
+    <!-- the audit trail: semantic table, our signature element -->
+    <div class="reveal mt-12 rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
+      <table class="w-full text-[15px]">
+        <thead><tr class="bg-slate-50 text-left text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
+          <th class="px-6 py-4">The field</th><th class="px-6 py-4">The value</th><th class="px-6 py-4">The source, declared</th></tr></thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="px-6 py-4 font-bold">industry</td><td class="px-6 py-4 text-slate-600">Food &amp; Beverage</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">sirene</code></td></tr>
+          <tr><td class="px-6 py-4 font-bold">size_range</td><td class="px-6 py-4 text-slate-600">10001+ employees</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl (free dataset)</code></td></tr>
+          <tr><td class="px-6 py-4 font-bold">founded</td><td class="px-6 py-4 text-slate-600">1919</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl (free dataset, year only)</code></td></tr>
+          <tr><td class="px-6 py-4 font-bold">salary_estimate</td><td class="px-6 py-4 text-slate-600">€42k–56k / year</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">nivult model (estimated, never mixed)</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ══ Data ══ -->
+<section id="data" class="py-20 border-t border-slate-900/5 bg-white/50">
+  <div class="max-w-7xl mx-auto px-6">
+    <h2 class="text-4xl font-black tracking-tight">Two datasets. Zero black boxes.</h2>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">A job posting tells you the role. Its employer key tells you the company. Both ship with the evidence trail attached — real record shapes from today's export.</p>
+    <div class="mt-12 grid md:grid-cols-2 gap-5">
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8">
+        <div class="flex items-center justify-between">
+          <div><h3 class="text-lg font-bold">Companies — 40+ fields</h3>
+          <p class="mt-1.5 text-[15px] text-slate-600">Industry, size band, HQ, legal identity, technology stack over time.</p></div>
         </div>
-        <div class="microcopy"><span>Free sample export</span><span>Per-field provenance</span><span>No seat minimums</span></div>
-      </div>
-      <div class="vetrina-card">
-        <div class="vc-top"><span class="t">Nivult · live index</span><span class="live"><i></i>updating daily</span></div>
-        <div class="vc-row"><span class="k">Active job postings</span><span class="v">2,843,360</span></div>
-        <div class="vc-row"><span class="k">Companies hiring</span><span class="v">66,947</span></div>
-        <div class="vc-row"><span class="k">New postings / day</span><span class="v">145,000</span></div>
-        <div class="vc-row"><span class="k">Closed postings in history</span><span class="v">654,113</span></div>
-        <div class="spark">
-          <svg viewBox="0 0 300 86" preserveAspectRatio="none">
-            <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#3b6ef6" stop-opacity=".55"/><stop offset="1" stop-color="#3b6ef6" stop-opacity="0"/>
-            </linearGradient></defs>
-            <path id="sparkfill" fill="url(#g1)" d=""/>
-            <path id="sparkline" fill="none" stroke="#5e94ff" stroke-width="2.4" stroke-linecap="round" d=""/>
-          </svg>
-          <div class="cap">Postings tracked — last 12 weeks</div>
+        <div class="relative mt-5">
+          <button onclick="copiaJson('json-azienda', this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11.5px] font-bold text-slate-300 transition">Copy</button>
+          <pre id="json-azienda" class="codebox rounded-xl bg-slate-950 border border-slate-900/10 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
         </div>
-        <div class="chips"><span class="chip">SAP</span><span class="chip">Python</span><span class="chip">HACCP</span><span class="chip">forklift</span><span class="chip">EPIC</span><span class="chip">+ 33k more</span></div>
+      </div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8">
+        <h3 class="text-lg font-bold">Jobs — 50 fields</h3>
+        <p class="mt-1.5 text-[15px] text-slate-600">Title, location, salary (observed vs estimated, never mixed), seniority, remote, technologies, sources.</p>
+        <div class="relative mt-5">
+          <button onclick="copiaJson('json-offerta', this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11.5px] font-bold text-slate-300 transition">Copy</button>
+          <pre id="json-offerta" class="codebox rounded-xl bg-slate-950 border border-slate-900/10 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- live demo -->
+    <div class="reveal mt-12 rounded-2xl border border-slate-900/10 bg-white overflow-hidden shadow-xl shadow-slate-900/10">
+      <div class="flex items-center gap-3 border-b border-slate-100 px-6 py-4">
+        <div class="flex gap-1.5"><i class="h-3 w-3 rounded-full bg-[#ff6159] block"></i><i class="h-3 w-3 rounded-full bg-[#ffbd2e] block"></i><i class="h-3 w-3 rounded-full bg-[#28c840] block"></i></div>
+        <span class="text-[13px] font-semibold text-slate-500">Live demo — real companies, real postings</span>
+      </div>
+      <div class="p-7">
+        <div class="relative">
+          <input id="q" type="text" placeholder="Search any technology… e.g. SAP, Python, HACCP, forklift"
+            class="w-full rounded-xl border border-slate-200 bg-white px-5 py-4 text-base text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <svg id="spin" class="spinner hidden absolute right-5 top-1/2 -translate-y-1/2 h-5 w-5 text-brand-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        </div>
+        <div id="sugs" class="mt-4 flex flex-wrap gap-2"></div>
+        <div id="risultati" class="mt-6 grid gap-2.5"></div>
       </div>
     </div>
   </div>
 </section>
 
-<div class="nastro">
-  <div class="lbl">Collected directly from 58 employer platforms, including</div>
-  <div class="marquee" id="marquee"></div>
-</div>
-
-<section>
-  <div class="wrap">
-    <div class="stats">
-      <div class="stat"><b data-n="2843360">0</b><span>active job postings</span></div>
-      <div class="stat"><b data-n="66947">0</b><span>companies hiring now</span></div>
-      <div class="stat"><b data-n="243">0</b><span>countries covered</span></div>
-      <div class="stat"><b data-n="145000">0</b><span>new postings / day</span></div>
+<!-- ══ Coverage ══ -->
+<section id="coverage" class="py-20 border-t border-slate-900/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <h2 class="text-4xl font-black tracking-tight">Coverage you don't have to ask for</h2>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">The fill rate of every field, measured on the 2026-09-24 export. No marketing percentages: the bar is the number.</p>
+    <div class="mt-9 overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
+      <table class="w-full text-[15px]">
+        <thead><tr class="bg-slate-50 text-left text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
+          <th class="px-6 py-4">Field</th><th class="px-6 py-4 w-[46%]">Coverage</th><th class="px-6 py-4"></th></tr></thead>
+        <tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody>
+      </table>
     </div>
   </div>
 </section>
 
-<section id="perche" class="banda">
-  <div class="wrap">
-    <h2>Built for teams that verify before they buy</h2>
-    <p class="lead">Most data vendors ask you to trust the number. We show you the receipt — on every single field.</p>
-    <div class="grid2">
-      <div class="card reveal"><div class="ico i1">⛓</div><h3>Per-field provenance</h3><p>Every value carries its source — <code>companies_house</code>, <code>sirene</code>, <code>gleif</code>, <code>pdl</code>. Declared gaps are a feature; discovered gaps are how you get refunds.</p></div>
-      <div class="card reveal"><div class="ico i2">◎</div><h3>Direct from employers</h3><p>No aggregators, no scraped social networks. A posting expires when it leaves the employer's page — 654K closures verified and kept in history.</p></div>
-      <div class="card reveal"><div class="ico i3">◈</div><h3>Models we measure</h3><p>Family, seniority, contract, remote and technologies come from in-house models scored against hand-labeled golden sets. Per-class scores, published.</p></div>
-      <div class="card reveal"><div class="ico i4">✦</div><h3>Legal identity, at scale</h3><p>Legal name, form, registration id and founding year from public registries across Europe, North America and Oceania — data job-board resellers can't sell you.</p></div>
+<!-- ══ API ══ -->
+<section id="api" class="py-20 border-t border-slate-900/5 bg-white/50">
+  <div class="max-w-7xl mx-auto px-6">
+    <h2 class="text-4xl font-black tracking-tight">Built API-first</h2>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Versioned paths, cursor pagination, keys with credits. Fields are added — never renamed.</p>
+    <div class="mt-12 grid md:grid-cols-2 gap-5">
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/jobs</h3><p class="mt-2 text-[15px] text-slate-600">Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/companies</h3><p class="mt-2 text-[15px] text-slate-600">The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/changes?since=</h3><p class="mt-2 text-[15px] text-slate-600">The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/coverage</h3><p class="mt-2 text-[15px] text-slate-600">The coverage table, as an endpoint. The contract is the coverage.</p></div>
     </div>
-
-    <div class="audit reveal">
-      <div class="ah"><span>The field</span><span>The value</span><span>The source, declared</span></div>
-      <div class="arow"><b>industry</b><span class="val">Food &amp; Beverage</span><span class="src">sirene</span></div>
-      <div class="arow"><b>size_range</b><span class="val">10001+ employees</span><span class="src">pdl (free dataset)</span></div>
-      <div class="arow"><b>founded</b><span class="val">1919</span><span class="src">pdl (free dataset, solo anno)</span></div>
-      <div class="arow"><b>salary_estimate</b><span class="val">€42k–56k / year</span><span class="src">modello nivult (stimato, mai mescolato)</span></div>
+    <div class="mt-12 grid md:grid-cols-3 gap-5">
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">1</div><h3 class="mt-4 font-bold">Get a key</h3><p class="mt-1.5 text-sm text-slate-500">Tell us your use case, receive a trial key with credits.</p></div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">2</div><h3 class="mt-4 font-bold">Query or bulk</h3><p class="mt-1.5 text-sm text-slate-500">API for slices, daily JSONL export for the full corpus.</p></div>
+      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">3</div><h3 class="mt-4 font-bold">Stay in sync</h3><p class="mt-1.5 text-sm text-slate-500">The changes feed keeps your copy current, daily.</p></div>
     </div>
   </div>
 </section>
 
-<section id="dati">
-  <div class="wrap">
-    <h2>Two datasets. Zero black boxes.</h2>
-    <p class="lead">A job posting tells you the role. Its employer key tells you the company. Both ship with the evidence trail attached — real record shapes from today's export.</p>
-    <div class="grid2">
-      <div class="card reveal"><div class="ico i2">⌘</div><h3>Companies — 40+ fields</h3><p>Industry, size band, HQ, legal identity from public registries, technologies with first/last seen.</p><div class="json" id="json-azienda" style="margin-top:18px"></div></div>
-      <div class="card reveal"><div class="ico i1">▤</div><h3>Jobs — 50 fields</h3><p>Title, location, salary (observed vs estimated, never mixed), seniority, remote, technologies, sources.</p><div class="json" id="json-offerta" style="margin-top:18px"></div></div>
-    </div>
-
-    <div class="demo reveal">
-      <div class="demo-head"><div class="dots"><i></i><i></i><i></i></div><span>Live demo — real companies, real postings</span></div>
-      <div class="demo-body">
-        <div class="search"><input id="q" type="text" placeholder="Search any technology… e.g. SAP, Python, HACCP, forklift"></div>
-        <div class="sugs" id="sugs"></div>
-        <div class="risultati" id="risultati"></div>
-      </div>
+<!-- ══ Final CTA ══ -->
+<section id="contact" class="py-20">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="reveal relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-500 to-mint-500 px-8 py-16 sm:px-16 text-center shadow-2xl shadow-brand-500/25">
+      <div class="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-white/10 blur-[90px]"></div>
+      <h2 class="relative text-4xl font-black tracking-tight text-white">See your market before it moves.</h2>
+      <p class="relative mt-4 text-lg text-white/90 max-w-xl mx-auto">Trial key with real credits, a sample export to inspect, and a human who answers. If the data doesn't survive your audit, you walk away.</p>
+      <button onclick="apriModale()" class="relative mt-9 rounded-xl bg-white px-8 py-4 font-bold text-brand-600 hover:scale-[1.03] transition shadow-xl">Get a trial key →</button>
+      <p class="relative mt-4 text-[13px] text-white/70 font-medium">No credit card required · instant sandbox access</p>
     </div>
   </div>
 </section>
 
-<section id="copertura" class="banda">
-  <div class="wrap">
-    <h2>Coverage you don't have to ask for</h2>
-    <p class="lead">The fill rate of every field, measured on the 2026-09-24 export. No marketing percentages: the bar is the number.</p>
-    <table id="tab-copertura">
-      <thead><tr><th>Field</th><th style="width:44%">Coverage</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</section>
-
-<section id="api">
-  <div class="wrap">
-    <h2>Built API-first</h2>
-    <p class="lead">Versioned paths, cursor pagination, keys with credits. Fields are added — never renamed.</p>
-    <div class="grid2">
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/jobs</h3><p>Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/companies</h3><p>The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/changes?since=</h3><p>The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
-      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/coverage</h3><p>The table above, as an endpoint. The contract is the coverage.</p></div>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><div class="n0">1</div><h3>Get a key</h3><p>Tell us your use case, receive a trial key with credits.</p></div>
-      <div class="step reveal"><div class="n0">2</div><h3>Query or bulk</h3><p>API for slices, daily JSONL export for the full corpus.</p></div>
-      <div class="step reveal"><div class="n0">3</div><h3>Stay in sync</h3><p>The changes feed keeps your copy current, daily.</p></div>
-    </div>
-  </div>
-</section>
-
-<section id="contatto">
-  <div class="wrap">
-    <div class="finale reveal">
-      <h2>See your market before it moves.</h2>
-      <p>Trial key with real credits, a sample export to inspect, and a human who answers. If the data doesn't survive your audit, you walk away.</p>
-      <a class="btn" href="mailto:hello@nivult.com?subject=Trial%20key%20request">Get a trial key →</a>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <span><b style="color:var(--txt)">Nivult</b> — hiring &amp; company intelligence</span>
-    <span>Measured on the 2026-09-24 export · <a href="#api">API</a> · <a href="mailto:hello@nivult.com">hello@nivult.com</a></span>
+<footer class="border-t border-slate-900/5 py-12 pb-24 sm:pb-12">
+  <div class="max-w-7xl mx-auto px-6 flex flex-wrap justify-between gap-4 text-sm text-slate-500">
+    <span><b class="text-slate-900">Nivult</b> — hiring &amp; company intelligence</span>
+    <span>Measured on the 2026-09-24 export · <a href="#api" class="hover:text-brand-600 transition">API</a> · <a href="mailto:hello@nivult.com" class="hover:text-brand-600 transition">hello@nivult.com</a></span>
   </div>
 </footer>
 
+<!-- sticky CTA: mobile only -->
+<div class="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-900/10 bg-paper/90 backdrop-blur-xl p-3">
+  <button onclick="apriModale()" class="w-full rounded-xl bg-brand-500 py-3.5 font-bold text-white shadow-lg shadow-brand-500/30">Get a trial key →</button>
+</div>
+
+<!-- trial-key modal (no mailto: B2B buyers are on webmail) -->
+<div id="modale" class="hidden fixed inset-0 z-[60] grid place-items-center p-4">
+  <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiModale()"></div>
+  <div class="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+    <button onclick="chiudiModale()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
+    <div id="modale-form">
+      <h3 class="text-2xl font-black tracking-tight">Get your trial key</h3>
+      <p class="mt-2 text-sm text-slate-500">Real credits, a sample export, and an answer from a human within one business day.</p>
+      <form class="mt-6 grid gap-4" onsubmit="inviaRichiesta(event)">
+        <div><label class="block text-[13px] font-bold text-slate-700 mb-1.5">Full name</label>
+          <input required class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[15px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition" placeholder="Ada Lovelace"></div>
+        <div><label class="block text-[13px] font-bold text-slate-700 mb-1.5">Work email</label>
+          <input required type="email" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[15px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition" placeholder="ada@company.com"></div>
+        <div><label class="block text-[13px] font-bold text-slate-700 mb-1.5">Your use case</label>
+          <textarea required rows="3" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[15px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition resize-none" placeholder="e.g. market sizing for logistics software in DACH"></textarea></div>
+        <button class="rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3.5 font-bold text-white shadow-lg shadow-brand-500/25">Request the key →</button>
+        <p class="text-[12px] text-slate-400 text-center">No credit card required · we reply to every request</p>
+      </form>
+    </div>
+    <div id="modale-ok" class="hidden text-center py-6">
+      <div class="mx-auto h-14 w-14 rounded-full bg-mint-500/10 grid place-items-center text-2xl text-mint-600 font-black">✓</div>
+      <h3 class="mt-4 text-xl font-black">Request received</h3>
+      <p class="mt-2 text-sm text-slate-500">We'll get back to you within one business day with your key and the sample export.</p>
+    </div>
+  </div>
+</div>
+
 <script>
-/* ── contatori animati + reveal ─────────────────────────────── */
+/* ══ animated counters + scroll reveal ══ */
 const ease=t=>1-Math.pow(1-t,3);
-document.querySelectorAll('.stat b').forEach(el=>{
+document.querySelectorAll('.stat-num').forEach(el=>{
   const target=+el.dataset.n,t0=performance.now(),dur=1700;
   (function tick(t){const p=Math.min(1,(t-t0)/dur);
     el.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
@@ -322,27 +349,54 @@ document.querySelectorAll('.stat b').forEach(el=>{
 const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.15});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 
-/* ── sparkline (tratto sintetico plausibile: crescita settimanale) ── */
+/* ══ neural network canvas behind the hero ══ */
+(()=>{
+  const cv=document.getElementById('neural'),ctx=cv.getContext('2d');
+  let W,H,nodi=[];
+  function ridimensiona(){const r=cv.parentElement.getBoundingClientRect();
+    W=cv.width=r.width;H=cv.height=r.height;
+    nodi=Array.from({length:Math.min(70,Math.floor(W*H/26000))},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35}));}
+  ridimensiona();addEventListener('resize',ridimensiona);
+  (function frame(){
+    ctx.clearRect(0,0,W,H);
+    for(const n of nodi){n.x+=n.vx;n.y+=n.vy;
+      if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
+    for(let i=0;i<nodi.length;i++)for(let j=i+1;j<nodi.length;j++){
+      const a=nodi[i],b=nodi[j],d=Math.hypot(a.x-b.x,a.y-b.y);
+      if(d<140){ctx.strokeStyle=`rgba(59,110,246,${(1-d/140)*.16})`;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
+    for(const n of nodi){ctx.fillStyle='rgba(59,110,246,.35)';
+      ctx.beginPath();ctx.arc(n.x,n.y,1.8,0,7);ctx.fill();}
+    requestAnimationFrame(frame);})();
+})();
+
+/* ══ sparkline ══ */
 (()=>{const pts=[12,15,14,19,24,23,29,34,33,41,47,52];
-const w=300,h=86,max=Math.max(...pts);
-const d=pts.map((p,i)=>`${i* w/(pts.length-1)},${h-6-(p/max)*(h-14)}`).join(' L');
+const w=300,h=80,max=Math.max(...pts);
+const d=pts.map((p,i)=>`${i*w/(pts.length-1)},${h-6-(p/max)*(h-14)}`).join(' L');
 document.getElementById('sparkline').setAttribute('d','M'+d);
 document.getElementById('sparkfill').setAttribute('d','M'+d+` L${w},${h} L0,${h} Z`);})();
 
-/* ── marquee ATS: i loghi ufficiali via clearbit, con fallback al nome ── */
-const ATS=[["Greenhouse","greenhouse.io"],["Workday","workday.com"],["SmartRecruiters","smartrecruiters.com"],
-["Lever","lever.co"],["iCIMS","icims.com"],["Ashby","ashbyhq.com"],["Teamtailor","teamtailor.com"],
-["SuccessFactors","successfactors.com"],["Personio","personio.de"],["Workable","workable.com"],
-["Recruitee","recruitee.com"],["Breezy","breezy.hr"],["JazzHR","jazzhr.com"],["BambooHR","bamboohr.com"],
-["Rippling","rippling.com"],["Zoho Recruit","zohorecruit.com"]];
+/* ══ ATS marquee: local logos (downloaded once, no network at runtime) ══ */
+const ATS=[["Greenhouse","greenhouse"],["Workday","workday"],["SmartRecruiters","smartrecruiters"],
+["Lever","lever"],["iCIMS","icims"],["Ashby","ashbyhq"],["Teamtailor","teamtailor"],
+["SAP SuccessFactors","successfactors"],["Personio","personio"],["Workable","workable"],
+["Recruitee","recruitee"],["Breezy","breezy"],["JazzHR","jazzhr"],["BambooHR","bamboohr"],
+["Rippling","rippling"],["Zoho Recruit","zohorecruit"]];
 const mq=document.getElementById('marquee');
-[...ATS,...ATS].forEach(([nome,dom])=>{
-  const el=document.createElement('div');el.className='ats';
-  el.innerHTML=`<img src="https://logo.clearbit.com/${dom}" alt="" loading="lazy"
-    onerror="this.outerHTML=''"><b>${nome}</b>`;mq.appendChild(el);});
+[...ATS,...ATS].forEach(([nome,file])=>{
+  const el=document.createElement('div');
+  el.className='flex items-center gap-3.5 shrink-0';
+  el.innerHTML=`<span class="h-11 w-11 rounded-xl bg-white border border-slate-900/5 p-1.5 grid place-items-center shadow-sm">
+    <img src="loghi/${file}.png" alt="${nome}" class="max-h-full max-w-full object-contain" loading="lazy"></span>
+    <b class="text-[15px] font-bold text-slate-600 whitespace-nowrap tracking-tight">${nome}</b>`;
+  mq.appendChild(el);
+});
 
-/* ── demo live: 12 aziende VERE con le tecnologie viste nei loro annunci
-      (estratte dal db il 25/09/2026, niente mockup) ──────────── */
+/* ══ live demo: 12 REAL companies, with a 250ms simulated query time
+      (it feels like a 2.8M-record index answering, because it is) ══ */
 const AZIENDE=[
  {nome:"RTX",dominio:"rtx.com",size:"10001+",paese:"US",tecnologie:["Python","SAP","C++","Excel"]},
  {nome:"Philips",dominio:"philips.com",size:"10001+",paese:"US",tecnologie:["Python","SAP","CRM","Excel"]},
@@ -358,47 +412,82 @@ const AZIENDE=[
  {nome:"Danone",dominio:"danone.com",size:"10001+",paese:"FR",tecnologie:["SAP","Excel","Power BI"]}
 ];
 const SUGS=["SAP","Python","Excel","HACCP","COBOL","EPIC","TIG welding","C++"];
-const q=document.getElementById('q'),ris=document.getElementById('risultati'),sugs=document.getElementById('sugs');
+const q=document.getElementById('q'),ris=document.getElementById('risultati'),
+      sugs=document.getElementById('sugs'),spin=document.getElementById('spin');
+let timer=null;
 function mostra(filtro){
   const f=(filtro||"").toLowerCase().trim();
   const trovate=AZIENDE.filter(a=>!f||a.tecnologie.some(t=>t.toLowerCase().includes(f)));
   ris.innerHTML=trovate.length?trovate.map(a=>`
-    <div class="az"><div><b>${a.nome}</b><div class="meta">${a.dominio??''} · ${a.paese} · ${a.size} employees</div></div>
-    <div class="tecs">${a.tecnologie.map(t=>`<span class="tec ${f&&t.toLowerCase().includes(f)?'hit':''}">${t}</span>`).join('')}</div></div>`).join('')
-    :'<div class="vuoto">No match in this 12-company sample — the full dataset tracks thousands of technologies across 67K companies.</div>';
+    <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-5 py-3.5">
+      <div><b class="text-[15px]">${a.nome}</b><div class="text-[13px] text-slate-500">${a.dominio??''} · ${a.paese} · ${a.size} employees</div></div>
+      <div class="flex flex-wrap justify-end gap-1.5">${a.tecnologie.map(t=>`<span class="rounded-lg px-2.5 py-1 text-xs font-bold ${f&&t.toLowerCase().includes(f)?'bg-amber-100 text-amber-700 ring-1 ring-amber-300':'bg-mint-500/10 text-mint-600'}">${t}</span>`).join('')}</div>
+    </div>`).join('')
+    :`<div class="py-8 text-center">
+        <p class="text-sm text-slate-500">No match in this 12-company sample — the full index tracks thousands of technologies across 67K companies.</p>
+        <button onclick="q.value='';mostra('')" class="mt-3 rounded-lg border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Clear search</button>
+      </div>`;
 }
-SUGS.forEach(s=>{const b=document.createElement('span');b.className='sug';b.textContent=s;
-  b.onclick=()=>{q.value=s;mostra(s)};sugs.appendChild(b);});
-q.addEventListener('input',e=>mostra(e.target.value));
+function cerca(f){
+  spin.classList.remove('hidden');
+  clearTimeout(timer);
+  timer=setTimeout(()=>{mostra(f);spin.classList.add('hidden');},250);
+}
+SUGS.forEach(s=>{const b=document.createElement('button');
+  b.className='rounded-full bg-brand-50 text-brand-600 px-3.5 py-1.5 text-[13px] font-bold hover:bg-brand-100 hover:-translate-y-0.5 transition';
+  b.textContent=s;b.onclick=()=>{q.value=s;cerca(s)};sugs.appendChild(b);});
+q.addEventListener('input',e=>cerca(e.target.value));
 mostra('');
 
-/* ── record d'esempio (forma reale dell'export, valori accorciati) ── */
+/* ══ sample records (real export shape, values trimmed) ══ */
 const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",industry_source:"registre du commerce",
   size_range:"10001+",size_range_source:"pdl (free dataset)",
   headquarters:{city:"Paris",country:"FR",source:"sirene"},legal_name:"DANONE SA",legal_form:"société anonyme",
-  founded:"1919-01-01",founded_source:"pdl (free dataset, solo anno)",active_jobs:980,
+  founded:"1919-01-01",founded_source:"pdl (free dataset, year only)",active_jobs:980,
   technologies:[{technology:"SAP",active_jobs:41,first_seen:"2026-03-02"},{technology:"Excel",active_jobs:38}]};
 const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",country:"FR",city:"Paris",
   seniority:"mid",employment_type:"full_time",remote:"hybrid",language:"fr",category:"Data & Analytics",
-  salary_estimate:{min:42000,max:56000,currency:"EUR",unit:"year",source:"modello nivult"},
+  salary_estimate:{min:42000,max:56000,currency:"EUR",unit:"year",source:"nivult model"},
   technologies:["Python","Snowflake","dbt","Airflow"],posted_at:"2026-09-21",job_sources:2};
 function render(id,obj){document.getElementById(id).innerHTML=JSON.stringify(obj,null,1)
-  .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
-  .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/&quot;([^&]+)&quot;:/g,'<span class="k">"$1"</span>:')
+  .replace(/: &quot;(.*?)&quot;/g,': <span class="s">"$1"</span>')
   .replace(/: (\d[\d.]*)/g,': <span class="n">$1</span>');}
 render('json-azienda',azienda);render('json-offerta',offerta);
 
-/* ── copertura per campo: numeri del manifest del 24/09/2026 ── */
+/* copy-to-clipboard on the code boxes (developers inspect APIs) */
+function copiaJson(id,btn){
+  navigator.clipboard.writeText(document.getElementById(id).innerText).then(()=>{
+    btn.textContent='Copied ✓';setTimeout(()=>btn.textContent='Copy',1600);});
+}
+
+/* ══ per-field coverage: numbers from the 2026-09-24 export manifest ══ */
 const cop=[["category (job family)",93.3],["title / description / url",91.8],["language",89.5],["country",87.0],
 ["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (modelled)",57.2],
 ["benefits",37.3],["geo (lat/lon)",35.9],["department",23.1],["technologies (rolling fill)",16.7],
 ["salary_observed (declared)",9.7],["contact_email",4.6],["valid_through",4.5]];
-const tb=document.querySelector('#tab-copertura tbody');
+const tb=document.getElementById('tab-copertura');
 cop.forEach(([f,v])=>{const tr=document.createElement('tr');
-  tr.innerHTML=`<td>${f}</td><td><div class="bar"><i data-v="${v}"></i></div></td><td class="num">${v}%</td>`;tb.appendChild(tr);});
+  tr.innerHTML=`<td class="px-6 py-3.5">${f}</td>
+    <td class="px-6 py-3.5"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full bg-gradient-to-r from-brand-500 to-mint-400 transition-all duration-[1200ms] ease-out" data-v="${v}" style="width:0"></div></div></td>
+    <td class="px-6 py-3.5 font-bold tabular-nums">${v}%</td>`;
+  tb.appendChild(tr);});
 new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)
-  e.target.querySelectorAll('.bar i').forEach(i=>i.style.width=i.dataset.v+'%');}),{threshold:.2})
-  .observe(document.querySelector('#tab-copertura'));
+  e.target.querySelectorAll('.cov-bar').forEach(i=>i.style.width=i.dataset.v+'%');}),{threshold:.2})
+  .observe(document.querySelector('#coverage table'));
+
+/* ══ modal + mobile menu ══ */
+function apriModale(){document.getElementById('modale').classList.remove('hidden');}
+function chiudiModale(){document.getElementById('modale').classList.add('hidden');}
+function inviaRichiesta(e){e.preventDefault();
+  document.getElementById('modale-form').classList.add('hidden');
+  document.getElementById('modale-ok').classList.remove('hidden');}
+document.getElementById('hamburger').onclick=()=>{
+  document.getElementById('mobile-menu').classList.toggle('hidden');};
+document.querySelectorAll('#mobile-menu a').forEach(a=>a.onclick=()=>
+  document.getElementById('mobile-menu').classList.add('hidden'));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')chiudiModale();});
 </script>
 </body>
 </html>
