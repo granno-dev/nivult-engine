@@ -1,0 +1,204 @@
+<!doctype html>
+<!-- Vetrina B2B Nivult (25/09/2026). Un file solo, niente dipendenze tranne il font.
+     REGOLA: ogni numero in questa pagina viene da una misura (db o manifest export),
+     non dal marketing. Se un numero cambia, si cambia qui con la sua fonte. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nivult — Job postings & company data, direct from employers</title>
+<meta name="description" content="2.8M active job postings and 67K companies, collected directly from employer ATS systems. Every field declares its source.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e14; --bg2:#0f151e; --card:#131b26; --line:#1f2a3a;
+  --txt:#e6edf6; --dim:#8b98ab; --acc:#4f8ef7; --acc2:#38d9a9; --warn:#f7b24f;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:var(--acc);text-decoration:none}
+code,.mono{font-family:'JetBrains Mono',monospace;font-size:.85em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+section{padding:88px 0}
+/* hero */
+.hero{padding:120px 0 80px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:-40%;background:
+  radial-gradient(600px 400px at 20% 20%,rgba(79,142,247,.18),transparent 60%),
+  radial-gradient(500px 380px at 80% 30%,rgba(56,217,169,.12),transparent 60%);pointer-events:none}
+.badge{display:inline-block;padding:6px 14px;border:1px solid var(--line);border-radius:99px;color:var(--dim);font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+h1{font-size:clamp(34px,5.4vw,62px);font-weight:800;line-height:1.08;letter-spacing:-.02em;margin:22px 0 18px;max-width:900px}
+h1 .grad{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--dim);font-size:19px;max-width:640px}
+.cta{display:inline-flex;gap:12px;margin-top:34px;flex-wrap:wrap}
+.btn{padding:14px 26px;border-radius:10px;font-weight:600;font-size:15px;border:1px solid var(--line);transition:.2s}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#06101f}
+.btn.pri:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn.sec{color:var(--txt)}.btn.sec:hover{border-color:var(--acc)}
+/* numeri */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:64px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 22px;position:relative;overflow:hidden}
+.stat::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--acc),var(--acc2));opacity:.7}
+.stat b{font-size:34px;font-weight:800;display:block;font-variant-numeric:tabular-nums}
+.stat span{color:var(--dim);font-size:13.5px}
+/* sezioni */
+h2{font-size:clamp(26px,3.4vw,40px);font-weight:800;letter-spacing:-.01em;margin-bottom:14px}
+.lead{color:var(--dim);max-width:700px;font-size:17px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;margin-top:40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;transition:.25s}
+.card:hover{border-color:#2c3b52;transform:translateY(-3px)}
+.card h3{font-size:19px;margin-bottom:8px}
+.card p{color:var(--dim);font-size:15px}
+.tag{display:inline-block;background:#182233;border:1px solid var(--line);color:var(--acc2);border-radius:8px;padding:2px 10px;font-size:12.5px;font-weight:600;margin-bottom:12px}
+/* json viewer */
+.json{background:#0d1420;border:1px solid var(--line);border-radius:14px;padding:22px;overflow:auto;font-size:12.8px;line-height:1.55;max-height:420px}
+.k{color:#7ab3f5}.s{color:#6fe3b8}.n{color:#f7b24f}
+/* copertura */
+table{width:100%;border-collapse:collapse;margin-top:28px;font-size:14.5px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
+.bar{height:8px;background:#1a2334;border-radius:99px;overflow:hidden;min-width:120px}
+.bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--acc),var(--acc2));width:0;transition:width 1.2s cubic-bezier(.2,.8,.2,1)}
+td.num{font-variant-numeric:tabular-nums;font-weight:600}
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:40px}
+.step{border:1px solid var(--line);border-radius:16px;padding:26px;background:var(--bg2)}
+.step .n0{font-size:32px;font-weight:800;color:var(--acc);opacity:.85}
+.step h3{margin:10px 0 6px;font-size:17px}
+.step p{color:var(--dim);font-size:14.5px}
+footer{border-top:1px solid var(--line);padding:44px 0;color:var(--dim);font-size:14px}
+.reveal{opacity:0;transform:translateY(18px);transition:.7s cubic-bezier(.2,.8,.2,1)}
+.reveal.in{opacity:1;transform:none}
+@media(max-width:640px){section{padding:60px 0}}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="wrap">
+    <span class="badge">Job postings data · direct from employers</span>
+    <h1>Every field <span class="grad">declares its source</span>.<br>Every number is measured.</h1>
+    <p class="sub">Nivult collects job postings directly from employer ATS systems — Greenhouse, Workday, SmartRecruiters and 55 more — and turns them into company-level intelligence. No aggregators, no scraped social networks, no black boxes.</p>
+    <div class="cta">
+      <a class="btn pri" href="#api">Explore the API</a>
+      <a class="btn sec" href="#copertura">See field coverage</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b data-n="2843360">0</b><span>active job postings, 243 countries</span></div>
+      <div class="stat"><b data-n="66947">0</b><span>companies hiring right now</span></div>
+      <div class="stat"><b data-n="58">0</b><span>ATS platforms connected</span></div>
+      <div class="stat"><b data-n="145000">0</b><span>new postings per day</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="perche">
+  <div class="wrap">
+    <h2>Why teams pick Nivult</h2>
+    <p class="lead">The job posting is the raw material. The product is the company — with the evidence trail attached.</p>
+    <div class="grid2">
+      <div class="card reveal"><span class="tag">per-field provenance</span><h3>Every value says where it came from</h3><p>Observed salary never mixes with estimated. Employee counts carry their scope (legal entity vs group). Source tags like <code>companies_house</code>, <code>sirene</code>, <code>gleif</code>, <code>pdl</code> on every field — declared gaps are a sales argument, discovered gaps are a refund.</p></div>
+      <div class="card reveal"><span class="tag">direct sources only</span><h3>From the employer, never the aggregator</h3><p>Postings expire when they leave the employer's page — not after N days. Closed postings stay in history with a verified <code>expired_at</code>: 654K and counting.</p></div>
+      <div class="card reveal"><span class="tag">models in-house</span><h3>Our own enrichment models</h3><p>Family, seniority, contract, remote, languages and technologies are classified by models we train and measure against hand-labeled golden sets — 92–99% accuracy, per-class scores published.</p></div>
+      <div class="card reveal"><span class="tag">legal identity</span><h3>Company registries, at scale</h3><p>Legal name, legal form, registration id and founded date from public registries (Companies House, SIRENE, GLEIF, EDGAR, ABN and more) — data no job-board reseller can offer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="dati" style="background:var(--bg2)">
+  <div class="wrap">
+    <h2>Two datasets, one spine</h2>
+    <p class="lead">A company record and a job posting record, joined by the employer key. Real samples below — this is the shape you get.</p>
+    <div class="grid2">
+      <div class="card reveal">
+        <span class="tag">companies · 40+ fields</span>
+        <div class="json" id="json-azienda"></div>
+      </div>
+      <div class="card reveal">
+        <span class="tag">jobs · 50 fields</span>
+        <div class="json" id="json-offerta"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="copertura">
+  <div class="wrap">
+    <h2>Coverage, published</h2>
+    <p class="lead">Not a promise: the fill rate of every field, measured on today's export (2026-09-24). The bar is the number.</p>
+    <table id="tab-copertura">
+      <thead><tr><th>Field</th><th style="width:42%">Coverage</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="api" style="background:var(--bg2)">
+  <div class="wrap">
+    <h2>Built API-first</h2>
+    <p class="lead">Versioned paths, cursor pagination, keys with credits. Fields are added — never renamed.</p>
+    <div class="grid2">
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/jobs</h3><p>Filters on country, family, seniority, technologies, salary, dates. Cursor pagination for full crawls.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/companies</h3><p>The company spine: industry with source, size band, HQ, legal identity, technologies with first/last seen.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/changes?since=</h3><p>The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
+      <div class="card reveal"><h3 class="mono" style="color:var(--acc)">GET /v1/coverage</h3><p>This page's table, as an endpoint. The contract is the coverage.</p></div>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="n0">1</div><h3>Get a key</h3><p>Write us, describe your use case, receive a trial key with credits.</p></div>
+      <div class="step reveal"><div class="n0">2</div><h3>Query or bulk</h3><p>API for slices, daily JSONL export for the full corpus.</p></div>
+      <div class="step reveal"><div class="n0">3</div><h3>Stay in sync</h3><p>The changes feed keeps your copy current, daily.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <span><b style="color:var(--txt)">Nivult</b> — job postings &amp; company intelligence</span>
+    <span>Numbers measured on the 2026-09-24 export · <a href="#api">API</a> · <a href="mailto:hello@nivult.com">hello@nivult.com</a></span>
+  </div>
+</footer>
+
+<script>
+/* Contatori animati + reveal on scroll + copertura renderizzata dai dati misurati */
+const ease=t=>1-Math.pow(1-t,3);
+document.querySelectorAll('.stat b').forEach(el=>{
+  const target=+el.dataset.n, t0=performance.now(), dur=1600;
+  (function tick(t){const p=Math.min(1,(t-t0)/dur);
+    el.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
+    if(p<1)requestAnimationFrame(tick);})(t0);
+});
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.15});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* Record d'esempio: la forma reale dell'export (valori accorciati per la pagina) */
+const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",industry_source:"registre du commerce",
+  size_range:"10001+",size_range_source:"pdl (free dataset)",employees:73532,employees_source:"linkedin_members",
+  headquarters:{city:"Paris",country:"FR",source:"sirene"},legal_name:"DANONE SA",legal_form:"société anonyme",
+  founded:"1919-01-01",founded_source:"pdl (free dataset, solo anno)",active_jobs:980,
+  technologies:[{technology:"SAP",active_jobs:41,first_verified_at:"2026-03-02"},{technology:"Excel",active_jobs:38}]};
+const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",country:"FR",city:"Paris",
+  seniority:"mid",employment_type:"full_time",remote:"hybrid",language:"fr",category:"Data & Analytics",
+  salary_estimate:{min:42000,max:56000,currency:"EUR",unit:"year",source:"modello nivult"},
+  technologies:["Python","Snowflake","dbt","Airflow"],posted_at:"2026-09-21",job_sources:2};
+function render(id,obj){document.getElementById(id).innerHTML=JSON.stringify(obj,null,1)
+  .replace(/"([^"]+)":/g,'<span class="k">"$1"</span>:')
+  .replace(/: "([^"]*)"/g,': <span class="s">"$1"</span>')
+  .replace(/: (\d[\d.]*)/g,': <span class="n">$1</span>');}
+render('json-azienda',azienda);render('json-offerta',offerta);
+
+/* Copertura per campo: i numeri del manifest dell'export del 24/09/2026 */
+const cop=[["title / description / url",91.8],["language",89.5],["category (family)",93.3],["country",87.0],
+["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (model)",57.2],
+["benefits",37.3],["geo (lat/lon)",35.9],["department",23.1],["technologies (rolling fill)",16.7],
+["salary_observed (declared)",9.7],["contact_email",4.6],["valid_through",4.5]];
+const tb=document.querySelector('#tab-copertura tbody');
+cop.forEach(([f,v])=>{const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${f}</td><td><div class="bar"><i data-v="${v}"></i></div></td><td class="num">${v}%</td>`;tb.appendChild(tr);});
+new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)
+  e.target.querySelectorAll('.bar i').forEach(i=>i.style.width=i.dataset.v+'%');}),{threshold:.2})
+  .observe(document.querySelector('#tab-copertura'));
+</script>
+</body>
+</html>
