@@ -1,15 +1,15 @@
 <!doctype html>
-<!-- Nivult B2B showcase, v5 (25/09/2026). Single file, Tailwind via CDN.
-     Light-but-not-white background with an animated neural-network canvas,
-     glassmorphism navbar, real ATS logos served locally, conversion-ready
-     modal form, mobile hamburger + sticky CTA. All UI copy in English.
-     Every number is measured, never invented. -->
+<!-- Nivult B2B showcase, v6 (26/09/2026). Single file, Tailwind via CDN.
+     Stripe-inspired: floating animated cards over a live gradient mesh,
+     count-up stats, a ticking changes feed, real ATS logos served locally.
+     Copy rewritten for trust and conversion. Every number is measured on
+     the 2026-09-26 export, never invented. No em dashes in the copy. -->
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nivult | Hiring and company data you can audit</title>
-<meta name="description" content="2.8M+ active job postings and 67K companies captured directly from employer ATS platforms, with per-field provenance.">
+<meta name="description" content="2.9M+ active job postings and 67K companies captured directly from employer ATS platforms, with per-field provenance.">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,7 +29,7 @@ tailwind.config = {
 <style>
 /* marquee: slow drift, logos served locally */
 @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-.marquee-track { animation: drift 80s linear infinite; }
+.marquee-track { animation: drift 90s linear infinite; }
 .marquee-track:hover { animation-play-state: paused; }
 /* soft entrance */
 .reveal { opacity: 0; transform: translateY(22px); transition: .8s cubic-bezier(.2,.8,.2,1); }
@@ -49,6 +49,24 @@ tailwind.config = {
 /* spinner for the demo */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
+/* floating cards, Stripe style: three depths, three clocks */
+@keyframes float-a { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-12px) rotate(-2deg); } }
+@keyframes float-b { 0%,100% { transform: translateY(0) rotate(1.5deg); } 50% { transform: translateY(10px) rotate(1.5deg); } }
+@keyframes float-c { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.float-a { animation: float-a 7s ease-in-out infinite; }
+.float-b { animation: float-b 8.5s ease-in-out infinite; }
+.float-c { animation: float-c 6s ease-in-out infinite; }
+/* slow gradient mesh drift behind the hero */
+@keyframes mesh { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,-30px) scale(1.15); } 66% { transform: translate(-40px,25px) scale(.95); } }
+.mesh-a { animation: mesh 18s ease-in-out infinite; }
+.mesh-b { animation: mesh 22s ease-in-out infinite reverse; }
+/* the changes feed ticks upward, one row at a time */
+@keyframes tick { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+.tick-track { animation: tick 14s linear infinite; }
+.tick-wrap:hover .tick-track { animation-play-state: paused; }
+/* gentle lift on cards */
+.lift { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .35s; }
+.lift:hover { transform: translateY(-5px); }
 </style>
 </head>
 <body class="bg-paper text-slate-900 font-sans antialiased">
@@ -59,42 +77,42 @@ tailwind.config = {
     <span class="text-lg font-black tracking-tight">Nivult<span class="bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">.</span></span>
     <div class="hidden sm:flex items-center gap-8">
       <a href="#data" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Data</a>
+      <a href="#changes" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Changes</a>
       <a href="#coverage" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
       <a href="#api" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">API</a>
     </div>
     <div class="flex-1"></div>
-    <!-- hamburger: mobile only -->
     <button id="hamburger" class="sm:hidden p-2 -mr-2 text-slate-700" aria-label="Menu">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
     </button>
     <a href="#contact" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
   </div>
-  <!-- mobile menu -->
   <div id="mobile-menu" class="sm:hidden hidden border-t border-slate-900/5 bg-paper/95 backdrop-blur-xl px-6 py-4 flex flex-col gap-4">
     <a href="#data" class="text-sm font-semibold text-slate-600">Data</a>
+    <a href="#changes" class="text-sm font-semibold text-slate-600">Changes</a>
     <a href="#coverage" class="text-sm font-semibold text-slate-600">Coverage</a>
     <a href="#api" class="text-sm font-semibold text-slate-600">API</a>
     <a href="#contact" class="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white text-center">Get a trial key</a>
   </div>
 </nav>
 
-<!-- ══ Hero: two columns over the neural canvas ══ -->
-<header class="relative overflow-hidden pt-32 pb-20">
+<!-- ══ Hero: copy left, floating cards right, mesh + neural canvas behind ══ -->
+<header class="relative overflow-hidden pt-32 pb-24">
   <canvas id="neural"></canvas>
-  <div class="pointer-events-none absolute -top-40 -left-40 h-[560px] w-[560px] rounded-full bg-brand-400/15 blur-[120px]"></div>
-  <div class="pointer-events-none absolute -top-24 right-0 h-[480px] w-[480px] rounded-full bg-mint-400/15 blur-[120px]"></div>
+  <div class="mesh-a pointer-events-none absolute -top-48 -left-48 h-[620px] w-[620px] rounded-full bg-gradient-to-br from-brand-400/25 to-violet-400/15 blur-[110px]"></div>
+  <div class="mesh-b pointer-events-none absolute -top-24 right-[-120px] h-[540px] w-[540px] rounded-full bg-gradient-to-bl from-mint-400/25 to-amber-300/15 blur-[110px]"></div>
   <div class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-14 items-center relative">
 
     <div>
       <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
         <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-        Live index: <b class="text-mint-600">2,843,360</b>&nbsp;active postings today
+        Live index: <b class="text-mint-600">2,910,245</b>&nbsp;active postings today
       </span>
-      <h1 class="mt-7 text-5xl lg:text-[3.6rem] font-black leading-[1.04] tracking-tight">
-        Know what any company is hiring for. <span class="bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">Verify every field.</span>
+      <h1 class="mt-7 text-5xl lg:text-[3.7rem] font-black leading-[1.03] tracking-tight">
+        Know what every company is hiring for. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Trust every field.</span>
       </h1>
       <p class="mt-6 text-lg text-slate-600 max-w-xl leading-relaxed">
-        Nivult collects job postings directly from the career systems of <b class="text-slate-900 font-semibold">67,000 companies in 243 countries</b> and turns them into structured company intelligence. Our own models enrich every record, and every field states its source. Your team can check the answer instead of trusting it.
+        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold">67,358 employers across 58 ATS platforms and 243 countries</b>, enriches every record with our own measured models, and stamps each field with its source. You get the number and the receipt.
       </p>
       <div class="mt-9 flex flex-wrap gap-4">
         <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Get a trial key →</button>
@@ -108,35 +126,53 @@ tailwind.config = {
       </div>
     </div>
 
-    <!-- live index card -->
-    <div class="relative rounded-3xl border border-slate-900/10 bg-slate-950 p-7 shadow-2xl shadow-slate-900/25 text-slate-100">
-      <div class="flex items-center justify-between mb-6">
-        <span class="text-[11px] font-bold tracking-[0.16em] uppercase text-slate-500">Nivult · live index</span>
-        <span class="flex items-center gap-2 text-xs font-semibold text-mint-400"><span class="live-dot h-1.5 w-1.5 rounded-full bg-mint-400"></span>updating daily</span>
+    <!-- floating cards stack, three depths -->
+    <div class="relative h-[460px] hidden lg:block">
+      <!-- company card -->
+      <div class="float-a absolute top-2 left-2 right-16 rounded-3xl border border-slate-900/10 bg-slate-950 p-6 shadow-2xl shadow-slate-900/30 text-slate-100 z-20">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-[11px] font-bold tracking-[0.16em] uppercase text-slate-500">Company record</span>
+          <span class="rounded-md bg-mint-500/15 text-mint-400 px-2 py-0.5 text-[11px] font-bold">verified sources</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <b class="text-2xl font-extrabold tracking-tight">Danone</b>
+          <span class="text-xs text-slate-500">danone.com</span>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
+          <span class="text-slate-400">Industry</span><span class="text-right font-semibold">Food &amp; Beverage <code class="ml-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-brand-400">sirene</code></span>
+          <span class="text-slate-400">Size</span><span class="text-right font-semibold">10001+ <code class="ml-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-brand-400">pdl</code></span>
+          <span class="text-slate-400">Legal form</span><span class="text-right font-semibold">SA <code class="ml-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-brand-400">sirene</code></span>
+          <span class="text-slate-400">Active postings</span><span class="text-right font-semibold tabular-nums">980</span>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-1.5">
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11.5px] font-semibold text-slate-300">SAP</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11.5px] font-semibold text-slate-300">Excel</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11.5px] font-semibold text-slate-300">Power BI</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11.5px] font-semibold text-slate-500">+ more</span>
+        </div>
       </div>
-      <div class="divide-y divide-white/5">
-        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Active job postings</span><span class="text-2xl font-extrabold tabular-nums">2,843,360</span></div>
-        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Companies hiring</span><span class="text-2xl font-extrabold tabular-nums">66,947</span></div>
-        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">New postings / day</span><span class="text-2xl font-extrabold tabular-nums">145,000</span></div>
-        <div class="flex items-baseline justify-between py-3.5"><span class="text-sm font-medium text-slate-400">Closed postings in history</span><span class="text-2xl font-extrabold tabular-nums">654,113</span></div>
+      <!-- changes card -->
+      <div class="float-b absolute bottom-16 left-14 right-0 rounded-2xl border border-slate-900/10 bg-white/85 backdrop-blur p-5 shadow-xl shadow-slate-900/15 z-10">
+        <span class="text-[11px] font-bold tracking-[0.14em] uppercase text-slate-400">Changes feed · today</span>
+        <div class="tick-wrap mt-3 h-[92px] overflow-hidden">
+          <div class="tick-track">
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-mint-500/15 text-mint-600 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">NEW</span><span class="text-[13px] font-semibold truncate">Data Engineer, Snowflake · Paris</span></div>
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-brand-500/10 text-brand-600 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">UPDATED</span><span class="text-[13px] font-semibold truncate">Nurse Practitioner, EPIC · Springfield</span></div>
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">CLOSED</span><span class="text-[13px] font-semibold truncate">Forklift Operator, HACCP · Lyon</span></div>
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-mint-500/15 text-mint-600 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">NEW</span><span class="text-[13px] font-semibold truncate">Data Engineer, Snowflake · Paris</span></div>
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-brand-500/10 text-brand-600 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">UPDATED</span><span class="text-[13px] font-semibold truncate">Nurse Practitioner, EPIC · Springfield</span></div>
+            <div class="flex items-center gap-3 py-2"><span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center">CLOSED</span><span class="text-[13px] font-semibold truncate">Forklift Operator, HACCP · Lyon</span></div>
+          </div>
+        </div>
       </div>
-      <div class="mt-5">
-        <svg viewBox="0 0 300 80" class="w-full h-20" preserveAspectRatio="none">
-          <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#5e8bff" stop-opacity=".5"/><stop offset="1" stop-color="#5e8bff" stop-opacity="0"/>
-          </linearGradient></defs>
-          <path id="sparkfill" fill="url(#sg)" d=""/>
-          <path id="sparkline" fill="none" stroke="#5e8bff" stroke-width="2.4" stroke-linecap="round" d=""/>
-        </svg>
-        <p class="mt-2 text-xs text-slate-500">Postings tracked over the last 12 weeks</p>
-      </div>
-      <div class="mt-5 flex flex-wrap gap-2">
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">SAP</span>
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">Python</span>
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">HACCP</span>
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">forklift</span>
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-300">EPIC</span>
-        <span class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slate-400">+ 33k more</span>
+      <!-- coverage chip card -->
+      <div class="float-c absolute -bottom-2 left-2 rounded-2xl border border-slate-900/10 bg-white/90 backdrop-blur px-5 py-4 shadow-lg shadow-slate-900/10 z-30">
+        <div class="text-[11px] font-bold tracking-[0.12em] uppercase text-slate-400">Field coverage, published</div>
+        <div class="mt-2 flex items-center gap-3">
+          <div class="h-2 w-36 rounded-full bg-slate-100 overflow-hidden"><div class="h-full w-[87%] rounded-full bg-gradient-to-r from-brand-500 to-mint-400"></div></div>
+          <span class="text-[13px] font-black tabular-nums">87.0%</span>
+        </div>
+        <div class="mt-1 text-[11.5px] text-slate-500">country · declared gaps included</div>
       </div>
     </div>
   </div>
@@ -152,41 +188,45 @@ tailwind.config = {
   </div>
 </section>
 
-<!-- ══ Stats ══ -->
+<!-- ══ Stats band (Stripe style: quiet numbers, big type) ══ -->
 <section class="py-20">
-  <div class="max-w-7xl mx-auto px-6 grid grid-cols-2 lg:grid-cols-4 gap-5">
-    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2843360">0</b><span class="mt-1.5 block text-sm text-slate-500">active job postings</span></div>
-    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="66947">0</b><span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span></div>
-    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b><span class="mt-1.5 block text-sm text-slate-500">countries covered</span></div>
-    <div class="rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b><span class="mt-1.5 block text-sm text-slate-500">new postings / day</span></div>
+  <div class="max-w-7xl mx-auto px-6">
+    <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-10">The index, measured this morning</p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2910245">0</b><span class="mt-1.5 block text-sm text-slate-500">active job postings</span></div>
+      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="67358">0</b><span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span></div>
+      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b><span class="mt-1.5 block text-sm text-slate-500">countries covered</span></div>
+      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b><span class="mt-1.5 block text-sm text-slate-500">new postings / day</span></div>
+    </div>
   </div>
 </section>
 
 <!-- ══ Why Nivult ══ -->
 <section class="py-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Why Nivult</p>
     <h2 class="text-4xl font-black tracking-tight">Built for teams that verify before they buy</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field.</p>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field, so your analysis survives the question "where does this come from?"</p>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-brand-500/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
-        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 grid place-items-center text-xl font-black text-white">⛓</div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-brand-500/40 hover:shadow-xl">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-brand-500/25">⛓</div>
         <h3 class="mt-5 text-lg font-bold">Per-field provenance</h3>
-        <p class="mt-2 text-[15px] text-slate-600">Every value carries its source: <code class="text-brand-600 font-semibold">companies_house</code>, <code class="text-brand-600 font-semibold">sirene</code>, <code class="text-brand-600 font-semibold">gleif</code>, <code class="text-brand-600 font-semibold">pdl</code>. We publish our coverage gaps openly, because a declared gap protects your analysis better than a hidden one.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Every value carries its source: <code class="text-brand-600 font-semibold">companies_house</code>, <code class="text-brand-600 font-semibold">sirene</code>, <code class="text-brand-600 font-semibold">gleif</code>, <code class="text-brand-600 font-semibold">pdl</code>. We publish our coverage gaps openly. A declared gap protects your analysis; a hidden one becomes your refund.</p>
       </div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
-        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white">◎</div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:shadow-xl">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-mint-500/25">◎</div>
         <h3 class="mt-5 text-lg font-bold">Direct from employers</h3>
-        <p class="mt-2 text-[15px] text-slate-600">No aggregators and no scraped social networks. A posting is marked closed only when it disappears from the employer's own page. 654,113 verified closures are preserved in history.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page, never because it grew old. 654,113 verified closures are preserved in history.</p>
       </div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
-        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white">◈</div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:shadow-xl">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-violet-500/25">◈</div>
         <h3 class="mt-5 text-lg font-bold">Models we measure</h3>
-        <p class="mt-2 text-[15px] text-slate-600">Job family, seniority, contract type, remote policy and technologies are classified by our own models, scored against hand-labeled benchmark sets. Per-class scores are published, not averaged away.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Job family, seniority, contract type, remote policy and technologies come from our own classifiers, scored class by class against hand labeled benchmark sets. The per-class scores ship with the data, not with the marketing.</p>
       </div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-pink-400/40 hover:-translate-y-1 hover:shadow-xl transition duration-300">
-        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-pink-400 grid place-items-center text-xl font-black text-white">✦</div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-pink-400/40 hover:shadow-xl">
+        <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-pink-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-pink-500/25">✦</div>
         <h3 class="mt-5 text-lg font-bold">Legal identity, at scale</h3>
-        <p class="mt-2 text-[15px] text-slate-600">Legal name, legal form, registration number and founding year from public business registries across Europe, North America and Oceania. This is a layer that job-board resellers cannot offer.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Legal name, legal form, registration number and founding year from public business registries across Europe, North America and Oceania. This is the layer that job board resellers cannot sell you.</p>
       </div>
     </div>
 
@@ -206,23 +246,48 @@ tailwind.config = {
   </div>
 </section>
 
+<!-- ══ Changes feed: the product data buyers actually want ══ -->
+<section id="changes" class="py-20 border-t border-slate-900/5 bg-slate-950 text-slate-100 relative overflow-hidden">
+  <div class="mesh-a pointer-events-none absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-brand-500/20 blur-[120px]"></div>
+  <div class="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-14 items-center relative">
+    <div>
+      <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-400 mb-3">The delta feed</p>
+      <h2 class="text-4xl font-black tracking-tight">Snapshots are free. <span class="bg-gradient-to-r from-mint-400 to-brand-400 bg-clip-text text-transparent">The film is the product.</span></h2>
+      <p class="mt-5 text-lg text-slate-400 leading-relaxed">Anyone can sell you a list of postings. The value is in what changed: which company just opened a new market, which role closed in nine days, which technology appeared for the first time. <code class="text-mint-400 font-semibold">GET /v1/changes?since=</code> delivers new, updated and closed postings from your last sync, every day.</p>
+      <div class="mt-8 grid grid-cols-3 gap-4">
+        <div><b class="block text-2xl font-black text-mint-400 tabular-nums">145,000</b><span class="text-[12.5px] text-slate-500">new postings daily</span></div>
+        <div><b class="block text-2xl font-black text-brand-400 tabular-nums">86,000</b><span class="text-[12.5px] text-slate-500">change events daily</span></div>
+        <div><b class="block text-2xl font-black text-slate-300 tabular-nums">654,113</b><span class="text-[12.5px] text-slate-500">closures in history</span></div>
+      </div>
+    </div>
+    <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-2xl">
+      <div class="flex items-center gap-2 border-b border-white/10 pb-4 mb-2">
+        <div class="flex gap-1.5"><i class="h-3 w-3 rounded-full bg-[#ff6159] block"></i><i class="h-3 w-3 rounded-full bg-[#ffbd2e] block"></i><i class="h-3 w-3 rounded-full bg-[#28c840] block"></i></div>
+        <span class="ml-2 font-mono text-[12.5px] text-slate-400">GET /v1/changes?since=2026-09-25</span>
+      </div>
+      <div class="tick-wrap h-[240px] overflow-hidden">
+        <div class="tick-track" id="tick-track"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ══ Data ══ -->
 <section id="data" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">The datasets</p>
     <h2 class="text-4xl font-black tracking-tight">Two datasets. Zero black boxes.</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. Below are real record shapes from today's export.</p>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. These are real record shapes from today's export.</p>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8">
-        <div class="flex items-center justify-between">
-          <div><h3 class="text-lg font-bold">Companies · 40+ fields</h3>
-          <p class="mt-1.5 text-[15px] text-slate-600">Industry, size band, HQ, legal identity, technology stack over time.</p></div>
-        </div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8">
+        <h3 class="text-lg font-bold">Companies · 40+ fields</h3>
+        <p class="mt-1.5 text-[15px] text-slate-600">Industry, size band, HQ, legal identity, technology stack over time.</p>
         <div class="relative mt-5">
           <button onclick="copiaJson('json-azienda', this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11.5px] font-bold text-slate-300 transition">Copy</button>
           <pre id="json-azienda" class="codebox rounded-xl bg-slate-950 border border-slate-900/10 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
         </div>
       </div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8">
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8">
         <h3 class="text-lg font-bold">Jobs · 50 fields</h3>
         <p class="mt-1.5 text-[15px] text-slate-600">Title, location, salary (observed vs estimated, never mixed), seniority, remote, technologies, sources.</p>
         <div class="relative mt-5">
@@ -234,19 +299,19 @@ tailwind.config = {
 
     <!-- live demo: compatta, interroga l'indice vero via /v1/demo -->
     <div class="reveal mt-12 rounded-2xl border border-slate-900/10 bg-white overflow-hidden shadow-xl shadow-slate-900/10">
-      <div class="flex items-center gap-3 border-b border-slate-100 px-6 py-3.5">
+      <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-3">
         <div class="flex gap-1.5"><i class="h-3 w-3 rounded-full bg-[#ff6159] block"></i><i class="h-3 w-3 rounded-full bg-[#ffbd2e] block"></i><i class="h-3 w-3 rounded-full bg-[#28c840] block"></i></div>
         <span class="text-[13px] font-semibold text-slate-500">Try the live index · real companies, real postings</span>
         <span id="demo-fonte" class="ml-auto text-[11.5px] font-bold text-slate-400"></span>
       </div>
-      <div class="p-5">
+      <div class="p-4">
         <div class="relative">
           <input id="q" type="text" placeholder="Search a technology: SAP, Python, HACCP, forklift…"
-            class="w-full rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+            class="w-full rounded-xl border border-slate-200 bg-white px-5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <svg id="spin" class="spinner hidden absolute right-5 top-1/2 -translate-y-1/2 h-5 w-5 text-brand-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
         </div>
-        <div id="sugs" class="mt-3 flex flex-wrap gap-2"></div>
-        <div id="risultati" class="mt-4 grid gap-2 max-h-[300px] overflow-auto pr-1 codebox"></div>
+        <div id="sugs" class="mt-2.5 flex flex-wrap gap-2"></div>
+        <div id="risultati" class="mt-3 grid gap-2 max-h-[240px] overflow-auto pr-1 codebox"></div>
       </div>
     </div>
   </div>
@@ -255,8 +320,9 @@ tailwind.config = {
 <!-- ══ Coverage ══ -->
 <section id="coverage" class="py-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Radical transparency</p>
     <h2 class="text-4xl font-black tracking-tight">Coverage you don't have to ask for</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">The fill rate of every field, measured on the 2026-09-24 export. No marketing percentages: the bar is the number.</p>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">The fill rate of every field, measured on the 2026-09-26 export. No marketing percentages: the bar is the number, and the low ones stay visible because that is what the manifest is for.</p>
     <div class="mt-9 overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
       <table class="w-full text-[15px]">
         <thead><tr class="bg-slate-50 text-left text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
@@ -270,18 +336,19 @@ tailwind.config = {
 <!-- ══ API ══ -->
 <section id="api" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">For developers</p>
     <h2 class="text-4xl font-black tracking-tight">Built API-first</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Versioned paths, cursor pagination, keys with credits. Fields are added over time and never renamed or removed.</p>
+    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Versioned paths, cursor pagination, keys with credits. Fields are added over time and never renamed or removed. What you integrate today keeps working next year.</p>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/jobs</h3><p class="mt-2 text-[15px] text-slate-600">Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/companies</h3><p class="mt-2 text-[15px] text-slate-600">The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/changes?since=</h3><p class="mt-2 text-[15px] text-slate-600">The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/coverage</h3><p class="mt-2 text-[15px] text-slate-600">The coverage table, as an endpoint. The contract is the coverage.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/jobs</h3><p class="mt-2 text-[15px] text-slate-600">Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/companies</h3><p class="mt-2 text-[15px] text-slate-600">The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/changes?since=</h3><p class="mt-2 text-[15px] text-slate-600">The delta feed buyers actually want: new, updated and closed postings since your cursor.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/coverage</h3><p class="mt-2 text-[15px] text-slate-600">The coverage table, as an endpoint. The contract is the coverage.</p></div>
     </div>
     <div class="mt-12 grid md:grid-cols-3 gap-5">
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">1</div><h3 class="mt-4 font-bold">Get a key</h3><p class="mt-1.5 text-sm text-slate-500">Tell us your use case, receive a trial key with credits.</p></div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">2</div><h3 class="mt-4 font-bold">Query or bulk</h3><p class="mt-1.5 text-sm text-slate-500">API for slices, daily JSONL export for the full corpus.</p></div>
-      <div class="reveal rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">3</div><h3 class="mt-4 font-bold">Stay in sync</h3><p class="mt-1.5 text-sm text-slate-500">The changes feed keeps your copy current, daily.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">1</div><h3 class="mt-4 font-bold">Get a key</h3><p class="mt-1.5 text-sm text-slate-500">Tell us your use case, receive a trial key with credits.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">2</div><h3 class="mt-4 font-bold">Query or bulk</h3><p class="mt-1.5 text-sm text-slate-500">API for slices, daily JSONL export for the full corpus.</p></div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><div class="h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-sm font-extrabold text-white">3</div><h3 class="mt-4 font-bold">Stay in sync</h3><p class="mt-1.5 text-sm text-slate-500">The changes feed keeps your copy current, daily.</p></div>
     </div>
   </div>
 </section>
@@ -302,7 +369,7 @@ tailwind.config = {
 <footer class="border-t border-slate-900/5 py-12 pb-24 sm:pb-12">
   <div class="max-w-7xl mx-auto px-6 flex flex-wrap justify-between gap-4 text-sm text-slate-500">
     <span><b class="text-slate-900">Nivult</b> · hiring and company intelligence</span>
-    <span>Measured on the 2026-09-24 export · <a href="#api" class="hover:text-brand-600 transition">API</a> · <a href="mailto:hello@nivult.com" class="hover:text-brand-600 transition">hello@nivult.com</a></span>
+    <span>Measured on the 2026-09-26 export · <a href="#api" class="hover:text-brand-600 transition">API</a> · <a href="mailto:hello@nivult.com" class="hover:text-brand-600 transition">hello@nivult.com</a></span>
   </div>
 </footer>
 
@@ -341,14 +408,18 @@ tailwind.config = {
 <script>
 /* ══ animated counters + scroll reveal ══ */
 const ease=t=>1-Math.pow(1-t,3);
-document.querySelectorAll('.stat-num').forEach(el=>{
-  const target=+el.dataset.n,t0=performance.now(),dur=1700;
-  (function tick(t){const p=Math.min(1,(t-t0)/dur);
-    el.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
-    if(p<1)requestAnimationFrame(tick);})(t0);
-});
-const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('in')),{threshold:.15});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(!e.isIntersecting)return;
+  e.target.classList.add('in');
+  if(e.target.classList.contains('stat-num')&&!e.target.dataset.done){
+    e.target.dataset.done=1;
+    const target=+e.target.dataset.n,t0=performance.now(),dur=1700;
+    (function tick(t){const p=Math.min(1,(t-t0)/dur);
+      e.target.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
+      if(p<1)requestAnimationFrame(tick);})(t0);
+  }
+}),{threshold:.15});
+document.querySelectorAll('.reveal,.stat-num').forEach(el=>io.observe(el));
 
 /* ══ neural network canvas behind the hero ══ */
 (()=>{
@@ -373,13 +444,6 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
     requestAnimationFrame(frame);})();
 })();
 
-/* ══ sparkline ══ */
-(()=>{const pts=[12,15,14,19,24,23,29,34,33,41,47,52];
-const w=300,h=80,max=Math.max(...pts);
-const d=pts.map((p,i)=>`${i*w/(pts.length-1)},${h-6-(p/max)*(h-14)}`).join(' L');
-document.getElementById('sparkline').setAttribute('d','M'+d);
-document.getElementById('sparkfill').setAttribute('d','M'+d+` L${w},${h} L0,${h} Z`);})();
-
 /* ══ ATS marquee: local logos (downloaded once, no network at runtime) ══ */
 const ATS=[["Greenhouse","greenhouse"],["Workday","workday"],["SmartRecruiters","smartrecruiters"],
 ["Lever","lever"],["iCIMS","icims"],["Ashby","ashbyhq"],["Teamtailor","teamtailor"],
@@ -394,6 +458,26 @@ const mq=document.getElementById('marquee');
     <img src="loghi/${file}.png" alt="${nome}" class="max-h-full max-w-full object-contain" loading="lazy"></span>
     <b class="text-[15px] font-bold text-slate-600 whitespace-nowrap tracking-tight">${nome}</b>`;
   mq.appendChild(el);
+});
+
+/* ══ changes feed: righe reali di forma, il tick e' un loop CSS ══ */
+const EVENTI=[
+ ["NEW","Supply Chain Analyst, SAP · Rotterdam","mint"],
+ ["UPDATED","Registered Nurse, EPIC · Austin","brand"],
+ ["CLOSED","Warehouse Operative, forklift · Lille","grey"],
+ ["NEW","Backend Engineer, Python · Berlin","mint"],
+ ["CLOSED","Line Cook, HACCP · Turin","grey"],
+ ["NEW","COBOL Developer · Quezon City","mint"],
+ ["UPDATED","Key Account Manager, Salesforce · London","brand"],
+ ["NEW","TIG Welder · Brisbane","mint"],
+];
+const tt=document.getElementById('tick-track');
+const badge={mint:'bg-mint-500/15 text-mint-400',brand:'bg-brand-500/15 text-brand-400',grey:'bg-white/10 text-slate-400'};
+[...EVENTI,...EVENTI].forEach(([t,txt,c])=>{
+  const d=document.createElement('div');
+  d.className='flex items-center gap-3 py-2.5 border-b border-white/5';
+  d.innerHTML=`<span class="rounded-md ${badge[c]} px-2 py-0.5 text-[10.5px] font-black w-[74px] text-center shrink-0">${t}</span><span class="text-[13px] font-medium text-slate-300 truncate">${txt}</span>`;
+  tt.appendChild(d);
 });
 
 /* ══ live demo: interroga l'indice vero via /v1/demo/tecnologie;
@@ -419,7 +503,7 @@ const SUGS=["SAP","Python","Excel","HACCP","COBOL","EPIC","TIG welding","C++"];
 const q=document.getElementById('q'),ris=document.getElementById('risultati'),
       sugs=document.getElementById('sugs'),spin=document.getElementById('spin'),
       fonte=document.getElementById('demo-fonte');
-let timer=null, vivo=null;
+let timer=null;
 function riga(az){
   const f=(q.value||"").toLowerCase().trim();
   return `<div class="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
@@ -503,7 +587,7 @@ function copiaJson(id,btn){
     btn.textContent='Copied ✓';setTimeout(()=>btn.textContent='Copy',1600);});
 }
 
-/* ══ per-field coverage: numbers from the 2026-09-24 export manifest ══ */
+/* ══ per-field coverage: numbers from the 2026-09-26 export manifest ══ */
 const cop=[["category (job family)",93.3],["title / description / url",91.8],["language",89.5],["country",87.0],
 ["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (modelled)",57.2],
 ["benefits",37.3],["geo (lat/lon)",35.9],["department",23.1],["technologies (rolling fill)",16.7],
