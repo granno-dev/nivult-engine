@@ -330,7 +330,12 @@ _CACHE_ARR: dict = {"t": 0.0, "v": []}
 
 
 def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
-    if time.time() - _CACHE_ARR["t"] < 600 and _CACHE_ARR["v"]:
+    # la copertura dei campi non cambia in minuti: cache di 6 ore.
+    # Il 26/09/2026 la query base misurava 262 s (scansione piena di 3M
+    # righe con filtri jsonb): col timeout a 60 s moriva a ogni giro, la
+    # cache non si riempiva MAI e il cruscotto serviva numeri vecchi di
+    # giorni. Ora ha il suo timeout (300 s) e gira nel thread in sfondo.
+    if time.time() - _CACHE_ARR["t"] < 6 * 3600 and _CACHE_ARR["v"]:
         return _CACHE_ARR["v"]
     r = _righe(ats_dsn, """
         SELECT count(country), count(salary_min), count(seniority),
@@ -347,7 +352,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(lang),
                count(*) FILTER (WHERE languages_required IS NOT NULL
                                   AND array_length(languages_required, 1) > 0)
-          FROM ats_jobs WHERE expired_at IS NULL""", timeout_s=60)[0]
+          FROM ats_jobs WHERE expired_at IS NULL""", timeout_s=300)[0]
     logo = _righe(ats_dsn, """
         SELECT count(*) FILTER (WHERE logo_url IS NOT NULL
                                    OR logo_domain IS NOT NULL), count(*)
@@ -467,6 +472,47 @@ def _ricalcola_pesanti(ats_dsn: str) -> dict:
         _CACHE_PES["in_corso"] = False
 
 
+def _copertura_piattaforme(ats_dsn: str) -> list[dict]:
+    """La copertura testo/paese per piattaforma, con la sua cache lenta:
+    12 ore di vita, timeout dedicato (misurato 105 s il 26/09/2026),
+    e se muore si serve la versione precedente. Non fa mai aspettare il
+    ricalcolo pesante: la prima volta torna vuota e si riempie in sfondo."""
+    import threading
+    if _CACHE_COP["v"] is not None and time.time() - _CACHE_COP["t"] < 12 * 3600:
+        return _CACHE_COP["v"]
+    if _CACHE_COP["in_corso"]:
+        return _CACHE_COP["v"] or []
+    _CACHE_COP["in_corso"] = True
+    threading.Thread(target=_ricalcola_copertura, args=(ats_dsn,),
+                     daemon=True).start()
+    return _CACHE_COP["v"] or []
+
+
+_CACHE_COP: dict = {"t": 0.0, "v": None, "in_corso": False}
+
+
+def _ricalcola_copertura(ats_dsn: str) -> None:
+    try:
+        v = [{"piattaforma": p, "n": n, "testo": float(t),
+              "paese": float(pa)} for p, n, t, pa in _righe(ats_dsn,
+            "SELECT platform_id, count(*), "
+            "round(100.0*count(*) FILTER (WHERE ha_testo)/count(*),1), "
+            "round(100.0*count(*) FILTER (WHERE ha_paese)/count(*),1) "
+            "FROM (SELECT platform_id, " + SQL_HA_TESTO + " AS ha_testo, "
+            "      country IS NOT NULL AS ha_paese "
+            "      FROM ats_jobs TABLESAMPLE SYSTEM (5) "
+            "      WHERE expired_at IS NULL) t "
+            "GROUP BY 1 HAVING count(*) >= 20 ORDER BY 2 DESC",
+            timeout_s=240)]
+        if v:
+            _CACHE_COP.update(t=time.time(), v=v)
+    except Exception as e:                            # noqa: BLE001
+        log.warning("cruscotto: copertura piattaforme non calcolata: %s",
+                    str(e).splitlines()[0][:160])
+    finally:
+        _CACHE_COP["in_corso"] = False
+
+
 def _calcola_pesanti(ats_dsn: str) -> dict:
     d: dict = {}
 
@@ -563,18 +609,13 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
     # ── copertura per piattaforma: testo e paese, campione 5% ──
     # Il 22/09/2026 il controllo fatto a mano ha trovato SETTE piattaforme a
     # zero testo da settimane (bamboohr, traffit...): mai piu' un buco che
-    # si scopre per caso. Campione, non censimento: la query gira in sfondo
-    # ogni 4 minuti, e a queste dimensioni l'errore di campionamento non
-    # cambia nessuna decisione.
-    d["copertura"] = [{"piattaforma": p, "n": n, "testo": float(t),
-                       "paese": float(pa)} for p, n, t, pa in _righe(ats_dsn,
-        "SELECT platform_id, count(*), "
-        "round(100.0*count(*) FILTER (WHERE ha_testo)/count(*),1), "
-        "round(100.0*count(*) FILTER (WHERE ha_paese)/count(*),1) "
-        "FROM (SELECT platform_id, " + SQL_HA_TESTO + " AS ha_testo, "
-        "      country IS NOT NULL AS ha_paese "
-        "      FROM ats_jobs TABLESAMPLE SYSTEM (5) WHERE expired_at IS NULL) t "
-        "GROUP BY 1 HAVING count(*) >= 20 ORDER BY 2 DESC", timeout_s=90)]
+    # si scopre per caso. Ma il 26/09 la stessa query e' diventata il modo in
+    # cui il cruscotto si ROMPEVA: TABLESAMPLE SYSTEM legge il raw (TOAST) di
+    # ~150.000 righe a caso = 105 secondi misurati, oltre il timeout, e il
+    # ricalcolo pesante moriva a ogni giro lasciando i numeri fermi al 23/09.
+    # Ora ha la sua cache lenta (12 ore) e il suo timeout: la copertura non e'
+    # un dato che cambia in minuti, e il resto del pannello non la aspetta.
+    d["copertura"] = _copertura_piattaforme(ats_dsn)
     d["per_paese"] = [{"paese": p or "—", "attive": n} for p, n in _righe(ats_dsn,
         "SELECT country, count(*) FROM ats_jobs WHERE expired_at IS NULL "
         "GROUP BY 1 ORDER BY 2 DESC LIMIT 20")]
