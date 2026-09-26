@@ -257,10 +257,11 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
 
 
 def demo_tecnologie(q: str) -> dict:
-    """La demo della vetrina pubblica: quante aziende assumono con la
-    tecnologia q, e DUE esempi. Il resto si sblocca con la chiave di
-    prova: se la pagina mostrasse la lista intera regaleremmo il
-    prodotto (25/09/2026, decisione di Giuseppe)."""
+    """La demo della vetrina pubblica: DUE aziende che assumono con la
+    tecnologia q. Il resto si sblocca con la chiave di prova: se la pagina
+    mostrasse la lista intera regaleremmo il prodotto (25/09/2026), e il
+    TOTALE esatto non si da' piu' (26/09/2026, decisione di Giuseppe): la
+    dimensione per-tecnologia e' merce, non marketing."""
     with _lock:
         righe = _conn().execute("""
             SELECT company, country, industry,
@@ -272,12 +273,6 @@ def demo_tecnologie(q: str) -> dict:
                AND company IS NOT NULL
              ORDER BY employees DESC NULLS LAST, company
              LIMIT 24""", {"q": q}).fetchall()
-        totale = _conn().execute("""
-            SELECT count(DISTINCT company)
-              FROM aziende
-             WHERE len(list_filter(technologies,
-                                  x -> contains(lower(x), lower($q)))) > 0
-               AND company IS NOT NULL""", {"q": q}).fetchone()[0]
     # niente tenant duplicati ne' id Wikidata non risolti («Q689791»)
     visti: set[str] = set()
     out = []
@@ -289,7 +284,25 @@ def demo_tecnologie(q: str) -> dict:
                     "technologies": list(tec)[:5]})
         if len(out) == 2:
             break
-    return {"totale_aziende": totale, "esempi": out}
+    # «ci sono altre aziende?» si', il numero no
+    return {"esempi": out, "altre": len(righe) > len(out)}
+
+
+def demo_stats() -> dict:
+    """I quattro contatori della vetrina, dall'export del giorno.
+
+    Endpoint pubblico senza parametri: niente input, niente superficie.
+    I numeri sono quelli del manifest, mai una stima."""
+    with _lock:
+        offerte = _conn().execute("SELECT count(*) FROM offerte").fetchone()[0]
+        aziende = _conn().execute("SELECT count(*) FROM aziende").fetchone()[0]
+        paesi = _conn().execute(
+            "SELECT count(DISTINCT country) FROM offerte").fetchone()[0]
+        nuove = _conn().execute(
+            "SELECT count(*) FROM flusso WHERE event = 'new' "
+            "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+    return {"offerte": offerte, "aziende": aziende,
+            "paesi": paesi, "nuove_24h": nuove}
 
 
 def cambiamenti(da: str, cursore: str | None,

@@ -199,6 +199,24 @@ _DEMO_RX = re.compile(r"^[A-Za-z0-9 .+#&()/'À-ÿ\-]{2,40}$")
 _demo_finestra: dict[str, list[float]] = {}
 
 
+def _demo_gate(request: Request) -> None:
+    """Il rate limit della demo pubblica: 30 chiamate al minuto per IP.
+
+    La mappa si pota oltre i 5000 IP: chi non batte piu' da un minuto non
+    ha piu' niente da contare."""
+    ora = time.time()
+    ip = request.client.host if request.client else "?"
+    finestra = [t for t in _demo_finestra.get(ip, []) if ora - t < 60]
+    if len(finestra) >= 30:
+        raise HTTPException(429, "troppo veloce: riprova tra un minuto")
+    finestra.append(ora)
+    _demo_finestra[ip] = finestra
+    if len(_demo_finestra) > 5000:
+        for k in [k for k, v in _demo_finestra.items()
+                  if not v or ora - v[-1] >= 60]:
+            del _demo_finestra[k]
+
+
 @router.get("/demo/tecnologie")
 def demo_tecnologie(request: Request, q: str = Query(default="")):
     """Quali aziende assumono con la tecnologia q — la demo della landing.
@@ -208,20 +226,16 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
     q = q.strip()
     if not _DEMO_RX.fullmatch(q):
         raise HTTPException(400, "caratteri non ammessi nella ricerca")
-    ora = time.time()
-    ip = request.client.host if request.client else "?"
-    finestra = [t for t in _demo_finestra.get(ip, []) if ora - t < 60]
-    if len(finestra) >= 30:
-        raise HTTPException(429, "troppo veloce: riprova tra un minuto")
-    finestra.append(ora)
-    _demo_finestra[ip] = finestra
-    # la mappa cresce a ogni IP mai visto: gli IP che non battono piu'
-    # da un minuto non hanno piu' niente da contare, e se ne vanno
-    if len(_demo_finestra) > 5000:
-        for k in [k for k, v in _demo_finestra.items()
-                  if not v or ora - v[-1] >= 60]:
-            del _demo_finestra[k]
+    _demo_gate(request)
     d = dati.demo_tecnologie(q)
-    return {"query": q, "data": d["esempi"],
-            "totale_aziende": d["totale_aziende"],
-            "campione": "demo pubblica: 2 aziende su %d. La lista intera e' nella API con chiave." % d["totale_aziende"]}
+    return {"query": q, "data": d["esempi"], "altre": d["altre"],
+            "campione": "demo pubblica: due aziende in chiaro. "
+                        "La lista intera e' nella API con chiave."}
+
+
+@router.get("/demo/stats")
+def demo_stats(request: Request):
+    """I quattro contatori della vetrina. Nessun parametro, niente input:
+    la superficie d'attacco e' il nulla, e' il punto (26/09/2026)."""
+    _demo_gate(request)
+    return dati.demo_stats()
