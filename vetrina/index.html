@@ -64,6 +64,14 @@ tailwind.config = {
 @keyframes tick { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
 .tick-track { animation: tick 14s linear infinite; }
 .tick-wrap:hover .tick-track { animation-play-state: paused; }
+/* the two coverage panels are equal by construction: same fixed height,
+   the longer list scrolls inside its own panel */
+@media (min-width: 1024px) { .cov-scroll { height: 1140px; } }
+/* the coverage scroll areas are light panels, not code boxes */
+.cov-scroll::-webkit-scrollbar { width: 8px; }
+.cov-scroll::-webkit-scrollbar-track { background: transparent; }
+.cov-scroll::-webkit-scrollbar-thumb { background: #d5dbe7; border-radius: 99px; }
+.cov-scroll::-webkit-scrollbar-thumb:hover { background: #b8c2d6; }
 /* gentle lift on cards */
 .lift { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .35s; }
 .lift:hover { transform: translateY(-5px); }
@@ -379,9 +387,9 @@ tailwind.config = {
       <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#f59e0b,#f43f5e)"></i>declared gap</span>
       <span class="text-slate-400">a declared gap protects your analysis</span>
     </div>
-    <div class="mt-6 grid lg:grid-cols-2 gap-5 items-start">
+    <div class="mt-6 grid lg:grid-cols-2 gap-5 items-stretch">
       <!-- aziende a sinistra: il prodotto sono loro -->
-      <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
+      <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm flex flex-col">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4"/></svg>
@@ -391,10 +399,12 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-mint-600">what we know about each employer</p>
           </div>
         </div>
-        <table class="w-full text-[15px]"><tbody id="tab-copertura-az" class="divide-y divide-slate-100"></tbody></table>
+        <div class="cov-scroll overflow-auto">
+          <table class="w-full text-[15px]"><tbody id="tab-copertura-az" class="divide-y divide-slate-100"></tbody></table>
+        </div>
       </div>
       <!-- offerte a destra -->
-      <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
+      <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm flex flex-col">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -404,7 +414,9 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-brand-600">what we know about each opening</p>
           </div>
         </div>
-        <table class="w-full text-[15px]"><tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody></table>
+        <div class="cov-scroll overflow-auto">
+          <table class="w-full text-[15px]"><tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody></table>
+        </div>
       </div>
     </div>
   </div>
@@ -771,11 +783,11 @@ function disegnaCopertura(righe, tbody, nomi){
     const tr=document.createElement('tr');
     tr.className="hover:bg-slate-50/70 transition";
     const[c1,c2,pill]=fasciaColore(v);
-    tr.innerHTML=`<td class="px-6 py-3.5">
+    tr.innerHTML=`<td class="px-6 py-3">
         <div class="font-semibold text-slate-800 text-[14.5px]">${umano}</div>
         <div class="font-mono text-[11px] text-slate-400 mt-0.5">${tecnico}</div></td>
-      <td class="px-6 py-3.5 w-[42%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
-      <td class="px-6 py-3.5 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${v}%</span></td>`;
+      <td class="px-6 py-3 w-[42%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
+      <td class="px-6 py-3 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${v}%</span></td>`;
     tbody.appendChild(tr);});
 }
 disegnaCopertura(copFallback, tb, NOMI_COP);
