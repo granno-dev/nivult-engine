@@ -75,6 +75,10 @@ class AtsJob:
         self.title = senza_nulli(self.title)
         self.url = senza_nulli(self.url)
         self.location = senza_nulli(self.location)
+        # country mancava dalla sanificazione (26/09/2026): un \x00 nel
+        # paese faceva fallire l'insert e — prima del try per offerta —
+        # l'intero lotto.
+        self.country = senza_nulli(self.country)
         self.city = senza_nulli(self.city)
         self.department = senza_nulli(self.department)
         self.external_id = senza_nulli(self.external_id)
@@ -205,7 +209,11 @@ class Greenhouse(BaseAdapter):
                 external_id=str(j["id"]), title=j.get("title", ""),
                 url=j.get("absolute_url", ""),
                 location=(j.get("location") or {}).get("name"),
-                posted_at=j.get("updated_at") or j.get("first_published"),
+                # 26/09/2026: la data VERA prima della ritoccata: updated_at
+                # cambia a ogni edit dell'annuncio e l'upsert la riscriveva —
+                # misura sul parco: 194.401 offerte attive con la data
+                # ringiovanita. first_published e' quella che si vende.
+                posted_at=j.get("first_published") or j.get("updated_at"),
                 raw=j)
             for j in r.json().get("jobs", [])]
 
@@ -231,6 +239,10 @@ class SmartRecruiters(BaseAdapter):
         while offset < self.MAX_OFFSET:
             r = self.client.get(f"{base}&offset={offset}")
             if r.status_code == 404:
+                if offset > 0:
+                    # un 404 a meta' paginazione non e' «la bacheca e'
+                    # finita»: la lettura si dichiara incompleta (26/09)
+                    self.lettura_parziale = True
                 return [] if offset == 0 else self._converti(slug, contenuto)
             r.raise_for_status()
             d = r.json()
@@ -441,9 +453,16 @@ class Workday(BaseAdapter):
                 if cand:
                     facet = cand[0].get("facetParameter")
             if facet:
-                grezzi = []
+                # 26/09: la board gia' letta NON si butta (copre chi non ha
+                # il facet), e ogni fetta dichiara se ha toccato il tetto:
+                # la somma si riconcilia col totale dichiarato alla fine.
+                per_fetta: list[dict] = []
                 for val in self._facet_values(url, facet):
-                    grezzi.extend(self._leggi_fetta(url, {facet: [val]}))
+                    fetta = self._leggi_fetta(url, {facet: [val]})
+                    if len(fetta) >= self.TETTO_QUERY:
+                        self.lettura_parziale = True   # la fetta stessa e' troppo grande
+                    per_fetta.extend(fetta)
+                grezzi.extend(per_fetta)
             else:
                 # niente facets: resta la lettura troncata e si dichiara
                 self.lettura_parziale = True
@@ -454,7 +473,10 @@ class Workday(BaseAdapter):
             # titolo: righe vuote, si scartano — verificate sul giro reale
             if not j.get("title"):
                 continue
-            eid = (j.get("bulletFields") or ["unknown"])[0]
+            # 26/09/2026: senza bulletFields l'id era «unknown» per tutti e
+            # collassavano in una riga sola, sovrascritta a ogni giro.
+            # La riserva e' il path: unico per costruzione.
+            eid = (j.get("bulletFields") or [None])[0] or j.get("externalPath") or "unknown"
             if eid in visti:
                 continue
             visti.add(eid)
@@ -471,6 +493,12 @@ class Workday(BaseAdapter):
                 country=country,
                 city=pezzi[0] if pezzi else None,
                 raw=j))
+        # riconciliazione: letto meno del dichiarato non e' mai «completo».
+        # Le righe senza titolo spiegano pochi punti; oltre il 5% di scarto
+        # la lettura si dichiara parziale, cosi' il cruscotto la vede.
+        if (self.total_dichiarato and
+                len(out) < self.total_dichiarato * 0.95):
+            self.lettura_parziale = True
         return out
 
 
@@ -1477,6 +1505,8 @@ class Niceboard(BaseAdapter):
                          "location_name": loc}))
             if len(jobs) < 200:
                 break
+        else:
+            self.lettura_parziale = True   # tetto delle 20 pagine toccato (26/09)
         return out
 
 
@@ -1539,6 +1569,10 @@ class Traffit(BaseAdapter):
                     # non un sottoinsieme: 11,5k offerte erano senza testo
                     raw=j))
             offset += 50
+        # il tetto dei 4.000 non e' «la bacheca e' finita»: se il conteggio
+        # dichiarato va oltre, la lettura si dichiara incompleta (26/09)
+        if count is not None and count > 4000:
+            self.lettura_parziale = True
         return out
 
 
@@ -1582,7 +1616,6 @@ class Vincere(BaseAdapter):
             blocchi = r.text.split('<article class="job">')[1:]
             if not blocchi:
                 break
-            nuovi = 0
             for b in blocchi:
                 m = self._LINK.search(b)
                 if not m:
@@ -1608,6 +1641,8 @@ class Vincere(BaseAdapter):
                          "location": loc}))
             if nuovi == 0:
                 break
+        else:
+            self.lettura_parziale = True   # tetto delle 30 pagine toccato (26/09)
         return out
 
 
@@ -1812,6 +1847,9 @@ class Eploy(BaseAdapter):
         for u in urls:
             if u not in visti:
                 visti.add(u); out.append(u)
+        # 26/09/2026: il taglio a 600 non e' «la bacheca e' finita»
+        if len(out) > self.MAX_OFFERTE:
+            self.lettura_parziale = True
         return out[:self.MAX_OFFERTE]
 
     def _una(self, slug: str, url: str):
@@ -1846,10 +1884,17 @@ class Eploy(BaseAdapter):
         if not urls:
             return []
         out: list[AtsJob] = []
+        fallite = 0
         with ThreadPoolExecutor(max_workers=6) as ex:
             for aj in ex.map(lambda u: self._una(slug, u), urls):
                 if aj is not None:
                     out.append(aj)
+                else:
+                    fallite += 1
+        # una pagina che non risponde non e' «non esiste»: oltre un decimo
+        # di pagine senza JSON-LD la lettura si dichiara parziale (26/09)
+        if fallite and fallite * 10 > len(urls):
+            self.lettura_parziale = True
         return out
 
 
@@ -2061,12 +2106,20 @@ class JsonLd(BaseAdapter):
             urls = sorted(u for u in link if mio(u) and PATH_ANNUNCIO.search(urlparse(u).path)
                           and u.rstrip("/") != str(r.url).rstrip("/"))
         out: list[AtsJob] = []
+        # 26/09/2026: il taglio a 200 pagine non e' «finita» e una pagina
+        # che non risponde non e' «non esiste»: entrambi si dichiarano,
+        # o la scadenza per presenza uccide offerte vive.
+        if len(urls) > self.MASSIMO_PAGINE:
+            self.lettura_parziale = True
+        fallite = 0
         for u in urls[:self.MASSIMO_PAGINE]:
             try:
                 p = self.client.get(u)
             except httpx.HTTPError:
+                fallite += 1
                 continue
             if p.status_code != 200:
+                fallite += 1
                 continue
             jp = _estrai_ld(p.text)
             if not jp:
@@ -2089,6 +2142,10 @@ class JsonLd(BaseAdapter):
                 title=titolo[:300], url=str(p.url),
                 location=citta, city=citta, country=paese, posted_at=_data(jp),
                 raw=raw))
+        # un sito che muore a meta' enumerazione non e' una bacheca letta:
+        # oltre un decimo di pagine fallite la lettura si dichiara parziale
+        if fallite and fallite * 10 > min(len(urls), self.MASSIMO_PAGINE):
+            self.lettura_parziale = True
         return out
 
 

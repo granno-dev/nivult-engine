@@ -330,34 +330,45 @@ def scrape(dsn: str, piattaforma: str | None = None,
 
                 for j in jobs:
                     j.country = _paese_all_ingresso(j)
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            INSERT INTO ats_jobs (platform_id, slug, external_id, title,
-                              url, location, country, city, posted_at, department, raw,
-                              posted_at_estimated)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::timestamptz, now()),%s,%s,(%s::timestamptz IS NULL))
-                            ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
-                              title = EXCLUDED.title, url = EXCLUDED.url,
-                              location = EXCLUDED.location,
-                              country = COALESCE(EXCLUDED.country, ats_jobs.country),
-                              city = EXCLUDED.city,
-                              -- 14/09: senza data dichiarata vale la prima vista (stimata);
-                              -- una data dichiarata batte sempre una stima
-                              posted_at = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN EXCLUDED.posted_at ELSE ats_jobs.posted_at END,
-                              posted_at_estimated = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN false ELSE ats_jobs.posted_at_estimated END,
-                              department = EXCLUDED.department, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
-                              expired_at = NULL,   -- rivista = di nuovo viva
-                              fetched_at = now()
-                            RETURNING (xmax = 0) AS is_new
-                        """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
-                              j.location, j.country, j.city, j.posted_at,
-                              j.department, psycopg.types.json.Json(j.raw), j.posted_at))
-                        r = cur.fetchone()
-                        if r and r[0]:
-                            stats["nuove"] += 1
-                        else:
-                            stats["aggiornate"] += 1
-                    stats["offerte"] += 1
+                    try:
+                        # 26/09/2026: ogni offerta ha il suo savepoint: una
+                        # riga cattiva si ritira da sola, le altre della
+                        # stessa azienda restano (prima il rollback manuale
+                        # le trascinava giu' tutte).
+                        with conn.transaction():
+                            with conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO ats_jobs (platform_id, slug, external_id, title,
+                                      url, location, country, city, posted_at, department, raw,
+                                      posted_at_estimated)
+                                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s::timestamptz, now()),%s,%s,(%s::timestamptz IS NULL))
+                                    ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
+                                      title = EXCLUDED.title, url = EXCLUDED.url,
+                                      location = EXCLUDED.location,
+                                      country = COALESCE(EXCLUDED.country, ats_jobs.country),
+                                      city = EXCLUDED.city,
+                                      -- 14/09: senza data dichiarata vale la prima vista (stimata);
+                                      -- una data dichiarata batte sempre una stima
+                                      posted_at = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN EXCLUDED.posted_at ELSE ats_jobs.posted_at END,
+                                      posted_at_estimated = CASE WHEN NOT EXCLUDED.posted_at_estimated THEN false ELSE ats_jobs.posted_at_estimated END,
+                                      department = EXCLUDED.department, raw = CASE WHEN ats_jobs.raw ? 'description' AND NOT (EXCLUDED.raw ? 'description') THEN EXCLUDED.raw || jsonb_build_object('description', ats_jobs.raw->'description') ELSE EXCLUDED.raw END,
+                                      expired_at = NULL,   -- rivista = di nuovo viva
+                                      fetched_at = now()
+                                    RETURNING (xmax = 0) AS is_new
+                                """, (j.platform_id, j.slug, j.external_id, j.title, j.url,
+                                      j.location, j.country, j.city, j.posted_at,
+                                      j.department, psycopg.types.json.Json(j.raw), j.posted_at))
+                                r = cur.fetchone()
+                                if r and r[0]:
+                                    stats["nuove"] += 1
+                                else:
+                                    stats["aggiornate"] += 1
+                            stats["offerte"] += 1
+                    except psycopg.Error as exc:
+                        stats["saltate"] = stats.get("saltate", 0) + 1
+                        log.warning("offerta saltata (%s/%s/%s): %s",
+                                    j.platform_id, j.slug, j.external_id,
+                                    str(exc).splitlines()[0][:160])
 
                 with conn.cursor() as cur:
                     # last_ok_at: la lettura e' RIUSCITA (offerte parseate, o

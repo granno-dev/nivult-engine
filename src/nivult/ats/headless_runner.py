@@ -95,8 +95,12 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
                 JOIN ats_platforms ap ON ap.id = ac.platform_id
                 WHERE ac.is_active AND ap.is_active
                   AND ap.api_type IN ('headless', 'headless_difficult')
-                  AND ac.last_fetch_at IS NULL
+                  AND (ac.last_fetch_at IS NULL
+                       OR ac.last_fetch_at < now() - interval '7 days')
             """
+            # 26/09/2026: prima c'era solo `last_fetch_at IS NULL`: ogni
+            # tenant veniva letto UNA volta nella vita — niente refresh,
+            # niente chiusure, e i falliti mai riprovati.
             params: list = []
             if piattaforma:
                 sql += " AND ac.platform_id = %s"
@@ -160,6 +164,7 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
                                     VALUES (%s, %s, %s, %s, %s, %s)
                                     ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
                                       title = EXCLUDED.title, url = EXCLUDED.url,
+                                      expired_at = NULL,   -- rivista = di nuovo viva (26/09)
                                       fetched_at = now()
                                     RETURNING (xmax = 0) AS is_new
                                 """, (platform_id, slug, external_id, link["text"],
@@ -173,10 +178,20 @@ async def scrape_headless(dsn: str, piattaforma: str | None = None) -> dict:
                 # Aggiorna lo stato dell'azienda
                 with psycopg.connect(dsn) as conn:
                     with conn.cursor() as cur:
-                        cur.execute(
-                            "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
-                            "job_count = %s WHERE platform_id = %s AND slug = %s",
-                            (jobs_trovati, platform_id, slug))
+                        if jobs_trovati > 0:
+                            cur.execute(
+                                "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
+                                "job_count = %s WHERE platform_id = %s AND slug = %s",
+                                (jobs_trovati, platform_id, slug))
+                        else:
+                            # 26/09/2026: zero link su una pagina 200 non e'
+                            # una bacheca vuota (template cambiato, muro di
+                            # consenso): si segna TENTATA, non letta — la
+                            # scadenza per presenza non tocca le sue offerte.
+                            cur.execute(
+                                "UPDATE ats_companies SET last_fetch_at = now() "
+                                "WHERE platform_id = %s AND slug = %s",
+                                (platform_id, slug))
                     conn.commit()
 
                 log.info("  %s/%s: %d offerte", platform_id, slug, jobs_trovati)
@@ -211,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
     dsn = ATS_DSN
-    print(f"database ATS: {dsn}")
+    # mai la password in chiaro nei log (come gia' in runner.py): il DSN
+    # si mostra mascherato
+    print(f"database ATS: {re.sub(r'//[^:]+:[^@]+@', '//***:***@', dsn)}")
 
     stats = asyncio.run(scrape_headless(dsn, args.piattaforma))
 
