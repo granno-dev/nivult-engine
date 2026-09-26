@@ -104,7 +104,11 @@ def email_da_code(code: str) -> str | None:
         return None
     if r.status_code != 200:
         return None
-    id_token = r.json().get("id_token")
+    try:
+        id_token = r.json().get("id_token")
+    except ValueError:
+        # un 200 senza JSON (proxy, captive portal) non e' un login valido
+        return None
     if not id_token:
         return None
     try:
@@ -898,8 +902,9 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
     # ── parte pesante PRIMA del resto: i conteggi pieni (attive, viste
     # 24h, sprint/ora) vengono da li', gia' pronti dalla cache di sfondo ──
     pes = _pesanti(ats_dsn)
-    attive = (pes["salute"].get("offerte_attive") or 0) if pes else 0
-    d["stato"]["offerte_viste_24h"] = pes["salute"].get("offerte_viste_24h") if pes else None
+    salute = (pes or {}).get("salute") or {}
+    attive = (salute.get("offerte_attive") or 0) if pes else 0
+    d["stato"]["offerte_viste_24h"] = salute.get("offerte_viste_24h") if pes else None
 
     # ── board live: le offerte piu' recenti per data di pubblicazione,
     # col tempo relativo, come il flusso continuo di Fantastic.
@@ -943,7 +948,7 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
 
     d["giri"] = _giri(ats_dsn)
     d["macchine"] = _macchine(ats_dsn, sprint_ultima_ora=(
-        pes["salute"].get("sprint_ultima_ora") if pes else None))
+        salute.get("sprint_ultima_ora") if pes else None))
 
     try:
         d["motore"] = {
@@ -990,7 +995,7 @@ def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
               "raccolta_oraria", "magazzino", "scheda_azienda",
               "scheda_azienda_tot", "registri", "modelli", "copertura"):
         d[k] = pes.get(k)     # .get: la cache su disco puo' venire dal codice di prima
-    d["salute"] = dict(pes["salute"])
+    d["salute"] = dict(salute)
     if not attive:
         # la cache su disco del codice precedente non ha i conteggi nuovi:
         # si misurano una volta qui, dal prossimo giro arrivano dalla cache

@@ -29,7 +29,7 @@ import psycopg
 from psycopg import Binary
 from psycopg.types.json import Json
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
-                     Request, Response, UploadFile)
+                     Query, Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
@@ -118,10 +118,14 @@ def _ip(request: Request) -> str | None:
     """L'indirizzo del chiamante, se è davvero un indirizzo.
 
     Dietro il tunnel di Cloudflare l'host è quello locale del connettore: il
-    vero IP sta negli header. Ma qui si difende solo da input non-IP —
-    un valore sporco non deve far 500 una richiesta di login.
+    vero IP sta in CF-Connecting-IP (lo scrive Cloudflare, il cliente non lo
+    falsifica). Il 26/09/2026 il docstring lo prometteva e il codice non lo
+    faceva: il rate limiting misurava il tunnel, non il visitatore. Qui si
+    difende solo da input non-IP — un valore sporco non deve far 500 una
+    richiesta di login.
     """
-    host = request.client.host if request.client else None
+    host = (request.headers.get("cf-connecting-ip")
+            or (request.client.host if request.client else None))
     try:
         return str(ipaddress.ip_address(host)) if host else None
     except ValueError:
@@ -933,7 +937,7 @@ def create_app() -> FastAPI:
 
     @app.get("/me/offerte")
     def mie_offerte(uid: str = Depends(utente), conn=Depends(connessione),
-                    limite: int = 40):
+                    limite: int = Query(40, ge=1, le=100)):
         """Le offerte che hanno superato la soglia per questo utente.
 
         Solo quelle passate: le scartate sono rumore, e mostrarle
@@ -952,7 +956,7 @@ def create_app() -> FastAPI:
                 "FROM matches m JOIN jobs j ON j.id = m.job_id "
                 "WHERE m.user_id = %s AND m.passed "
                 "ORDER BY m.evaluated_at DESC, m.score DESC LIMIT %s",
-                (uid, min(limite, 100)))
+                (uid, limite))
             righe = cur.fetchall()
             cur.execute("SELECT count(*) FROM matches WHERE user_id = %s", (uid,))
             lette = cur.fetchone()[0]
@@ -1468,7 +1472,12 @@ def create_app() -> FastAPI:
         if not atteso or not ricevuto or not secrets.compare_digest(ricevuto, atteso):
             raise HTTPException(403, "no")
 
-        corpo = await request.json()
+        try:
+            corpo = await request.json()
+        except Exception:                                # noqa: BLE001
+            # un corpo non-JSON non e' un nostro guasto: 200 e basta,
+            # come promesso nel docstring (a Telegram non si racconta)
+            return {"ok": True}
         msg = (corpo or {}).get("message") or {}
         chat_id = str(((msg.get("chat") or {}).get("id") or "")).strip()
         testo = (msg.get("text") or "").strip()
@@ -1806,7 +1815,12 @@ def create_app() -> FastAPI:
         Il testo del CV non si logga MAI: è un dato personale come tutto il
         resto del file.
         """
-        dati = await file.read()
+        # 26/09/2026: il file veniva letto intero in memoria prima di
+        # qualunque controllo — un upload da centinaia di MB gonfiava la RAM
+        # dell'API. Tetto dichiarato: 20 MB bastano a qualunque CV.
+        dati = await file.read(20 * 1024 * 1024 + 1)
+        if len(dati) > 20 * 1024 * 1024:
+            raise HTTPException(413, "il file supera i 20 MB: troppo grande per un CV")
         try:
             testo = cv.estrai_testo(file.filename or "", file.content_type or "", dati)
         except ValueError as exc:

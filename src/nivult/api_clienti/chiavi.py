@@ -117,12 +117,15 @@ def _leggi(key_hash: str) -> dict | None:
             "usati_mese": r[3], "mese_uso": r[4]}
 
 
-def _consuma(chiave_id: str) -> None:
+def _consuma(chiave_id: str) -> int | None:
     """Un credito in meno, in un'unica istruzione: la transazione e' la riga.
 
     Il reset mensile e' dentro lo stesso UPDATE: se mese_uso e' di un mese
-    vecchio il contatore riparte da 1, altrimenti sale di 1. Niente lettura
-    preliminare, niente corsa fra richieste parallele.
+    vecchio il contatore riparte da 1, altrimenti sale di 1. E il TETTO e'
+    nello stesso UPDATE (26/09/2026): prima si leggeva il contatore dalla
+    cache del processo e con N worker il cliente riceveva N x crediti.
+    Torna il conteggio dopo la scrittura, o None se il tetto e' pieno
+    (o la chiave revocata — il chiamante distingue).
     """
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
@@ -130,9 +133,14 @@ def _consuma(chiave_id: str) -> None:
             "  usati_mese = CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
             "                    THEN 1 ELSE usati_mese + 1 END, "
             "  mese_uso   = date_trunc('month', CURRENT_DATE)::date "
-            "WHERE id = %s AND revoked_at IS NULL",
+            "WHERE id = %s AND revoked_at IS NULL "
+            "  AND (mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "       OR usati_mese < crediti_mensili) "
+            "RETURNING usati_mese",
             (chiave_id,))
+        r = cur.fetchone()
         conn.commit()
+        return r[0] if r else None
 
 
 def autentica(chiave: str) -> dict:
@@ -161,14 +169,17 @@ def autentica(chiave: str) -> dict:
         # criterio, cosi' le due non possono divergere.
         rec["usati_mese"] = 0
         rec["mese_uso"] = mese
-    if rec["usati_mese"] >= rec["crediti_mensili"]:
-        raise CreditiEsauriti(rec["crediti_mensili"], rec["mese_uso"])
     try:
-        _consuma(rec["id"])
+        dopo = _consuma(rec["id"])
     except Exception as exc:  # noqa: BLE001
         # La risposta parte lo stesso: il dato viene prima della contabilita'.
         log.warning("conteggio credito fallito per %s: %s", rec.get("id"), exc)
-    rec["usati_mese"] += 1
+        dopo = rec["usati_mese"] + 1
+    if dopo is None:
+        # il tetto l'ha detto il DB, atomico: con N worker la risposta e'
+        # la stessa per tutti (26/09/2026)
+        raise CreditiEsauriti(rec["crediti_mensili"], rec["mese_uso"])
+    rec["usati_mese"] = dopo
     return rec
 
 
@@ -213,9 +224,13 @@ def lista() -> list[dict]:
 def revoca(chiave_id: str) -> bool:
     """Revoca logica: la riga resta come traccia. -> True se esisteva ed era attiva."""
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE api_chiavi SET revoked_at = now() "
-            "WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
+        try:
+            cur.execute(
+                "UPDATE api_chiavi SET revoked_at = now() "
+                "WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
+        except psycopg.errors.InvalidTextRepresentation:
+            # un id che non e' un uuid non esiste, non e' un errore del server
+            return False
         fatta = cur.rowcount > 0
         conn.commit()
     invalida(chiave_id)

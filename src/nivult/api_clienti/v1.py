@@ -60,8 +60,16 @@ def _cliente(request: Request) -> dict:
 
 
 def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
-    """La forma delle liste, una sola per tutte: data / next_cursor / count_page."""
-    righe, prossimo = funzione(filtri, cursore, limite)
+    """La forma delle liste, una sola per tutte: data / next_cursor / count_page.
+
+    Il cursore malformato e' un errore del CLIENTE (400), non un guasto
+    nostro (500): senza questa traduzione una richiesta sbagliata pagava
+    un credito e riceveva un Internal Server Error.
+    """
+    try:
+        righe, prossimo = funzione(filtri, cursore, limite)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
@@ -133,7 +141,10 @@ def changes(since: str | None = None, cursor: str | None = None,
     except ValueError:
         raise HTTPException(
             400, f"'since' non e' una data ISO 8601 valida: {since!r}")
-    righe, prossimo = dati.cambiamenti(since.strip(), cursor, limit)
+    try:
+        righe, prossimo = dati.cambiamenti(since.strip(), cursor, limit)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
@@ -204,6 +215,12 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
         raise HTTPException(429, "troppo veloce: riprova tra un minuto")
     finestra.append(ora)
     _demo_finestra[ip] = finestra
+    # la mappa cresce a ogni IP mai visto: gli IP che non battono piu'
+    # da un minuto non hanno piu' niente da contare, e se ne vanno
+    if len(_demo_finestra) > 5000:
+        for k in [k for k, v in _demo_finestra.items()
+                  if not v or ora - v[-1] >= 60]:
+            del _demo_finestra[k]
     d = dati.demo_tecnologie(q)
     return {"query": q, "data": d["esempi"],
             "totale_aziende": d["totale_aziende"],

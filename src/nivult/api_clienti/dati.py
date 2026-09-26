@@ -44,6 +44,9 @@ _con: duckdb.DuckDBPyConnection | None = None
 _con_mtime: float | None = None
 _percorso = PERCORSO
 _lock = threading.Lock()
+# il lock della gestione della connessione (apri/chiudi/riapri): separato
+# da _lock delle query, perche' _pagina chiama _conn tenendo il suo
+_lock_conn = threading.Lock()
 # duckdb-python: una connessione NON e' thread-safe. Il lock serializza
 # le query dell'API; una scansione filtrata su 800k righe di colonnare
 # si misura in millisecondi, quindi il collo di bottiglia e' altrove.
@@ -51,20 +54,24 @@ _lock = threading.Lock()
 
 def _conn() -> duckdb.DuckDBPyConnection:
     global _con, _con_mtime
-    try:
-        m = os.path.getmtime(_percorso)
-    except OSError:
-        m = None
-    if _con is not None and m != _con_mtime:
-        # il builder ha sostituito il file stamattina: chi l'ha aperto
-        # resta sull'inode vecchio (POSIX) — si riapre, o l'API servirebbe
-        # l'export di ieri fino al prossimo riavvio
-        _con.close()
-        _con = None
-    if _con is None:
-        _con = duckdb.connect(_percorso, read_only=True)
-        _con_mtime = m
-    return _con
+    # il lock della connessione e' SEPARATO da _lock (quello delle query):
+    # _pagina tiene _lock mentre ci chiama — con lo stesso lock non
+    # rientrante sarebbe deadlock (26/09/2026)
+    with _lock_conn:
+        try:
+            m = os.path.getmtime(_percorso)
+        except OSError:
+            m = None
+        if _con is not None and m != _con_mtime:
+            # il builder ha sostituito il file stamattina: chi l'ha aperto
+            # resta sull'inode vecchio (POSIX) — si riapre, o l'API servirebbe
+            # l'export di ieri fino al prossimo riavvio
+            _con.close()
+            _con = None
+        if _con is None:
+            _con = duckdb.connect(_percorso, read_only=True)
+            _con_mtime = m
+        return _con
 
 
 def apri(percorso: str | None = None) -> None:
@@ -75,19 +82,15 @@ def apri(percorso: str | None = None) -> None:
     deve fallire all'import.
     """
     global _con, _con_mtime, _percorso
-    with _lock:
+    # entrambi i lock: _con e' di _lock_conn, ma chi ci chiama puo' gia'
+    # tenere _lock — l'ordine di acquisizione e' sempre questo (_lock
+    # poi _lock_conn), come in _pagina -> _conn
+    with _lock, _lock_conn:
         if _con is not None:
             _con.close()
             _con = None
         _con_mtime = None
         _percorso = percorso or PERCORSO
-
-
-def _conn() -> duckdb.DuckDBPyConnection:
-    global _con
-    if _con is None:
-        _con = duckdb.connect(_percorso, read_only=True)
-    return _con
 
 
 def _iso(v):
@@ -148,6 +151,13 @@ _TEC = ("list_contains(list_transform(technologies, x -> lower(x)),"
         " lower(${nome}))")
 
 
+def _like(testo: str) -> str:
+    """ILIKE con jolly spenti: il % e il _ del cliente sono LETTERE,
+    non metacaratteri — «100%» deve trovare 100%, non tutto."""
+    return ("%" + testo.replace("\\", "\\\\").replace("%", "\\%")
+            .replace("_", "\\_") + "%")
+
+
 def offerte(filtri: dict, cursore: str | None,
             limite: int) -> tuple[list[dict], str | None]:
     filtri = filtri or {}
@@ -166,8 +176,8 @@ def offerte(filtri: dict, cursore: str | None,
             if isinstance(v, bool) else str(v)
         dove.append("remote = $remote")
     if filtri.get("q"):
-        dove.append("title ILIKE $q")
-        par["q"] = f"%{filtri['q']}%"
+        dove.append("title ILIKE $q ESCAPE '\\'")
+        par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
         dove.append(_TEC.format(nome="technology"))
         par["technology"] = str(filtri["technology"])
@@ -206,8 +216,8 @@ def aziende(filtri: dict, cursore: str | None,
             dove.append(f"{campo} = ${campo}")
             par[campo] = filtri[campo]
     if filtri.get("q"):
-        dove.append("company ILIKE $q")
-        par["q"] = f"%{filtri['q']}%"
+        dove.append("company ILIKE $q ESCAPE '\\'")
+        par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
         dove.append(_TEC.format(nome="technology"))
         par["technology"] = str(filtri["technology"])

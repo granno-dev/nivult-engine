@@ -133,12 +133,23 @@ def _leggi_finto(key_hash: str):
 
 
 def _consuma_finto(chiave_id: str):
+    """Il contratto NUOVO di _consuma: torna il conteggio dopo la
+    scrittura, o None se il tetto e' pieno — come l'UPDATE atomico."""
     if CONSUMI_FALLISCONO:
         raise RuntimeError("database giu' (simulato)")
     CONSUMI.append(chiave_id)
     for rec in STORE.values():
         if rec["id"] == chiave_id:
+            # come l'UPDATE vero: il mese vecchio riparte da 1 nella
+            # stessa istruzione, prima ancora di guardare il tetto
+            if rec["mese_uso"].replace(day=1) < OGGI.replace(day=1):
+                rec["usati_mese"] = 0
+                rec["mese_uso"] = OGGI.replace(day=1)
+            if rec["usati_mese"] >= rec["crediti_mensili"]:
+                return None
             rec["usati_mese"] += 1
+            return rec["usati_mese"]
+    return None
 
 
 chiavi._leggi = _leggi_finto
