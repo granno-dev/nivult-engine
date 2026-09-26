@@ -205,6 +205,11 @@ def _carica_copertura(con: duckdb.DuckDBPyConnection, cartella: str) -> dict:
     copertura = manifest.get("coverage") or {}
     con.executemany("INSERT INTO copertura VALUES (?, ?)",
                     [(k, float(v)) for k, v in copertura.items()])
+    # la copertura delle aziende viaggia nella stessa tabella, col
+    # prefisso che la distingue (27/09/2026): `az:domain` ecc.
+    copertura_az = manifest.get("coverage_aziende") or {}
+    con.executemany("INSERT INTO copertura VALUES (?, ?)",
+                    [("az:" + k, float(v)) for k, v in copertura_az.items()])
     return manifest
 
 

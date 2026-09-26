@@ -306,12 +306,15 @@ def demo_stats() -> dict:
                 nuove = _conn().execute(
                     "SELECT count(*) FROM flusso WHERE event = 'new' "
                     "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
-                cop = {k: v for k, v in _conn().execute(
-                    "SELECT chiave, valore FROM copertura").fetchall()}
+                righe_cop = _conn().execute(
+                    "SELECT chiave, valore FROM copertura").fetchall()
+            cop = {k: v for k, v in righe_cop if not k.startswith("az:")}
+            cop_az = {k[3:]: v for k, v in righe_cop if k.startswith("az:")}
             return {"offerte": sal["offerte_attive"],
                     "aziende": sal.get("aziende_con_offerte"),
                     "paesi": sal.get("paesi"),
-                    "nuove_24h": nuove, "copertura": cop}
+                    "nuove_24h": nuove, "copertura": cop,
+                    "copertura_aziende": cop_az}
     except Exception:                                # noqa: BLE001
         pass                                         # ripiego sotto
     with _lock:
@@ -322,10 +325,13 @@ def demo_stats() -> dict:
         nuove = _conn().execute(
             "SELECT count(*) FROM flusso WHERE event = 'new' "
             "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
-        cop = {k: v for k, v in _conn().execute(
-            "SELECT chiave, valore FROM copertura").fetchall()}
+        righe_cop = _conn().execute(
+            "SELECT chiave, valore FROM copertura").fetchall()
+    cop = {k: v for k, v in righe_cop if not k.startswith("az:")}
+    cop_az = {k[3:]: v for k, v in righe_cop if k.startswith("az:")}
     return {"offerte": offerte, "aziende": aziende,
-            "paesi": paesi, "nuove_24h": nuove, "copertura": cop}
+            "paesi": paesi, "nuove_24h": nuove, "copertura": cop,
+            "copertura_aziende": cop_az}
 
 
 def cambiamenti(da: str, cursore: str | None,
@@ -350,11 +356,19 @@ def cambiamenti(da: str, cursore: str | None,
 
 
 def copertura() -> dict:
-    """I fill-rate dichiarati dal manifest dell'export: {campo: pct}."""
+    """I fill-rate dichiarati dal manifest dell'export.
+
+    Forma: {campo: pct} per le offerte (invariata dal giorno uno) piu'
+    la chiave "aziende" (27/09/2026) col fill-rate dei campi azienda.
+    Le chiavi si aggiungono, non si rinominano mai."""
     with _lock:
         righe = _conn().execute(
             "SELECT chiave, valore FROM copertura").fetchall()
-    return {k: v for k, v in righe}
+    out = {k: v for k, v in righe if not k.startswith("az:")}
+    az = {k[3:]: v for k, v in righe if k.startswith("az:")}
+    if az:
+        out["aziende"] = az
+    return out
 
 
 def stato_export() -> dict:

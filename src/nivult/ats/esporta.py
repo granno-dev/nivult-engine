@@ -285,6 +285,9 @@ def attive(dsn: str, campione: int | None = None) -> int:
 def aziende(dsn: str, campione: int | None = None) -> int:
     percorso, f = _apri("aziende-segnali" + ("-campione" if campione else ""))
     n = 0
+    # la copertura dei campi AZIENDA, dichiarata come quella delle offerte
+    # (27/09/2026): il prodotto sono le aziende, e i buchi si mostrano
+    copertura: dict[str, int] = {}
     with psycopg.connect(dsn) as conn:
         # le competenze più chieste da ciascuna azienda: l'aggregato che
         # trasforma un mucchio di annunci in un segnale su chi assume cosa
@@ -426,7 +429,40 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                                    "last_verified_at": u}
                                   for a, tot, t, p, u in tec]))
                 n += 1
+                copertura["country"] = copertura.get("country", 0) + (r[3] is not None)
+                copertura["domain"] = copertura.get("domain", 0) + bool(r[4])
+                copertura["website"] = copertura.get("website", 0) + bool(sito)
+                copertura["industry"] = copertura.get("industry", 0) + bool(r[8])
+                copertura["size_range"] = copertura.get("size_range", 0) + bool(size_range)
+                copertura["employees"] = copertura.get("employees", 0) + (dip_best is not None)
+                copertura["legal_name"] = copertura.get("legal_name", 0) + bool(legal_name)
+                copertura["legal_form"] = copertura.get("legal_form", 0) + bool(legal_form)
+                copertura["registration_id"] = copertura.get("registration_id", 0) + bool(reg_id)
+                copertura["founded"] = copertura.get("founded", 0) + bool(fondata)
+                copertura["headquarters"] = copertura.get("headquarters", 0) + bool(hq)
+                copertura["description"] = copertura.get("description", 0) + bool(pulito(descr))
+                copertura["technologies"] = copertura.get("technologies", 0) + bool(tec)
+                copertura["top_skills"] = copertura.get("top_skills", 0) + bool(cime)
+                copertura["locations"] = copertura.get("locations", 0) + bool(sedi)
+                copertura["external_urls"] = copertura.get("external_urls", 0) + bool(urls)
+                copertura["lei"] = copertura.get("lei", 0) + bool(lei)
+                copertura["languages"] = copertura.get("languages", 0) + bool(r[14])
     _chiudi(percorso, f, n)
+    # il manifest delle offerte e' gia' scritto da attive(): qui si aggiunge
+    # la chiave coverage_aziende, stessa atomica' (tmp + rename)
+    if not campione:
+        nome_manifest = f"{CARTELLA}/manifest-ultimo.json"
+        try:
+            with open(nome_manifest) as mf:
+                manifest = json.load(mf)
+        except (OSError, json.JSONDecodeError):
+            manifest = {"date": dt.date.today().isoformat()}
+        manifest["coverage_aziende"] = {k: round(100 * v / max(n, 1), 1)
+                                        for k, v in copertura.items()}
+        with open(nome_manifest + ".tmp", "w") as mf:
+            json.dump(manifest, mf, indent=1)
+        os.replace(nome_manifest + ".tmp", nome_manifest)
+        log.info("manifest aziende: %s", manifest["coverage_aziende"])
     return n
 
 
