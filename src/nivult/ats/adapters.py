@@ -889,8 +889,19 @@ class Icims(BaseAdapter):
     `iCIMS_JobCardItem` con titolo, URL (che contiene l'id) e, quando il
     portale li mostra, i campi di intestazione (requisition, sede). Si
     pagina con `pr` finche' non arrivano piu' card nuove.
+
+    26/09/2026 — via il tetto delle 40 pagine: era nostro, non di iCIMS.
+    Misurato su careers-aerotek e careers-tephseal: oltre l'ultima pagina
+    la ricerca risponde 200 con zero card (fino a pr=500), non un errore,
+    quindi si puo' paginare fino in fondo. Ogni pagina dichiara il suo
+    indice («Page 1 of 9»): quel numero e' il totale con cui la lettura
+    si riconcilia a fine giro, come fa Workday col `total` della CXS.
     """
     platform_id = "icims"
+    # guardia contro i portali che non finiscono mai: a 20-50 card per
+    # pagina (misurato) sono comunque 10.000+ offerte prima del taglio
+    MAX_PAGINE = 500
+    _PAGER = re.compile(r"Page\s+(\d+)\s+of\s+(\d+)")
     _CARD = re.compile(r'<li class="iCIMS_JobCardItem">(.*?)</li>', re.S)
     _LINK = re.compile(
         r'href="(https://[^"]+/jobs/(\d+)/[^"]+/job)"[^>]*?title="([^"]*)"',
@@ -910,7 +921,9 @@ class Icims(BaseAdapter):
     def jobs(self, slug: str) -> list[AtsJob]:
         out: list[AtsJob] = []
         visti: set[str] = set()
-        for page in range(0, 40):
+        pagine_dichiarate: int | None = None
+        page = 0
+        while page < self.MAX_PAGINE:
             url = (f"https://{slug}.icims.com/jobs/search?pr={page}"
                    "&mobile=true&needsRedirect=false")
             try:
@@ -922,8 +935,14 @@ class Icims(BaseAdapter):
             if r.status_code != 200:
                 self.lettura_parziale = True
                 break
+            if pagine_dichiarate is None:
+                m0 = self._PAGER.search(r.text)
+                if m0:
+                    pagine_dichiarate = int(m0.group(2))
             cards = self._CARD.findall(r.text)
             if not cards:
+                # misurato 26/09: oltre l'ultima pagina iCIMS risponde
+                # 200 con zero card, non un errore: e' la fine naturale
                 break
             nuovi = 0
             for card in cards:
@@ -964,10 +983,17 @@ class Icims(BaseAdapter):
                     platform_id=self.platform_id, slug=slug,
                     external_id=jid, title=titolo, url=jurl,
                     location=loc, city=citta, country=paese, raw=campi))
+            page += 1
+            if pagine_dichiarate and page >= pagine_dichiarate:
+                break                # ultima pagina dichiarata raggiunta
             if nuovi == 0:
                 break
         else:
-            self.lettura_parziale = True   # tetto toccato: elenco incompleto
+            self.lettura_parziale = True   # tetto delle 500 pagine toccato (26/09)
+        # riconciliazione col pager: fermarsi prima dell'ultima pagina
+        # dichiarata non e' mai «la bacheca e' finita» (26/09)
+        if pagine_dichiarate is not None and page < pagine_dichiarate:
+            self.lettura_parziale = True
         return out
 
 
@@ -2402,15 +2428,55 @@ class SuccessFactors(BaseAdapter):
     muti perche' i tre di riferimento erano della variante che
     funzionava. Fantastic vedeva 10.463 offerte SuccessFactors a
     settimana in Germania; noi 434.
+
+    26/09/2026 — tre riparazioni misurate su jobs.bayer.com e
+    jobs.zf.com. (a) Le righe per pagina si MISURANO sulla prima pagina:
+    CSB permette da 5 a 100 righe (SAP KBA 2583360) e startrow e' un
+    offset di riga — avanzare di 25 con 10 righe/pagina saltava 15
+    offerte a pagina (Bayer: 635 dichiarate, il 40% letto). (b) La
+    sitemap puo' essere un INDICE di sitemap (jobs.sap.com: 6 figlie):
+    leggerlo come urlset non trovava nessun /job/ e la fonte della
+    completezza taceva — ora si seguono i figli. (c) La ricerca dichiara
+    il totale (aria-label «Page 1 of 64, Results 1 to 10 of 635»; nel
+    template a tile, `jobRecordsFound`): a fine lettura il letto si
+    riconcilia col dichiarato, come fa Workday col `total` della CXS.
+    (d) Il nuovo CSB (Unified Data Model) cambia forma agli URL degli
+    annunci: /{lingua}/{segmento-tradotto}/{id}/{slug}/ — su
+    jobs.sap.com /en/jobs/…, /fr/emplois/…, /de/stellen/…, con lo stesso
+    id fra le lingue. _RX_JOB li riconosce entrambi; attenzione che li'
+    le pagine HTML sono dietro Cloudflare (403) e la sitemap e' l'unica
+    fonte.
     """
     platform_id = "successfactors"
-    MAX_PAGINE = 60          # 60 x 25 = 1.500 righe con sede; oltre, la sitemap
+    # guardia contro i siti che non finiscono mai: la fine naturale e' il
+    # totale dichiarato o la pagina vuota (Scania: 743 offerte = 75
+    # pagine da 10, oltre il vecchio tetto di 60)
+    MAX_PAGINE = 500
     MAX_BACHECHE = 6
-    _RX_JOB = re.compile(r'/job/([^"\'<>\s]+?)/(\d+)/?(?=["\'<\s?#])')
+    MAX_SITEMAP = 50       # figlie di un sitemapindex (SAP ne ha 6)
+    # Due formati di URL annuncio. Quello classico: /job/{slug}/{id}/
+    # (Bayer, ZF). Il nuovo CSB (Unified Data Model, misurato su
+    # jobs.sap.com il 26/09): /{lingua}/{segmento-tradotto}/{id}/{slug}/
+    # — /en/jobs/…, /fr/emplois/…, /de/stellen/…, stesso id fra lingue
+    # (la dedup per id ne tiene uno). L'id nuovo e' lungo (15 cifre):
+    # si chiedono 6+ per non confondere bacheche e pagine.
+    _RX_JOB = re.compile(
+        r'/job/([^"\'<>\s]+?)/(\d+)/?(?=["\'<\s?#])'
+        r'|/[a-z]{2}(?:-[a-z]{2})?/[a-z-]{3,}/(\d{6,})/([^"\'<>\s]+?)/?(?=["\'<\s?#])',
+        re.I)
     _RX_RIGA = re.compile(r'<tr class="data-row".*?</tr>', re.S)
     _RX_TILE = re.compile(r'<li class="job-tile.*?</li>', re.S)
     _RX_INIT = re.compile(
         r'Results\.init\(\{(.*?)\}\)', re.S)
+    # il totale dichiarato dalla vista tabellare, misurato su Bayer e ZF:
+    # aria-label="Search results for . Page 1 of 64, Results 1 to 10 of 635"
+    # (il separatore e' «to» nell'etichetta lunga, «–» in quella corta)
+    _RX_TOTALE = re.compile(
+        r"Results\s+[\d.,]+\s*(?:[–—-]|to)\s+[\d.,]+\s+of\s+([\d.,]+)")
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.total_dichiarato: int | None = None   # il totale che la ricerca dichiara
 
     @staticmethod
     def _testo(frammento: str | None) -> str | None:
@@ -2452,6 +2518,16 @@ class SuccessFactors(BaseAdapter):
                 continue
         return None
 
+    @staticmethod
+    def _annuncio(m) -> tuple[str, str]:
+        """Da un match di _RX_JOB: (id, path). Per il formato classico il
+        path si ricostruisce; per il nuovo CSB si prende com'e' — serve
+        il segmento di lingua tradotto (/fr/emplois/{id}/…, 26/09)."""
+        if m.group(2):
+            return m.group(2), f"/job/{m.group(1)}/{m.group(2)}/"
+        path = m.group(0)
+        return m.group(3), path if path.endswith("/") else path + "/"
+
     def _offerta(self, slug: str, base: str, path: str, id_offerta: str,
                  titolo: str | None, sede: str | None, reparto: str | None,
                  data, fonte: str) -> AtsJob:
@@ -2463,7 +2539,11 @@ class SuccessFactors(BaseAdapter):
             if sciolto == path:
                 break
             path = sciolto
-        titolo_slug = path.rstrip("/").split("/")[-2] if path.count("/") >= 3 else ""
+        # il titolo di riserva e' il segmento del path che non e' l'id:
+        # /job/{slug}/{id}/ nel formato classico, /{lingua}/jobs/{id}/{slug}/
+        # nel nuovo CSB — in entrambi e' l'ultimo che non e' l'id (26/09)
+        pezzi = [p for p in path.split("/") if p]
+        titolo_slug = next((p for p in reversed(pezzi) if p != id_offerta), "")
         titolo = titolo or unquote(titolo_slug).replace("-", " ").strip()
         citta = None
         if sede:
@@ -2483,8 +2563,7 @@ class SuccessFactors(BaseAdapter):
             m = self._RX_JOB.search(riga)
             if not m:
                 continue
-            id_offerta = m.group(2)
-            path = f"/job/{m.group(1)}/{id_offerta}/"
+            id_offerta, path = self._annuncio(m)
             titolo = self._testo(next(iter(re.findall(
                 r'<a[^>]*class="jobTitle-link"[^>]*>(.*?)</a>', riga, re.S)), None))
             if not titolo:
@@ -2512,8 +2591,7 @@ class SuccessFactors(BaseAdapter):
             m = self._RX_JOB.search(tile)
             if not m:
                 continue
-            id_offerta = m.group(2)
-            path = f"/job/{m.group(1)}/{id_offerta}/"
+            id_offerta, path = self._annuncio(m)
             titolo = self._testo(next(iter(re.findall(
                 r'<a[^>]*class="jobTitle-link[^"]*"[^>]*>(.*?)</a>', tile, re.S)), None))
             # I campi della tile: id «-section-location-value» sui siti
@@ -2565,10 +2643,24 @@ class SuccessFactors(BaseAdapter):
 
         # 1. la pagina di ricerca: tabella, oppure la dichiarazione dell'API
         r = self._get(f"{base}/search/?q=&sortColumn=referencedate&sortDirection=desc&startrow=0")
-        if r is not None and self._righe_tabella(slug, base, r.text, visti, out):
+        righe0 = len(self._RX_RIGA.findall(r.text)) if r is not None else 0
+        if righe0:
+            # il passo si MISURA sulla prima pagina: CSB permette da 5 a
+            # 100 righe (SAP KBA 2583360) e startrow e' un offset di riga.
+            # Avanzare di 25 con 10 righe/pagina saltava 15 offerte a
+            # pagina (Bayer, 26/09: 635 dichiarate, il 40% letto).
+            passo = righe0
+            mt = self._RX_TOTALE.search(r.text)
+            if mt:
+                self.total_dichiarato = int(
+                    mt.group(1).replace(".", "").replace(",", ""))
+            self._righe_tabella(slug, base, r.text, visti, out)
             for pagina in range(1, self.MAX_PAGINE):
+                if (self.total_dichiarato and
+                        pagina * passo >= self.total_dichiarato):
+                    break            # coperto il totale dichiarato
                 rp = self._get(f"{base}/search/?q=&sortColumn=referencedate"
-                               f"&sortDirection=desc&startrow={pagina * 25}")
+                               f"&sortDirection=desc&startrow={pagina * passo}")
                 if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
                     # interrotto a meta': l'elenco e' incompleto (22/09/2026)
                     if rp is None:
@@ -2583,6 +2675,9 @@ class SuccessFactors(BaseAdapter):
                               or [None, "15"])[1])
             trovate = int((re.search(r'jobRecordsFound:\s*parseInt\("(\d+)"\)', cfg)
                            or [None, "0"])[1])
+            # il totale dichiarato: con lui la lettura si riconcilia
+            if trovate:
+                self.total_dichiarato = trovate
             per_pagina = max(per_pagina, 1)
             for pagina in range(self.MAX_PAGINE):
                 inizio = pagina * per_pagina
@@ -2603,7 +2698,12 @@ class SuccessFactors(BaseAdapter):
                 bacheche = [html_mod.unescape(b)
                             for b in re.findall(r'href="(/go/[^"]+)"', rh.text)]
                 bacheche = [b for b in bacheche if len(b.rstrip("/").split("/")) == 4]
-                for bacheca in list(dict.fromkeys(bacheche))[:self.MAX_BACHECHE]:
+                bacheche = list(dict.fromkeys(bacheche))
+                # tagliare alla sesta bacheca non e' «letta tutta»
+                # (Scania ne ha sedici): si dichiara (26/09)
+                if len(bacheche) > self.MAX_BACHECHE:
+                    self.lettura_parziale = True
+                for bacheca in bacheche[:self.MAX_BACHECHE]:
                     for pagina in range(self.MAX_PAGINE):
                         rp = self._get(f"{base}{bacheca}" + (f"{pagina * 25}/" if pagina else ""))
                         if rp is None or not self._righe_tabella(slug, base, rp.text, visti, out):
@@ -2620,13 +2720,42 @@ class SuccessFactors(BaseAdapter):
         # JobPosting della pagina.
         rs = self._get(f"{base}/sitemap.xml")
         if rs is not None and "<loc>" in rs.text:
-            for loc in re.findall(r'<loc>([^<]+)</loc>', rs.text):
-                m = self._RX_JOB.search(loc + " ")
-                if not m or m.group(2) in visti:
-                    continue
-                visti.add(m.group(2))
-                out.append(self._offerta(slug, base, f"/job/{m.group(1)}/{m.group(2)}/",
-                                         m.group(2), None, None, None, None, "sitemap"))
+            sorgenti = [rs.text]
+            if "<sitemapindex" in rs.text:
+                # 26/09: la sitemap puo' essere un INDICE di sitemap
+                # (jobs.sap.com: 6 figlie, per lingua e per tipo) —
+                # letta come urlset non trovava nessun /job/ e la fonte
+                # della completezza taceva. Si seguono i figli, un
+                # livello: oltre, si dichiara.
+                figli = re.findall(r'<loc>([^<]+)</loc>', rs.text)
+                if len(figli) > self.MAX_SITEMAP:
+                    self.lettura_parziale = True
+                sorgenti = []
+                for sm in figli[:self.MAX_SITEMAP]:
+                    rf = self._get(sm)
+                    if rf is None:
+                        # una sitemap figlia che non risponde non e'
+                        # «vuota»: la lettura si dichiara incompleta
+                        self.lettura_parziale = True
+                    else:
+                        sorgenti.append(rf.text)
+            for testo in sorgenti:
+                for loc in re.findall(r'<loc>([^<]+)</loc>', testo):
+                    m = self._RX_JOB.search(loc + " ")
+                    if not m:
+                        continue
+                    id_offerta, path = self._annuncio(m)
+                    if id_offerta in visti:
+                        continue
+                    visti.add(id_offerta)
+                    out.append(self._offerta(slug, base, path,
+                                             id_offerta, None, None, None, None, "sitemap"))
+        # riconciliazione col totale dichiarato dalla ricerca (26/09, come
+        # Workday col `total` della CXS): la sitemap e' gia' fusa, uno
+        # scarto oltre il 5% e' perdita vera e si dichiara
+        if (self.total_dichiarato and
+                len(out) < self.total_dichiarato * 0.95):
+            self.lettura_parziale = True
         return out
 
 
