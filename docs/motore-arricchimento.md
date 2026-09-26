@@ -244,12 +244,26 @@ un'altra azienda.
 | ARES | Cechia | aperto | NACE, forma |
 | RPO | Slovacchia | aperto | ricerca per nome debole |
 | SEC EDGAR | USA | aperto | solo società quotate |
+| ABN Lookup | Australia | chiave gratuita | stato ABN, sede |
+| BORME via OpenMercantil | Spagna | aperto (200 chiamate/giorno per IP, CC-BY) | CIF, forma giuridica, provincia, CNAE |
 | GLEIF | ovunque | aperto | sede operativa e forma per chi ha un LEI |
 
-**Senza via d'uscita gratuita:** Germania (4.271 tenant, 257.000 offerte),
-Paesi Bassi, Spagna, Italia, Svezia, Austria, India. Per loro restano GLEIF e
-Wikidata. In attesa di credenziali: Zefix (Svizzera, richiesta via
-`zefix@bj.admin.ch`), ABN Lookup (Australia), CRO (Irlanda).
+**Senza via d'uscita gratuita (misurato il 26/09/2026):** Germania (4.271
+tenant, 257.000 offerte — OffeneRegister è fermo al 2018 e i dump sono
+offline; handelsregister.de vieta l'uso automatizzato nei ToS), Italia (il
+registro camerale è a pagamento per legge; INI-PEC e registroimprese.it
+sono solo web con captcha). **Con chiave gratuita da registrare:** Svezia
+(Bolagsverket, HVD UE, 60 req/min — modulo online), Austria (opendata.host,
+CC-BY-AT, chiave via email), India (data.gov.in, GODL, snapshot MCA
+periodico). **A pagamento e non ridistribuibile:** Paesi Bassi (KVK, chiave
+da 6,40 €/mese, i ToS vietano la rivendita dell'estratto — solo
+arricchimento interno). In attesa di credenziali: Zefix (Svizzera, richiesta
+via `zefix@bj.admin.ch`), CRO (Irlanda).
+
+Il paese delle aziende si riempie anche da solo: il passo schede propaga
+`pdl_country` in `country` (fonte `country_source`, 34.737 aziende il
+26/09/2026) e il passo da-azienda risale il paese dominante degli annunci
+(≥3 offerte, 90% di accordo) alle aziende senza paese.
 
 ## Come si opera
 
