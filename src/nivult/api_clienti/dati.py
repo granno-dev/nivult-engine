@@ -31,6 +31,7 @@ import logging
 import os
 import re
 import threading
+import time
 
 import duckdb
 
@@ -289,10 +290,28 @@ def demo_tecnologie(q: str) -> dict:
 
 
 def demo_stats() -> dict:
-    """I quattro contatori della vetrina, dall'export del giorno.
+    """I quattro contatori della vetrina, freschi come il cruscotto.
 
     Endpoint pubblico senza parametri: niente input, niente superficie.
-    I numeri sono quelli del manifest, mai una stima."""
+    Prima la cache del cruscotto (ricalcolata ogni 4 minuti: gli stessi
+    numeri che vede Giuseppe), poi l'export del giorno come ripiego.
+    """
+    try:
+        import json as _json
+        d = _json.load(open("/opt/nivult/cruscotto-cache.json"))
+        sal = d.get("v", {}).get("salute", {})
+        if sal.get("offerte_attive") and time.time() - d["t"] < 900:
+            nuove = None
+            with _lock:
+                nuove = _conn().execute(
+                    "SELECT count(*) FROM flusso WHERE event = 'new' "
+                    "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+            return {"offerte": sal["offerte_attive"],
+                    "aziende": sal.get("aziende_con_offerte"),
+                    "paesi": sal.get("paesi"),
+                    "nuove_24h": nuove}
+    except Exception:                                # noqa: BLE001
+        pass                                         # ripiego sotto
     with _lock:
         offerte = _conn().execute("SELECT count(*) FROM offerte").fetchone()[0]
         aziende = _conn().execute("SELECT count(*) FROM aziende").fetchone()[0]
