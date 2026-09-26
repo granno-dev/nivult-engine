@@ -370,13 +370,17 @@ tailwind.config = {
   <div class="max-w-7xl mx-auto px-6">
     <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Radical transparency</p>
-    <h2 class="text-4xl font-black tracking-tight">Coverage you <span class="accent underline-draw">don't have to ask</span> for</h2>
+    <h2 class="text-4xl font-black tracking-tight">Coverage you <span class="accent underline-draw">never ask</span> for</h2>
     <p class="mt-4 text-lg text-slate-600">The fill rate of every field, measured on the latest daily export. No marketing percentages: the bar is the number, and the low ones stay visible because that is what the manifest is for.</p>
     </div>
     <div class="mt-9 overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
+      <div class="flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60 text-[12px] font-semibold text-slate-500">
+        <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#3b6ef6,#0fbf9a)"></i>solid coverage</span>
+        <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#8b5cf6,#3b6ef6)"></i>filling in</span>
+        <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#f59e0b,#f43f5e)"></i>declared gap</span>
+        <span class="ml-auto text-slate-400">a declared gap protects your analysis</span>
+      </div>
       <table class="w-full text-[15px]">
-        <thead><tr class="bg-slate-50 text-left text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
-          <th class="px-6 py-4">Field</th><th class="px-6 py-4 w-[46%]">Coverage</th><th class="px-6 py-4"></th></tr></thead>
         <tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
@@ -644,15 +648,31 @@ function copiaJson(id,btn){
 }
 
 /* ══ per-field coverage: numbers from the latest export manifest ══ */
-const cop=[["category (job family)",93.3],["title / description / url",91.8],["language",89.5],["country",87.0],
-["remote",80.6],["seniority",78.3],["employment_type",74.7],["salary_estimate (modelled)",57.2],
-["benefits",37.3],["geo (lat/lon)",35.9],["department",23.1],["technologies (rolling fill)",16.7],
-["salary_observed (declared)",9.7],["contact_email",4.6],["valid_through",4.5]];
+/* nome umano, nome tecnico, valore misurato. Il colore SEGUE il valore:
+   pieno (blu-menta), in riempimento (viola-blu), buco dichiarato
+   (ambra-rosa) — la mappa dei buchi e' il punto, non la vergogna. */
+const cop=[["Job family","category",93.3],["Title, full text & link","title / description / url",91.8],
+["Language","language",89.5],["Country","country",87.0],["Remote policy","remote",80.6],
+["Seniority","seniority",78.3],["Contract type","employment_type",74.7],
+["Salary, modelled","salary_estimate",57.2],["Benefits","benefits",37.3],
+["Coordinates","geo (lat/lon)",35.9],["Department","department",23.1],
+["Technologies (rolling fill)","technologies",16.7],
+["Salary, declared by the employer","salary_observed",9.7],
+["Recruiter contact","contact_email",4.6],["Application deadline","valid_through",4.5]];
 const tb=document.getElementById('tab-copertura');
-cop.forEach(([f,v])=>{const tr=document.createElement('tr');
-  tr.innerHTML=`<td class="px-6 py-3.5">${f}</td>
-    <td class="px-6 py-3.5"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full bg-gradient-to-r from-brand-500 to-mint-400 transition-all duration-[1200ms] ease-out" data-v="${v}" style="width:0"></div></div></td>
-    <td class="px-6 py-3.5 font-bold tabular-nums">${v}%</td>`;
+function fasciaColore(v){
+  if(v>=70)return["#3b6ef6","#0fbf9a","bg-mint-500/10 text-mint-600"];
+  if(v>=30)return["#8b5cf6","#3b6ef6","bg-brand-50 text-brand-600"];
+  return["#f59e0b","#f43f5e","bg-amber-50 text-amber-600"];
+}
+cop.forEach(([umano,tecnico,v],i)=>{const tr=document.createElement('tr');
+  tr.className="hover:bg-slate-50/70 transition";
+  const[c1,c2,pill]=fasciaColore(v);
+  tr.innerHTML=`<td class="px-6 py-3.5">
+      <div class="font-semibold text-slate-800 text-[14.5px]">${umano}</div>
+      <div class="font-mono text-[11px] text-slate-400 mt-0.5">${tecnico}</div></td>
+    <td class="px-6 py-3.5 w-[46%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
+    <td class="px-6 py-3.5 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${v}%</span></td>`;
   tb.appendChild(tr);});
 new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)
   e.target.querySelectorAll('.cov-bar').forEach(i=>i.style.width=i.dataset.v+'%');}),{threshold:.2})
