@@ -153,7 +153,8 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
             c.execute("RESET lock_timeout")
         righe = c.execute("""
             SELECT platform_id, slug,
-                   coalesce(logo_domain, site_domain), company_name
+                   coalesce(logo_domain, site_domain), company_name,
+                   site_domain_source
               FROM ats_companies
              WHERE is_active AND job_count > 0
                AND coalesce(logo_domain, site_domain) IS NOT NULL
@@ -161,7 +162,7 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
                AND employees_reg IS NULL AND employees_wd IS NULL
              ORDER BY job_count DESC
              LIMIT %s""", (limite,)).fetchall()
-        for pid, slug, dominio, nome in righe:
+        for pid, slug, dominio, nome, fonte_dom in righe:
             stats["esaminate"] += 1
             meta: dict = {}
             testo = _testo_azienda(cli, dominio, meta)
@@ -182,8 +183,17 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
             # (Brandfetch su un omonimo) e dai logo_domain sporchi.
             if nome and _norm(nome) and len(_norm(nome)) >= 4 \
                     and _norm(nome) not in _norm(testo):
-                c.execute("UPDATE ats_companies SET site_checked_at=now() "
-                          "WHERE platform_id=%s AND slug=%s", (pid, slug))
+                # una PISTA (dominio suggerito da terzi, es. fantastic) che
+                # fallisce la prova d'identita' non resta appesa: via, e
+                # il candidato si ricostruira' da fonte diretta (26/09)
+                if (fonte_dom or "").startswith("pista-"):
+                    c.execute("UPDATE ats_companies SET site_domain = NULL, "
+                              "site_domain_source = NULL, site_checked_at=now() "
+                              "WHERE platform_id=%s AND slug=%s", (pid, slug))
+                    stats["pista_sbagliata"] = stats.get("pista_sbagliata", 0) + 1
+                else:
+                    c.execute("UPDATE ats_companies SET site_checked_at=now() "
+                              "WHERE platform_id=%s AND slug=%s", (pid, slug))
                 continue
             stats["con_testo"] += 1
             dip = sett = prova = None
@@ -221,11 +231,18 @@ def arricchisci(dsn: str, limite: int = 300) -> dict:
                                     ko_di_fila)
             # si scrive SEMPRE (anche in modalita' solo regole): il numero
             # deterministico non si butta piu' per un modello che non risponde
+            # La PISTA che passa la prova d'identita' diventa un dato nostro:
+            # l'abbiamo verificata noi, sulla pagina dell'azienda (26/09).
+            nuova_fonte = ("verificato-diretto"
+                           if (fonte_dom or "").startswith("pista-") else None)
             c.execute("""UPDATE ats_companies
                             SET employees_site = %s, industry_site = %s,
-                                site_evidence = %s, site_checked_at = now()
+                                site_evidence = %s, site_checked_at = now(),
+                                site_domain_source = COALESCE(%s, site_domain_source)
                           WHERE platform_id = %s AND slug = %s""",
-                      (dip, sett, prova, pid, slug))
+                      (dip, sett, prova, nuova_fonte, pid, slug))
+            stats["pista_verificata"] = stats.get("pista_verificata", 0) + (
+                1 if nuova_fonte else 0)
             stats["organico"] += 1 if dip else 0
             stats["settore"] += 1 if sett else 0
     log.info("scheda sito: %s", stats)
