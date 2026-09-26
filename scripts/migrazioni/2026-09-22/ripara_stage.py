@@ -13,7 +13,7 @@ o seniority = intern:
   - se la piattaforma DICHIARA lo stage (contratto.da_raw sul grezzo): resta;
   - se titolo o testo lo nominano (testo.evidenza_stage): resta;
   - altrimenti: il campo torna NULL, l'offerta entra in ripasso_v1_dal_titolo
-    (fase 7) con locale_v1_at azzerato.
+    con locale_v1_at azzerato.
 
 Solo CPU su Hetzner: legge il grezzo di ~138k righe a lotti di 500.
 Idempotente: ripete solo cio' che e' ancora etichettato cosi'.
@@ -89,8 +89,14 @@ def ripara(dsn: str, lotto: int = 500, dry: bool = False) -> dict:
                             c.execute("UPDATE ats_jobs SET seniority = NULL WHERE id = ANY(%s::uuid[]) AND seniority = 'intern'",
                                       (sorted(togli_sen),))
                         c.execute("UPDATE ats_jobs SET locale_v1_at = NULL WHERE id = ANY(%s::uuid[])", (sorted(coda),))
-                        c.execute("INSERT INTO ripasso_v1_dal_titolo (job_id, fase) SELECT unnest(%s::uuid[]), 7 "
-                                  "ON CONFLICT (job_id) DO UPDATE SET fase = 7", (sorted(coda),))
+                        # la tabella nasce (migrazione del 21/09) con le sole
+                        # colonne job_id e creato_at: `fase` la aggiungeva
+                        # ripasso_v1_a_lotti.sh, e dove quello script non e'
+                        # mai passato l'INSERT con `fase` fallisce. Il valore
+                        # non lo legge nessuno (classifica_v1 guarda solo
+                        # job_id): si inserisce la sola colonna garantita.
+                        c.execute("INSERT INTO ripasso_v1_dal_titolo (job_id) SELECT unnest(%s::uuid[]) "
+                                  "ON CONFLICT (job_id) DO NOTHING", (sorted(coda),))
                     break
                 except psycopg.errors.DeadlockDetected:
                     log.warning("deadlock, tentativo %d", tentativo + 1)

@@ -147,7 +147,11 @@ def voci(testo: str, pr, offsets, soglia: float) -> list[str]:
             continue
         p = pr[k]
         inizio = float(p[1]) >= soglia and float(p[1]) >= float(p[2])
-        dentro = float(p[1] + p[2]) >= soglia
+        # «dentro» vale solo se il token e' piu' B/I che O: la sola somma
+        # p[1]+p[2] >= soglia lasciava passare token dove O dominava
+        # (0.70 / 0.20 / 0.15 somma a 0.35) e lo span ingoiava mezza frase
+        dentro = (float(p[1] + p[2]) >= soglia
+                  and float(p[1] + p[2]) > float(p[0]))
         if inizio and ini is not None:
             fuori.add(testo[ini:fin]); ini, fin = oi, of
         elif inizio or (dentro and ini is not None):
@@ -208,15 +212,23 @@ def main() -> int:
             lavoro, tutti = [], []
             for jid, titolo, grezzo in righe:
                 st["viste"] += 1
-                tutti.append(jid)
                 testo = ancoraggio.pulito(grezzo)
                 if len(testo) < 300:
                     st["senza_testo"] += 1
+                    # Il marcatore «fatto» solo se il testo mancava DAVVERO
+                    # nel raw (resa dei 7 giorni: grezzo vuoto). Se il raw lo
+                    # aveva e la pulizia l'ha ridotto sotto i 300 caratteri,
+                    # il lavoro non e' stato fatto: niente marcatore, la riga
+                    # resta in coda — la pulizia si puo' migliorare, un
+                    # «fatto» falso no (26/09/2026).
+                    if not (grezzo or "").strip():
+                        tutti.append(jid)
                     continue
                 # NIENTE TAGLIO A MANO. Il testo entra intero e piu' sotto viene letto a
                 # pezzi: a 1024 token il 22,5% degli annunci veniva letto a
                 # meta', e su quelli si perdeva il 27% del testo — la fine,
                 # dove i requisiti elencano gli strumenti (20/09/2026).
+                tutti.append(jid)
                 lavoro.append((jid, f"{titolo or ''}\n{testo}"))
 
             # gemelle: stesso testo, stessa risposta. Si chiede al database
@@ -281,8 +293,9 @@ def main() -> int:
                                        [x[0] for x in scritte], [x[1] for x in scritte],
                                        [x[2] for x in scritte], [x[3] for x in scritte]))
                 st["scritte"] += len(scritte)
-            # Si marcano TUTTE le righe viste, anche quelle senza testo: se no si
-            # ripresentano a ogni giro e il demone non avanza mai.
+            # Si marcano le righe lavorate e quelle senza testo NEL RAW (resa
+            # dei 7 giorni): se no si ripresentano a ogni giro e il demone non
+            # avanza mai. Quelle col testo perso in pulizia NON sono in `tutti`.
             c.execute("UPDATE ats_jobs SET tec_v1_at = now() WHERE id = ANY(%s::uuid[])", (tutti,))
 
             dt = max(time.time() - t0, 1)

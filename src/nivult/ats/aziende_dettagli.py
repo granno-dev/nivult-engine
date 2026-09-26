@@ -117,10 +117,16 @@ def dipendenti(e_reg, e_site, e_self, e_wd, band, categoria=None, pdl_size=None)
             portata = "legal_entity"
     if not size and pdl_size:
         size, size_da = pdl_size, "pdl (free dataset)"
-    if categoria == "GE" and (best or 0) < 5000:
-        size, size_da = "5001+", "INSEE catégorie GE (impresa, non unità legale)"
-    elif categoria == "ETI" and (best or 0) < 250:
-        size, size_da = "251-5000", "INSEE catégorie ETI (impresa, non unità legale)"
+    # La correzione INSEE resta nel vocabolario FASCE (26/09/2026: «5001+» e
+    # «251-5000» non ne facevano parte): GE vuol dire impresa da 5.000+, la
+    # fascia piu' vicina e' 5001-10000; ETI vuol dire 250-4.999, per punto
+    # medio 1001-5000. E non tocca una fascia DICHIARATA dall'azienda (PDL):
+    # un dato dichiarato non si sovrascrive con una stima.
+    if size_da != "pdl (free dataset)":
+        if categoria == "GE" and (best or 0) < 5000:
+            size, size_da = "5001-10000", "INSEE catégorie GE (impresa, non unità legale)"
+        elif categoria == "ETI" and (best or 0) < 250:
+            size, size_da = "1001-5000", "INSEE catégorie ETI (impresa, non unità legale)"
     return best, da, portata, size, size_da
 
 
@@ -393,7 +399,10 @@ def applica(dsn: str, limite: int = 20000) -> dict:
                 desc = _boilerplate_azienda(c, pid, slug, nome_az)
                 if desc:
                     desc_da = "annunci (boilerplate)"
-            if reg.get("website") and not any(reg["website"].split("/")[-1] in u for u in urls):
+            # rstrip("/") prima dello split: su «https://acme.com/» l'ultimo
+            # pezzo e' la stringa vuota, e «"" in u» e' vero per ogni u — il
+            # sito del registro non entrava mai fra gli external_urls (26/09)
+            if reg.get("website") and not any(reg["website"].rstrip("/").split("/")[-1] in u for u in urls):
                 w = reg["website"] if reg["website"].startswith("http") else "https://" + reg["website"]
                 urls.append(w[:200])
             kw = {"famiglie": fam, "tecnologie": tec} if (fam or tec) else None

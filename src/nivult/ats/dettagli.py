@@ -238,8 +238,21 @@ def _data(v) -> date | None:
             return None
     m = re.search(r"(\d{2})[/.](\d{2})[/.](\d{4})", s)
     if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        # Giorno e mese sono ambigui: 03/04/2026 e' il 3 aprile in Europa e
+        # il 4 marzo negli USA. Si decide solo quando un numero non puo'
+        # essere un mese: se lo supera il PRIMO e' il giorno (europeo), se
+        # lo supera il SECONDO il primo e' il mese (americano). Se entrambi
+        # stanno sotto il 13 non si indovina: meglio NULL che una data con
+        # giorno e mese scambiati (26/09/2026).
+        if a > 12:
+            giorno, mese = a, b
+        elif b > 12:
+            mese, giorno = a, b
+        else:
+            return None
         try:
-            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            return date(y, mese, giorno)
         except ValueError:
             return None
     return None
@@ -347,7 +360,11 @@ def dettagli(riga) -> dict:
     testo = pulito(grezzo)
     out: dict = {"job_id": jid}
     out["management_level"], out["is_decision_maker"] = _livello(titolo or "", testo, seniority)
-    out["is_urgently_hiring"] = bool(URGENTE.search(testo)) or bool(_cerca(raw, ("isUrgent", "urgent", "is_urgent")))
+    # il dichiarato si parsa come is_easy_apply: bool(_cerca(...)) leggerebbe
+    # la stringa "false" come True (bool di una stringa non vuota)
+    ug = _cerca(raw, ("isUrgent", "urgent", "is_urgent"))
+    ug = (bool(ug) if isinstance(ug, bool) else (str(ug).lower() in ("true", "1", "yes"))) if ug is not None else False
+    out["is_urgently_hiring"] = bool(URGENTE.search(testo)) or ug
     out["shift_schedule"], out["shift_testo"] = _shift(_testo(_cerca(raw, CHIAVI["shift"])) or _testo(_cerca(raw, CHIAVI["schedule"])), testo)
     ore = _testo(_cerca(raw, CHIAVI["hours"]))
     if not ore:
@@ -409,11 +426,16 @@ SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority, j.contact_email,
   FROM ats_jobs j
   -- 23/09/2026: LATERAL, non la subquery doppia — il testo si valuta UNA
   -- volta per riga (la versione con la subquery nel WHERE la pagava due,
-  -- e sotto carico la coda prendeva 6 minuti). Il JOIN filtra le senza
-  -- testo: restano in coda finche' il testo non arriva.
-  JOIN LATERAL (SELECT v FROM unnest(ARRAY[{campi}]) v
+  -- e sotto carico la coda prendeva 6 minuti). LEFT JOIN dal 26/09: il JOIN
+  -- semplice teneva le offerte senza testo in coda PER SEMPRE; ora si
+  -- aspetta che il testo arrivi, ma dopo 7 giorni si prende atto che non
+  -- arrivera' e la riga si calcola senza (lo stesso criterio di resa di
+  -- classifica_v1). I campi dichiarati nel raw (scadenza, stato, CAP...)
+  -- si leggono comunque: per quelli il testo non serve.
+  LEFT JOIN LATERAL (SELECT v FROM unnest(ARRAY[{campi}]) v
                 WHERE length(v) >= 80 LIMIT 1) t ON true
  WHERE j.expired_at IS NULL AND j.dettagli_at IS NULL
+   AND (t.v IS NOT NULL OR j.created_at < now() - interval '7 days')
  ORDER BY j.posted_at DESC NULLS LAST
  LIMIT %s
 """.format(campi=", ".join(f"j.raw->>'{c}'" for c in CAMPI_TESTO))
@@ -444,7 +466,10 @@ def _schema(c) -> None:
 
 
 def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = False) -> dict:
-    st = {"viste": 0, "urgenti": 0, "turni": 0, "benefit": 0, "salario_testo": 0, "scadenza": 0, "geo": 0, "recruiter": 0}
+    st = {"viste": 0, "urgenti": 0, "turni": 0, "benefit": 0, "salario_testo": 0, "scadenza": 0, "geo": 0, "recruiter": 0,
+          # calculate senza testo (resa dei 7 giorni): i campi dal raw ci
+          # sono lo stesso, ma il resoconto deve dire quante sono
+          "senza_testo": 0}
     t0 = time.time()
     with psycopg.connect(dsn, autocommit=True) as c:
         _schema(c)
@@ -462,6 +487,7 @@ def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = Fals
                 ids.append(r[0])
                 valori.append(tuple(d[k] for k in COLONNE))
                 st["viste"] += 1
+                st["senza_testo"] += not (r[7] or "").strip()
                 st["urgenti"] += bool(d["is_urgently_hiring"]); st["turni"] += bool(d["shift_schedule"])
                 st["benefit"] += bool(d["benefits"]); st["salario_testo"] += bool(d["salary_text"])
                 st["scadenza"] += bool(d["valid_through"]); st["geo"] += d["latitude"] is not None

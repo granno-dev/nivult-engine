@@ -267,8 +267,11 @@ def _fi(cli: httpx.Client, nome: str):
 def _dk(cli: httpx.Client, nome: str):
     r = cli.get("https://cvrapi.dk/api",
                 params={"search": nome, "country": "dk"})
-    if r.status_code != 200:
-        return None
+    if r.status_code == 404:
+        return None            # non trovata: e' un esito, si marca
+    # 429 (quota cvrapi finita) o altro errore HTTP: guasto di TRASPORTO,
+    # non un esito — si alza e il chiamante non marca reg_checked_at
+    r.raise_for_status()
     ris = r.json()
     if not isinstance(ris, dict) or not _combacia(nome, [ris.get("name")]):
         return None
@@ -583,8 +586,11 @@ class _Edgar:
             if _combacia(nome, [titolo], stretto=True):
                 r = self.cli.get(
                     f"https://data.sec.gov/submissions/CIK{cik}.json")
-                if r.status_code != 200:
-                    return None
+                if r.status_code == 404:
+                    return None        # CIK nell'indice ma senza submissions
+                # 429/5xx: la SEC risponde cosi' sotto pressione; e' un
+                # guasto di TRASPORTO, non un esito — il chiamante non marca
+                r.raise_for_status()
                 j = r.json()
                 ind = (j.get("addresses") or {}).get("business") or {}
                 scheda = _scheda(legal_name=j.get("name"), registro_id=cik, website=j.get("website") or None,
@@ -723,7 +729,13 @@ def arricchisci(dsn: str, limite: int = 1000,
              WHERE ac.is_active AND ac.job_count > 0
                AND ac.company_name IS NOT NULL
                AND {condizione}
-             ORDER BY ac.job_count DESC""").fetchall()
+               -- i paesi senza registro gratuito si saltano GIA' nella
+               -- selezione: prima restavano in coda e venivano riletti a
+               -- ogni giro, e senza LIMIT la query li trascinava tutti in
+               -- memoria (26/09/2026)
+               AND {geo_sql} = ANY(%s::text[])
+             ORDER BY ac.job_count DESC
+             LIMIT %s""", (sorted(ammessi), limite)).fetchall()
         for pid, slug, nome, paese, cid in righe:
             if stats["esaminate"] >= limite:
                 break
@@ -790,7 +802,7 @@ def settore_dal_mix(dsn: str) -> dict:
         if _colonna_manca(c, "ats_companies", "industry_mix_share"):
             c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT "
                       "EXISTS industry_mix_share real")
-        n = c.execute("""
+        cte = """
             WITH mix AS (
               SELECT j.platform_id, j.slug, jc.family,
                      count(*) AS n,
@@ -798,14 +810,15 @@ def settore_dal_mix(dsn: str) -> dict:
                                                       j.slug) AS tot
                 FROM ats_jobs j
                 JOIN job_classifications jc ON jc.job_id = j.id
-               WHERE j.expired_at IS NULL
+               WHERE j.expired_at IS NULL AND jc.family IS NOT NULL
                GROUP BY 1, 2, 3),
             dominante AS (
               SELECT DISTINCT ON (platform_id, slug)
                      platform_id, slug, family, n, tot
                 FROM mix
                WHERE n >= 3 AND n * 100 >= tot * 45
-               ORDER BY platform_id, slug, n DESC)
+               ORDER BY platform_id, slug, n DESC)"""
+        n = c.execute(cte + """
             UPDATE ats_companies ac
                SET industry_mix = d.family,
                    industry_mix_share = round(100.0 * d.n / d.tot, 1)
@@ -815,8 +828,19 @@ def settore_dal_mix(dsn: str) -> dict:
                AND (ac.industry_mix IS DISTINCT FROM d.family
                     OR ac.industry_mix_share IS DISTINCT FROM
                        round(100.0 * d.n / d.tot, 1))""").rowcount
-    log.info("settore dal mix: %d aziende", n)
-    return {"aggiornate": n}
+        # il mix non e' storico, e' una stima corrente: chi scende sotto
+        # soglia (o perde le offerte classificate) non ha piu' un mestiere
+        # dominante e la riga va aggiornata lo stesso — a NULL (26/09/2026).
+        # Prima il settore vecchio restava scritto per sempre.
+        tolte = c.execute(cte + """
+            UPDATE ats_companies ac
+               SET industry_mix = NULL, industry_mix_share = NULL
+             WHERE ac.industry_mix IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM dominante d
+                                WHERE d.platform_id = ac.platform_id
+                                  AND d.slug = ac.slug)""").rowcount
+    log.info("settore dal mix: %d aziende aggiornate, %d tolte", n, tolte)
+    return {"aggiornate": n, "tolte": tolte}
 
 
 def main() -> int:

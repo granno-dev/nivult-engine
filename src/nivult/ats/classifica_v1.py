@@ -24,6 +24,7 @@ import time
 
 import psycopg
 
+from nivult.ats.dichiarati import PIATTAFORME
 from nivult.ats.modello_v1 import ModelloV1, testo, pulito
 from nivult.ats.testo import evidenza_stage
 
@@ -127,6 +128,14 @@ def main() -> int:
                        j.created_at, j.lang
                   FROM ats_jobs j
                  WHERE j.expired_at IS NULL AND j.locale_v1_at IS NULL
+                 -- IL DICHIARATO PASSA PRIMA (26/09/2026): sulle piattaforme
+                 -- che dichiarano contratto/seniority/remoto nel raw, v1
+                 -- aspetta il passo `dichiarati`. Se arrivasse prima lui, la
+                 -- sua stima occuperebbe la colonna e il coalesce di
+                 -- dichiarati la terrebbe: il valore esatto scritto dal
+                 -- recruiter andrebbe perso (stesso motivo del passo 2 del
+                 -- ripasso del 21/09).
+                 AND (j.dichiarati_at IS NOT NULL OR NOT (j.platform_id = ANY(%s::text[])))
                  -- LA GARA COL DETTAGLIO (21/09/2026): le offerte piu' nuove
                  -- vengono prese per prime, e per meta' delle piattaforme il
                  -- testo arriva DOPO, da un passo di dettaglio a parte. Senza
@@ -162,13 +171,16 @@ def main() -> int:
             # dimezzava il ritmo (5/s misurati alle 13:40 del 21/09)
             if not pareri and giro % 4:
                 try:
-                    righe = c.execute(SQL_RIPASSO).fetchall()
+                    righe = c.execute(SQL_RIPASSO, (list(PIATTAFORME),)).fetchall()
                 except psycopg.errors.UndefinedTable:
                     pass                                     # nessun ripasso in corso
             if len(righe) < 2048:
                 visti = {r[0] for r in righe}
-                righe += [r for r in c.execute(SQL_PARERI if pareri else SQL_NORMALE).fetchall()
-                          if r[0] not in visti]
+                # SQL_PARERI non ha parametri: le piattaforme del dichiarato
+                # servono solo alla coda normale (e al ripasso, che la eredita)
+                base = c.execute(SQL_PARERI).fetchall() if pareri \
+                    else c.execute(SQL_NORMALE, (list(PIATTAFORME),)).fetchall()
+                righe += [r for r in base if r[0] not in visti]
             if not righe:
                 if continuo:
                     time.sleep(60)
@@ -298,6 +310,16 @@ def main() -> int:
                            "WHERE c.job_id = v.id AND c.v1_family IS DISTINCT FROM v.fam",
                            ([r[0] for r in par_rows], [r[1] for r in par_rows], [r[2] for r in par_rows]))
                 scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = ANY(%s::uuid[])", (marcati,))
+                # La coda di ripasso si SVUOTA man mano (26/09/2026): le righe
+                # lavorate restavano nella tabella per sempre, e ogni lotto la
+                # rileggeva tutta per trovare le 2048 ancora da fare. Non e'
+                # storico: e' una coda di lavoro. I differiti (in attesa del
+                # testo) NON sono in `marcati` e restano in tabella, com'e'
+                # giusto: torneranno.
+                try:
+                    c.execute("DELETE FROM ripasso_v1_dal_titolo WHERE job_id = ANY(%s::uuid[])", (marcati,))
+                except psycopg.errors.UndefinedTable:
+                    pass                                 # nessun ripasso in corso
             st["famiglie"] += len(fam_rows); st["pareri"] = st.get("pareri", 0) + len(par_rows)
             st["seniority"] += len(sen_rows)
             st["contratto"] += len(con_rows); st["remoto"] += len(rem_rows); st["lingue"] += len(lin_rows)
