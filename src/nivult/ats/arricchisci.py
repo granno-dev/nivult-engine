@@ -25,6 +25,7 @@ from datetime import datetime
 
 import httpx
 import psycopg
+import html as html_mod
 
 
 def _scrivi_a_lotti(conn, sql: str, righe: list, lotto: int = 200, tentativi: int = 6) -> int:
@@ -146,6 +147,30 @@ def _estrai_microdata(html: str) -> dict:
     return {}
 
 
+def _estrai_testo_visibile(html: str) -> dict:
+    """Ultima spiaggia: il testo visibile della pagina, senza JSON-LD.
+
+    JazzHR pubblica pagine renderizzate dal server col testo nel corpo e
+    un JSON-LD che descrive solo l'Organization (misurato il 26/09/2026 su
+    applytojob.com): chi legge solo il JobPosting le marca mute e butta
+    migliaia di descrizioni vere. Qui si spogliano script, stili, menu e
+    piede e si prende il corpo, ma SOLO se e' lungo abbastanza da essere
+    un annuncio: sotto i 400 caratteri e' il guscio JS di una pagina che
+    non abbiamo saputo leggere, e un guscio non e' un testo."""
+    t = html
+    for _ in range(2):                      # &lt;p&gt; → <p> → via
+        t = html_mod.unescape(t)
+        t = re.sub(r"<(style|script|noscript|svg|header|footer|nav)[^>]*>.*?</\1>",
+                   " ", t, flags=re.S | re.I)
+        t = re.sub(r"<!--.*?-->", " ", t, flags=re.S)
+        t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if len(t) < 400:
+        return {}
+    return {"country": None, "city": None, "posted_at": None,
+            "description": t[:30000]}
+
+
 def _estrai_jsonld(html: str) -> dict:
     """Il JSON-LD JobPosting dalla pagina, se c'è (altrimenti il microdata).
     Il parser e' UNO, condiviso (testo.jobposting_da_html): una copia
@@ -227,6 +252,11 @@ def arricchisci_dettaglio(dsn: str, piattaforme=PIATTAFORME_DETTAGLIO,
             return jid, None
         if r.status_code == 200:
             d = _estrai_jsonld(r.text)
+            if not d:
+                # JazzHR e simili: testo nel corpo, JSON-LD solo
+                # d'Organization. Il ripiego sul testo visibile e'
+                # misurato (26/09): 7-13k caratteri veri per pagina.
+                d = _estrai_testo_visibile(r.text)
             st_p = per_piatt.setdefault(pid, {"lette": 0, "testo": 0})
             st_p["lette"] += 1
             st_p["testo"] += 1 if d.get("description") else 0
