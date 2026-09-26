@@ -215,7 +215,15 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     # nella loro sabbia; in produzione API_CLIENTI_DB manda sul volume.
     destinazione = (db_path or os.environ.get("API_CLIENTI_DB")
                     or os.path.join(cartella, NOME_DB))
-    os.makedirs(os.path.dirname(destinazione), exist_ok=True)
+    # il volume dedicato (26/09): se la destinazione e' sul volume ma il
+    # volume non e' montato, makedirs la creerebbe sul DISCO DI ROOT e li'
+    # il builder scriverebbe 15 GB — esattamente lo scenario che il volume
+    # doveva evitare. Si misura il mount, non si suppone.
+    cartella_dest = os.path.dirname(destinazione)
+    if cartella_dest.startswith("/mnt/") and not os.path.ismount(cartella_dest):
+        raise SystemExit(f"il volume {cartella_dest} non e' montato: "
+                         "non costruisco il db sul disco di root")
+    os.makedirs(cartella_dest, exist_ok=True)
     tmp = destinazione + ".tmp"
     for p in (tmp, tmp + ".wal"):  # resti di un giro morto a meta'
         try:

@@ -14,7 +14,7 @@ BASE=/opt/nivult/engine
 LOG=/var/log/nivult-medico.log
 CONTA=/tmp/nivult-medico.ora
 ora=$(date +%Y%m%d%H)
-n=$( (grep -c "^$ora$" "$CONTA" 2>/dev/null) || echo 0)
+n=$(grep -c "^$ora$" "$CONTA" 2>/dev/null || true)
 if [ "$n" -ge 4 ]; then
   echo "$(date -Is) medico: tetto orario raggiunto (4), salto" >> "$LOG"; exit 0
 fi

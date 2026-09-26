@@ -11,8 +11,11 @@ POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | c
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
 while true; do
+  # 26/09/2026: il grep mostrava SOLO le righe «scrape:» — un traceback
+  # del runner spariva nella pipe e il loop riprovava cieco per sempre.
+  # Ora passano anche errori e traceback.
   "$PY" -m nivult.ats.runner --limite 500 --thread 16 2>&1 \
-    | grep "scrape:" || true
+    | grep -E "scrape:|Traceback|Error|error" || true
   # una pausa breve tra i lotti: gentilezza verso le piattaforme
   # condivise (greenhouse, lever...) per non farsi limitare
   sleep 12

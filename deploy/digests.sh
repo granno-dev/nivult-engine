@@ -22,9 +22,11 @@ LOCK=/var/run/nivult-digests.lock
 log() { echo "$(date -Is) $*"; }
 
 exec 9>"$LOCK"
-if ! flock -n 9; then
-  log "un giro precedente è ancora in corso: salto"
-  exit 0
+# 26/09/2026: come nightly — flock con attesa e uscita rumorosa, non
+# un'uscita 0 in silenzio che nasconde un giro impuntato.
+if ! flock -w 10800 9; then
+  log "un giro precedente e' ancora in corso dopo 3h: esco CON ERRORE"
+  exit 1
 fi
 
 cd "$BASE" || { log "ERRORE: $BASE non accessibile"; exit 1; }

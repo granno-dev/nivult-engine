@@ -32,6 +32,7 @@ import smtplib
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from email.mime.text import MIMEText
 
 ENV = "/opt/nivult/.env"
@@ -222,6 +223,15 @@ def _controlli() -> list[Condizione]:
         lc = open("/opt/nivult/engine/logs/ats-cron.log", errors="replace").read()[-40000:]
         avvii = re.findall(r"=== ATS nightly (20\S+) ===", lc)
         blocco = lc.rsplit("=== ATS nightly 20", 1)[-1]
+        # 26/09/2026: il giro che non e' partito NON si vedeva: la regex
+        # misurava solo i passi falliti dentro un giro avvenuto oggi, e
+        # una riga di cron sparita taceva per costruzione. Ora controlla
+        # anche che il giro sia AVVENUTO entro le 26 ore.
+        if avvii:
+            ultimo = datetime.fromisoformat(avvii[-1]).timestamp()
+            if time.time() - ultimo > 26 * 3600:
+                c.append(Condizione("manutenzione", "avviso", "il giro notturno non e' partito",
+                                    f"ultimo avvio {avvii[-1]}"))
         if avvii and "completato" in blocco:
             falliti = [n.split("(")[0].strip() for n, e in re.findall(r"── ([^\n]+)\n\s+(ok|FALLITO)", blocco) if e == "FALLITO"]
             if falliti and avvii[-1][:10] == time.strftime("%Y-%m-%d"):

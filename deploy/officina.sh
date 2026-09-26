@@ -53,7 +53,7 @@ diario() { T=$(mktemp); printf %s "$2" > "$T"; cd "$BASE" && "$PY" -m nivult.ats
 # --- limiti di frequenza --------------------------------------------------
 ULT=/tmp/nivult-officina-$PID.ultima; CONTA=/tmp/nivult-officina.giorno; oggi=$(date +%Y%m%d)
 if [ -f "$ULT" ] && [ $(( $(date +%s) - $(cat "$ULT") )) -lt 21600 ]; then log "gia' aperta meno di 6h fa: salto"; exit 0; fi
-if [ "$( (grep -c "^$oggi$" "$CONTA" 2>/dev/null) || echo 0)" -ge 6 ]; then log "sei officine oggi: basta"; telegram "🔧 Officina: sesta richiesta di oggi ($PID), mi fermo. Serve una mano umana."; exit 0; fi
+if [ "$(grep -c "^$oggi$" "$CONTA" 2>/dev/null || true)" -ge 6 ]; then log "sei officine oggi: basta"; telegram "🔧 Officina: sesta richiesta di oggi ($PID), mi fermo. Serve una mano umana."; exit 0; fi
 date +%s > "$ULT"; echo "$oggi" >> "$CONTA"
 export CLAUDE_CODE_OAUTH_TOKEN=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' /opt/nivult/.env | cut -d= -f2-)
 [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || { log "gettone Claude assente"; telegram "🔧 Officina su $PID: il gettone di Claude manca (scade settembre 2027)."; exit 1; }

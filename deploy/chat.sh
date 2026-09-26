@@ -48,7 +48,7 @@ esac
 # --- domanda libera: Claude ---------------------------------------------
 # tetto: 20 risposte l'ora (e' l'abbonamento di Giuseppe, non un pozzo)
 CONTA=/tmp/nivult-chat.ora; ora=$(date +%Y%m%d%H)
-if [ "$( (grep -c "^$ora$" "$CONTA" 2>/dev/null) || echo 0)" -ge 20 ]; then
+if [ "$(grep -c "^$ora$" "$CONTA" 2>/dev/null || true)" -ge 20 ]; then
   rispondi "Ho risposto 20 volte in quest'ora: riprendo alla prossima."; exit 0
 fi
 echo "$ora" >> "$CONTA"

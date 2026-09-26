@@ -10,7 +10,9 @@ POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | c
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
 while true; do
+  # 26/09/2026: come scrape-continuo — i traceback passano, non si
+  # ingoiano piu' nella pipe.
   "$PY" -m nivult.ats.classificatore_livelli --no-glm --limite 60000 2>&1 \
-    | grep -E "classificate|viste" | tail -1 || true
+    | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
   sleep 180
 done

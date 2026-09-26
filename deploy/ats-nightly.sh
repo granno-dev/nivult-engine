@@ -44,10 +44,16 @@ export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432
 export DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult"
 
 exec 9>"$LOCK"
-flock -n 9 || { echo "ATS nightly: giro precedente ancora in corso, esco"; exit 0; }
+# 26/09/2026: flock -n usciva 0 in silenzio se il giro precedente era
+# impuntato — il lavoro restava fermo per giorni e per cron era «andato
+# bene». Ora si aspetta fino a 3 ore, poi si esce CON ERRORE (la
+# sentinella vede il log) e si scrive perche'.
+flock -w 10800 9 || { echo "ATS nightly: giro precedente ancora in corso dopo 3h, esco CON ERRORE"; exit 1; }
 
 cd "$BASE"
 echo "=== ATS nightly $(date -Is) ==="
+# dove inizia questo giro nel log (append): i FALLITO si contano solo da qui
+RIGHE_PRIMA=$(wc -l < "$LOG_DIR/ats-nightly.log" 2>/dev/null || echo 0)
 
 # ── 1. Scrape: aggiorna tutte le aziende registrate ─────────────────
 echo "── scrape"
@@ -110,7 +116,6 @@ try:
 except (OSError, ValueError):
     pos = 0
 selezioni = [tutte[(pos + i) % len(tutte)] for i in range(3)]
-open(state_file, "w").write(str((pos + 3) % len(tutte)))
 print(f"CC rotazione: {selezioni} (posizione {pos}/{len(tutte)})")
 for pid in selezioni:
     piattaforma = next(p for p in REGISTRY if p["id"] == pid)
@@ -126,8 +131,11 @@ for pid in selezioni:
                         (pid, s))
             conn.commit()
     print(f"  {pid}: {len(slugs)} nuove aziende")
+# 26/09/2026: lo stato si scrive DOPO il lavoro — se il giro muore a
+# meta', la posizione non avanza e quelle piattaforme non saltano 12 notti
+open(state_file, "w").write(str((pos + 3) % len(tutte)))
 PYEOF
-echo "   ok"
+if [ $? -eq 0 ]; then echo "   ok"; else echo "   FALLITO"; fi
 
 # ── 4c. Scoperta profonda: drena i colossi sotto-censiti da Wayback.
 # Greenhouse ogni notte (ha decine di migliaia di board, 286 pagine da
@@ -146,10 +154,11 @@ sf = os.path.join(sys.argv[1], "profonda-rotazione.txt")
 try: pos = int(open(sf).read().strip())
 except Exception: pos = 0
 pid = altre[pos % len(altre)]
-open(sf, "w").write(str((pos + 1) % len(altre)))
 print("profonda rotazione:", pid, scava(ATS, pid, pagine=8))
+# lo stato si scrive DOPO (26/09): un giro morto non brucia il turno
+open(sf, "w").write(str((pos + 1) % len(altre)))
 PYEOF
-echo "   ok rotazione"
+if [ $? -eq 0 ]; then echo "   ok rotazione"; else echo "   FALLITO rotazione"; fi
 
 # ── 5. Mantenimento: expira, normalizza i nuovi, dedup ────────────
 echo "── mantenimento (expira/normalizza/dedup)"
@@ -180,9 +189,10 @@ for i in range(3):
         r = pota(ATS, pid, 1000)
         print("potatura", r)
         if r.get("esaminati", 0) == 0: break
+# lo stato si scrive DOPO (26/09): un giro morto non brucia il turno
 open(sf, "w").write(str((pos + 3) % len(plats)))
 PYEOF
-echo "   ok"
+if [ $? -eq 0 ]; then echo "   ok"; else echo "   FALLITO"; fi
 
 # ── 5b. Arricchimento: paese/data dalle pagine di dettaglio ──────
 echo "── arricchisci (dettaglio phenom + successfactors, 3000)"
@@ -292,4 +302,14 @@ echo "── ponte verso il motore"
 /opt/nivult/engine/deploy/ponte-ats.sh >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# 26/09/2026: prima si usciva sempre 0 — un giro con passi morti era
+# «andato bene» per chiunque leggesse l'exit code. Ora i FALLITO si
+# contano (solo quelli di questo giro: il log e' append) e l'exit code
+# li racconta.
+falliti=$(tail -n +$((RIGHE_PRIMA + 1)) "$LOG_DIR/ats-nightly.log" 2>/dev/null | grep -c "FALLITO" || true)
+if [ "$falliti" -gt 0 ]; then
+  echo "=== ATS nightly completato con $falliti passi FALLITI $(date -Is) ==="
+  exit 1
+fi
 echo "=== ATS nightly completato $(date -Is) ==="
+exit 0

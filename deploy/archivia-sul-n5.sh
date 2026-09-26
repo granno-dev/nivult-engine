@@ -48,9 +48,13 @@ sposta() {   # $1 file, $2 sottocartella
 while IFS= read -r f; do sposta "$f" exports; done \
   < <(find /opt/nivult/exports -maxdepth 1 -name "*.jsonl.gz" -daystart -mtime +$GIORNI_EXPORT -type f | sort)
 
-# 2. backup: solo quelli gia' verificati sullo spazio remoto
-set -a; . /opt/nivult/backup.env 2>/dev/null; set +a
-while IFS= read -r f; do
+# 2. backup: solo quelli gia' verificati sullo spazio remoto.
+# Il 26/09: il sourcing di backup.env era «2>/dev/null»: se manca, il giro
+# moriva a meta' per set -u (export gia' spostati, backup mai verificati).
+# Ora la sua assenza si vede nel log e la sezione backup si salta intera.
+if [ -f /opt/nivult/backup.env ]; then
+  set -a; . /opt/nivult/backup.env; set +a
+  while IFS= read -r f; do
   nome=$(basename "$f")
   r=$(timeout 60 ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -p "${BACKUP_REMOTE_PORT:-23}" \
         -i "${BACKUP_SSH_KEY:-/root/.ssh/id_ed25519_storagebox}" \
@@ -61,7 +65,10 @@ while IFS= read -r f; do
   else
     dire "backup $nome NON confermato sul remoto: lo lascio"
   fi
-done < <(find /opt/nivult/backups -name "nivult-*.sql.gz.enc" -daystart -mtime +$GIORNI_BACKUP -type f | sort)
+    done < <(find /opt/nivult/backups -name "nivult-*.sql.gz.enc" -daystart -mtime +$GIORNI_BACKUP -type f | sort)
+else
+  dire "backup.env mancante: sezione backup saltata (gli export sono gia' stati spostati)"
+fi
 
 # 3. modelli e dataset raffreddati
 while IFS= read -r f; do sposta "$f" gpu; done \
@@ -70,15 +77,27 @@ while IFS= read -r f; do sposta "$f" gpu; done \
 # 4. i MODELLI freddi. Lo script muoveva solo i file di dati e lasciava indietro le
 # cartelle dei modelli: il 18/09/2026 il disco e' arrivato al 93% per quelle. Si
 # spostano quelle non toccate da GIORNI_MODELLI giorni, tranne quelle in produzione.
+# La lista dei «in produzione» vive in /opt/nivult/gpu/IN-PRODUZIONE.txt (una riga
+# per nome): se il file manca vale la lista storica qui sotto — e un modello nuovo
+# messo in produzione senza aggiornarla veniva archiviato e CANCELLATO dal disco
+# mentre serviva (26/09: trovato in revisione, mai successo ma armato).
 GIORNI_MODELLI=${GIORNI_MODELLI:-3}
+if [ -f /opt/nivult/gpu/IN-PRODUZIONE.txt ]; then
+  mapfile -t IN_PROD < <(grep -v '^\s*$' /opt/nivult/gpu/IN-PRODUZIONE.txt)
+else
+  IN_PROD=(mt5-epoca2 v1-200k tecnologie-v1)
+  dire "ATTENZIONE: IN-PRODUZIONE.txt manca, uso la lista storica di riserva"
+fi
 if [ -x /opt/nivult/gpu/archivia-modelli.sh ]; then
   # array con l'idioma while-read del file, non [ -n $freddi ]: non
   # quotata, con due cartelle il test falliva («too many arguments») e i
   # modelli freddi non partivano MAI; con zero partiva senza argomenti
   freddi=()
+  esclusi=(-not -name gpu)
+  for m in "${IN_PROD[@]}"; do esclusi+=(-not -name "$m"); done
   while IFS= read -r d; do freddi+=("$d"); done \
     < <(find /opt/nivult/gpu -maxdepth 1 -type d -mtime +$GIORNI_MODELLI \
-        -not -name gpu -not -name mt5-epoca2 -not -name v1-200k -not -name tecnologie-v1 2>/dev/null)
+        "${esclusi[@]}" 2>/dev/null)
   if [ ${#freddi[@]} -gt 0 ]; then
     /opt/nivult/gpu/archivia-modelli.sh "${freddi[@]}" >> $LOG 2>&1
   fi

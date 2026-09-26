@@ -22,9 +22,12 @@ STATE=/opt/nivult/nightly-state
 log() { echo "$(date -Is) $*"; }
 
 exec 9>"$LOCK"
-if ! flock -n 9; then
-  log "un giro precedente è ancora in corso: salto"
-  exit 0
+# 26/09/2026: prima era flock -n e si usciva 0 in silenzio — un giro
+# impuntato fermava il lavoro per giorni senza segnale. Ora si aspetta
+# fino a 3 ore, poi si esce CON ERRORE e si scrive il motivo.
+if ! flock -w 10800 9; then
+  log "un giro precedente e' ancora in corso dopo 3h: esco CON ERRORE"
+  exit 1
 fi
 
 cd "$BASE" || { log "ERRORE: $BASE non accessibile"; exit 1; }
