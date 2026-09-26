@@ -339,19 +339,26 @@ tailwind.config = {
 
     <!-- live demo: compatta, interroga l'indice vero via /v1/demo -->
     <div class="reveal mt-12 rounded-2xl border border-slate-900/10 bg-white overflow-hidden shadow-xl shadow-slate-900/10">
-      <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-3.5 bg-gradient-to-r from-brand-50/60 via-white to-mint-500/5">
-        <span class="relative flex h-2.5 w-2.5"><span class="live-dot absolute inline-flex h-full w-full rounded-full bg-mint-400"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-mint-500"></span></span>
-        <span class="text-[13.5px] font-bold text-slate-700 tracking-tight">Explore the live index</span>
-        <span class="text-[12px] text-slate-400 font-medium hidden sm:inline">type a technology, watch who hires for it</span>
+      <div class="flex items-center gap-4 border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-brand-50/60 via-white to-mint-500/5">
+        <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center shadow-lg shadow-brand-500/25">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold tracking-tight flex items-center gap-2.5">Search the live index
+            <span class="relative flex h-2 w-2"><span class="live-dot absolute inline-flex h-full w-full rounded-full bg-mint-400"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-mint-500"></span></span>
+          </h3>
+          <p class="mt-0.5 text-[13px] font-semibold text-brand-600">thousands of technologies · real employers, right now</p>
+        </div>
         <span id="demo-fonte" class="ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-400"></span>
       </div>
-      <div class="p-4">
+      <div class="p-5">
         <div class="relative">
-          <input id="q" type="text" placeholder="Search a technology: SAP, Python, HACCP, forklift…"
-            class="w-full rounded-xl border border-slate-200 bg-white px-5 py-3 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <svg class="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+          <input id="q" type="text" placeholder="Type a technology, from SAP to forklift…"
+            class="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-12 py-3.5 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <svg id="spin" class="spinner hidden absolute right-5 top-1/2 -translate-y-1/2 h-5 w-5 text-brand-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity=".2" stroke-width="3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
         </div>
-        <div id="sugs" class="mt-2.5 flex flex-wrap gap-2"></div>
+        <div id="sugs" class="mt-3 flex flex-wrap gap-2"></div>
         <div id="risultati" class="mt-3 grid gap-2 max-h-[240px] overflow-auto pr-1 codebox"></div>
       </div>
     </div>
