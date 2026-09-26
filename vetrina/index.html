@@ -67,6 +67,18 @@ tailwind.config = {
 /* gentle lift on cards */
 .lift { transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s, border-color .35s; }
 .lift:hover { transform: translateY(-5px); }
+/* section accents: the keyword gets the gradient, the underline draws in */
+.accent { background: linear-gradient(90deg,#3b6ef6,#8b5cf6,#0fbf9a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.underline-draw { position: relative; white-space: nowrap; }
+.underline-draw::after { content:""; position: absolute; left: 0; right: 100%; bottom: -6px; height: 4px; border-radius: 99px;
+  background: linear-gradient(90deg,#3b6ef6,#0fbf9a); transition: right 1s cubic-bezier(.2,.8,.2,1) .2s; }
+.in .underline-draw::after { right: 0; }
+/* faint dot grid behind quiet sections, so the paper is not flat */
+.dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
+/* soft band of color that separates the stats from the rest */
+.statcard { position: relative; overflow: hidden; }
+.statcard::before { content:""; position:absolute; inset:0 0 auto 0; height:3px;
+  background: linear-gradient(90deg,#3b6ef6,#8b5cf6,#0fbf9a); opacity:.85; }
 </style>
 </head>
 <body class="bg-paper text-slate-900 font-sans antialiased">
@@ -193,20 +205,20 @@ tailwind.config = {
   <div class="max-w-7xl mx-auto px-6">
     <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-10">The index, measured this morning</p>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
-      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2910245">0</b><span class="mt-1.5 block text-sm text-slate-500">active job postings</span></div>
-      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="67358">0</b><span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span></div>
-      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b><span class="mt-1.5 block text-sm text-slate-500">countries covered</span></div>
-      <div class="lift rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b><span class="mt-1.5 block text-sm text-slate-500">new postings / day</span></div>
+      <div class="lift statcard rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2910245">0</b><span class="mt-1.5 block text-sm text-slate-500">active job postings</span></div>
+      <div class="lift statcard rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="67358">0</b><span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span></div>
+      <div class="lift statcard rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b><span class="mt-1.5 block text-sm text-slate-500">countries covered</span></div>
+      <div class="lift statcard rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm"><b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b><span class="mt-1.5 block text-sm text-slate-500">new postings / day</span></div>
     </div>
   </div>
 </section>
 
 <!-- ══ Why Nivult ══ -->
-<section class="pt-12 pb-20 border-t border-slate-900/5">
+<section class="pt-12 pb-20 border-t border-slate-900/5 dotgrid">
   <div class="max-w-7xl mx-auto px-6">
-    <div class="text-center max-w-2xl mx-auto">
+    <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Why Nivult</p>
-    <h2 class="text-4xl font-black tracking-tight">Built for teams that verify before they buy</h2>
+    <h2 class="text-4xl font-black tracking-tight">Built for teams that <span class="accent underline-draw">verify</span> before they buy</h2>
     <p class="mt-4 text-lg text-slate-600">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field, so your analysis survives the question "where does this come from?"</p>
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
@@ -277,9 +289,9 @@ tailwind.config = {
 <!-- ══ Data ══ -->
 <section id="data" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
-    <div class="text-center max-w-2xl mx-auto">
+    <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">The datasets</p>
-    <h2 class="text-4xl font-black tracking-tight">Two datasets. Zero black boxes.</h2>
+    <h2 class="text-4xl font-black tracking-tight">Two datasets. <span class="accent underline-draw">Zero black boxes.</span></h2>
     <p class="mt-4 text-lg text-slate-600">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. These are real record shapes from today's export.</p>
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
@@ -324,9 +336,9 @@ tailwind.config = {
 <!-- ══ Coverage ══ -->
 <section id="coverage" class="py-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
-    <div class="text-center max-w-2xl mx-auto">
+    <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Radical transparency</p>
-    <h2 class="text-4xl font-black tracking-tight">Coverage you don't have to ask for</h2>
+    <h2 class="text-4xl font-black tracking-tight">Coverage you <span class="accent underline-draw">don't have to ask</span> for</h2>
     <p class="mt-4 text-lg text-slate-600">The fill rate of every field, measured on the 2026-09-26 export. No marketing percentages: the bar is the number, and the low ones stay visible because that is what the manifest is for.</p>
     </div>
     <div class="mt-9 overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
@@ -342,9 +354,9 @@ tailwind.config = {
 <!-- ══ API ══ -->
 <section id="api" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
-    <div class="text-center max-w-2xl mx-auto">
+    <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">For developers</p>
-    <h2 class="text-4xl font-black tracking-tight">Built API-first</h2>
+    <h2 class="text-4xl font-black tracking-tight">Built <span class="accent underline-draw">API-first</span></h2>
     <p class="mt-4 text-lg text-slate-600">Versioned paths, cursor pagination, keys with credits. Fields are added over time and never renamed or removed. What you integrate today keeps working next year.</p>
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
