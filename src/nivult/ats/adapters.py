@@ -363,12 +363,61 @@ class Workday(BaseAdapter):
     Ogni azienda ha tre pezzi che cambiano: il tenant (abb, cc, eiffage),
     il server (wd3, wd103, wd5) e l'istanza (Eiffage_Careers, Babilou).
     Tutti e tre stanno nelle colonne wd_server e wd_instance di ats_companies.
+
+    26/09/2026 — via il tetto delle 50 pagine: era la misura che teneva
+    1.823 tenant «letti a meta'» e le loro offerte vive per sempre.
+    Ora la CXS ci dice il totale dichiarato (`total`, valido solo a
+    offset 0) e paginiamo fino in fondo. Sopra le 10.000 posizioni la CXS
+    taglia la risposta: si spezza l'enumerazione per facet (sede, poi
+    famiglia) finche' ogni fetta sta sotto il tetto — la tecnica
+    documentata da chi fa questo per mestiere (JobsPipe, 26/09).
     """
     platform_id = "workday"
 
     # Workday rifiuta limit > 20: paginazione obbligatoria.
     LIMITE_PAGINA = 20
-    MAX_PAGINE = 50    # 1.000 offerte per azienda (14/09: era 10 = 200, e la scadenza per presenza faceva scadere il resto); oltre, lettura_parziale
+    TETTO_QUERY = 10000   # oltre, la CXS non risponde piu': facet-slicing
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.total_dichiarato: int | None = None   # il totale che Workday dichiara
+
+    def _leggi_fetta(self, url: str, facets: dict) -> list[dict]:
+        """Una fetta di enumerazione (un valore di facet o la board intera).
+        Pagina fino in fondo; misura il totale sulla prima chiamata."""
+        out: list[dict] = []
+        offset = 0
+        while True:
+            r = self.client.post(url, json={
+                "appliedFacets": facets, "limit": self.LIMITE_PAGINA,
+                "offset": offset})
+            if r.status_code != 200:
+                self.lettura_parziale = True
+                break
+            corpo = r.json()
+            if offset == 0 and not facets:
+                self.total_dichiarato = corpo.get("total")
+            postings = corpo.get("jobPostings", [])
+            if not postings:
+                break
+            out.extend(postings)
+            offset += self.LIMITE_PAGINA
+            totale = corpo.get("total") or 0
+            if offset >= totale and totale:
+                break
+        return out
+
+    def _facet_values(self, url: str, campo: str) -> list[str]:
+        """I valori di un facet (chiave `id` nella risposta CXS, misurato
+        su CVS il 26/09): una chiamata minima."""
+        r = self.client.post(url, json={
+            "appliedFacets": {}, "limit": 1, "offset": 0})
+        if r.status_code != 200:
+            return []
+        for f in r.json().get("facets", []):
+            if f.get("facetParameter") == campo:
+                return [v["id"] for v in f.get("values", []) if v.get("id")]
+        return []
 
     def jobs(self, slug: str, wd_server: str | None = None,
              wd_instance: str | None = None) -> list[AtsJob]:
@@ -377,38 +426,51 @@ class Workday(BaseAdapter):
         base = f"https://{slug}.{wd_server}.myworkdayjobs.com/{wd_instance}"
         url = (f"https://{slug}.{wd_server}.myworkdayjobs.com"
                f"/wday/cxs/{slug}/{wd_instance}/jobs")
-        out = []
-        for pagina in range(self.MAX_PAGINE):
-            r = self.client.post(url, json={
-                "appliedFacets": {}, "limit": self.LIMITE_PAGINA,
-                "offset": pagina * self.LIMITE_PAGINA})
-            if r.status_code != 200:
-                # interrotto a meta': l'elenco e' incompleto (22/09/2026)
+
+        # prima la board intera: sotto il tetto della CXS basta lei
+        grezzi = self._leggi_fetta(url, {})
+        if (self.total_dichiarato or 0) > self.TETTO_QUERY:
+            # oltre il tetto la CXS tronca: si spezza per il facet piu'
+            # ricco (misurato su CVS 26/09: jobFamilyGroup con 24 valori;
+            # «locations» non esiste ovunque). Una fetta per valore.
+            facet = None
+            r = self.client.post(url, json={"appliedFacets": {}, "limit": 1, "offset": 0})
+            if r.status_code == 200:
+                cand = sorted(r.json().get("facets", []),
+                              key=lambda f: -len(f.get("values", [])))
+                if cand:
+                    facet = cand[0].get("facetParameter")
+            if facet:
+                grezzi = []
+                for val in self._facet_values(url, facet):
+                    grezzi.extend(self._leggi_fetta(url, {facet: [val]}))
+            else:
+                # niente facets: resta la lettura troncata e si dichiara
                 self.lettura_parziale = True
-                break
-            postings = r.json().get("jobPostings", [])
-            if not postings:
-                break
-            for j in postings:
-                # alcuni posting hanno solo bulletFields (l'ID) e niente
-                # titolo: righe vuote, si scartano — verificate sul giro reale
-                if not j.get("title"):
-                    continue
-                path = j.get("externalPath", "")
-                loc = j.get("locationsText") or ""
-                pezzi = [p.strip() for p in loc.split(",")] if loc else []
-                country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
-                out.append(AtsJob(
-                    platform_id=self.platform_id, slug=slug,
-                    external_id=(j.get("bulletFields") or ["unknown"])[0],
-                    title=j["title"],
-                    url=f"{base}{path}",
-                    location=loc,
-                    country=country,
-                    city=pezzi[0] if pezzi else None,
-                    raw=j))
-        else:
-            self.lettura_parziale = True   # tetto toccato: elenco incompleto
+        visti: set[str] = set()
+        out = []
+        for j in grezzi:
+            # alcuni posting hanno solo bulletFields (l'ID) e niente
+            # titolo: righe vuote, si scartano — verificate sul giro reale
+            if not j.get("title"):
+                continue
+            eid = (j.get("bulletFields") or ["unknown"])[0]
+            if eid in visti:
+                continue
+            visti.add(eid)
+            path = j.get("externalPath", "")
+            loc = j.get("locationsText") or ""
+            pezzi = [p.strip() for p in loc.split(",")] if loc else []
+            country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=eid,
+                title=j["title"],
+                url=f"{base}{path}",
+                location=loc,
+                country=country,
+                city=pezzi[0] if pezzi else None,
+                raw=j))
         return out
 
 
