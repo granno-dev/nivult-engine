@@ -296,27 +296,43 @@ tailwind.config = {
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5 items-stretch">
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col">
-        <h3 class="text-lg font-bold">Companies · 40+ fields</h3>
-        <p class="mt-1.5 text-[15px] text-slate-600">Industry, size band, HQ, legal identity, technology stack over time.</p>
+        <div class="flex items-center gap-4">
+          <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-lg shadow-brand-500/25">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 9h.01M9 13h.01M15 9h.01M15 13h.01"/></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold tracking-tight">The company record</h3>
+            <p class="mt-0.5 text-[13px] font-semibold text-brand-600">40+ fields · one per employer</p>
+          </div>
+        </div>
+        <p class="mt-3 text-[15px] text-slate-600 leading-relaxed">Industry with its registry source, size band, headquarters, legal identity, and the technology stack as it evolves month over month.</p>
         <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10">
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
             <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
             <span class="ml-2 font-mono text-[11.5px] text-slate-500">companies.jsonl · daily</span>
             <button onclick="copiaJson('json-azienda', this)" class="ml-auto rounded-md bg-white/10 hover:bg-white/20 border border-white/10 px-2.5 py-1 text-[11px] font-bold text-slate-300 transition">Copy</button>
           </div>
-          <pre id="json-azienda" class="codebox flex-1 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[400px]"></pre>
+          <pre id="json-azienda" class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[430px]"></pre>
         </div>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col">
-        <h3 class="text-lg font-bold">Jobs · 50 fields</h3>
-        <p class="mt-1.5 text-[15px] text-slate-600">Title, location, salary (observed vs estimated, never mixed), seniority, remote, technologies, full text.</p>
+        <div class="flex items-center gap-4">
+          <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-lg shadow-mint-500/25">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold tracking-tight">The job posting record</h3>
+            <p class="mt-0.5 text-[13px] font-semibold text-mint-600">50 fields · one per opening</p>
+          </div>
+        </div>
+        <p class="mt-3 text-[15px] text-slate-600 leading-relaxed">Role, location, seniority, remote policy, technologies and the full text. Salary stays honest: observed and estimated never mix.</p>
         <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10">
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
             <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
             <span class="ml-2 font-mono text-[11.5px] text-slate-500">jobs.jsonl · daily</span>
             <button onclick="copiaJson('json-offerta', this)" class="ml-auto rounded-md bg-white/10 hover:bg-white/20 border border-white/10 px-2.5 py-1 text-[11px] font-bold text-slate-300 transition">Copy</button>
           </div>
-          <pre id="json-offerta" class="codebox flex-1 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[400px]"></pre>
+          <pre id="json-offerta" class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[430px]"></pre>
         </div>
       </div>
     </div>
