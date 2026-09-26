@@ -189,7 +189,7 @@ tailwind.config = {
 </section>
 
 <!-- ══ Stats band (Stripe style: quiet numbers, big type) ══ -->
-<section class="py-20">
+<section class="pt-16 pb-12">
   <div class="max-w-7xl mx-auto px-6">
     <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-10">The index, measured this morning</p>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
@@ -202,11 +202,13 @@ tailwind.config = {
 </section>
 
 <!-- ══ Why Nivult ══ -->
-<section class="py-20 border-t border-slate-900/5">
+<section class="pt-12 pb-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Why Nivult</p>
     <h2 class="text-4xl font-black tracking-tight">Built for teams that verify before they buy</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field, so your analysis survives the question "where does this come from?"</p>
+    <p class="mt-4 text-lg text-slate-600">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field, so your analysis survives the question "where does this come from?"</p>
+    </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-brand-500/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-brand-500/25">⛓</div>
@@ -275,9 +277,11 @@ tailwind.config = {
 <!-- ══ Data ══ -->
 <section id="data" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">The datasets</p>
     <h2 class="text-4xl font-black tracking-tight">Two datasets. Zero black boxes.</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. These are real record shapes from today's export.</p>
+    <p class="mt-4 text-lg text-slate-600">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. These are real record shapes from today's export.</p>
+    </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8">
         <h3 class="text-lg font-bold">Companies · 40+ fields</h3>
@@ -320,9 +324,11 @@ tailwind.config = {
 <!-- ══ Coverage ══ -->
 <section id="coverage" class="py-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Radical transparency</p>
     <h2 class="text-4xl font-black tracking-tight">Coverage you don't have to ask for</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">The fill rate of every field, measured on the 2026-09-26 export. No marketing percentages: the bar is the number, and the low ones stay visible because that is what the manifest is for.</p>
+    <p class="mt-4 text-lg text-slate-600">The fill rate of every field, measured on the 2026-09-26 export. No marketing percentages: the bar is the number, and the low ones stay visible because that is what the manifest is for.</p>
+    </div>
     <div class="mt-9 overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm">
       <table class="w-full text-[15px]">
         <thead><tr class="bg-slate-50 text-left text-[11.5px] font-bold uppercase tracking-[0.1em] text-slate-500">
@@ -336,9 +342,11 @@ tailwind.config = {
 <!-- ══ API ══ -->
 <section id="api" class="py-20 border-t border-slate-900/5 bg-white/50">
   <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">For developers</p>
     <h2 class="text-4xl font-black tracking-tight">Built API-first</h2>
-    <p class="mt-4 text-lg text-slate-600 max-w-2xl">Versioned paths, cursor pagination, keys with credits. Fields are added over time and never renamed or removed. What you integrate today keeps working next year.</p>
+    <p class="mt-4 text-lg text-slate-600">Versioned paths, cursor pagination, keys with credits. Fields are added over time and never renamed or removed. What you integrate today keeps working next year.</p>
+    </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/jobs</h3><p class="mt-2 text-[15px] text-slate-600">Filter by country, family, seniority, technology, salary, dates. Cursor pagination for full crawls.</p></div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8"><h3 class="font-mono text-brand-600 font-semibold">GET /v1/companies</h3><p class="mt-2 text-[15px] text-slate-600">The company spine: industry with source, size band, HQ, legal identity, technology stack over time.</p></div>
