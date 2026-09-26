@@ -42,6 +42,8 @@ import time
 
 import psycopg
 
+from .geografia import iso_da_nome_paese
+
 log = logging.getLogger("nivult.ats.aziende_dettagli")
 
 DDL = """
@@ -327,20 +329,35 @@ def _schema(c) -> None:
     if not c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_companies' AND column_name = 'site_description'").fetchone():
         c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description text")
         c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS site_description_at timestamptz")
+    # la fonte del paese azienda (26/09/2026): PDL scrive pdl_country ma
+    # country restava vuoto — la propagazione la dichiara qui
+    if not c.execute("SELECT 1 FROM information_schema.columns WHERE table_name = 'ats_companies' AND column_name = 'country_source'").fetchone():
+        c.execute("ALTER TABLE ats_companies ADD COLUMN IF NOT EXISTS country_source text")
     c.execute("RESET lock_timeout")
 
 
 def applica(dsn: str, limite: int = 20000) -> dict:
-    st = {"viste": 0, "fascia": 0, "sedi": 0, "descrizione": 0, "keywords": 0}
+    st = {"viste": 0, "fascia": 0, "sedi": 0, "descrizione": 0, "keywords": 0,
+          "paese_pdl": 0}
     t0 = time.time()
     with psycopg.connect(dsn, autocommit=True) as c:
         _schema(c)
         tenants = c.execute(SQL_TENANT, (limite,)).fetchall()
         for cid, e_reg, e_site, e_self, e_wd, band, paese, descr_sito in tenants:
-            pid, slug, nome_az, logo_domain, pdl_size, pdl_founded = c.execute(
-                "SELECT platform_id, slug, company_name, logo_domain, pdl_size, pdl_founded "
+            pid, slug, nome_az, logo_domain, pdl_size, pdl_founded, az_country, pdl_country = c.execute(
+                "SELECT platform_id, slug, company_name, logo_domain, pdl_size, pdl_founded, country, pdl_country "
                 "FROM ats_companies WHERE id = %s", (cid,)).fetchone()
             st["viste"] += 1
+            if not az_country and pdl_country:
+                # il paese dichiarato dal dataset PDL riempie il vuoto, con
+                # la fonte scritta accanto (26/09/2026: 34.485 aziende lo
+                # avevano li' fermo, mai propagato)
+                iso = iso_da_nome_paese(pdl_country)
+                if iso:
+                    c.execute("UPDATE ats_companies SET country = %s, "
+                              "country_source = 'pdl (free dataset)' "
+                              "WHERE id = %s AND country IS NULL", (iso, cid))
+                    st["paese_pdl"] += 1
             try:
                 registri = c.execute(SQL_REGISTRO, (cid,)).fetchall()
             except psycopg.errors.UndefinedTable:

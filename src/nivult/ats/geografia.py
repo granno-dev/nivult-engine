@@ -68,6 +68,9 @@ _ALIAS = {
     "firenze": "IT", "venezia": "IT", "genova": "IT", "padova": "IT",
     "wien": "AT", "praha": "CZ", "warszawa": "PL", "lisboa": "PT",
     "bruxelles": "BE", "antwerpen": "BE", "koln": "DE", "munchen": "DE",
+    # i nomi che PDL scrive diversamente da GeoNames (26/09/2026)
+    "cote d'ivoire": "CI", "ivory coast": "CI", "cape verde": "CV",
+    "macau": "MO", "caribbean netherlands": "BQ",
 }
 
 # rumore da togliere prima di cercare la citta'
@@ -78,6 +81,21 @@ _RUMORE = re.compile(
 
 # indizi di paese scritti in chiaro dentro la stringa
 _INDIZIO = re.compile(r"\b(U\.?S\.?A?|USA|UK|UAE)\b")
+
+
+def iso_da_nome_paese(nome: str | None) -> str | None:
+    """«united states» -> «US»: il nome inglese per esteso diventa ISO2.
+
+    Serve alle fonti che dichiarano il paese a parole (il dataset PDL lo
+    scrive cosi'): solo l'esatto nome GeoNames, niente indovinelli — un
+    nome che non torna e' un None, non un paese a caso (26/09/2026)."""
+    if not nome:
+        return None
+    n = _piatto(nome.strip())
+    if len(n) == 2 and n.upper() in _CODICI:
+        return n.upper()
+    # GeoNames registra «The Netherlands», le fonti scrivono «netherlands»
+    return _PAESI.get(n) or _PAESI.get("the " + n) or _ALIAS.get(n)
 
 
 def paese_da_localita(loc: str | None) -> str | None:

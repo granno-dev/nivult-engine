@@ -297,6 +297,53 @@ def _dk(cli: httpx.Client, nome: str):
     return (ris.get("industrydesc"), dip, fascia, scheda)
 
 
+# ── Spagna: BORME via OpenMercantil (26/09/2026) ──────────────────────
+# Fino a ieri la Spagna era fra i «paesi senza registro gratuito». Poi la
+# misura: l'API del BOE per il BORME risponde 200 senza chiave, e sopra il
+# BORME c'e' OpenMercantil (2,8M aziende indicizzate, CC-BY 4.0, licenza
+# compatibile col prodotto B2B). 200 chiamate/giorno per IP senza chiave:
+# la coda ES avanza piano ma gratis, e un 429 non marca — si riprova.
+# La forma giuridica la si legge dal suffisso del nome (SA, SL, SLU...):
+# il dettaglio per slug costerebbe una seconda chiamata della quota.
+_FORME_ES = [
+    ("S.L.U.", "Sociedad Limitada Unipersonal"), ("S.L.N.E.", "Sociedad Limitada Nueva Empresa"),
+    ("S.L.L.", "Sociedad Limitada Laboral"), ("S.L.", "Sociedad Limitada"),
+    ("S.A.U.", "Sociedad Anónima Unipersonal"), ("S.A.", "Sociedad Anónima"),
+    ("S.COOP.", "Sociedad Cooperativa"), ("S.C.P.", "Sociedad Civil Privada"),
+    ("S.COM.", "Sociedad en Comandita"), ("S.E.", "Societas Europaea"),
+]
+
+
+def _forma_es(nome_legale: str) -> str | None:
+    coda = (nome_legale or "").upper().rstrip()
+    for sigla, estesa in _FORME_ES:
+        if coda.endswith(sigla) or coda.endswith(sigla.replace(".", "")):
+            return estesa
+    return None
+
+
+def _es(cli: httpx.Client, nome: str):
+    r = cli.get("https://openmercantil.es/api/v1/search",
+                params={"q": nome, "limit": 10})
+    if r.status_code == 404:
+        return None            # non trovata: e' un esito, si marca
+    r.raise_for_status()       # 429 (quota del giorno): trasporto, non esito
+    for it in r.json().get("items", []):
+        if not _combacia(nome, [it.get("name")]):
+            continue
+        # first_seen e' il primo ATTO visto dal loro indice, non la
+        # nascita: non si spaccia per data di fondazione
+        scheda = _scheda(legal_name=it.get("name"),
+                         registro_id=it.get("cif"),
+                         legal_form=_forma_es(it.get("name") or ""),
+                         region=it.get("province"), country="ES",
+                         status="active")
+        # CNAE-2009 e' armonizzato con NACE Rev.2 a livello di divisione:
+        # la stessa mappa delle due cifre vale per entrambi
+        return (_nace(it.get("cnae_code")), None, None, scheda)
+    return None
+
+
 # ── Regno Unito: Companies House (22/09/2026) ─────────────────────────
 # API gratuita con chiave (account sviluppatore di Giuseppe), 600 chiamate
 # ogni 5 minuti. La ricerca da' sede legale, tipo e data di costituzione; il
@@ -605,10 +652,11 @@ class _Edgar:
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
           "SK": (_sk, 0.5), "BE": (_be, 0.0), "CA": (_ca, 0.0),
-          "AU": (_au, 1.0)}   # fonte, secondi di pausa
+          "AU": (_au, 1.0), "ES": (_es, 1.0)}   # fonte, secondi di pausa
 _FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
           "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo",
-          "CA": "corporations_canada", "AU": "abn_lookup"}
+          "CA": "corporations_canada", "AU": "abn_lookup",
+          "ES": "borme_openmercantil"}
 
 
 DDL_REGISTRO = """
