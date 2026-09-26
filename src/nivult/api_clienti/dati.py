@@ -306,10 +306,12 @@ def demo_stats() -> dict:
                 nuove = _conn().execute(
                     "SELECT count(*) FROM flusso WHERE event = 'new' "
                     "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+                cop = {k: v for k, v in _conn().execute(
+                    "SELECT chiave, valore FROM copertura").fetchall()}
             return {"offerte": sal["offerte_attive"],
                     "aziende": sal.get("aziende_con_offerte"),
                     "paesi": sal.get("paesi"),
-                    "nuove_24h": nuove}
+                    "nuove_24h": nuove, "copertura": cop}
     except Exception:                                # noqa: BLE001
         pass                                         # ripiego sotto
     with _lock:
@@ -320,8 +322,10 @@ def demo_stats() -> dict:
         nuove = _conn().execute(
             "SELECT count(*) FROM flusso WHERE event = 'new' "
             "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+        cop = {k: v for k, v in _conn().execute(
+            "SELECT chiave, valore FROM copertura").fetchall()}
     return {"offerte": offerte, "aziende": aziende,
-            "paesi": paesi, "nuove_24h": nuove}
+            "paesi": paesi, "nuove_24h": nuove, "copertura": cop}
 
 
 def cambiamenti(da: str, cursore: str | None,
