@@ -536,6 +536,31 @@ def arricchisci_da_azienda(dsn: str) -> dict:
 
         _scrivi_a_lotti(conn, "UPDATE ats_jobs SET country = %s WHERE id = %s", aggiorna)
 
+        # Il dominante risale alle AZIENDE senza paese (26/09/2026): chi
+        # pubblica il 90%+ delle offerte in un paese e' quasi certamente
+        # registrato li', e il paese sblocca la coda dei registri. Fonte
+        # dichiarata in country_source; mai sopra un paese gia' scritto.
+        if dominante:
+            chiavi = list(dominante)
+            n_az = 0
+            for i in range(0, len(chiavi), 5000):
+                pezzo = chiavi[i:i + 5000]
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE ats_companies ac
+                           SET country = t.iso, country_source = 'dominante annunci (>=90%%)'
+                          FROM (SELECT unnest(%s::text[]) AS platform_id,
+                                       unnest(%s::text[]) AS slug,
+                                       unnest(%s::text[]) AS iso) t
+                         WHERE ac.platform_id = t.platform_id AND ac.slug = t.slug
+                           AND ac.country IS NULL""",
+                        ([k[0] for k in pezzo], [k[1] for k in pezzo],
+                         [dominante[k] for k in pezzo]))
+                    n_az += cur.rowcount
+                conn.commit()
+            log.info("da_azienda: %d aziende hanno preso il paese dal "
+                     "dominante dei loro annunci", n_az)
+
     da_evidenza = len(con_evidenza)
     riempiti = len(aggiorna) - da_evidenza
     azzerati = 0
