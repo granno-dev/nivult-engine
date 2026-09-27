@@ -272,6 +272,136 @@ def rivela_offerta(offerta_id: str) -> dict | None:
     return json.loads(r[0]) if r else None
 
 
+def offerta_dettaglio_portale(offerta_id: str) -> dict | None:
+    """Il dettaglio SENZA azienda ne' URL: il testo si legge gratis,
+    l'identita' di chi assume si rivela. Toglie dal raw i tre campi
+    che vendono."""
+    riga = rivela_offerta(offerta_id)
+    if riga is None:
+        return None
+    for k in ("company", "company_slug", "url", "ats"):
+        riga.pop(k, None)
+    return riga
+
+
+def cerca_aziende_portale(filtri: dict, cursore: str | None,
+                          limite: int = 25) -> tuple[list[dict], str | None, int]:
+    """Le aziende MASCHERATE: settore, paese, dimensione e il numero di
+    tecnologie si vedono; il nome e la chiave si rivelano a credito."""
+    filtri = filtri or {}
+    limite = max(1, min(int(limite or 25), 50))
+    dove = ["company IS NOT NULL"]
+    par: dict = {}
+    for campo in ("country", "industry"):
+        if filtri.get(campo):
+            dove.append(f"{campo} = ${campo}")
+            par[campo] = filtri[campo]
+    if filtri.get("technology"):
+        dove.append(_TEC.format(nome="technology"))
+        par["technology"] = str(filtri["technology"])
+    if cursore:
+        emp, a, s = _leggi_cursore(cursore)
+        par.update(emp=emp, c_ats=a, c_slug=s)
+        if emp is None:
+            # i NULL stanno in fondo: dopo un NULL solo altri NULL
+            dove.append("employees IS NULL AND (ats > $c_ats"
+                        " OR (ats = $c_ats AND company_slug > $c_slug))")
+        else:
+            dove.append("(employees IS NULL OR employees < $emp"
+                        " OR (employees = $emp AND (ats > $c_ats"
+                        "     OR (ats = $c_ats AND company_slug > $c_slug))))")
+    with _lock:
+        totale = _conn().execute(
+            f"SELECT count(*) FROM aziende WHERE {' AND '.join(dove)}",
+            par).fetchone()[0]
+        righe = _conn().execute(
+            f"""SELECT ats, company, country, industry, employees,
+                       len(technologies), company_slug
+                  FROM aziende
+                 WHERE {' AND '.join(dove)}
+                 ORDER BY employees DESC NULLS LAST, ats, company_slug
+                 LIMIT {limite + 1}""", par).fetchall()
+    prossimo = None
+    if len(righe) > limite:
+        righe = righe[:limite]
+        # il cursore porta slug e piattaforma, mai il nome: la
+        # mascheratura non deve svelarsi in base64
+        prossimo = _cursore([righe[-1][4], righe[-1][0], righe[-1][6]])
+    # il nome resta nel conteggio delle tecnologie, mai nel payload
+    return ([{"country": r[2], "industry": r[3], "employees": r[4],
+              "n_tecnologie": r[5], "ref": r[0] + ":" + r[6]}
+            for r in righe], prossimo, totale)
+
+
+def rivela_azienda(riferimento: str) -> dict | None:
+    """L'azienda intera, per chi ha pagato: nome, dominio, scheda."""
+    try:
+        ats, slug = riferimento.split(":", 1)
+    except ValueError:
+        return None
+    with _lock:
+        r = _conn().execute(
+            "SELECT raw FROM aziende WHERE ats = $a AND company_slug = $s "
+            "LIMIT 1", {"a": ats, "s": slug}).fetchone()
+    return json.loads(r[0]) if r else None
+
+
+def azienda_jobs_portale(riferimento: str) -> list[dict]:
+    """Le offerte attive di un'azienda rivelata (titolo, luogo, data)."""
+    try:
+        ats, slug = riferimento.split(":", 1)
+    except ValueError:
+        return []
+    with _lock:
+        righe = _conn().execute(
+            """SELECT id, title, country, city, category, posted_at
+                 FROM offerte
+                WHERE ats = $a AND company_slug = $s
+                ORDER BY posted_at DESC NULLS LAST LIMIT 50""",
+            {"a": ats, "s": slug}).fetchall()
+    return [{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
+             "category": r[4], "posted_at": _iso(r[5])} for r in righe]
+
+
+def cerca_chiuse_portale(filtri: dict, cursore: str | None,
+                         limite: int = 25) -> tuple[list[dict], str | None, int]:
+    """Le offerte CHIUSE, dal flusso: stesso mascheramento delle attive."""
+    filtri = filtri or {}
+    limite = max(1, min(int(limite or 25), 50))
+    dove = ["event = 'closed'"]
+    par: dict = {}
+    if filtri.get("q"):
+        dove.append("raw->>'title' ILIKE $q ESCAPE '\\'")
+        par["q"] = _like(str(filtri["q"]))
+    if filtri.get("technology"):
+        dove.append("list_contains(list_transform("
+                    "CAST(raw->'technologies' AS VARCHAR[]), "
+                    "x -> lower(x)), lower($technology))")
+        par["technology"] = str(filtri["technology"])
+    if cursore:
+        t, cid = _leggi_cursore(cursore)
+        dove.append("(t < CAST($ct AS TIMESTAMP)"
+                    " OR (t = CAST($ct AS TIMESTAMP) AND id > $cid))")
+        par.update(ct=_norm_ts(t), cid=cid)
+    with _lock:
+        totale = _conn().execute(
+            f"SELECT count(*) FROM flusso WHERE {' AND '.join(dove)}",
+            par).fetchone()[0]
+        righe = _conn().execute(
+            f"""SELECT id, raw->>'title', raw->>'country', raw->>'city',
+                       raw->>'category', t, raw->'technologies'
+                  FROM flusso
+                 WHERE {' AND '.join(dove)}
+                 ORDER BY t DESC, id LIMIT {limite + 1}""", par).fetchall()
+    prossimo = None
+    if len(righe) > limite:
+        righe = righe[:limite]
+        prossimo = _cursore([_iso(righe[-1][5]), righe[-1][0]])
+    return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
+              "category": r[4], "closed_at": _iso(r[5]),
+              "technologies": r[6] or []} for r in righe], prossimo, totale)
+
+
 def aziende(filtri: dict, cursore: str | None,
             limite: int) -> tuple[list[dict], str | None]:
     filtri = filtri or {}

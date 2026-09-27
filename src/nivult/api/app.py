@@ -1053,9 +1053,46 @@ def create_app() -> FastAPI:
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "category", "ats", "seniority",
                            "language", "remote", "q", "technology", "dal")}
-        righe, prossimo, totale = _dati.cerca_portale(
+        cur = (corpo or {}).get("cursor")
+        if (corpo or {}).get("stato") == "chiuse":
+            righe, prossimo, totale = _dati.cerca_chiuse_portale(filtri, cur)
+        else:
+            righe, prossimo, totale = _dati.cerca_portale(filtri, cur)
+        return {"data": righe, "next_cursor": prossimo, "totale": totale}
+
+    @app.post("/portale/cerca-aziende")
+    async def cerca_aziende_nel_portale(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        filtri = {k: v for k, v in (corpo or {}).items()
+                  if k in ("country", "industry", "technology")}
+        righe, prossimo, totale = _dati.cerca_aziende_portale(
             filtri, (corpo or {}).get("cursor"))
         return {"data": righe, "next_cursor": prossimo, "totale": totale}
+
+    @app.post("/portale/offerta-dettaglio")
+    async def dettaglio_offerta_portale(request: Request, uid: str = Depends(utente)):
+        """Il dettaglio dell'offerta SENZA azienda: gratis da leggere,
+        l'identita' si rivela a credito."""
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        offerta_id = str((corpo or {}).get("id") or "").strip()
+        if not offerta_id:
+            raise HTTPException(400, "id mancante")
+        if _chiavi.e_rivelata(uid, "job", offerta_id):
+            # chi ha rivelato rivede tutto, gratis, per sempre
+            riga = _dati.rivela_offerta(offerta_id)
+            if riga is None:
+                raise HTTPException(404, "offerta non trovata")
+            return {"offerta": riga, "rivelata": True}
+        riga = _dati.offerta_dettaglio_portale(offerta_id)
+        if riga is None:
+            raise HTTPException(404, "offerta non trovata")
+        return {"offerta": riga, "rivelata": False}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
@@ -1066,13 +1103,44 @@ def create_app() -> FastAPI:
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
             raise HTTPException(400, "id mancante")
-        if not _chiavi.spendi_per_utente(uid):
+        esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
+        if esito == "senza_crediti":
             raise HTTPException(429, "crediti del mese finiti: "
                                 "aumenta il volume dalla dashboard")
         riga = _dati.rivela_offerta(offerta_id)
         if riga is None:
             raise HTTPException(404, "offerta non trovata")
-        return {"offerta": riga}
+        return {"offerta": riga, "esito": esito}
+
+    @app.post("/portale/rivela-azienda")
+    async def rivela_azienda_nel_portale(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        rif = str((corpo or {}).get("ref") or "").strip()
+        if not rif:
+            raise HTTPException(400, "ref mancante")
+        esito = _chiavi.rivela_per_utente(uid, "azienda", rif)
+        if esito == "senza_crediti":
+            raise HTTPException(429, "crediti del mese finiti: "
+                                "aumenta il volume dalla dashboard")
+        riga = _dati.rivela_azienda(rif)
+        if riga is None:
+            raise HTTPException(404, "azienda non trovata")
+        return {"azienda": riga, "esito": esito}
+
+    @app.post("/portale/azienda-jobs")
+    async def jobs_dell_azienda(request: Request, uid: str = Depends(utente)):
+        """Le offerte attive di un'azienda: solo dopo il reveal."""
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        rif = str((corpo or {}).get("ref") or "").strip()
+        if not _chiavi.e_rivelata(uid, "azienda", rif):
+            raise HTTPException(402, "rivela prima l'azienda")
+        return {"data": _dati.azienda_jobs_portale(rif)}
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):

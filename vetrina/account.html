@@ -98,7 +98,7 @@ tailwind.config = {
   </div>
 
   <!-- ══ DASHBOARD ══ -->
-  <div id="vista-dash" class="hidden relative max-w-5xl mx-auto px-6 py-12">
+  <div id="vista-dash" class="hidden relative max-w-7xl mx-auto px-6 py-10 w-full">
     <div class="flex items-center gap-4 flex-wrap">
       <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black" id="dash-iniziale">N</div>
       <div>
@@ -118,9 +118,9 @@ tailwind.config = {
       <p class="mt-3 text-[12.5px] text-slate-500">Store it now. We keep only its hash: if you lose it, create a new one and revoke this.</p>
     </div>
 
-    <div class="mt-8 grid lg:grid-cols-5 gap-5 items-start">
+    <div class="mt-8 grid lg:grid-cols-3 gap-5 items-start">
       <!-- chiavi -->
-      <div class="lg:col-span-3 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
+      <div class="lg:col-span-2 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.9 12.1 9.4-9.4M15 6l3 3m-6 0 3 3"/></svg>
@@ -135,7 +135,7 @@ tailwind.config = {
       </div>
 
       <!-- consumo + acquisto -->
-      <div class="lg:col-span-2 grid gap-5">
+      <div class="lg:col-span-1 grid gap-5">
         <div class="rounded-2xl border border-slate-900/10 bg-white shadow-sm p-6">
           <h2 class="text-[15px] font-bold tracking-tight">This month's credits</h2>
           <div class="mt-3 flex items-baseline gap-2">
@@ -162,20 +162,26 @@ tailwind.config = {
       </div>
     </div>
 
-    <!-- ══ la ricerca nel dataset, dal portale ══ -->
+    <!-- ══ l'esploratore: offerte e aziende, gratis da guardare ══ -->
     <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
-      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent flex-wrap">
         <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
         </div>
         <div>
-          <h2 class="text-[15px] font-bold tracking-tight">Search the index</h2>
-          <p class="text-[11.5px] font-semibold text-mint-600">browsing is free · revealing a company costs 1 credit</p>
+          <h2 class="text-[15px] font-bold tracking-tight">Explore the index</h2>
+          <p class="text-[11.5px] font-semibold text-mint-600">browsing is free · revealing a company costs 1 credit, once</p>
         </div>
-        <span id="cerca-totale" class="ml-auto text-[12px] font-bold text-slate-400 tabular-nums"></span>
+        <div class="ml-auto flex items-center gap-2">
+          <div class="rounded-xl bg-slate-100 p-1 flex">
+            <button id="tab-jobs" onclick="cambiaTab('jobs')" class="rounded-lg px-4 py-1.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Jobs</button>
+            <button id="tab-az" onclick="cambiaTab('az')" class="rounded-lg px-4 py-1.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-900">Companies</button>
+          </div>
+          <span id="cerca-totale" class="text-[12px] font-bold text-slate-400 tabular-nums"></span>
+        </div>
       </div>
       <div class="p-5">
-        <div class="grid sm:grid-cols-4 gap-3">
+        <div class="grid sm:grid-cols-5 gap-3">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <input id="f-tec" type="text" placeholder="Technology…"
@@ -188,12 +194,22 @@ tailwind.config = {
             <option value="hybrid">Hybrid</option>
             <option value="onsite">On site</option>
           </select>
+          <select id="f-stato" class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] text-slate-600 outline-none focus:border-brand-500 transition">
+            <option value="aperte">Open postings</option>
+            <option value="chiuse">Closed postings</option>
+          </select>
         </div>
         <div id="cerca-righe" class="mt-4 grid gap-2"></div>
         <div class="mt-3 flex justify-center">
           <button id="cerca-altro" onclick="cercaAncora()" class="hidden rounded-xl border border-slate-200 px-5 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Load more</button>
         </div>
       </div>
+    </div>
+
+    <!-- ══ il dettaglio: modale sopra tutto ══ -->
+    <div id="dettaglio" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiDettaglio()"></div>
+      <div class="relative w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-2xl" id="dettaglio-box"></div>
     </div>
 
     <!-- ══ la guida per chi integra ══ -->
@@ -376,8 +392,8 @@ async function compra() {
   location.href = d.checkout_url;
 }
 
-/* ══ la ricerca nel portale: gratis, mascherata; il reveal costa 1 credito ══ */
-let cursore = null, cercaTimer = null;
+/* ══ l'esploratore: due tab (jobs / companies), mascherato fino al reveal ══ */
+let cursore = null, cercaTimer = null, tab = "jobs";
 function filtri() {
   const f = {};
   const q = document.getElementById("f-q").value.trim();
@@ -388,37 +404,67 @@ function filtri() {
   if (t) f.technology = t;
   if (p) f.country = p;
   if (r) f.remote = r;
+  if (tab === "jobs" && document.getElementById("f-stato").value === "chiuse")
+    f.stato = "chiuse";
   return f;
 }
-function rigaCerca(o) {
+function rigaJob(o) {
   const tec = (o.technologies || []).slice(0, 4).map(t =>
     `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${t}</span>`).join("");
-  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3" id="row-${o.id}">
+  const data = (o.posted_at || o.closed_at || "").slice(0, 10);
+  const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
+  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-brand-300 transition cursor-pointer" id="row-${o.id}" onclick="dettaglioJob('${o.id}')">
     <div class="min-w-0 flex-1">
-      <b class="text-[14px] block truncate">${o.title || "—"}</b>
+      <b class="text-[14px] block truncate">${o.title || "—"} ${chiusa}</b>
       <div class="text-[12px] text-slate-500 mt-0.5">${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
       <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
     </div>
-    <div class="text-right shrink-0">
+    <div class="text-right shrink-0" onclick="event.stopPropagation()">
       <div class="flex items-center gap-2 justify-end">
         <span class="blur-[5px] select-none text-[13px] font-bold text-slate-400">████████</span>
         <button onclick="rivela('${o.id}', this)" class="rounded-lg bg-brand-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal · 1 credit</button>
       </div>
-      <div class="text-[11px] text-slate-400 mt-1.5">${(o.posted_at || "").slice(0, 10)} · ${o.ats || ""}</div>
+      <div class="text-[11px] text-slate-400 mt-1.5">${data}${o.ats ? " · " + o.ats : ""}</div>
     </div>
   </div>`;
 }
+function rigaAzienda(a) {
+  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-mint-500/50 transition cursor-pointer" onclick="dettaglioAzienda('${a.ref}')">
+    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
+    <div class="min-w-0 flex-1">
+      <b class="text-[14px] blur-[5px] select-none text-slate-400">██████████</b>
+      <div class="text-[12px] text-slate-500 mt-0.5">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</div>
+    </div>
+    <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
+      <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
+      <button onclick="rivelaAzienda('${a.ref}', this)" class="rounded-lg bg-brand-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal · 1 credit</button>
+    </div>
+  </div>`;
+}
+function cambiaTab(t) {
+  tab = t;
+  const on = "rounded-lg px-4 py-1.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900";
+  const off = "rounded-lg px-4 py-1.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-900";
+  document.getElementById("tab-jobs").className = t === "jobs" ? on : off;
+  document.getElementById("tab-az").className = t === "az" ? on : off;
+  document.getElementById("f-q").placeholder = t === "jobs" ? "Job title…" : "Industry (exact)…";
+  document.getElementById("f-stato").style.display = t === "jobs" ? "" : "none";
+  cursore = null;
+  cerca(false);
+}
 async function cerca(append = false) {
+  const via = tab === "jobs" ? "/portale/cerca" : "/portale/cerca-aziende";
   const body = { ...filtri(), cursor: append ? cursore : null };
-  const r = await api("/portale/cerca", { method: "POST", body: JSON.stringify(body) });
+  const r = await api(via, { method: "POST", body: JSON.stringify(body) });
   if (!r.ok) return;
   const d = await r.json();
   cursore = d.next_cursor;
   document.getElementById("cerca-totale").textContent =
-    (d.totale || 0).toLocaleString("en-US") + " postings";
+    (d.totale || 0).toLocaleString("en-US") + (tab === "jobs" ? " postings" : " companies");
   const el = document.getElementById("cerca-righe");
   if (!append) el.innerHTML = "";
-  el.insertAdjacentHTML("beforeend", d.data.map(rigaCerca).join(""));
+  el.insertAdjacentHTML("beforeend",
+    d.data.map(tab === "jobs" ? rigaJob : rigaAzienda).join(""));
   document.getElementById("cerca-altro").classList.toggle("hidden", !cursore);
 }
 function cercaAncora() { cerca(true); }
@@ -427,21 +473,113 @@ function cercaAncora() { cerca(true); }
     clearTimeout(cercaTimer); cercaTimer = setTimeout(() => cerca(false), 350);
   }));
 document.getElementById("f-remoto").addEventListener("change", () => cerca(false));
+document.getElementById("f-stato").addEventListener("change", () => cerca(false));
+
+/* il reveal: una volta sola per sempre (il server lo ricorda) */
 async function rivela(id, btn) {
   btn.disabled = true; btn.textContent = "…";
   const r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
   if (r.status === 429) {
-    btn.textContent = "credits out — top up below";
+    btn.textContent = "credits out — top up";
     btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
     return;
   }
   if (!r.ok) { btn.disabled = false; btn.textContent = "Reveal · 1 credit"; return; }
   const d = await r.json();
   const o = d.offerta || {};
-  const row = document.getElementById("row-" + id);
-  const cella = btn.parentElement;
-  cella.innerHTML = `<a href="${o.url || "#"}" target="_blank" rel="noopener" class="text-[13px] font-bold text-brand-600 hover:underline">${o.company || "vedi l'offerta"} ↗</a>`;
+  btn.parentElement.innerHTML = `<a href="${o.url || "#"}" target="_blank" rel="noopener" class="text-[13px] font-bold text-brand-600 hover:underline">${o.company || "see the posting"} ↗</a>`;
   await carica();   // il contatore scende davanti agli occhi
+}
+async function rivelaAzienda(ref, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+  if (r.status === 429) {
+    btn.textContent = "credits out — top up";
+    btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
+    return;
+  }
+  if (!r.ok) { btn.disabled = false; btn.textContent = "Reveal · 1 credit"; return; }
+  const d = await r.json();
+  mostraAzienda(d.azienda, ref);
+  await carica();
+}
+
+/* il dettaglio: il modale sopra tutto */
+function chiudiDettaglio() { document.getElementById("dettaglio").classList.add("hidden"); }
+function apriDettaglio(html) {
+  document.getElementById("dettaglio-box").innerHTML = html;
+  document.getElementById("dettaglio").classList.remove("hidden");
+}
+async function dettaglioJob(id) {
+  const r = await api("/portale/offerta-dettaglio", { method: "POST", body: JSON.stringify({ id }) });
+  if (!r.ok) return;
+  const d = await r.json();
+  const o = d.offerta || {};
+  const tec = (o.technologies || []).map(t =>
+    `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${t}</span>`).join("");
+  const azienda = d.rivelata
+    ? `<div class="mt-6 flex items-center gap-3 rounded-xl border border-mint-500/30 bg-mint-500/5 px-5 py-4">
+         <b class="text-[14.5px]">${o.company || ""}</b>
+         ${o.url ? `<a href="${o.url}" target="_blank" rel="noopener" class="ml-auto rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25">Open the original posting ↗</a>` : ""}
+       </div>`
+    : `<div class="mt-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-5 py-4">
+         <span class="blur-[5px] select-none text-[13px] font-bold text-slate-400">██████████</span>
+         <button onclick="rivelaNelModale('${id}', this)" class="ml-auto rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal the company · 1 credit</button>
+       </div>`;
+  apriDettaglio(`<div class="p-8">
+    <div class="flex items-start justify-between gap-4">
+      <div><h3 class="text-xl font-black tracking-tight">${o.title || ""}</h3>
+      <p class="mt-1 text-[13.5px] text-slate-500">${[o.city, o.country].filter(Boolean).join(", ")}</p></div>
+      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2">${[
+      o.category, o.seniority, o.remote, o.employment_type,
+      o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
+      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
+    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
+    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><p class="mt-2 text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap max-h-64 overflow-auto">${String(o.description).slice(0, 1200)}</p>` : ""}
+    ${azienda}
+  </div>`);
+}
+async function rivelaNelModale(id, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  const r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
+  if (r.status === 429) {
+    btn.disabled = false; btn.textContent = "credits out — top up from your dashboard";
+    return;
+  }
+  if (r.ok) { await dettaglioJob(id); await carica(); }
+}
+async function mostraAzienda(a, ref) {
+  const tec = (a.technologies || []).slice(0, 40).map(t =>
+    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${t.technology}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${t.active_jobs || t.jobs || ""} jobs</span></div>`).join("");
+  apriDettaglio(`<div class="p-8">
+    <div class="flex items-start justify-between gap-4">
+      <div><h3 class="text-xl font-black tracking-tight">${a.company || ""}</h3>
+      <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</p></div>
+      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2">${[a.legal_name ? "legal: " + a.legal_name : null, a.size_range ? "size " + a.size_range : null, a.founded ? "founded " + String(a.founded).slice(0, 4) : null, a.domain || a.website].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
+    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${String(a.description).slice(0, 600)}</p>` : ""}
+    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-1 max-h-56 overflow-auto pr-1">${tec}</div>` : ""}
+    <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
+  </div>`);
+  const r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ ref }) });
+  const el = document.getElementById("az-jobs-lista");
+  if (!r.ok) { el.textContent = ""; return; }
+  const d = await r.json();
+  el.innerHTML = (d.data || []).map(j =>
+    `<div class="py-1.5 border-b border-slate-50 flex justify-between gap-3"><span class="font-semibold truncate">${j.title}</span><span class="text-slate-400 text-[11.5px] shrink-0">${[j.city, j.country].filter(Boolean).join(", ")}</span></div>`).join("") || "no active postings today";
+}
+function dettaglioAzienda(ref) {
+  /* il click apre la scheda MASCHERATA: il credito parte solo dal
+     bottone, mai da un click esplorativo */
+  apriDettaglio(`<div class="p-8 text-center">
+    <div class="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
+    <h3 class="mt-4 text-xl font-black tracking-tight blur-[6px] select-none text-slate-400">████████████</h3>
+    <p class="mt-2 text-[13.5px] text-slate-500">Industry, size and technology count are visible above.<br>The name, the domain and the full record unlock with one credit — once, then it's yours.</p>
+    <button onclick="rivelaAzienda('${ref}', this)" class="mt-5 rounded-xl bg-brand-500 px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition">Reveal this company · 1 credit</button>
+  </div>`);
 }
 
 /* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */

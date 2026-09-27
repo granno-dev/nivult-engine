@@ -248,6 +248,38 @@ def spendi_per_utente(user_id: str) -> bool:
     return _consuma(attive[0]["id"]) is not None
 
 
+def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
+    """Il reveal che si ricorda: gia' rivelato -> gratis; nuovo -> un
+    credito e la riga che lo ricorda. Torna 'ok', 'gratis' (era gia'
+    suo) o 'senza_crediti'."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM portale_rivelazioni "
+            "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
+            (user_id, tipo, riferimento))
+        if cur.fetchone():
+            return "gratis"
+    if not spendi_per_utente(user_id):
+        return "senza_crediti"
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
+            "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+            (user_id, tipo, riferimento))
+        conn.commit()
+    return "ok"
+
+
+def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
+    """Il dettaglio completo lo vede solo chi ha rivelato."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM portale_rivelazioni "
+            "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
+            (user_id, tipo, riferimento))
+        return cur.fetchone() is not None
+
+
 def lista() -> list[dict]:
     """Le chiavi che esistono. MAI la chiave ne' il suo hash: non servono."""
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
