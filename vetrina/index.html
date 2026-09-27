@@ -64,6 +64,13 @@ tailwind.config = {
 @keyframes tick { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
 .tick-track { animation: tick 14s linear infinite; }
 .tick-wrap:hover .tick-track { animation-play-state: paused; }
+/* pricing slider */
+.pz-slider { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 99px;
+  background: linear-gradient(90deg,#3b6ef6 var(--fill,50%), #e7eaf3 var(--fill,50%)); outline: none; }
+.pz-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
+.pz-slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
 /* the two coverage panels are equal by construction: same fixed height,
    the longer list scrolls inside its own panel */
 @media (min-width: 1024px) { .cov-scroll { height: 1140px; } }
@@ -100,6 +107,7 @@ tailwind.config = {
       <a href="#changes" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Changes</a>
       <a href="#coverage" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
       <a href="#api" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">API</a>
+      <a href="#pricing" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Pricing</a>
     </div>
     <div class="flex-1"></div>
     <button id="hamburger" class="sm:hidden p-2 -mr-2 text-slate-700" aria-label="Menu">
@@ -112,6 +120,7 @@ tailwind.config = {
     <a href="#changes" class="text-sm font-semibold text-slate-600">Changes</a>
     <a href="#coverage" class="text-sm font-semibold text-slate-600">Coverage</a>
     <a href="#api" class="text-sm font-semibold text-slate-600">API</a>
+    <a href="#pricing" class="text-sm font-semibold text-slate-600">Pricing</a>
     <a href="#contact" class="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white text-center">Get a trial key</a>
   </div>
 </nav>
@@ -502,6 +511,63 @@ tailwind.config = {
   </div>
 </section>
 
+<!-- ══ Pricing: slider volume → prezzo unitario che scende ══ -->
+<section id="pricing" class="py-20 border-t border-slate-900/5">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="reveal text-center max-w-3xl mx-auto">
+      <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Pricing</p>
+      <h2 class="text-4xl font-black tracking-tight">More data, <span class="accent underline-draw">less per call</span></h2>
+      <p class="mt-4 text-lg text-slate-600">One credit is one API call. The more you pull, the less each call costs. Move the slider and watch the unit price fall.</p>
+    </div>
+
+    <div class="reveal mt-10 max-w-3xl mx-auto rounded-3xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/10 overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
+      <div class="p-8 sm:p-10">
+        <div class="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">credits per month</div>
+            <div id="pz-crediti" class="mt-1 text-3xl font-black tracking-tight tabular-nums">100,000</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">per month</div>
+            <div id="pz-prezzo" class="mt-1 text-4xl font-black tracking-tight tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">€229</div>
+          </div>
+        </div>
+
+        <input id="pz-slider" type="range" min="0" max="1000" value="500"
+          class="pz-slider mt-8 w-full" aria-label="Credits per month">
+
+        <div class="mt-6 flex items-center gap-4">
+          <div class="flex-1">
+            <div class="flex justify-between text-[12px] font-bold mb-1.5">
+              <span class="text-slate-500">price per 1,000 calls</span>
+              <span><span id="pz-unit" class="text-slate-900 tabular-nums">€2.29</span>
+              <span id="pz-sconto" class="ml-2 rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px]">−53% vs entry</span></span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div id="pz-barra" class="h-full rounded-full bg-gradient-to-r from-amber-500 via-brand-500 to-mint-500 transition-all duration-500" style="width:47%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pz-incluso" class="mt-6 flex flex-wrap gap-2"></div>
+
+        <div class="mt-7 flex flex-wrap items-center gap-4">
+          <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Start with this volume →</button>
+          <span class="text-[13px] text-slate-500 font-medium">First 1,000 credits every month are free. No card required.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal mt-8 max-w-3xl mx-auto grid sm:grid-cols-3 gap-4 text-center">
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-5"><b class="block text-lg font-black">Daily export</b><span class="text-[13px] text-slate-500">from 50K credits: the full corpus, every morning</span></div>
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-5"><b class="block text-lg font-black">Delta feed</b><span class="text-[13px] text-slate-500">from 200K credits: new, updated, closed daily</span></div>
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-5"><b class="block text-lg font-black">Historical backfill</b><span class="text-[13px] text-slate-500">from 1M credits: 654K+ verified closures</span></div>
+    </div>
+    <p class="reveal mt-8 text-center text-[13px] text-slate-400 max-w-xl mx-auto">Fields are added over time and never renamed. Your integration never breaks because we shipped an improvement.</p>
+  </div>
+</section>
+
 <!-- ══ Final CTA ══ -->
 <section id="contact" class="py-20">
   <div class="max-w-7xl mx-auto px-6">
@@ -831,6 +897,51 @@ fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000)
    }
    if(toc&&covVista)animaCopertura();
  }).catch(()=>{/* il ripiego sono i numeri embedded */});
+
+/* ══ pricing: la curva dei volumi, ancorata ai prezzi misurati del
+      mercato (ricerca del 27/09/2026: TheirStack 32,7$/1K e Coresignal
+      19,6$/1K all'ingresso; noi entriamo a 4,9€/1K). Il prezzo si
+      interpola log-log fra gli ancoraggi: la curva e' liscia e il
+      prezzo unitario scende sempre. ══ */
+const ANCORE=[[10000,49],[25000,89],[50000,149],[100000,229],[250000,399],
+              [500000,599],[1000000,899],[2500000,1790],[5000000,2990]];
+const UNIT_ENTRATA=ANCORE[0][1]/(ANCORE[0][0]/1000);   // 4,90 €/1K
+const sl=document.getElementById('pz-slider');
+function creditiDi(p){                       // slider log-uniforme 10K..5M
+  const lo=Math.log10(10000),hi=Math.log10(5000000);
+  return Math.round(Math.pow(10,lo+(hi-lo)*p)/1000)*1000;
+}
+function prezzoDi(c){                        // interpola log-log fra ancore
+  if(c<=ANCORE[0][0])return ANCORE[0][1];
+  for(let i=1;i<ANCORE.length;i++){
+    const[c1,p1]=ANCORE[i-1],[c2,p2]=ANCORE[i];
+    if(c<=c2){const t=(Math.log(c)-Math.log(c1))/(Math.log(c2)-Math.log(c1));
+      return Math.exp(Math.log(p1)+t*(Math.log(p2)-Math.log(p1)));}
+  }
+  return ANCORE[ANCORE.length-1][1];
+}
+const CHIP_BASE=["Full API access","Per-field provenance","Coverage endpoint"];
+function aggiornaPrezzo(){
+  const c=creditiDi(sl.value/1000);
+  const p=prezzoDi(c),unit=p/(c/1000);
+  document.getElementById('pz-crediti').textContent=c.toLocaleString('en-US');
+  document.getElementById('pz-prezzo').textContent="€"+Math.round(p).toLocaleString('en-US');
+  document.getElementById('pz-unit').textContent="€"+unit.toFixed(2);
+  const sconto=Math.round((1-unit/UNIT_ENTRATA)*100);
+  const el=document.getElementById('pz-sconto');
+  el.textContent=sconto>0?`−${sconto}% vs entry`:"entry rate";
+  el.className="ml-2 rounded-md px-2 py-0.5 text-[11px] "+(sconto>0?"bg-mint-500/10 text-mint-600":"bg-slate-100 text-slate-500");
+  document.getElementById('pz-barra').style.width=Math.max(4,Math.round(100*unit/UNIT_ENTRATA))+"%";
+  sl.style.setProperty('--fill',(sl.value/10)+"%");
+  const chips=[...CHIP_BASE];
+  if(c>=50000)chips.push("Daily bulk export");
+  if(c>=200000)chips.push("Delta feed: new · updated · closed");
+  if(c>=1000000)chips.push("Historical backfill");
+  document.getElementById('pz-incluso').innerHTML=chips.map(x=>
+    `<span class="rounded-lg bg-slate-100 text-slate-600 px-3 py-1.5 text-[12px] font-bold">✓ ${x}</span>`).join('');
+}
+sl.addEventListener('input',aggiornaPrezzo);
+aggiornaPrezzo();
 
 /* ══ modal + mobile menu ══ */
 function apriModale(){document.getElementById('modale').classList.remove('hidden');}
