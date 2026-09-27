@@ -42,12 +42,19 @@ tailwind.config = {
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
 .pz-slider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%;
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
+/* scrollbar chiara per l'esploratore */
+.cov-scroll::-webkit-scrollbar { width: 8px; }
+.cov-scroll::-webkit-scrollbar-track { background: transparent; }
+.cov-scroll::-webkit-scrollbar-thumb { background: #d5dbe7; border-radius: 99px; }
+/* la rete neurale dietro tutto, come nella landing */
+#neural { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
 </style>
 </head>
 <body class="bg-paper text-slate-900 font-sans antialiased min-h-screen flex flex-col">
+<canvas id="neural"></canvas>
 
-<nav class="border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
-  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center gap-8">
+<nav class="relative z-10 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
+  <div class="max-w-[1400px] mx-auto px-6 sm:px-8 h-16 flex items-center gap-8">
     <a href="index.html" class="text-lg font-black tracking-tight">Nivult<span class="bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">.</span></a>
     <a href="index.html#data" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Data</a>
     <a href="index.html#coverage" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
@@ -57,7 +64,7 @@ tailwind.config = {
   </div>
 </nav>
 
-<main class="flex-1 relative overflow-hidden">
+<main class="relative z-10 flex-1">
   <div class="mesh-a pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-brand-400/15 blur-[110px]"></div>
   <div class="mesh-b pointer-events-none absolute -bottom-32 -right-24 h-[420px] w-[420px] rounded-full bg-mint-400/15 blur-[110px]"></div>
 
@@ -98,12 +105,12 @@ tailwind.config = {
   </div>
 
   <!-- ══ DASHBOARD ══ -->
-  <div id="vista-dash" class="hidden relative max-w-[1500px] mx-auto px-6 py-10 w-full">
+  <div id="vista-dash" class="hidden relative max-w-[1400px] mx-auto px-6 sm:px-8 py-10 w-full">
     <div class="flex items-center gap-4 flex-wrap">
       <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black" id="dash-iniziale">N</div>
       <div>
         <h1 class="text-2xl font-black tracking-tight" id="dash-nome">—</h1>
-        <p class="text-[13px] text-slate-500"><span id="dash-email">—</span> · API account · <span class="text-mint-600 font-semibold">active</span></p>
+        <p class="text-[13px] text-slate-500"><span id="dash-email"></span><span id="dash-email-sep"> · </span>API account · <span class="text-mint-600 font-semibold">active</span></p>
       </div>
       <button onclick="esci()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
     </div>
@@ -136,30 +143,48 @@ tailwind.config = {
       </div>
 
       <!-- consumo -->
-      <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm p-6 flex flex-col">
-        <h2 class="text-[15px] font-bold tracking-tight">This month's credits</h2>
-        <div class="mt-3 flex items-baseline gap-2">
-          <b id="uso-val" class="text-3xl font-black tabular-nums">0</b>
-          <span class="text-[13px] text-slate-500">/ <span id="uso-max">1,000</span> used</span>
+      <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-500/10 to-transparent">
+          <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 grid place-items-center shadow-md shadow-violet-500/25">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+          <div>
+            <h2 class="text-[15px] font-bold tracking-tight">This month's credits</h2>
+            <p class="text-[11.5px] font-semibold text-violet-600">the counter resets on the 1st</p>
+          </div>
         </div>
-        <div class="mt-3 h-2.5 rounded-full bg-slate-100 overflow-hidden">
-          <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-brand-500 to-mint-400 transition-all duration-700" style="width:0"></div>
+        <div class="p-6 flex-1 flex flex-col justify-center">
+          <div class="flex items-baseline gap-2">
+            <b id="uso-val" class="text-4xl font-black tabular-nums bg-gradient-to-r from-violet-500 to-pink-500 bg-clip-text text-transparent">0</b>
+            <span class="text-[13px] text-slate-500">/ <span id="uso-max">1,000</span> used</span>
+          </div>
+          <div class="mt-4 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+            <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700" style="width:0"></div>
+          </div>
         </div>
-        <p class="mt-3 text-[12px] text-slate-400">The counter resets on the first of the month, on its own.</p>
       </div>
 
       <!-- acquisto -->
-      <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm p-6 flex flex-col">
-        <h2 class="text-[15px] font-bold tracking-tight">Need more volume?</h2>
-        <p class="mt-1.5 text-[13px] text-slate-500">Pick a monthly volume. The unit price falls as it grows.</p>
-        <div class="mt-4 flex items-center justify-between">
-          <span id="buy-vol" class="text-xl font-black tabular-nums">100,000</span>
-          <span id="buy-prezzo" class="text-xl font-black tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">€229/mo</span>
+      <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
+          <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="4"/></svg>
+          </div>
+          <div>
+            <h2 class="text-[15px] font-bold tracking-tight">Need more volume?</h2>
+            <p class="text-[11.5px] font-semibold text-mint-600">the unit price falls as it grows</p>
+          </div>
         </div>
-        <input id="buy-slider" type="range" min="0" max="8" value="3" class="pz-slider mt-4 w-full" aria-label="Monthly volume">
-        <div class="mt-auto pt-5">
-          <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3 font-bold text-white shadow-lg shadow-brand-500/25">Continue to checkout →</button>
-          <p id="buy-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
+        <div class="p-6 flex-1 flex flex-col">
+          <div class="flex items-center justify-between">
+            <span id="buy-vol" class="text-xl font-black tabular-nums">100,000</span>
+            <span id="buy-prezzo" class="text-xl font-black tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">€229/mo</span>
+          </div>
+          <input id="buy-slider" type="range" min="0" max="8" value="3" class="pz-slider mt-4 w-full" aria-label="Monthly volume">
+          <div class="mt-auto pt-5">
+            <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3 font-bold text-white shadow-lg shadow-brand-500/25">Continue to checkout →</button>
+            <p id="buy-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
+          </div>
         </div>
       </div>
     </div>
@@ -201,7 +226,7 @@ tailwind.config = {
             <option value="chiuse">Closed postings</option>
           </select>
         </div>
-        <div id="cerca-righe" class="mt-4 grid gap-2"></div>
+        <div id="cerca-righe" class="mt-4 grid gap-2 max-h-[560px] overflow-auto pr-1 cov-scroll"></div>
         <div class="mt-3 flex justify-center">
           <button id="cerca-altro" onclick="cercaAncora()" class="hidden rounded-xl border border-slate-200 px-5 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Load more</button>
         </div>
@@ -225,14 +250,20 @@ tailwind.config = {
           <p class="text-[11.5px] font-semibold text-brand-600">real scenarios, copy-paste ready</p>
         </div>
       </div>
-      <div class="flex flex-wrap gap-2 px-6 pt-4" id="guida-tab"></div>
-      <div class="p-6 pt-4">
-        <p id="guida-testo" class="text-[14px] text-slate-600 leading-relaxed max-w-3xl"></p>
-        <div class="relative mt-4">
-          <button onclick="copiaGuida(this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11px] font-bold text-slate-300 transition">Copy</button>
-          <pre id="guida-codice" class="rounded-xl bg-slate-950 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
+      <div class="grid lg:grid-cols-4 gap-0">
+        <div class="lg:border-r border-slate-100 p-5 flex lg:flex-col flex-wrap gap-2" id="guida-tab"></div>
+        <div class="lg:col-span-3 p-6">
+          <h3 id="guida-titolo" class="text-lg font-bold tracking-tight"></h3>
+          <p id="guida-testo" class="mt-2 text-[14px] text-slate-600 leading-relaxed max-w-3xl"></p>
+          <div class="relative mt-4">
+            <button onclick="copiaGuida(this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11px] font-bold text-slate-300 transition">Copy</button>
+            <pre id="guida-codice" class="rounded-xl bg-slate-950 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
+          </div>
+          <div class="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-50/70 border border-brand-100 px-4 py-3">
+            <span class="text-brand-500 font-black text-sm leading-none mt-0.5">i</span>
+            <p id="guida-nota" class="text-[12.5px] text-slate-600"></p>
+          </div>
         </div>
-        <p id="guida-nota" class="mt-3 text-[12.5px] text-slate-400"></p>
       </div>
     </div>
   </div>
@@ -303,7 +334,8 @@ async function carica() {
   const me = await (await api("/me")).json();
   const nome = (me.nome || "").trim();
   document.getElementById("dash-nome").textContent = nome || me.email;
-  document.getElementById("dash-email").textContent = nome ? me.email : "API account";
+  document.getElementById("dash-email").textContent = nome ? me.email : "";
+  document.getElementById("dash-email-sep").style.display = nome ? "" : "none";
   document.getElementById("dash-iniziale").textContent = ((nome || me.email)[0] || "N").toUpperCase();
   document.getElementById("nav-stato").textContent = nome || me.email;
   const r = await (await api("/me/chiavi")).json();
@@ -462,7 +494,7 @@ async function cerca(append = false) {
   const d = await r.json();
   cursore = d.next_cursor;
   document.getElementById("cerca-totale").textContent =
-    (d.totale || 0).toLocaleString("en-US") + (tab === "jobs" ? " postings" : " companies");
+    (d.totale || 0).toLocaleString("en-US") + (tab === "jobs" ? " postings in today's export" : " companies in today's export");
   const el = document.getElementById("cerca-righe");
   if (!append) el.innerHTML = "";
   el.insertAdjacentHTML("beforeend",
@@ -631,8 +663,9 @@ while True:
 let guidaAttiva = 0;
 function disegnaGuida() {
   document.getElementById("guida-tab").innerHTML = SCENARI.map(([t], i) =>
-    `<button onclick="scegliScenario(${i})" class="rounded-full px-4 py-1.5 text-[13px] font-bold transition ${i === guidaAttiva ? "bg-brand-500 text-white shadow-md shadow-brand-500/25" : "bg-slate-100 text-slate-500 hover:bg-brand-50 hover:text-brand-600"}">${t}</button>`).join("");
-  const [, testo, codice, nota] = SCENARI[guidaAttiva];
+    `<button onclick="scegliScenario(${i})" class="rounded-xl px-4 py-2.5 text-left text-[13px] font-bold transition w-full ${i === guidaAttiva ? "bg-brand-500 text-white shadow-md shadow-brand-500/25" : "text-slate-500 hover:bg-brand-50 hover:text-brand-600"}">${t}</button>`).join("");
+  const [titolo, testo, codice, nota] = SCENARI[guidaAttiva];
+  document.getElementById("guida-titolo").textContent = titolo;
   document.getElementById("guida-testo").textContent = testo;
   document.getElementById("guida-codice").textContent = codice;
   document.getElementById("guida-nota").textContent = nota;
@@ -643,6 +676,25 @@ function copiaGuida(btn) {
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
 }
 disegnaGuida();
+
+/* ══ la rete neurale sullo sfondo, come nella landing ══ */
+(()=>{
+  const cv=document.getElementById('neural');if(!cv)return;
+  const ctx=cv.getContext('2d');let W,H,nodi=[];
+  function ridimensiona(){W=cv.width=innerWidth;H=cv.height=innerHeight;
+    nodi=Array.from({length:Math.min(60,Math.floor(W*H/32000))},()=>({
+      x:Math.random()*W,y:Math.random()*H,
+      vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3}));}
+  ridimensiona();addEventListener('resize',ridimensiona);
+  (function frame(){ctx.clearRect(0,0,W,H);
+    for(const n of nodi){n.x+=n.vx;n.y+=n.vy;
+      if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
+    for(let i=0;i<nodi.length;i++)for(let j=i+1;j<nodi.length;j++){
+      const a=nodi[i],b=nodi[j],d=Math.hypot(a.x-b.x,a.y-b.y);
+      if(d<130){ctx.strokeStyle=`rgba(59,110,246,${(1-d/130)*.10})`;
+        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
+    requestAnimationFrame(frame);})();
+})();
 
 /* ══ avvio ══ */
 (async () => {
