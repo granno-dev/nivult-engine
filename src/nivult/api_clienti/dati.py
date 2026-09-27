@@ -374,8 +374,11 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
         dove.append("raw->>'title' ILIKE $q ESCAPE '\\'")
         par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
+        # nel flusso il campo si chiama skills (le technologies vengono
+        # dopo, dal modello: una riga chiusa e' il ricordo dell'ultima
+        # foto, non l'arricchimento completo)
         dove.append("list_contains(list_transform("
-                    "CAST(raw->'technologies' AS VARCHAR[]), "
+                    "CAST(coalesce(raw->'skills', '[]'::json) AS VARCHAR[]), "
                     "x -> lower(x)), lower($technology))")
         par["technology"] = str(filtri["technology"])
     if cursore:
@@ -389,17 +392,17 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
             par).fetchone()[0]
         righe = _conn().execute(
             f"""SELECT id, raw->>'title', raw->>'country', raw->>'city',
-                       raw->>'category', t, raw->'technologies'
+                       t, coalesce(raw->'skills', '[]'::json)
                   FROM flusso
                  WHERE {' AND '.join(dove)}
                  ORDER BY t DESC, id LIMIT {limite + 1}""", par).fetchall()
     prossimo = None
     if len(righe) > limite:
         righe = righe[:limite]
-        prossimo = _cursore([_iso(righe[-1][5]), righe[-1][0]])
+        prossimo = _cursore([_iso(righe[-1][4]), righe[-1][0]])
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
-              "category": r[4], "closed_at": _iso(r[5]),
-              "technologies": r[6] or []} for r in righe], prossimo, totale)
+              "closed_at": _iso(r[4]), "category": None,
+              "technologies": r[5] or []} for r in righe], prossimo, totale)
 
 
 def aziende(filtri: dict, cursore: str | None,
