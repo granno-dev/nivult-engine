@@ -71,7 +71,9 @@ def _utente_o_nuovo(cur, email: str, locale: str | None = None) -> str:
 
 
 def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=None,
-                        invia=None, locale: str | None = None) -> str | None:
+                        invia=None, locale: str | None = None,
+                        base: str | None = None,
+                        percorso: str = "/verify") -> str | None:
     """Genera un magic link per l'indirizzo e lo affida all'email.
 
     Ritorna il token in chiaro (al chiamante, che lo mette nell'email e lo
@@ -106,7 +108,11 @@ def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=Non
 
     from nivult.delivery.testi import t
     x = t(locale)
-    link = f"{_base_url()}/verify?token={token}"
+    # `base` e `percorso` li passa il chiamante quando il link non deve
+    # atterrare sul sito principale: il portale B2B verifica da solo nella
+    # sua pagina account (27/09/2026).
+    radice = (base or "").strip().rstrip("/") or _base_url()
+    link = f"{radice}{percorso}?token={token}"
     if invia is None:
         from nivult.delivery.email import invia_generica
         invia = lambda a, oggetto, testo, html: invia_generica(a, oggetto, testo, html)  # noqa: E731

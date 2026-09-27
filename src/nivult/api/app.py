@@ -137,6 +137,9 @@ class RichiestaLink(BaseModel):
     # La lingua della pagina da cui l'utente sta chiedendo il link: decide la
     # lingua dell'EMAIL, e alla prima richiesta diventa la lingua dell'account.
     locale: str | None = Field(default=None, pattern="^[a-z]{2}$")
+    # Dove atterra il link: il portale B2B verifica da solo nella sua pagina
+    # (27/09/2026). Solo le nostre origini passano, le altre si ignorano.
+    redirect: str | None = Field(default=None, max_length=300)
 
 
 class ConsumoLink(BaseModel):
@@ -485,11 +488,20 @@ def create_app() -> FastAPI:
                    conn=Depends(connessione)):
         # La risposta è sempre la stessa, anche a fine rate limit: dall'esterno
         # non si scopre né se l'indirizzo esiste né quanto è vicino al muro.
+        base = percorso = None
+        dest = (corpo.redirect or "").strip()
+        if dest:
+            from urllib.parse import urlparse
+            u = urlparse(dest)
+            origine = f"{u.scheme}://{u.netloc}"
+            if origine == oauth.site_url() or u.netloc.startswith("localhost"):
+                base, percorso = origine, u.path or "/verify"
         auth.richiedi_magic_link(
             conn, str(corpo.email),
             ip=_ip(request),
             ua=request.headers.get("User-Agent"),
-            locale=corpo.locale)
+            locale=corpo.locale,
+            base=base, percorso=percorso or "/verify")
         return {"esito": "se l'indirizzo è valido, ricevi un link"}
 
     @app.post("/auth/consuma")
@@ -523,12 +535,20 @@ def create_app() -> FastAPI:
         return RedirectResponse(f"{oauth.site_url()}{percorso}", status_code=302)
 
     @app.get("/auth/oauth/{provider}/start")
-    def oauth_start(provider: str, conn=Depends(connessione)):
+    def oauth_start(provider: str, request: Request, conn=Depends(connessione)):
         # Rotta non autenticata che scrive una riga: le righe sono minuscole,
         # vivono dieci minuti, e ogni passaggio pota le scadute. Se un giorno
         # servisse un freno, va messo qui.
+        # `dest`: dove atterrare a fine giro (il portale B2B non e' /verify).
+        # Solo nostre origini: mai un redirect aperto verso fuori.
+        dest = (request.query_params.get("dest") or "").strip()
+        if dest and not (dest.startswith(oauth.site_url())
+                         or dest.startswith("http://localhost")):
+            dest = ""
         try:
-            return RedirectResponse(oauth.inizia(conn, provider), status_code=302)
+            return RedirectResponse(
+                oauth.inizia(conn, provider, destinazione=dest or None),
+                status_code=302)
         except oauth.OAuthError as e:
             return _al_sito(f"/login?errore={e.codice}")
 
@@ -540,13 +560,17 @@ def create_app() -> FastAPI:
             # guasto, si torna al login senza drammi.
             return _al_sito("/login?errore=accesso_annullato")
         try:
-            gettone = oauth.concludi(conn, provider, code, state)
+            gettone, destinazione = oauth.concludi(conn, provider, code, state)
         except oauth.OAuthError as e:
             # Il codice finisce nell'URL di ritorno, dove nessuno lo legge in
             # un guasto: anche a log, cosi' un login OAuth che fallisce si
             # diagnostica senza ricostruirlo dal browser.
             log.warning("oauth callback %s fallita: %s", provider, e.codice)
             return _al_sito(f"/login?errore={e.codice}")
+        if destinazione:
+            sep = "&" if "?" in destinazione else "?"
+            return RedirectResponse(f"{destinazione}{sep}token={gettone}",
+                                    status_code=302)
         return _al_sito(f"/verify?token={gettone}")
 
     @app.get("/me")
@@ -974,6 +998,91 @@ def create_app() -> FastAPI:
                 "archiviata": r[12],
             } for r in righe],
         }
+
+    # ── il portale clienti B2B: le chiavi API dell'utente (27/09/2026) ──
+    # Self-service: il cliente crea e revoca da solo. La chiave in chiaro
+    # esce UNA volta, alla creazione; in tabella resta lo sha256. Al primo
+    # accesso nasce la chiave trial da 1.000 crediti/mese — la promessa
+    # della landing ("first 1,000 credits free").
+    from nivult.api_clienti import chiavi as _chiavi
+
+    @app.get("/me/chiavi")
+    def mie_chiavi(uid: str = Depends(utente)):
+        lista = _chiavi.lista_per_utente(uid)
+        if lista:
+            return {"chiavi": lista}
+        # primo accesso: la chiave trial nasce qui, e SI MOSTRA in chiaro
+        # questa volta sola — in tabella resta solo l'hash
+        chiave, chiave_id = _chiavi.nuova("principale (trial)", 1000,
+                                          user_id=uid)
+        return {"chiavi": _chiavi.lista_per_utente(uid),
+                "chiave_nuova": chiave,
+                "nota": "la chiave si vede solo ora: conservala tu"}
+
+    @app.post("/me/chiavi")
+    async def nuova_chiave(request: Request, uid: str = Depends(utente)):
+        # body opzionale: {"etichetta": "..."} — lunga al massimo 80 char
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        etichetta = str((corpo or {}).get("etichetta") or "").strip()[:80] \
+            or "chiave del portale"
+        chiave, chiave_id = _chiavi.nuova(etichetta, 1000, user_id=uid)
+        return {"chiave": chiave, "id": chiave_id,
+                "nota": "la chiave si vede solo ora: conservala tu"}
+
+    @app.delete("/me/chiavi/{chiave_id}")
+    def revoca_mia_chiave(chiave_id: str, uid: str = Depends(utente)):
+        if not _chiavi.revoca_per_utente(chiave_id, uid):
+            raise HTTPException(404, "chiave non trovata o non tua")
+        return {"revocata": True}
+
+    # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
+    from nivult.api_clienti import billing as _billing
+
+    @app.get("/me/volumi")
+    def volumi_vendibili(uid: str = Depends(utente)):
+        """I volumi comprabili (configurati su Creem da noi)."""
+        return {"volumi": _billing.volumi()}
+
+    @app.post("/me/checkout")
+    async def checkout_crediti(request: Request, uid: str = Depends(utente),
+                               conn=Depends(connessione)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        volume = int((corpo or {}).get("volume") or 0)
+        if volume not in _billing.volumi():
+            raise HTTPException(400, "volume non vendibile")
+        with conn.cursor() as cur:
+            cur.execute("SELECT email FROM users WHERE id = %s", (uid,))
+            riga = cur.fetchone()
+        try:
+            url = _billing.checkout(
+                uid, riga[0] if riga else "", volume,
+                success_url=os.environ.get("SITE_URL", "").rstrip("/")
+                + "/account.html?pagato=1",
+                cancel_url=os.environ.get("SITE_URL", "").rstrip("/")
+                + "/account.html")
+        except _billing.BillingNonPronto:
+            raise HTTPException(503, "checkout non ancora attivo: "
+                                "scrivi a hello@nivult.com")
+        return {"checkout_url": url}
+
+    @app.post("/webhooks/creem")
+    async def webhook_creem(request: Request):
+        corpo = await request.body()
+        if not _billing.firma_valida(
+                corpo, request.headers.get("creem-signature")):
+            raise HTTPException(401, "firma non valida")
+        try:
+            evento = json.loads(corpo)
+        except ValueError:
+            raise HTTPException(400, "corpo non JSON")
+        esito = _billing.applica_pagamento(database_url(), evento)
+        return {"esito": esito}
 
     def _campo_testo(v) -> str | None:
         """Un campo del corpus che puo' essere testo o lista: reso testo.

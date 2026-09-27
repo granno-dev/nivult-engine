@@ -89,7 +89,7 @@ def esito(conn, provider, code, state, claim, status=200) -> str:
     """concludi(), ma il codice d'errore al posto dell'eccezione."""
     try:
         return oauth.concludi(conn, provider, code, state,
-                              client=ClientFinto(claim, status))
+                              client=ClientFinto(claim, status))[0]
     except oauth.OAuthError as e:
         return f"errore:{e.codice}"
 

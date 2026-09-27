@@ -195,17 +195,47 @@ def svuota_cache() -> None:
     _cache.clear()
 
 
-def nuova(etichetta: str, crediti: int) -> tuple[str, str]:
+def nuova(etichetta: str, crediti: int, user_id: str | None = None) -> tuple[str, str]:
     """Crea la chiave e ritorna (chiave in chiaro, id). Si vede ORA, mai piu'."""
     chiave = "nv_" + secrets.token_urlsafe(32)
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili) "
-            "VALUES (%s, %s, %s) RETURNING id::text",
-            (_hash(chiave), etichetta, crediti))
+            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id) "
+            "VALUES (%s, %s, %s, %s) RETURNING id::text",
+            (_hash(chiave), etichetta, crediti, user_id))
         chiave_id = cur.fetchone()[0]
         conn.commit()
     return chiave, chiave_id
+
+
+def lista_per_utente(user_id: str) -> list[dict]:
+    """Le chiavi del cliente, per la dashboard del portale. Mai la chiave."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
+            "       usati_mese, mese_uso FROM api_chiavi "
+            "WHERE user_id = %s ORDER BY created_at", (user_id,))
+        return [{"id": r[0], "etichetta": r[1],
+                 "creata_il": r[2].isoformat(),
+                 "revocata_il": r[3].isoformat() if r[3] else None,
+                 "crediti_mensili": r[4], "usati_mese": r[5],
+                 "mese_uso": r[6].isoformat()} for r in cur.fetchall()]
+
+
+def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
+    """Revoca logica, solo se la chiave e' di chi chiede."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        try:
+            cur.execute(
+                "UPDATE api_chiavi SET revoked_at = now() "
+                "WHERE id = %s AND user_id = %s AND revoked_at IS NULL",
+                (chiave_id, user_id))
+        except psycopg.errors.InvalidTextRepresentation:
+            return False
+        fatta = cur.rowcount > 0
+        conn.commit()
+    invalida(chiave_id)
+    return fatta
 
 
 def lista() -> list[dict]:

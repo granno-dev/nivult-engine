@@ -114,6 +114,21 @@ PROVIDERS = {
         # LinkedIn non rimanda il nonce nell'id_token: vedi _verifica_claim.
         "verifica_nonce": False,
     },
+    "github": {
+        # GitHub non e' OIDC: niente id_token. Lo scambio del code da' un
+        # access token, e l'identita' si legge dalla sua API
+        # (/user + /user/emails). L'email fidata e' solo quella che GitHub
+        # marca verified: niente takeover per indirizzo. Niente PKCE (non
+        # dichiarato) e niente nonce (non esiste): il replay resta chiuso
+        # dallo state consumato una volta sola.
+        "autorizzazione": "https://github.com/login/oauth/authorize",
+        "token": "https://github.com/login/oauth/access_token",
+        "scope": "read:user user:email",
+        "env": ("GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"),
+        "pkce": False,
+        "userinfo": True,
+        "verifica_nonce": False,
+    },
 }
 
 
@@ -247,16 +262,21 @@ def _email_attendibile(provider: str, claim: dict) -> tuple[str | None, bool]:
     # Google e LinkedIn dichiarano `email_verified` e ognuno possiede la
     # propria identita': non c'e' l'amministratore di tenant che decide
     # l'indirizzo di un altro, quindi il claim vale. LinkedIn verifica
-    # sempre l'email prima di darla.
-    if provider in ("google", "linkedin"):
+    # sempre l'email prima di darla. GitHub: il claim lo costruiamo noi
+    # da /user/emails, e verified=True significa che GitHub l'ha verificata.
+    if provider in ("google", "linkedin", "github"):
         verificata = claim.get("email_verified")
         return email, verificata is True or verificata == "true"
 
     return email, claim.get("tid") == MSA_TENANT
 
 
-def inizia(conn: psycopg.Connection, provider: str) -> str:
-    """Apre un giro e ritorna l'URL a cui mandare il browser."""
+def inizia(conn: psycopg.Connection, provider: str,
+           destinazione: str | None = None) -> str:
+    """Apre un giro e ritorna l'URL a cui mandare il browser.
+
+    `destinazione` (27/09/2026): dove atterrare a fine giro invece che su
+    /verify — il portale B2B e' un'altra pagina dello stesso sito."""
     cfg = _config(provider)
     client_id, _ = _credenziali(provider)
 
@@ -272,9 +292,9 @@ def inizia(conn: psycopg.Connection, provider: str) -> str:
         cur.execute("DELETE FROM oauth_flows WHERE expires_at < now()")
         cur.execute(
             "INSERT INTO oauth_flows (provider, state_hash, nonce_hash, code_verifier, "
-            "  expires_at) VALUES (%s, %s, %s, %s, now() + make_interval(mins => %s))",
+            "  destinazione, expires_at) VALUES (%s, %s, %s, %s, %s, now() + make_interval(mins => %s))",
             (provider, _sha256(state), _sha256(nonce), verifier,
-             FLUSSO_VALIDITA.seconds // 60))
+             destinazione, FLUSSO_VALIDITA.seconds // 60))
     conn.commit()
 
     parametri = {
@@ -374,11 +394,53 @@ def _collega_o_crea(cur, provider: str, subject: str,
     return uid
 
 
-def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
-             *, client=None) -> str:
-    """Chiude il giro e ritorna un gettone monouso da spendere su /verify.
+def _userinfo_github(access_token: str | None, client=None) -> dict:
+    """L'identita' GitHub letta dalla sua API, nella forma dei claim OIDC.
 
-    `client` è iniettabile: i test non parlano con Google.
+    /user da' id e nome; /user/emails da' le email col marchio verified.
+    L'email fidata e' la primaria verificata: se non c'e', il claim arriva
+    senza email e il collegamento per indirizzo non scatta mai."""
+    if not access_token:
+        raise OAuthError("id_token_assente", "Risposta del provider incompleta.")
+    h = {"Authorization": f"Bearer {access_token}",
+         "Accept": "application/vnd.github+json"}
+
+    def _get(url):
+        if client is not None:
+            return client.get(url, headers=h)
+        with httpx.Client(timeout=15) as c:
+            return c.get(url, headers=h)
+
+    try:
+        u = _get("https://api.github.com/user")
+        e = _get("https://api.github.com/user/emails")
+    except httpx.HTTPError as exc:
+        raise OAuthError("provider_irraggiungibile",
+                         "Il provider non risponde. Riprova fra poco.") from exc
+    if u.status_code != 200:
+        raise OAuthError("scambio_fallito",
+                         "Il provider ha rifiutato l'accesso. Riprova ad accedere.")
+    utente = u.json()
+    email = verificata = None
+    if e.status_code == 200 and isinstance(e.json(), list):
+        primarie = [x for x in e.json()
+                    if x.get("primary") and x.get("verified")]
+        if primarie:
+            email = primarie[0].get("email")
+            verificata = True
+    return {"sub": str(utente.get("id") or ""),
+            "email": email or (utente.get("email") or "").strip().lower() or None,
+            "email_verified": bool(verificata),
+            "name": utente.get("name") or utente.get("login")}
+
+
+def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
+             *, client=None) -> tuple[str, str | None]:
+    """Chiude il giro e ritorna (gettone monouso, destinazione del giro).
+
+    Il gettone si spende su /verify; la destinazione e' dove atterrare
+    (None = /verify del sito). `client` è iniettabile: i test non parlano
+    con Google.
     """
     cfg = _config(provider)
     # `segreto` e non `client_secret`: la scansione dei segreti in pre-commit
@@ -394,14 +456,14 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
             "UPDATE oauth_flows SET consumed_at = now() "
             "WHERE state_hash = %s AND provider = %s AND consumed_at IS NULL "
             "  AND expires_at > now() "
-            "RETURNING code_verifier, nonce_hash",
+            "RETURNING code_verifier, nonce_hash, destinazione",
             (_sha256(state), provider))
         r = cur.fetchone()
         if not r:
             conn.rollback()
             raise OAuthError("state_rifiutato",
                              "Richiesta scaduta o già usata. Riprova ad accedere.")
-        verifier, nonce_hash = r
+        verifier, nonce_hash, destinazione = r
     conn.commit()
 
     dati = {
@@ -413,12 +475,14 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
     }
     if cfg.get("pkce"):
         dati["code_verifier"] = verifier
+    # GitHub risponde form-encoded di default: JSON va chiesto
+    intest = {"Accept": "application/json"} if cfg.get("userinfo") else None
     try:
         if client is None:
             with httpx.Client(timeout=15) as c:
-                risposta = c.post(cfg["token"], data=dati)
+                risposta = c.post(cfg["token"], data=dati, headers=intest)
         else:
-            risposta = client.post(cfg["token"], data=dati)
+            risposta = client.post(cfg["token"], data=dati, headers=intest)
     except httpx.HTTPError as e:
         raise OAuthError("provider_irraggiungibile",
                          "Il provider non risponde. Riprova fra poco.") from e
@@ -433,12 +497,16 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
                          "Il provider ha rifiutato l'accesso. Riprova ad accedere.")
 
     corpo = risposta.json()
-    id_token = corpo.get("id_token")
-    if not id_token:
-        raise OAuthError("id_token_assente", "Risposta del provider incompleta.")
-
-    claim = _decodifica_payload(id_token)
-    _verifica_claim(provider, claim, client_id, nonce_hash)
+    if cfg.get("userinfo"):
+        # GitHub non e' OIDC: l'identita' si legge dalla sua API con
+        # l'access token appena scambiato (lo state e' gia' consumato)
+        claim = _userinfo_github(corpo.get("access_token"), client)
+    else:
+        id_token = corpo.get("id_token")
+        if not id_token:
+            raise OAuthError("id_token_assente", "Risposta del provider incompleta.")
+        claim = _decodifica_payload(id_token)
+        _verifica_claim(provider, claim, client_id, nonce_hash)
 
     subject = claim.get("sub")
     if not subject:
@@ -460,4 +528,4 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
             "VALUES (%s, %s, now() + make_interval(mins => %s), %s)",
             (uid, _sha256(gettone), GETTONE_VALIDITA.seconds // 60, provider))
     conn.commit()
-    return gettone
+    return gettone, destinazione

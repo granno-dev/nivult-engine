@@ -369,7 +369,7 @@ def create_app() -> FastAPI:
             # guasto, si torna al login senza drammi.
             return _al_sito("/login?errore=accesso_annullato")
         try:
-            gettone = oauth.concludi(conn, provider, code, state)
+            gettone, _destinazione = oauth.concludi(conn, provider, code, state)
         except oauth.OAuthError as e:
             return _al_sito(f"/login?errore={e.codice}")
         return _al_sito(f"/verify?token={gettone}")
