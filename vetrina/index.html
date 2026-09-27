@@ -598,12 +598,27 @@ tailwind.config = {
 <!-- ══ Final CTA ══ -->
 <section id="contact" class="py-20">
   <div class="max-w-7xl mx-auto px-6">
-    <div class="reveal relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-500 to-mint-500 px-8 py-16 sm:px-16 text-center shadow-2xl shadow-brand-500/25">
-      <div class="pointer-events-none absolute -top-24 right-0 h-72 w-72 rounded-full bg-white/10 blur-[90px]"></div>
-      <h2 class="relative text-4xl font-black tracking-tight text-white">See your market before it moves.</h2>
-      <p class="relative mt-4 text-lg text-white/90 max-w-xl mx-auto">Trial key with real credits, a sample export to inspect, and a human who answers. If the data doesn't survive your audit, you walk away.</p>
-      <button onclick="apriModale()" class="relative mt-9 rounded-xl bg-white px-8 py-4 font-bold text-brand-600 hover:scale-[1.03] transition shadow-xl">Get a trial key →</button>
-      <p class="relative mt-4 text-[13px] text-white/70 font-medium">No credit card required · instant sandbox access</p>
+    <div class="reveal relative overflow-hidden rounded-3xl bg-slate-950 px-8 py-16 sm:px-16 text-center shadow-2xl shadow-slate-900/40">
+      <div class="mesh-a pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full bg-brand-500/25 blur-[100px]"></div>
+      <div class="mesh-b pointer-events-none absolute -bottom-32 -right-24 h-[380px] w-[380px] rounded-full bg-mint-500/20 blur-[100px]"></div>
+      <div class="pointer-events-none absolute inset-0 opacity-[0.15]" style="background-image:radial-gradient(rgba(255,255,255,.5) 1px, transparent 1px);background-size:26px 26px"></div>
+      <div class="relative">
+        <span class="inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-300">
+          <span class="live-dot h-2 w-2 rounded-full bg-mint-400"></span>
+          Right now: <b id="cta-live" class="text-mint-400 tabular-nums">46,363</b>&nbsp;new postings in the last 24 hours
+        </span>
+        <h2 class="mt-6 text-4xl sm:text-5xl font-black tracking-tight text-white">See your market <span class="bg-gradient-to-r from-brand-400 via-violet-400 to-mint-400 bg-clip-text text-transparent">before it moves.</span></h2>
+        <p class="mt-5 text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">Trial key with real credits, a sample export to inspect, and a human who answers. If the data doesn't survive your audit, you walk away.</p>
+        <div class="mt-9 flex flex-wrap justify-center gap-4">
+          <button onclick="apriModale()" class="rounded-xl bg-white px-8 py-4 font-bold text-slate-900 hover:scale-[1.03] transition shadow-xl shadow-white/10">Get a trial key →</button>
+          <a href="#data" class="rounded-xl border border-white/20 px-8 py-4 font-bold text-white hover:bg-white/10 transition">Explore the live index</a>
+        </div>
+        <div class="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[13px] text-slate-400">
+          <span><span class="text-mint-400 font-bold mr-1.5">✓</span>No credit card required</span>
+          <span><span class="text-mint-400 font-bold mr-1.5">✓</span>Instant sandbox access</span>
+          <span><span class="text-mint-400 font-bold mr-1.5">✓</span>Answer within one business day</span>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -901,6 +916,10 @@ fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000)
    if(s.offerte){
      const h=document.getElementById("stat-hero");
      if(h)h.textContent=s.offerte.toLocaleString("en-US");
+   }
+   if(s.nuove_24h){
+     const c=document.getElementById("cta-live");
+     if(c)c.textContent=s.nuove_24h.toLocaleString("en-US");
    }
    const cards=document.querySelectorAll(".stat-num");
    mappa.forEach(([_,v],i)=>{
