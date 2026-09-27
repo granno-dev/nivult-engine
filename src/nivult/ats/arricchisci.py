@@ -21,7 +21,7 @@ import logging
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 import psycopg
@@ -189,6 +189,10 @@ def _estrai_jsonld(html: str) -> dict:
         try:
             dt = datetime.fromisoformat(data) if data else None
         except ValueError:
+            dt = None
+        # la stessa guardia di jobposting._data (27/09/2026): gli
+        # apprendistati scrivono la data di inizio, non di pubblicazione
+        if dt is not None and dt.date() > (datetime.now().date() + timedelta(days=2)):
             dt = None
         # la descrizione viaggia nello stesso JSON-LD: buttarla
         # e' stata la differenza fra 0% e 90% su phenom
