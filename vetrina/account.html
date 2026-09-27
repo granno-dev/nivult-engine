@@ -682,7 +682,7 @@ disegnaGuida();
   const cv=document.getElementById('neural');if(!cv)return;
   const ctx=cv.getContext('2d');let W,H,nodi=[];
   function ridimensiona(){W=cv.width=innerWidth;H=cv.height=innerHeight;
-    nodi=Array.from({length:Math.min(60,Math.floor(W*H/32000))},()=>({
+    nodi=Array.from({length:Math.min(90,Math.floor(W*H/22000))},()=>({
       x:Math.random()*W,y:Math.random()*H,
       vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3}));}
   ridimensiona();addEventListener('resize',ridimensiona);
@@ -691,8 +691,10 @@ disegnaGuida();
       if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
     for(let i=0;i<nodi.length;i++)for(let j=i+1;j<nodi.length;j++){
       const a=nodi[i],b=nodi[j],d=Math.hypot(a.x-b.x,a.y-b.y);
-      if(d<130){ctx.strokeStyle=`rgba(59,110,246,${(1-d/130)*.10})`;
+      if(d<150){ctx.strokeStyle=`rgba(59,110,246,${(1-d/150)*.18})`;
         ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
+    for(const n of nodi){ctx.fillStyle='rgba(59,110,246,.30)';
+      ctx.beginPath();ctx.arc(n.x,n.y,1.8,0,7);ctx.fill();}
     requestAnimationFrame(frame);})();
 })();
 
