@@ -32,4 +32,6 @@ regexes = [
   ''':\{[a-z_]+\}@''',
   # segnaposto documentali: postgresql://utente:<password>@host
   ''':<[a-z_]+>@''',
+  # il segnaposto della chiave API nella vetrina: nv_your_key
+  '''nv_your_key''',
 ]

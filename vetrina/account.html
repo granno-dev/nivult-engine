@@ -102,8 +102,8 @@ tailwind.config = {
     <div class="flex items-center gap-4 flex-wrap">
       <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black" id="dash-iniziale">N</div>
       <div>
-        <h1 class="text-2xl font-black tracking-tight" id="dash-email">—</h1>
-        <p class="text-[13px] text-slate-500">API account · <span class="text-mint-600 font-semibold">active</span></p>
+        <h1 class="text-2xl font-black tracking-tight" id="dash-nome">—</h1>
+        <p class="text-[13px] text-slate-500"><span id="dash-email">—</span> · API account · <span class="text-mint-600 font-semibold">active</span></p>
       </div>
       <button onclick="esci()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
     </div>
@@ -162,10 +162,26 @@ tailwind.config = {
       </div>
     </div>
 
-    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm p-6">
-      <h2 class="text-[15px] font-bold tracking-tight">First call in ten seconds</h2>
-      <pre class="mt-3 rounded-xl bg-slate-950 text-slate-200 font-mono text-[12.5px] p-4 overflow-x-auto">curl -H "X-Api-Key: <span class="text-mint-400">nv_your_key</span>" \
-  https://api.nivult.com/v1/jobs?technology=SAP&amp;country=DE</pre>
+    <!-- ══ la guida per chi integra ══ -->
+    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
+        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-bold tracking-tight">Build with the API</h2>
+          <p class="text-[11.5px] font-semibold text-brand-600">real scenarios, copy-paste ready</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2 px-6 pt-4" id="guida-tab"></div>
+      <div class="p-6 pt-4">
+        <p id="guida-testo" class="text-[14px] text-slate-600 leading-relaxed max-w-3xl"></p>
+        <div class="relative mt-4">
+          <button onclick="copiaGuida(this)" class="absolute top-3 right-3 z-10 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 px-3 py-1.5 text-[11px] font-bold text-slate-300 transition">Copy</button>
+          <pre id="guida-codice" class="rounded-xl bg-slate-950 p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 max-h-[380px]"></pre>
+        </div>
+        <p id="guida-nota" class="mt-3 text-[12.5px] text-slate-400"></p>
+      </div>
     </div>
   </div>
 </main>
@@ -233,9 +249,11 @@ async function magicLink(e) {
 let chiavi = [];
 async function carica() {
   const me = await (await api("/me")).json();
-  document.getElementById("dash-email").textContent = me.email;
-  document.getElementById("dash-iniziale").textContent = (me.email[0] || "N").toUpperCase();
-  document.getElementById("nav-stato").textContent = me.email;
+  const nome = (me.nome || "").trim();
+  document.getElementById("dash-nome").textContent = nome || me.email;
+  document.getElementById("dash-email").textContent = nome ? me.email : "API account";
+  document.getElementById("dash-iniziale").textContent = ((nome || me.email)[0] || "N").toUpperCase();
+  document.getElementById("nav-stato").textContent = nome || me.email;
   const r = await (await api("/me/chiavi")).json();
   chiavi = r.chiavi || [];
   if (r.chiave_nuova) mostraChiaveNuova(r.chiave_nuova);
@@ -323,6 +341,66 @@ async function compra() {
   const d = await r.json();
   location.href = d.checkout_url;
 }
+
+/* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */
+const SCENARI = [
+ ["Quickstart", "Every call carries your key in the X-Api-Key header, never in the URL. This one asks for the postings that mention SAP in Germany:",
+`curl -H "X-Api-Key: nv_your_key" \\
+  "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`,
+  "The answer is data / next_cursor / count_page. Follow next_cursor until it is null."],
+ ["Python", "The same call from Python, with pagination that walks the whole result set:",
+`import requests
+
+KEY = "nv_your_key"
+url = "https://api.nivult.com/v1/jobs"
+cursor = None
+
+while True:
+    r = requests.get(url, headers={"X-Api-Key": KEY},
+                     params={"technology": "Snowflake", "cursor": cursor},
+                     timeout=30)
+    r.raise_for_status()
+    page = r.json()
+    for job in page["data"]:
+        print(job["title"], job["ats"])
+    cursor = page["next_cursor"]
+    if not cursor:
+        break`,
+  "One call is one credit, whatever the page size. Fewer, fuller pages cost less."],
+ ["Stay in sync", "The delta feed keeps your copy current. Store your cursor, ask what changed, repeat daily:",
+`curl -H "X-Api-Key: nv_your_key" \\
+  "https://api.nivult.com/v1/changes?since=2026-09-01T00:00:00Z"`,
+  "Events are new, updated or closed. A closure is verified: the posting left the employer's own page."],
+ ["Companies", "The company spine: one record per employer, with industry and legal identity from public registries:",
+`curl -H "X-Api-Key: nv_your_key" \\
+  "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500"`,
+  "Every field carries its source, so you can filter out what you do not trust."],
+ ["Limits & errors", "The API answers in the open: 401 means the key is missing or revoked, 429 means the month's credits are spent, 400 means the request itself is wrong.",
+`HTTP/1.1 429
+{
+  "detail": {
+    "errore": "crediti mensili esauriti",
+    "crediti_mensili": 1000,
+    "mese_uso": "2026-09-01"
+  }
+}`,
+  "Your usage is always one call away: GET /v1/usage with your key."],
+];
+let guidaAttiva = 0;
+function disegnaGuida() {
+  document.getElementById("guida-tab").innerHTML = SCENARI.map(([t], i) =>
+    `<button onclick="scegliScenario(${i})" class="rounded-full px-4 py-1.5 text-[13px] font-bold transition ${i === guidaAttiva ? "bg-brand-500 text-white shadow-md shadow-brand-500/25" : "bg-slate-100 text-slate-500 hover:bg-brand-50 hover:text-brand-600"}">${t}</button>`).join("");
+  const [, testo, codice, nota] = SCENARI[guidaAttiva];
+  document.getElementById("guida-testo").textContent = testo;
+  document.getElementById("guida-codice").textContent = codice;
+  document.getElementById("guida-nota").textContent = nota;
+}
+function scegliScenario(i) { guidaAttiva = i; disegnaGuida(); }
+function copiaGuida(btn) {
+  navigator.clipboard.writeText(document.getElementById("guida-codice").textContent)
+    .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
+}
+disegnaGuida();
 
 /* ══ avvio ══ */
 (async () => {
