@@ -149,8 +149,8 @@ tailwind.config = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
           </div>
           <div>
-            <h2 class="text-[15px] font-bold tracking-tight">This month's credits</h2>
-            <p class="text-[11.5px] font-semibold text-violet-600">the counter resets on the 1st</p>
+            <h2 class="text-[15px] font-bold tracking-tight">Credits this month</h2>
+            <p class="text-[11.5px] font-semibold text-violet-600">resets on the 1st · upgrades apply right away</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col justify-center">
@@ -207,14 +207,18 @@ tailwind.config = {
           <span id="cerca-totale" class="text-[12px] font-bold text-slate-400 tabular-nums"></span>
         </div>
       </div>
+      <div class="px-5 pt-3 text-[12px] font-semibold text-slate-400" id="cerca-match"></div>
       <div class="p-5">
         <div class="grid sm:grid-cols-5 gap-3">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <input id="f-tec" type="text" placeholder="Technology…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
-          <input id="f-paese" type="text" placeholder="Country (IT, DE…)" maxlength="2"
-            class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] uppercase outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <div class="relative">
+            <input id="f-paese" type="text" placeholder="Country" autocomplete="off"
+              class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+            <div id="f-paese-lista" class="hidden absolute z-20 mt-1.5 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl cov-scroll"></div>
+          </div>
           <select id="f-remoto" class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] text-slate-600 outline-none focus:border-brand-500 transition">
             <option value="">Any workplace</option>
             <option value="remote">Remote</option>
@@ -432,11 +436,13 @@ function filtri() {
   const f = {};
   const q = document.getElementById("f-q").value.trim();
   const t = document.getElementById("f-tec").value.trim();
-  const p = document.getElementById("f-paese").value.trim().toUpperCase();
   const r = document.getElementById("f-remoto").value;
+  // il paese arriva dal menu (ISO certo); chi digita due lettere a mano
+  // trova lo stesso
+  const p = paeseIso || document.getElementById("f-paese").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
   if (q) f.q = q;
   if (t) f.technology = t;
-  if (p) f.country = p;
+  if (p && p.length === 2) f.country = p;
   if (r) f.remote = r;
   if (tab === "jobs" && document.getElementById("f-stato").value === "chiuse")
     f.stato = "chiuse";
@@ -493,8 +499,10 @@ async function cerca(append = false) {
   if (!r.ok) return;
   const d = await r.json();
   cursore = d.next_cursor;
-  document.getElementById("cerca-totale").textContent =
-    (d.totale || 0).toLocaleString("en-US") + (tab === "jobs" ? " postings in today's export" : " companies in today's export");
+  /* il totale in testa e' il VIVO (dalla cache del cruscotto); il numero
+     dei risultati filtrati e' dell'export del giorno, e lo dichiara */
+  document.getElementById("cerca-match").textContent =
+    (d.totale || 0).toLocaleString("en-US") + (tab === "jobs" ? " match in today's export" : " companies in today's export");
   const el = document.getElementById("cerca-righe");
   if (!append) el.innerHTML = "";
   el.insertAdjacentHTML("beforeend",
@@ -698,8 +706,42 @@ disegnaGuida();
     requestAnimationFrame(frame);})();
 })();
 
+
+/* ══ il paese si sceglie da un menu, non si scrive a mano ══ */
+const PAESI = [["Afghanistan", "AF"], ["Aland Islands", "AX"], ["Albania", "AL"], ["Algeria", "DZ"], ["American Samoa", "AS"], ["Andorra", "AD"], ["Angola", "AO"], ["Anguilla", "AI"], ["Antarctica", "AQ"], ["Antigua and Barbuda", "AG"], ["Argentina", "AR"], ["Armenia", "AM"], ["Aruba", "AW"], ["Australia", "AU"], ["Austria", "AT"], ["Azerbaijan", "AZ"], ["Bahamas", "BS"], ["Bahrain", "BH"], ["Bangladesh", "BD"], ["Barbados", "BB"], ["Belarus", "BY"], ["Belgium", "BE"], ["Belize", "BZ"], ["Benin", "BJ"], ["Bermuda", "BM"], ["Bhutan", "BT"], ["Bolivia", "BO"], ["Bonaire, Saint Eustatius and Saba ", "BQ"], ["Bosnia and Herzegovina", "BA"], ["Botswana", "BW"], ["Bouvet Island", "BV"], ["Brazil", "BR"], ["British Indian Ocean Territory", "IO"], ["British Virgin Islands", "VG"], ["Brunei", "BN"], ["Bulgaria", "BG"], ["Burkina Faso", "BF"], ["Burundi", "BI"], ["Cabo Verde", "CV"], ["Cambodia", "KH"], ["Cameroon", "CM"], ["Canada", "CA"], ["Cayman Islands", "KY"], ["Central African Republic", "CF"], ["Chad", "TD"], ["Chile", "CL"], ["China", "CN"], ["Christmas Island", "CX"], ["Cocos Islands", "CC"], ["Colombia", "CO"], ["Comoros", "KM"], ["Cook Islands", "CK"], ["Costa Rica", "CR"], ["Croatia", "HR"], ["Cuba", "CU"], ["Curacao", "CW"], ["Cyprus", "CY"], ["Czechia", "CZ"], ["Democratic Republic of the Congo", "CD"], ["Denmark", "DK"], ["Djibouti", "DJ"], ["Dominica", "DM"], ["Dominican Republic", "DO"], ["Ecuador", "EC"], ["Egypt", "EG"], ["El Salvador", "SV"], ["Equatorial Guinea", "GQ"], ["Eritrea", "ER"], ["Estonia", "EE"], ["Eswatini", "SZ"], ["Ethiopia", "ET"], ["Falkland Islands", "FK"], ["Faroe Islands", "FO"], ["Fiji", "FJ"], ["Finland", "FI"], ["France", "FR"], ["French Guiana", "GF"], ["French Polynesia", "PF"], ["French Southern Territories", "TF"], ["Gabon", "GA"], ["Gambia", "GM"], ["Georgia", "GE"], ["Germany", "DE"], ["Ghana", "GH"], ["Gibraltar", "GI"], ["Greece", "GR"], ["Greenland", "GL"], ["Grenada", "GD"], ["Guadeloupe", "GP"], ["Guam", "GU"], ["Guatemala", "GT"], ["Guernsey", "GG"], ["Guinea", "GN"], ["Guinea-Bissau", "GW"], ["Guyana", "GY"], ["Haiti", "HT"], ["Heard Island and McDonald Islands", "HM"], ["Honduras", "HN"], ["Hong Kong", "HK"], ["Hungary", "HU"], ["Iceland", "IS"], ["India", "IN"], ["Indonesia", "ID"], ["Iran", "IR"], ["Iraq", "IQ"], ["Ireland", "IE"], ["Isle of Man", "IM"], ["Israel", "IL"], ["Italy", "IT"], ["Ivory Coast", "CI"], ["Jamaica", "JM"], ["Japan", "JP"], ["Jersey", "JE"], ["Jordan", "JO"], ["Kazakhstan", "KZ"], ["Kenya", "KE"], ["Kiribati", "KI"], ["Kosovo", "XK"], ["Kuwait", "KW"], ["Kyrgyzstan", "KG"], ["Laos", "LA"], ["Latvia", "LV"], ["Lebanon", "LB"], ["Lesotho", "LS"], ["Liberia", "LR"], ["Libya", "LY"], ["Liechtenstein", "LI"], ["Lithuania", "LT"], ["Luxembourg", "LU"], ["Macao", "MO"], ["Madagascar", "MG"], ["Malawi", "MW"], ["Malaysia", "MY"], ["Maldives", "MV"], ["Mali", "ML"], ["Malta", "MT"], ["Marshall Islands", "MH"], ["Martinique", "MQ"], ["Mauritania", "MR"], ["Mauritius", "MU"], ["Mayotte", "YT"], ["Mexico", "MX"], ["Micronesia", "FM"], ["Moldova", "MD"], ["Monaco", "MC"], ["Mongolia", "MN"], ["Montenegro", "ME"], ["Montserrat", "MS"], ["Morocco", "MA"], ["Mozambique", "MZ"], ["Myanmar", "MM"], ["Namibia", "NA"], ["Nauru", "NR"], ["Nepal", "NP"], ["Netherlands Antilles", "AN"], ["New Caledonia", "NC"], ["New Zealand", "NZ"], ["Nicaragua", "NI"], ["Niger", "NE"], ["Nigeria", "NG"], ["Niue", "NU"], ["Norfolk Island", "NF"], ["North Korea", "KP"], ["North Macedonia", "MK"], ["Northern Mariana Islands", "MP"], ["Norway", "NO"], ["Oman", "OM"], ["Pakistan", "PK"], ["Palau", "PW"], ["Palestinian Territory", "PS"], ["Panama", "PA"], ["Papua New Guinea", "PG"], ["Paraguay", "PY"], ["Peru", "PE"], ["Philippines", "PH"], ["Pitcairn", "PN"], ["Poland", "PL"], ["Portugal", "PT"], ["Puerto Rico", "PR"], ["Qatar", "QA"], ["Republic of the Congo", "CG"], ["Reunion", "RE"], ["Romania", "RO"], ["Russia", "RU"], ["Rwanda", "RW"], ["Saint Barthelemy", "BL"], ["Saint Helena", "SH"], ["Saint Kitts and Nevis", "KN"], ["Saint Lucia", "LC"], ["Saint Martin", "MF"], ["Saint Pierre and Miquelon", "PM"], ["Saint Vincent and the Grenadines", "VC"], ["Samoa", "WS"], ["San Marino", "SM"], ["Sao Tome and Principe", "ST"], ["Saudi Arabia", "SA"], ["Senegal", "SN"], ["Serbia", "RS"], ["Serbia and Montenegro", "CS"], ["Seychelles", "SC"], ["Sierra Leone", "SL"], ["Singapore", "SG"], ["Sint Maarten", "SX"], ["Slovakia", "SK"], ["Slovenia", "SI"], ["Solomon Islands", "SB"], ["Somalia", "SO"], ["South Africa", "ZA"], ["South Georgia and the South Sandwich Islands", "GS"], ["South Korea", "KR"], ["South Sudan", "SS"], ["Spain", "ES"], ["Sri Lanka", "LK"], ["Sudan", "SD"], ["Suriname", "SR"], ["Svalbard and Jan Mayen", "SJ"], ["Sweden", "SE"], ["Switzerland", "CH"], ["Syria", "SY"], ["Taiwan", "TW"], ["Tajikistan", "TJ"], ["Tanzania", "TZ"], ["Thailand", "TH"], ["The Netherlands", "NL"], ["Timor Leste", "TL"], ["Togo", "TG"], ["Tokelau", "TK"], ["Tonga", "TO"], ["Trinidad and Tobago", "TT"], ["Tunisia", "TN"], ["Turkey", "TR"], ["Turkmenistan", "TM"], ["Turks and Caicos Islands", "TC"], ["Tuvalu", "TV"], ["U.S. Virgin Islands", "VI"], ["Uganda", "UG"], ["Ukraine", "UA"], ["United Arab Emirates", "AE"], ["United Kingdom", "GB"], ["United States", "US"], ["United States Minor Outlying Islands", "UM"], ["Uruguay", "UY"], ["Uzbekistan", "UZ"], ["Vanuatu", "VU"], ["Vatican", "VA"], ["Venezuela", "VE"], ["Vietnam", "VN"], ["Wallis and Futuna", "WF"], ["Western Sahara", "EH"], ["Yemen", "YE"], ["Zambia", "ZM"], ["Zimbabwe", "ZW"]];
+const inpP = document.getElementById("f-paese"), listaP = document.getElementById("f-paese-lista");
+let paeseIso = "";
+function disegnaPaesi(f) {
+  const q = (f || "").toLowerCase();
+  const voci = PAESI.filter(([n, c]) => !q || n.toLowerCase().includes(q) || c.toLowerCase().startsWith(q)).slice(0, 40);
+  listaP.innerHTML = voci.map(([n, c]) =>
+    `<div class="px-4 py-2 text-[13.5px] hover:bg-brand-50 cursor-pointer flex justify-between" data-iso="${c}"><span>${n}</span><span class="text-slate-400 font-mono text-[11px]">${c}</span></div>`).join("");
+  listaP.classList.toggle("hidden", !voci.length);
+}
+inpP.addEventListener("input", () => { paeseIso = ""; disegnaPaesi(inpP.value); });
+inpP.addEventListener("focus", () => disegnaPaesi(inpP.value));
+listaP.addEventListener("mousedown", e => {
+  const d = e.target.closest("[data-iso]");
+  if (!d) return;
+  paeseIso = d.dataset.iso;
+  inpP.value = d.firstElementChild.textContent + " (" + paeseIso + ")";
+  listaP.classList.add("hidden");
+  cerca(false);
+});
+document.addEventListener("click", e => {
+  if (!e.target.closest("#f-paese") && !e.target.closest("#f-paese-lista"))
+    listaP.classList.add("hidden");
+});
+
 /* ══ avvio ══ */
 (async () => {
+  // il numero in testa all'esploratore e' il VIVO, lo stesso del cruscotto
+  fetch(API + "/v1/demo/stats", { signal: AbortSignal.timeout(5000) })
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(s => {
+      const el = document.getElementById("cerca-totale");
+      if (s.offerte) el.innerHTML = `<b class="text-mint-600">${s.offerte.toLocaleString("en-US")}</b> active postings right now`;
+    }).catch(() => {});
   await verificaGettone();
   if (!getTok()) { mostraLogin(); return; }
   document.getElementById("vista-dash").classList.remove("hidden");
