@@ -1040,6 +1040,39 @@ def create_app() -> FastAPI:
 
     # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
     from nivult.api_clienti import billing as _billing
+    from nivult.api_clienti import dati as _dati
+
+    @app.post("/portale/cerca")
+    async def cerca_nel_portale(request: Request, uid: str = Depends(utente)):
+        """La ricerca del portale: gratis, ma MASCHERATA. Azienda e URL
+        si rivelano con un credito (cercare aggancia, rivelare paga)."""
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        filtri = {k: v for k, v in (corpo or {}).items()
+                  if k in ("country", "category", "ats", "seniority",
+                           "language", "remote", "q", "technology", "dal")}
+        righe, prossimo, totale = _dati.cerca_portale(
+            filtri, (corpo or {}).get("cursor"))
+        return {"data": righe, "next_cursor": prossimo, "totale": totale}
+
+    @app.post("/portale/rivela")
+    async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        offerta_id = str((corpo or {}).get("id") or "").strip()
+        if not offerta_id:
+            raise HTTPException(400, "id mancante")
+        if not _chiavi.spendi_per_utente(uid):
+            raise HTTPException(429, "crediti del mese finiti: "
+                                "aumenta il volume dalla dashboard")
+        riga = _dati.rivela_offerta(offerta_id)
+        if riga is None:
+            raise HTTPException(404, "offerta non trovata")
+        return {"offerta": riga}
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):

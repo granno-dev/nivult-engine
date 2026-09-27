@@ -206,6 +206,72 @@ def offerte(filtri: dict, cursore: str | None,
     return _pagina(sql, par, limite, lambda r: [_iso(r[1]), r[2]])
 
 
+def cerca_portale(filtri: dict, cursore: str | None,
+                  limite: int = 25) -> tuple[list[dict], str | None, int]:
+    """La ricerca del portale: righe MASCHERATE (azienda e URL si
+    rivelano con un credito, il modello visto su TheirStack il 27/09).
+
+    Cercare e' gratis, rivelare no: e' il gancio che trasforma la
+    curiosita' in piano. Stessi filtri di offerte(), ma la SELECT non
+    tocca raw: il contenuto dell'annuncio non esce da qui."""
+    filtri = filtri or {}
+    limite = max(1, min(int(limite or 25), 50))
+    dove = ["TRUE"]
+    par: dict = {}
+    for campo in ("country", "category", "ats", "seniority", "language"):
+        if filtri.get(campo):
+            dove.append(f"{campo} = ${campo}")
+            par[campo] = filtri[campo]
+    if filtri.get("remote"):
+        dove.append("remote = $remote")
+        par["remote"] = str(filtri["remote"])
+    if filtri.get("q"):
+        dove.append("title ILIKE $q ESCAPE '\\'")
+        par["q"] = _like(str(filtri["q"]))
+    if filtri.get("technology"):
+        dove.append(_TEC.format(nome="technology"))
+        par["technology"] = str(filtri["technology"])
+    if filtri.get("dal"):
+        dove.append("posted_at >= CAST($dal AS TIMESTAMP)")
+        par["dal"] = _norm_ts(filtri["dal"])
+    if cursore:
+        ts, pid = _leggi_cursore(cursore)
+        par["pid"] = pid
+        dove.append("(posted_at IS NULL"
+                    " OR posted_at < CAST($pts AS TIMESTAMP)"
+                    " OR (posted_at = CAST($pts AS TIMESTAMP)"
+                    "     AND id > $pid))")
+        par["pts"] = _norm_ts(ts)
+    with _lock:
+        totale = _conn().execute(
+            f"SELECT count(*) FROM offerte WHERE {' AND '.join(dove)}",
+            par).fetchone()[0]
+        righe = _conn().execute(
+            f"""SELECT id, title, country, city, seniority, remote,
+                       category, posted_at, technologies, ats
+                  FROM offerte
+                 WHERE {' AND '.join(dove)}
+                 ORDER BY posted_at DESC NULLS LAST, id
+                 LIMIT {limite + 1}""", par).fetchall()
+    prossimo = None
+    if len(righe) > limite:
+        righe = righe[:limite]
+        prossimo = _cursore([_iso(righe[-1][7]), righe[-1][0]])
+    return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
+              "seniority": r[4], "remote": r[5], "category": r[6],
+              "posted_at": _iso(r[7]), "technologies": r[8] or [],
+              "ats": r[9]} for r in righe], prossimo, totale)
+
+
+def rivela_offerta(offerta_id: str) -> dict | None:
+    """La riga intera, per chi ha pagato il reveal: azienda e URL dentro."""
+    with _lock:
+        r = _conn().execute(
+            "SELECT raw FROM offerte WHERE id = $id",
+            {"id": offerta_id}).fetchone()
+    return json.loads(r[0]) if r else None
+
+
 def aziende(filtri: dict, cursore: str | None,
             limite: int) -> tuple[list[dict], str | None]:
     filtri = filtri or {}

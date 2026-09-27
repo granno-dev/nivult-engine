@@ -238,6 +238,16 @@ def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
     return fatta
 
 
+def spendi_per_utente(user_id: str) -> bool:
+    """Un credito dalla prima chiave attiva dell'utente: il reveal del
+    portale paga dallo stesso contatore dell'API (27/09/2026).
+    False se non c'e' una chiave attiva o il tetto del mese e' pieno."""
+    attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
+    if not attive:
+        return False
+    return _consuma(attive[0]["id"]) is not None
+
+
 def lista() -> list[dict]:
     """Le chiavi che esistono. MAI la chiave ne' il suo hash: non servono."""
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:

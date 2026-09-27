@@ -162,6 +162,40 @@ tailwind.config = {
       </div>
     </div>
 
+    <!-- ══ la ricerca nel dataset, dal portale ══ -->
+    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
+        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-bold tracking-tight">Search the index</h2>
+          <p class="text-[11.5px] font-semibold text-mint-600">browsing is free · revealing a company costs 1 credit</p>
+        </div>
+        <span id="cerca-totale" class="ml-auto text-[12px] font-bold text-slate-400 tabular-nums"></span>
+      </div>
+      <div class="p-5">
+        <div class="grid sm:grid-cols-4 gap-3">
+          <input id="f-q" type="text" placeholder="Job title…"
+            class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <input id="f-tec" type="text" placeholder="Technology…"
+            class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <input id="f-paese" type="text" placeholder="Country (IT, DE…)" maxlength="2"
+            class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] uppercase outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+          <select id="f-remoto" class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] text-slate-600 outline-none focus:border-brand-500 transition">
+            <option value="">Any workplace</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="onsite">On site</option>
+          </select>
+        </div>
+        <div id="cerca-righe" class="mt-4 grid gap-2"></div>
+        <div class="mt-3 flex justify-center">
+          <button id="cerca-altro" onclick="cercaAncora()" class="hidden rounded-xl border border-slate-200 px-5 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Load more</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ la guida per chi integra ══ -->
     <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
@@ -342,6 +376,74 @@ async function compra() {
   location.href = d.checkout_url;
 }
 
+/* ══ la ricerca nel portale: gratis, mascherata; il reveal costa 1 credito ══ */
+let cursore = null, cercaTimer = null;
+function filtri() {
+  const f = {};
+  const q = document.getElementById("f-q").value.trim();
+  const t = document.getElementById("f-tec").value.trim();
+  const p = document.getElementById("f-paese").value.trim().toUpperCase();
+  const r = document.getElementById("f-remoto").value;
+  if (q) f.q = q;
+  if (t) f.technology = t;
+  if (p) f.country = p;
+  if (r) f.remote = r;
+  return f;
+}
+function rigaCerca(o) {
+  const tec = (o.technologies || []).slice(0, 4).map(t =>
+    `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${t}</span>`).join("");
+  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3" id="row-${o.id}">
+    <div class="min-w-0 flex-1">
+      <b class="text-[14px] block truncate">${o.title || "—"}</b>
+      <div class="text-[12px] text-slate-500 mt-0.5">${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
+      <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
+    </div>
+    <div class="text-right shrink-0">
+      <div class="flex items-center gap-2 justify-end">
+        <span class="blur-[5px] select-none text-[13px] font-bold text-slate-400">████████</span>
+        <button onclick="rivela('${o.id}', this)" class="rounded-lg bg-brand-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal · 1 credit</button>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-1.5">${(o.posted_at || "").slice(0, 10)} · ${o.ats || ""}</div>
+    </div>
+  </div>`;
+}
+async function cerca(append = false) {
+  const body = { ...filtri(), cursor: append ? cursore : null };
+  const r = await api("/portale/cerca", { method: "POST", body: JSON.stringify(body) });
+  if (!r.ok) return;
+  const d = await r.json();
+  cursore = d.next_cursor;
+  document.getElementById("cerca-totale").textContent =
+    (d.totale || 0).toLocaleString("en-US") + " postings";
+  const el = document.getElementById("cerca-righe");
+  if (!append) el.innerHTML = "";
+  el.insertAdjacentHTML("beforeend", d.data.map(rigaCerca).join(""));
+  document.getElementById("cerca-altro").classList.toggle("hidden", !cursore);
+}
+function cercaAncora() { cerca(true); }
+["f-q", "f-tec", "f-paese"].forEach(id =>
+  document.getElementById(id).addEventListener("input", () => {
+    clearTimeout(cercaTimer); cercaTimer = setTimeout(() => cerca(false), 350);
+  }));
+document.getElementById("f-remoto").addEventListener("change", () => cerca(false));
+async function rivela(id, btn) {
+  btn.disabled = true; btn.textContent = "…";
+  const r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
+  if (r.status === 429) {
+    btn.textContent = "credits out — top up below";
+    btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
+    return;
+  }
+  if (!r.ok) { btn.disabled = false; btn.textContent = "Reveal · 1 credit"; return; }
+  const d = await r.json();
+  const o = d.offerta || {};
+  const row = document.getElementById("row-" + id);
+  const cella = btn.parentElement;
+  cella.innerHTML = `<a href="${o.url || "#"}" target="_blank" rel="noopener" class="text-[13px] font-bold text-brand-600 hover:underline">${o.company || "vedi l'offerta"} ↗</a>`;
+  await carica();   // il contatore scende davanti agli occhi
+}
+
 /* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */
 const SCENARI = [
  ["Quickstart", "Every call carries your key in the X-Api-Key header, never in the URL. This one asks for the postings that mention SAP in Germany:",
@@ -408,6 +510,7 @@ disegnaGuida();
   if (!getTok()) { mostraLogin(); return; }
   document.getElementById("vista-dash").classList.remove("hidden");
   try { await carica(); } catch (e) { /* 401 gia' gestita */ }
+  cerca(false);   // il portale si apre sull'ultimo giorno dell'indice
   if (new URL(location.href).searchParams.get("pagato")) {
     history.replaceState(null, "", QUI);
   }
