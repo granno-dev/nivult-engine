@@ -31,7 +31,8 @@ from psycopg.types.json import Json
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
                      Query, Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               RedirectResponse)
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
@@ -1141,6 +1142,29 @@ def create_app() -> FastAPI:
         if not _chiavi.e_rivelata(uid, "azienda", rif):
             raise HTTPException(402, "rivela prima l'azienda")
         return {"data": _dati.azienda_jobs_portale(rif)}
+
+    @app.get("/portale/export/{nome}")
+    def export_dal_portale(nome: str, uid: str = Depends(utente)):
+        """L'export del giorno dal portale, con la sessione: la chiave
+        non si mostra mai all'utente in chiaro dopo la creazione, e il
+        download paga un credito dal suo contatore. Sotto i 50K/mese
+        l'export bulk non e' nel piano (la soglia della landing)."""
+        if nome not in ("offerte", "aziende"):
+            raise HTTPException(404, "export sconosciuto")
+        attive = [k for k in _chiavi.lista_per_utente(uid)
+                  if not k["revocata_il"]]
+        if not attive:
+            raise HTTPException(402, "crea prima una chiave API")
+        if max(k["crediti_mensili"] for k in attive) < 50000:
+            raise HTTPException(402, "l'export giornaliero parte da 50K "
+                                "crediti/mese — alza il volume qui sotto")
+        if not _chiavi.spendi_per_utente(uid):
+            raise HTTPException(429, "crediti del mese finiti")
+        percorso = (_dati.stato_export().get("file") or {}).get(nome)
+        if not percorso or not os.path.isfile(percorso):
+            raise HTTPException(404, "export di oggi non ancora pronto")
+        return FileResponse(percorso, media_type="application/gzip",
+                            filename=os.path.basename(percorso))
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):

@@ -161,6 +161,10 @@ tailwind.config = {
           <div class="mt-4 h-2.5 rounded-full bg-slate-100 overflow-hidden">
             <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700" style="width:0"></div>
           </div>
+          <button onclick="scaricaExport()" id="export-btn" class="mt-5 w-full rounded-xl border border-violet-200 text-violet-600 px-4 py-2.5 text-[13px] font-bold hover:bg-violet-50 transition flex items-center justify-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            Download today's full export</button>
+          <p class="mt-2 text-[11px] text-slate-400 text-center">every posting, as JSONL · uses one credit</p>
         </div>
       </div>
 
@@ -190,8 +194,9 @@ tailwind.config = {
     </div>
 
     <!-- ══ l'esploratore: offerte e aziende, gratis da guardare ══ -->
-    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
-      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent flex-wrap">
+    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/5 overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 flex-wrap">
         <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
         </div>
@@ -209,7 +214,7 @@ tailwind.config = {
       </div>
       <div class="px-5 pt-3 text-[12px] font-semibold text-slate-400" id="cerca-match"></div>
       <div class="p-5">
-        <div class="grid sm:grid-cols-5 gap-3">
+        <div class="grid sm:grid-cols-5 gap-3 items-center">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <input id="f-tec" type="text" placeholder="Technology…"
@@ -229,6 +234,10 @@ tailwind.config = {
             <option value="aperte">Open postings</option>
             <option value="chiuse">Closed postings</option>
           </select>
+        </div>
+        <div class="mt-3 flex items-center justify-between">
+          <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
+          <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
         </div>
         <div id="cerca-righe" class="mt-4 grid gap-2 max-h-[560px] overflow-auto pr-1 cov-scroll"></div>
         <div class="mt-3 flex justify-center">
@@ -266,6 +275,16 @@ tailwind.config = {
           <div class="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-50/70 border border-brand-100 px-4 py-3">
             <span class="text-brand-500 font-black text-sm leading-none mt-0.5">i</span>
             <p id="guida-nota" class="text-[12.5px] text-slate-600"></p>
+          </div>
+          <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
+            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mr-1">quick reference</span>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/jobs</code>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/companies</code>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/changes?since=</code>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/coverage</code>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/exports/latest</code>
+            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/usage</code>
+            <span class="text-[11.5px] text-slate-400 ml-auto font-mono">api.nivult.com · X-Api-Key header</span>
           </div>
         </div>
       </div>
@@ -400,6 +419,34 @@ function copiaChiave(btn) {
   navigator.clipboard.writeText(document.getElementById("chiave-nuova-val").textContent)
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
 }
+
+/* l'export del giorno, scaricato con la chiave dell'utente: la chiave
+   viaggia nell'header, mai nell'URL (le URL finiscono nei log) */
+async function scaricaExport() {
+  const btn = document.getElementById("export-btn");
+  const attive = chiavi.filter(k => !k.revocata_il);
+  if (!attive.length) { btn.textContent = "create a key first"; return; }
+  btn.textContent = "preparing…";
+  const chiave = attive[0];
+  /* la chiave in chiaro non la abbiamo piu' (solo l'hash): il download
+     passa dall'endpoint col Bearer della sessione, che risolve la
+     chiave dell'utente lato server */
+  const r = await api("/portale/export/offerte");
+  if (!r.ok) {
+    btn.textContent = r.status === 402 ? "daily export needs a plan of 50K+ credits"
+                                      : "not available right now";
+    setTimeout(() => btn.innerHTML = "Download today's full export", 2500);
+    return;
+  }
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "nivult-jobs.jsonl.gz";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  btn.innerHTML = "Download today's full export";
+  await carica();
+}
 function esci() {
   api("/auth/logout", { method: "POST" }).catch(() => {});
   setTok(""); mostraLogin();
@@ -510,12 +557,28 @@ async function cerca(append = false) {
   document.getElementById("cerca-altro").classList.toggle("hidden", !cursore);
 }
 function cercaAncora() { cerca(true); }
+function pulisciFiltri() {
+  ["f-q", "f-tec", "f-paese"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("f-remoto").value = "";
+  document.getElementById("f-stato").value = "aperte";
+  paeseIso = ""; cursore = null;
+  cerca(false);
+}
+function aggiornaPulisci() {
+  const sporco = document.getElementById("f-q").value.trim()
+    || document.getElementById("f-tec").value.trim() || paeseIso
+    || document.getElementById("f-paese").value.trim()
+    || document.getElementById("f-remoto").value
+    || document.getElementById("f-stato").value !== "aperte";
+  document.getElementById("pulisci").classList.toggle("hidden", !sporco);
+}
 ["f-q", "f-tec", "f-paese"].forEach(id =>
   document.getElementById(id).addEventListener("input", () => {
+    aggiornaPulisci();
     clearTimeout(cercaTimer); cercaTimer = setTimeout(() => cerca(false), 350);
   }));
-document.getElementById("f-remoto").addEventListener("change", () => cerca(false));
-document.getElementById("f-stato").addEventListener("change", () => cerca(false));
+document.getElementById("f-remoto").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
+document.getElementById("f-stato").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
 
 /* il reveal: una volta sola per sempre (il server lo ricorda) */
 async function rivela(id, btn) {
@@ -626,11 +689,11 @@ function dettaglioAzienda(ref) {
 
 /* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */
 const SCENARI = [
- ["Quickstart", "Every call carries your key in the X-Api-Key header, never in the URL. This one asks for the postings that mention SAP in Germany:",
+ ["Quickstart", "your first call in ten seconds", "Every call carries your key in the X-Api-Key header, never in the URL. This one asks for the postings that mention SAP in Germany:",
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`,
   "The answer is data / next_cursor / count_page. Follow next_cursor until it is null."],
- ["Python", "The same call from Python, with pagination that walks the whole result set:",
+ ["Python", "the same call, with pagination", "The same call from Python, with pagination that walks the whole result set:",
 `import requests
 
 KEY = "nv_your_key"
@@ -649,15 +712,15 @@ while True:
     if not cursor:
         break`,
   "One call is one credit, whatever the page size. Fewer, fuller pages cost less."],
- ["Stay in sync", "The delta feed keeps your copy current. Store your cursor, ask what changed, repeat daily:",
+ ["Stay in sync", "your copy never goes stale", "The delta feed keeps your copy current. Store your cursor, ask what changed, repeat daily:",
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/changes?since=2026-09-01T00:00:00Z"`,
   "Events are new, updated or closed. A closure is verified: the posting left the employer's own page."],
- ["Companies", "The company spine: one record per employer, with industry and legal identity from public registries:",
+ ["Companies", "the spine: one record per employer", "The company spine: one record per employer, with industry and legal identity from public registries:",
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500"`,
   "Every field carries its source, so you can filter out what you do not trust."],
- ["Limits & errors", "The API answers in the open: 401 means the key is missing or revoked, 429 means the month's credits are spent, 400 means the request itself is wrong.",
+ ["Limits & errors", "401, 429, 400: what they mean", "The API answers in the open: 401 means the key is missing or revoked, 429 means the month's credits are spent, 400 means the request itself is wrong.",
 `HTTP/1.1 429
 {
   "detail": {
@@ -670,9 +733,12 @@ while True:
 ];
 let guidaAttiva = 0;
 function disegnaGuida() {
-  document.getElementById("guida-tab").innerHTML = SCENARI.map(([t], i) =>
-    `<button onclick="scegliScenario(${i})" class="rounded-xl px-4 py-2.5 text-left text-[13px] font-bold transition w-full ${i === guidaAttiva ? "bg-brand-500 text-white shadow-md shadow-brand-500/25" : "text-slate-500 hover:bg-brand-50 hover:text-brand-600"}">${t}</button>`).join("");
-  const [titolo, testo, codice, nota] = SCENARI[guidaAttiva];
+  document.getElementById("guida-tab").innerHTML = SCENARI.map(([t, sub], i) =>
+    `<button onclick="scegliScenario(${i})" class="rounded-xl px-4 py-3 text-left transition w-full ${i === guidaAttiva ? "bg-gradient-to-r from-brand-500 to-violet-500 text-white shadow-md shadow-brand-500/25" : "text-slate-600 hover:bg-brand-50 border border-transparent"}">
+      <div class="text-[13.5px] font-bold">${t}</div>
+      <div class="text-[11px] mt-0.5 ${i === guidaAttiva ? "text-white/80" : "text-slate-400"}">${sub}</div>
+    </button>`).join("");
+  const [titolo, , testo, codice, nota] = SCENARI[guidaAttiva];
   document.getElementById("guida-titolo").textContent = titolo;
   document.getElementById("guida-testo").textContent = testo;
   document.getElementById("guida-codice").textContent = codice;
@@ -726,6 +792,7 @@ listaP.addEventListener("mousedown", e => {
   paeseIso = d.dataset.iso;
   inpP.value = d.firstElementChild.textContent + " (" + paeseIso + ")";
   listaP.classList.add("hidden");
+  aggiornaPulisci();
   cerca(false);
 });
 document.addEventListener("click", e => {
@@ -742,6 +809,7 @@ document.addEventListener("click", e => {
       const el = document.getElementById("cerca-totale");
       if (s.offerte) el.innerHTML = `<b class="text-mint-600">${s.offerte.toLocaleString("en-US")}</b> active postings right now`;
     }).catch(() => {});
+  document.getElementById("cerca-freschezza").textContent = "the index refreshes every morning";
   await verificaGettone();
   if (!getTok()) { mostraLogin(); return; }
   document.getElementById("vista-dash").classList.remove("hidden");
