@@ -162,6 +162,29 @@ def main() -> int:
         SQL_RIPASSO = SQL_NORMALE.replace(
             "FROM ats_jobs j\n", "FROM ripasso_v1_dal_titolo r JOIN ats_jobs j ON j.id = r.job_id\n"
         ).split("ORDER BY")[0] + " LIMIT 2048"
+
+        def scrivi(sql, params):
+            """UNA istruzione per tabella, con array unnest: 6 round trip per
+            lotto. Con executemany erano migliaia, e sulla Tailscale N5 →
+            Hetzner (30 ms l'uno) il modello aspettava il database: 3
+            offerte/s contro le 26 della GPU (misurato il 07/09/2026).
+            Definita fuori dal while: la usano anche i differiti (28/09/2026 —
+            un deadlock sul loro UPDATE, fuori da scrivi, ha ucciso il demone
+            per 10 ore con 40.000 offerte in coda)."""
+            for tentativo in range(3):
+                try:
+                    c.execute(sql, params)
+                    return
+                except psycopg.errors.DeadlockDetected:
+                    print(f"deadlock in scrivi, tentativo {tentativo + 1}",
+                          flush=True)
+                    time.sleep(1)
+            # Come dettagli.py: un deadlock persistente fa RUMORE (il
+            # supervisore rilancia, il ripasso riprende dai marcatori
+            # committati). Ingoiarlo marcava il lotto come visto anche
+            # quando la scrittura non era avvenuta: perdita silenziosa.
+            raise RuntimeError("classifica_v1: deadlock persistente in scrivi")
+
         giro = 0
         while st["viste"] < tetto:
             giro += 1
@@ -197,7 +220,7 @@ def main() -> int:
             if differiti:
                 righe = [r for r in righe if r[0] not in set(differiti)]
                 if not dry:
-                    c.execute("UPDATE ats_jobs SET differito_v1_at = now() WHERE id = ANY(%s::uuid[])", (differiti,))
+                    scrivi("UPDATE ats_jobs SET differito_v1_at = now() WHERE id = ANY(%s::uuid[])", (differiti,))
                 st["differite"] = st.get("differite", 0) + len(differiti)
             # I lotti si formano per LUNGHEZZA simile: il tokenizzatore riempie
             # fino al piu' lungo del lotto, e mescolare un annuncio da 1.600 token
@@ -269,25 +292,6 @@ def main() -> int:
                         lingue = [cod for cod, pr in p["lingue"] if pr >= 0.5]
                         if lingue:
                             lin_rows.append((lingue, jid))
-
-            def scrivi(sql, params):
-                """UNA istruzione per tabella, con array unnest: 6 round trip per
-                lotto. Con executemany erano migliaia, e sulla Tailscale N5 →
-                Hetzner (30 ms l'uno) il modello aspettava il database: 3
-                offerte/s contro le 26 della GPU (misurato il 07/09/2026)."""
-                for tentativo in range(3):
-                    try:
-                        c.execute(sql, params)
-                        return
-                    except psycopg.errors.DeadlockDetected:
-                        print(f"deadlock in scrivi, tentativo {tentativo + 1}",
-                              flush=True)
-                        time.sleep(1)
-                # Come dettagli.py: un deadlock persistente fa RUMORE (il
-                # supervisore rilancia, il ripasso riprende dai marcatori
-                # committati). Ingoiarlo marcava il lotto come visto anche
-                # quando la scrittura non era avvenuta: perdita silenziosa.
-                raise RuntimeError("classifica_v1: deadlock persistente in scrivi")
 
             if not dry:
                 if fam_rows:
