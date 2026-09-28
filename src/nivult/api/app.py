@@ -1567,6 +1567,31 @@ def create_app() -> FastAPI:
                 # Terzo anello della catena in CLAUDE.md: Logo.dev dal dominio.
                 if not url and dominio:
                     url = f"https://img.logo.dev/{dominio}?size=128&format=png"
+                if not url:
+                    # Quarto anello (28/09/2026): il corpus ATS. Il B2C
+                    # conosce 780 aziende, il portale 66.000 — li' il logo
+                    # lo porta ats_companies (logo_url, o brandfetch dal
+                    # dominio cacciato dal demone). Senza questo anello la
+                    # vetrina dei clienti era un muro di avatar-iniziale.
+                    try:
+                        from nivult.ponte_ats import ats_database_url
+                        with psycopg.connect(ats_database_url()) as ca, \
+                                ca.cursor() as cura:
+                            cura.execute(
+                                "SELECT logo_url, logo_domain "
+                                "FROM ats_companies WHERE slug = %s "
+                                "ORDER BY (logo_url IS NOT NULL) DESC "
+                                "LIMIT 1", (chiave,))
+                            riga_ats = cura.fetchone()
+                    except Exception:                            # noqa: BLE001
+                        riga_ats = None
+                    if riga_ats:
+                        url = riga_ats[0]
+                        if not url and riga_ats[1]:
+                            cid = os.environ.get("BRANDFETCH_CLIENT_ID", "")
+                            url = (f"https://cdn.brandfetch.io/{riga_ats[1]}"
+                                   "/w/128/h/128"
+                                   + (f"?c={cid}" if cid else ""))
                 mime = dati = None
                 if url:
                     # Lo scarico passa da `_scarica_logo`, che valida l'host

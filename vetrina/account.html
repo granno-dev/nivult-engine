@@ -602,7 +602,7 @@ function chipAts(ats) {
   if (!ats) return "";
   const [mono, colore] = ATS_INFO[ats] || [ats.slice(0, 2), "#64748b"];
   return `<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1" title="source: ${ats}">
-    <span class="grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black" style="background:${colore}">${mono}</span>
+    <img src="loghi-ats/${encodeURIComponent(ats)}.png" alt="" class="h-4 w-4 rounded-sm object-contain" onerror="this.outerHTML='<span class=&quot;grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black&quot; style=&quot;background:${colore}&quot;>${mono}</span>'">
     <span class="text-[11px] font-semibold text-slate-500">${ats}</span></span>`;
 }
 function rigaJob(o) {
