@@ -63,7 +63,11 @@ in italiano, numeri veri.
   standalone su quel file ha affamato la box: SSH morto, API 530, riavvio
   dalla console Hetzner. Qualunque misura sull'export passa dagli
   endpoint (`/v1/jobs`, `/portale/cerca`, …) o aspetta che l'API sia
-  ferma.
+  ferma. E SEMPRE con `SET memory_limit`: senza, leggere la colonna
+  `raw` con un filtro qualunque gonfia il processo fino all'OOM-kill
+  (misurato: 4,9 GB di RSS per 937 righe; col tetto da 1,5 GB e
+  `temp_directory` sul volume: stabile). La connessione dell'API porta
+  già i due SET in `_conn()`.
 
 ## Guasti noti e cura
 
