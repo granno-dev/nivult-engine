@@ -188,10 +188,19 @@ def _controlli() -> list[Condizione]:
                 c.append(Condizione("nuove senza paese", "info", "nuove offerte quasi senza paese",
                                     f"{100*con_p//tot}% su {tot} nelle 24h"))
             # l'operaio a casa
-            for nome, eta_s in db.execute("SELECT nome, extract(epoch FROM now()-battito) FROM operaio_battiti"):
-                if eta_s > 2 * 3600:
+            for nome, eta_s, nota in db.execute("SELECT nome, extract(epoch FROM now()-battito), note FROM operaio_battiti"):
+                # 28/09/2026: la fase «dettaglio» puo' durare ore per legge —
+                # 8 thread su siti lenti o appesi, col ciclo VIVO che
+                # lavorava e la sentinella che gridava «muto». La soglia
+                # dipende dalla fase, e il messaggio la nomina.
+                try:
+                    fase = (json.loads(nota or "{}") or {}).get("fase") or ""
+                except (TypeError, ValueError):
+                    fase = ""
+                soglia = 4 * 3600 if fase.startswith("dettaglio") else 2 * 3600
+                if eta_s > soglia:
                     c.append(Condizione(f"operaio {nome} muto", "avviso", f"operaio {nome} muto",
-                                        f"ultimo battito {int(eta_s//3600)}h fa: N5 spento, Tailscale giu' o ciclo bloccato"))
+                                        f"ultimo battito {int(eta_s//3600)}h fa (fase {fase or '?'}): N5 spento, Tailscale giu' o ciclo bloccato"))
             # lo sprint: unita' giu' con coda piena e non per fine/credito
             if sub(["systemctl", "is-active", "nivult-sprint"]) != "active" \
                     and not os.path.exists("/opt/nivult/glm-corpus.spento") \
