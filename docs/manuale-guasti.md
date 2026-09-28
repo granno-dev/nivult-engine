@@ -57,6 +57,13 @@ in italiano, numeri veri.
   «compile airport certification manuals» qualcuno le ha riaccese.
 - **Il backup vive in tre posti** (server, Storage Box, N5), cifrato con
   chiave pubblica: nessuna macchina può leggerlo, ed è voluto.
+- **Il DuckDB dei clienti si legge solo tramite l'API, mai da un processo
+  a parte.** `/mnt/HC_Volume_106941692/api-clienti.duckdb` (17 GB) è
+  aperto dall'API in lettura-scrittura. Il 28/09/2026 una misura Python
+  standalone su quel file ha affamato la box: SSH morto, API 530, riavvio
+  dalla console Hetzner. Qualunque misura sull'export passa dagli
+  endpoint (`/v1/jobs`, `/portale/cerca`, …) o aspetta che l'API sia
+  ferma.
 
 ## Guasti noti e cura
 
