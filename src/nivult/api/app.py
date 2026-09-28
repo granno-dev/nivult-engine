@@ -1087,11 +1087,19 @@ def create_app() -> FastAPI:
         if not offerta_id:
             raise HTTPException(400, "id mancante")
         if _chiavi.e_rivelata(uid, "job", offerta_id):
-            # chi ha rivelato rivede tutto, gratis, per sempre
+            # chi ha rivelato rivede tutto, gratis, per sempre — e il
+            # portale gli offre la scheda azienda: gia' sua, o da 1
+            # credito (azienda_rivelata guida il modale)
             riga = _dati.rivela_offerta(offerta_id)
             if riga is None:
                 raise HTTPException(404, "offerta non trovata")
-            return {"offerta": riga, "rivelata": True}
+            rif = None
+            if riga.get("ats") and riga.get("company_slug"):
+                rif = f"{riga['ats']}:{riga['company_slug']}"
+            return {"offerta": riga, "rivelata": True,
+                    "azienda_ref": rif,
+                    "azienda_rivelata": bool(rif) and _chiavi.e_rivelata(
+                        uid, "azienda", rif)}
         riga = _dati.offerta_dettaglio_portale(offerta_id)
         if riga is None:
             raise HTTPException(404, "offerta non trovata")

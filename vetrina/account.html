@@ -36,6 +36,8 @@ tailwind.config = {
 .mesh-b { animation: mesh 22s ease-in-out infinite reverse; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.975); } to { opacity: 1; transform: none; } }
+#dettaglio-box, #export-modale > div:last-child { animation: modalIn .24s cubic-bezier(.2,.8,.2,1); }
 .pz-slider { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 99px;
   background: linear-gradient(90deg,#3b6ef6 var(--fill,50%), #e7eaf3 var(--fill,50%)); outline: none; }
 .pz-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
@@ -716,16 +718,29 @@ async function dettaglioJob(id) {
   const o = d.offerta || {};
   const tec = (o.technologies || []).map(t =>
     `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${t}</span>`).join("");
+  const logo = o.company_slug
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${(o.company || "?")[0]}</div>'">`
+    : "";
+  /* l'azienda rivelata e' cliccabile: apre la scheda — gratis se e'
+     gia' sua, un credito (dichiarato) se ancora mascherata */
   const azienda = d.rivelata
-    ? `<div class="mt-6 flex items-center gap-3 rounded-xl border border-mint-500/30 bg-mint-500/5 px-5 py-4">
-         <b class="text-[14.5px]">${o.company || ""}</b>
-         ${o.url ? `<a href="${o.url}" target="_blank" rel="noopener" class="ml-auto rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25">Open the original posting ↗</a>` : ""}
+    ? `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob('${d.azienda_ref || ""}', ${d.azienda_rivelata ? "true" : "false"})">
+         ${logo}
+         <div class="min-w-0">
+           <b class="text-[15px] truncate block">${o.company || ""}</b>
+           <p class="text-[12px] font-bold text-mint-600 group-hover:text-mint-500 transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
+         </div>
+         ${o.url ? `<a href="${o.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>` : ""}
        </div>`
-    : `<div class="mt-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-5 py-4">
-         <span class="blur-[5px] select-none text-[13px] font-bold text-slate-400">██████████</span>
-         <button onclick="rivelaNelModale('${id}', this)" class="ml-auto rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal the company · 1 credit</button>
+    : `<div class="mt-6 flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 px-5 py-4">
+         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-lg font-black shrink-0">?</div>
+         <div>
+           <span class="blur-[5px] select-none text-[14px] font-bold text-slate-400">██████████</span>
+           <p class="text-[12px] text-slate-400">name, logo, profile and original link unlock once</p>
+         </div>
+         <button onclick="rivelaNelModale('${id}', this)" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal the company · 1 credit</button>
        </div>`;
-  apriDettaglio(`<div class="p-8">
+  apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
       <div><h3 class="text-xl font-black tracking-tight">${o.title || ""}</h3>
       <p class="mt-1 text-[13.5px] text-slate-500">${[o.city, o.country].filter(Boolean).join(", ")}</p></div>
@@ -736,9 +751,20 @@ async function dettaglioJob(id) {
       o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
       .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><p class="mt-2 text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap max-h-64 overflow-auto">${String(o.description).slice(0, 1200)}</p>` : ""}
+    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${String(o.description).slice(0, 1200)}</p></div>` : ""}
     ${azienda}
   </div>`);
+}
+async function apriAziendaDaJob(ref, giaSua) {
+  /* la scheda azienda dal modale dell'offerta: se e' gia' rivelata il
+     giro e' gratis (rivela_per_utente torna 'gratis'), altrimenti si
+     mostra prima il prezzo — mai un addebito per un click esplorativo */
+  if (!ref) return;
+  if (!giaSua) return dettaglioAzienda(ref);
+  const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+  if (!r.ok) return;
+  const d = await r.json();
+  mostraAzienda(d.azienda || {}, ref);
 }
 async function rivelaNelModale(id, btn) {
   btn.disabled = true; btn.textContent = "…";
@@ -752,15 +778,24 @@ async function rivelaNelModale(id, btn) {
 async function mostraAzienda(a, ref) {
   const tec = (a.technologies || []).slice(0, 40).map(t =>
     `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${t.technology}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${t.active_jobs || t.jobs || ""} jobs</span></div>`).join("");
-  apriDettaglio(`<div class="p-8">
+  const slug = (ref || "").split(":")[1] || "";
+  /* molte schede sono magre per nascita: niente nome, niente dominio.
+     Il titolo cade in piedi: nome, poi ragione sociale, poi il sito */
+  const nomeAz = a.company || a.legal_name || a.website || a.domain || slug || "—";
+  const logo = slug
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${nomeAz[0].toUpperCase()}</div>'">`
+    : "";
+  apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
-      <div><h3 class="text-xl font-black tracking-tight">${a.company || ""}</h3>
-      <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</p></div>
-      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+      <div class="flex items-center gap-4 min-w-0">${logo}
+        <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${nomeAz}</h3>
+        <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</p></div>
+      </div>
+      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">${[a.legal_name ? "legal: " + a.legal_name : null, a.size_range ? "size " + a.size_range : null, a.founded ? "founded " + String(a.founded).slice(0, 4) : null, a.domain || a.website].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
     ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${String(a.description).slice(0, 600)}</p>` : ""}
-    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-1 max-h-56 overflow-auto pr-1">${tec}</div>` : ""}
+    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${tec}</div>` : ""}
     <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
   </div>`);
   const r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ ref }) });
@@ -773,7 +808,7 @@ async function mostraAzienda(a, ref) {
 function dettaglioAzienda(ref) {
   /* il click apre la scheda MASCHERATA: il credito parte solo dal
      bottone, mai da un click esplorativo */
-  apriDettaglio(`<div class="p-8 text-center">
+  apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
     <div class="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
     <h3 class="mt-4 text-xl font-black tracking-tight blur-[6px] select-none text-slate-400">████████████</h3>
     <p class="mt-2 text-[13.5px] text-slate-500">Industry, size and technology count are visible above.<br>The name, the domain and the full record unlock with one credit — once, then it's yours.</p>
