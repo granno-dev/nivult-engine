@@ -93,6 +93,10 @@ RIGHE=$(cat <<'EOF'
 35 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.benchmark_salari >> /var/log/nivult-esporta.log 2>&1
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
+# il campione gratuito per la vetrina B2B (28/09/2026): riga a parte perche'
+# --campione SOSTITUISCE il file — nella riga dell'export intero lo ridurrebbe
+# a 2.000 righe. Il retention di notte lo cancella: questa riga lo rifa'.
+46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --campione 2000 >> /var/log/nivult-esporta.log 2>&1
 # il DuckDB dei clienti, DAGLI EXPORT appena scritti: /v1 legge da qui,
 # mai dal Postgres di produzione. Sul volume dedicato (23/09/2026: il
 # disco di root non regge il file da 15 GB + il ciclo notturno).
