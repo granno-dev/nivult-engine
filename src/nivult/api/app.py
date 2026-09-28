@@ -1047,8 +1047,10 @@ def create_app() -> FastAPI:
 
     @app.post("/portale/cerca")
     async def cerca_nel_portale(request: Request, uid: str = Depends(utente)):
-        """La ricerca del portale: gratis, ma MASCHERATA. Azienda e URL
-        si rivelano con un credito (cercare aggancia, rivelare paga)."""
+        """La ricerca del portale: gratis, CON il nome dell'azienda
+        (modello TheirStack, 28/09 — l'annuncio e' pubblico alla fonte).
+        Il credito vive sul profilo azienda: ogni riga dichiara se e'
+        gia' dell'utente."""
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
@@ -1061,6 +1063,13 @@ def create_app() -> FastAPI:
             righe, prossimo, totale = _dati.cerca_chiuse_portale(filtri, cur)
         else:
             righe, prossimo, totale = _dati.cerca_portale(filtri, cur)
+        rif = [f"{r['ats']}:{r['company_slug']}" for r in righe
+               if r.get("ats") and r.get("company_slug")]
+        sue = _chiavi.rivelate_per_utente(uid, "azienda", rif)
+        for r in righe:
+            r["az_rivelata"] = bool(
+                r.get("ats") and r.get("company_slug")
+                and f"{r['ats']}:{r['company_slug']}" in sue)
         return {"data": righe, "next_cursor": prossimo, "totale": totale}
 
     @app.post("/portale/cerca-aziende")
@@ -1077,8 +1086,9 @@ def create_app() -> FastAPI:
 
     @app.post("/portale/offerta-dettaglio")
     async def dettaglio_offerta_portale(request: Request, uid: str = Depends(utente)):
-        """Il dettaglio dell'offerta SENZA azienda: gratis da leggere,
-        l'identita' si rivela a credito."""
+        """Il dettaglio COMPLETO dell'offerta, gratis (28/09: il datore
+        non si maschera piu', e' pubblico alla fonte). Il modale offre
+        poi la scheda azienda: gia' sua, o da 1 credito."""
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
@@ -1086,24 +1096,16 @@ def create_app() -> FastAPI:
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
             raise HTTPException(400, "id mancante")
-        if _chiavi.e_rivelata(uid, "job", offerta_id):
-            # chi ha rivelato rivede tutto, gratis, per sempre — e il
-            # portale gli offre la scheda azienda: gia' sua, o da 1
-            # credito (azienda_rivelata guida il modale)
-            riga = _dati.rivela_offerta(offerta_id)
-            if riga is None:
-                raise HTTPException(404, "offerta non trovata")
-            rif = None
-            if riga.get("ats") and riga.get("company_slug"):
-                rif = f"{riga['ats']}:{riga['company_slug']}"
-            return {"offerta": riga, "rivelata": True,
-                    "azienda_ref": rif,
-                    "azienda_rivelata": bool(rif) and _chiavi.e_rivelata(
-                        uid, "azienda", rif)}
         riga = _dati.offerta_dettaglio_portale(offerta_id)
         if riga is None:
             raise HTTPException(404, "offerta non trovata")
-        return {"offerta": riga, "rivelata": False}
+        rif = None
+        if riga.get("ats") and riga.get("company_slug"):
+            rif = f"{riga['ats']}:{riga['company_slug']}"
+        return {"offerta": riga, "rivelata": True,
+                "azienda_ref": rif,
+                "azienda_rivelata": bool(rif) and _chiavi.e_rivelata(
+                    uid, "azienda", rif)}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):

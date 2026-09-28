@@ -590,18 +590,24 @@ function rigaJob(o) {
     `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${t}</span>`).join("");
   const data = (o.posted_at || o.closed_at || "").slice(0, 10);
   const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
-  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-brand-300 transition cursor-pointer" id="row-${o.id}" onclick="dettaglioJob('${o.id}')">
+  const rif = (o.ats && o.company_slug) ? `${o.ats}:${o.company_slug}` : "";
+  const logo = o.company_slug
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" loading="lazy" class="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shrink-0" onerror="this.outerHTML='<div class=&quot;h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-[13px] font-black shrink-0&quot;>${(o.company || "?")[0].toUpperCase()}</div>'">`
+    : "";
+  /* l'azienda si vede gratis (modello TheirStack): il click apre il
+     PROFILO — gratis se e' gia' dell'utente, un credito altrimenti */
+  const az = o.company
+    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob('${rif}', ${o.az_rivelata ? "true" : "false"})">${o.company}</span> · `
+    : "";
+  return `<div class="group flex items-center gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/5 hover:-translate-y-px transition cursor-pointer" id="row-${o.id}" onclick="dettaglioJob('${o.id}')">
+    ${logo}
     <div class="min-w-0 flex-1">
       <b class="text-[14px] block truncate">${o.title || "—"} ${chiusa}</b>
-      <div class="text-[12px] text-slate-500 mt-0.5">${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
+      <div class="text-[12px] text-slate-500 mt-0.5 truncate">${az}${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
       <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
     </div>
-    <div class="text-right shrink-0" onclick="event.stopPropagation()">
-      <div class="flex items-center gap-2 justify-end">
-        <span class="blur-[5px] select-none text-[13px] font-bold text-slate-400">████████</span>
-        <button onclick="rivela('${o.id}', this)" class="rounded-lg bg-brand-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal · 1 credit</button>
-      </div>
-      <div class="text-[11px] text-slate-400 mt-1.5">${data}${o.ats ? " · " + o.ats : ""}</div>
+    <div class="text-right shrink-0">
+      <div class="text-[11px] text-slate-400">${data}${o.ats ? " · " + o.ats : ""}</div>
     </div>
   </div>`;
 }
@@ -676,21 +682,9 @@ function aggiornaPulisci() {
 document.getElementById("f-remoto").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
 document.getElementById("f-stato").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
 
-/* il reveal: una volta sola per sempre (il server lo ricorda) */
-async function rivela(id, btn) {
-  btn.disabled = true; btn.textContent = "…";
-  const r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
-  if (r.status === 429) {
-    btn.textContent = "credits out — top up";
-    btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
-    return;
-  }
-  if (!r.ok) { btn.disabled = false; btn.textContent = "Reveal · 1 credit"; return; }
-  const d = await r.json();
-  const o = d.offerta || {};
-  btn.parentElement.innerHTML = `<a href="${o.url || "#"}" target="_blank" rel="noopener" class="text-[13px] font-bold text-brand-600 hover:underline">${o.company || "see the posting"} ↗</a>`;
-  await carica();   // il contatore scende davanti agli occhi
-}
+/* il reveal dell'azienda: una volta sola per sempre (il server lo
+   ricorda). Sui job non esiste piu': l'identita' del datore e' gratis
+   dal 28/09, il prodotto e' il profilo */
 async function rivelaAzienda(ref, btn) {
   btn.disabled = true; btn.textContent = "…";
   const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
@@ -721,24 +715,15 @@ async function dettaglioJob(id) {
   const logo = o.company_slug
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${(o.company || "?")[0]}</div>'">`
     : "";
-  /* l'azienda rivelata e' cliccabile: apre la scheda — gratis se e'
-     gia' sua, un credito (dichiarato) se ancora mascherata */
-  const azienda = d.rivelata
-    ? `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob('${d.azienda_ref || ""}', ${d.azienda_rivelata ? "true" : "false"})">
+  /* l'azienda si vede gratis (28/09): il click apre il profilo —
+     gratis se e' gia' dell'utente, un credito (dichiarato) altrimenti */
+  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob('${d.azienda_ref || ""}', ${d.azienda_rivelata ? "true" : "false"})">
          ${logo}
          <div class="min-w-0">
            <b class="text-[15px] truncate block">${o.company || ""}</b>
            <p class="text-[12px] font-bold text-mint-600 group-hover:text-mint-500 transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
          </div>
          ${o.url ? `<a href="${o.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>` : ""}
-       </div>`
-    : `<div class="mt-6 flex items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 px-5 py-4">
-         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-lg font-black shrink-0">?</div>
-         <div>
-           <span class="blur-[5px] select-none text-[14px] font-bold text-slate-400">██████████</span>
-           <p class="text-[12px] text-slate-400">name, logo, profile and original link unlock once</p>
-         </div>
-         <button onclick="rivelaNelModale('${id}', this)" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal the company · 1 credit</button>
        </div>`;
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
@@ -765,15 +750,6 @@ async function apriAziendaDaJob(ref, giaSua) {
   if (!r.ok) return;
   const d = await r.json();
   mostraAzienda(d.azienda || {}, ref);
-}
-async function rivelaNelModale(id, btn) {
-  btn.disabled = true; btn.textContent = "…";
-  const r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
-  if (r.status === 429) {
-    btn.disabled = false; btn.textContent = "credits out — top up from your dashboard";
-    return;
-  }
-  if (r.ok) { await dettaglioJob(id); await carica(); }
 }
 async function mostraAzienda(a, ref) {
   const tec = (a.technologies || []).slice(0, 40).map(t =>

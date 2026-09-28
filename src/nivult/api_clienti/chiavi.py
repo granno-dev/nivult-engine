@@ -327,6 +327,20 @@ def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
         return cur.fetchone() is not None
 
 
+def rivelate_per_utente(user_id: str, tipo: str,
+                        riferimenti: list[str]) -> set:
+    """Quali di questi riferimenti sono gia' dell'utente (una query sola:
+     il portale la chiama a ogni pagina di risultati)."""
+    if not riferimenti:
+        return set()
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT riferimento FROM portale_rivelazioni "
+            "WHERE user_id = %s AND tipo = %s AND riferimento = ANY(%s)",
+            (user_id, tipo, riferimenti))
+        return {r[0] for r in cur.fetchall()}
+
+
 def spendi_n_per_utente(user_id: str, n: int) -> bool:
     """N crediti in una volta sola, atomici: l'export filtrato costa
     righe/10. Prima si consuma la franchigia del mese, poi la ricarica

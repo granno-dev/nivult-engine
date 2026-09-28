@@ -263,7 +263,8 @@ def cerca_portale(filtri: dict, cursore: str | None,
             par).fetchone()[0]
         righe = _conn().execute(
             f"""SELECT id, title, country, city, seniority, remote,
-                       category, posted_at, technologies, ats
+                       category, posted_at, technologies, ats,
+                       company, company_slug
                   FROM offerte
                  WHERE {' AND '.join(dove)}
                  ORDER BY posted_at DESC NULLS LAST, id
@@ -275,7 +276,8 @@ def cerca_portale(filtri: dict, cursore: str | None,
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
               "seniority": r[4], "remote": r[5], "category": r[6],
               "posted_at": _iso(r[7]), "technologies": r[8] or [],
-              "ats": r[9]} for r in righe], prossimo, totale)
+              "ats": r[9], "company": r[10], "company_slug": r[11]}
+             for r in righe], prossimo, totale)
 
 
 def rivela_offerta(offerta_id: str) -> dict | None:
@@ -358,15 +360,10 @@ def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
 
 
 def offerta_dettaglio_portale(offerta_id: str) -> dict | None:
-    """Il dettaglio SENZA azienda ne' URL: il testo si legge gratis,
-    l'identita' di chi assume si rivela. Toglie dal raw i tre campi
-    che vendono."""
-    riga = rivela_offerta(offerta_id)
-    if riga is None:
-        return None
-    for k in ("company", "company_slug", "url", "ats"):
-        riga.pop(k, None)
-    return riga
+    """Il dettaglio COMPLETO dell'offerta: dal 28/09 l'identita' del
+    datore e' gratis (modello TheirStack — l'annuncio e' comunque
+    pubblico alla fonte); il prodotto in vendita e' il PROFILO azienda."""
+    return rivela_offerta(offerta_id)
 
 
 def cerca_aziende_portale(filtri: dict, cursore: str | None,
@@ -477,7 +474,8 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
             par).fetchone()[0]
         righe = _conn().execute(
             f"""SELECT id, raw->>'title', raw->>'country', raw->>'city',
-                       t, coalesce(raw->'skills', '[]'::json)
+                       t, coalesce(raw->'skills', '[]'::json),
+                       raw->>'company', raw->>'company_slug', raw->>'ats'
                   FROM flusso
                  WHERE {' AND '.join(dove)}
                  ORDER BY t DESC, id LIMIT {limite + 1}""", par).fetchall()
@@ -487,7 +485,9 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
         prossimo = _cursore([_iso(righe[-1][4]), righe[-1][0]])
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
               "closed_at": _iso(r[4]), "category": None,
-              "technologies": r[5] or []} for r in righe], prossimo, totale)
+              "technologies": r[5] or [], "company": r[6],
+              "company_slug": r[7], "ats": r[8]}
+             for r in righe], prossimo, totale)
 
 
 def aziende(filtri: dict, cursore: str | None,
