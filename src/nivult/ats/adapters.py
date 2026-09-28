@@ -16,7 +16,7 @@ import logging
 import re
 from urllib.parse import unquote, urljoin
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -95,14 +95,23 @@ def _dt(v) -> datetime | None:
         if ts > 1e12:
             ts /= 1000
         try:
-            return datetime.fromtimestamp(ts, tz=timezone.utc)
+            d = datetime.fromtimestamp(ts, tz=timezone.utc)
         except (ValueError, OverflowError):
             return None
-    try:
-        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
-        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
-    except ValueError:
+    else:
+        try:
+            d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+            d = d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    # la guardia del futuro (28/09/2026), qui e non solo in jobposting:
+    # le «Lehre» jsonld e alcuni SuccessFactors scrivono in datePosted la
+    # data di INIZIO del contratto (fino al 2030). La guardia in
+    # jobposting._data copriva un solo ingresso; qui vale per ogni
+    # adattatore, perche' tutti passano da AtsJob.__post_init__.
+    if d > datetime.now(timezone.utc) + timedelta(days=2):
         return None
+    return d
 
 
 def _iso(country: str | None) -> str | None:
