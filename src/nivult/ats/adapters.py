@@ -226,9 +226,15 @@ class SmartRecruiters(BaseAdapter):
     # offset). Con la scadenza per presenza attiva dal 10/09 tutto cio' che
     # stava oltre le prime 100 offerte veniva fatto scadere a ogni giro: su
     # 25 tenant grandi avevamo 2.710 offerte contro 10.947 dell'API, e 6
-    # «scadute» su 8 erano ancora vive. L'API accetta offset fino a 10.000.
+    # «scadute» su 8 erano ancora vive.
+    # 28/09/2026: via il tetto dei 10.000 — era nostro, non dell'API.
+    # Misurato dal vivo su dominos (totalFound 24.802): offset=24.800 torna
+    # le ultime 2 offerte, offset=24.900 torna vuoto. Quattro tenant
+    # (crossmark1, adeebaeservicespvtltd, dominos ×2) stavano al palo da
+    # settimane con la lettura «parziale» e i morti che non scadevano.
+    # Il freno resta, solo contro i loop infiniti.
     PAGINA = 100
-    MAX_OFFSET = 10000
+    TETTO_SICUREZZA = 200_000
 
     def jobs(self, slug: str, country: str | None = None) -> list[AtsJob]:
         base = f"https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit={self.PAGINA}"
@@ -236,7 +242,7 @@ class SmartRecruiters(BaseAdapter):
             base += f"&country={country.lower()}"
         contenuto: list[dict] = []
         offset = 0
-        while offset < self.MAX_OFFSET:
+        while offset < self.TETTO_SICUREZZA:
             r = self.client.get(f"{base}&offset={offset}")
             if r.status_code == 404:
                 if offset > 0:
@@ -466,7 +472,7 @@ class Workday(BaseAdapter):
             else:
                 # niente facets: resta la lettura troncata e si dichiara
                 self.lettura_parziale = True
-        visti: set[str] = set()
+        visti: dict[str, AtsJob] = {}
         out = []
         for j in grezzi:
             # alcuni posting hanno solo bulletFields (l'ID) e niente
@@ -477,14 +483,21 @@ class Workday(BaseAdapter):
             # collassavano in una riga sola, sovrascritta a ogni giro.
             # La riserva e' il path: unico per costruzione.
             eid = (j.get("bulletFields") or [None])[0] or j.get("externalPath") or "unknown"
-            if eid in visti:
-                continue
-            visti.add(eid)
-            path = j.get("externalPath", "")
             loc = j.get("locationsText") or ""
+            if eid in visti:
+                # 28/09/2026: la CXS espande UNA RIGA PER SEDE dello stesso
+                # annuncio (mango: 1.665 righe per 350 annunci). La sede in
+                # piu' non si butta: resta nel raw di quella tenuta.
+                tenuto = visti[eid]
+                if loc and loc != tenuto.location:
+                    altre = tenuto.raw.setdefault("sedi_altre", [])
+                    if loc not in altre:
+                        altre.append(loc)
+                continue
+            path = j.get("externalPath", "")
             pezzi = [p.strip() for p in loc.split(",")] if loc else []
             country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
-            out.append(AtsJob(
+            job = AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=eid,
                 title=j["title"],
@@ -492,12 +505,17 @@ class Workday(BaseAdapter):
                 location=loc,
                 country=country,
                 city=pezzi[0] if pezzi else None,
-                raw=j))
-        # riconciliazione: letto meno del dichiarato non e' mai «completo».
-        # Le righe senza titolo spiegano pochi punti; oltre il 5% di scarto
-        # la lettura si dichiara parziale, cosi' il cruscotto la vede.
+                raw=j)
+            visti[eid] = job
+            out.append(job)
+        # riconciliazione, 28/09/2026: il «totale» della CXS conta le RIGHE
+        # (una per sede), non gli annunci unici — confrontarlo con `out`
+        # dichiarava parziali letture complete (misurato dal vivo: mango
+        # 350 annunci su 1.665 righe, ezcorp 592/699, carlislellc
+        # 248/2.000). La completezza si misura sulle righe enumerate:
+        # se ne mancano, qualcosa si e' interrotto davvero.
         if (self.total_dichiarato and
-                len(out) < self.total_dichiarato * 0.95):
+                len(grezzi) < self.total_dichiarato * 0.95):
             self.lettura_parziale = True
         return out
 
@@ -2103,12 +2121,14 @@ class JsonLd(BaseAdapter):
     pagina carriere) + JobPosting JSON-LD su ogni annuncio — il canale
     che i siti espongono a Google for Jobs. Lo slug e' il dominio, la
     sorgente la trova `nivult.ats.jsonld` e sta in
-    ats_companies.sorgente_url. Fino a 200 pagine per visita: e' un
+    ats_companies.sorgente_url. Fino a 1.000 pagine per visita (dal
+    28/09/2026: erano 200, e i 696 tenant con piu' pagine restavano «letti
+    a meta'» per sempre, con le offerte morte che non scadevano). E' un
     lettore per PMI, non per le agenzie (quelle hanno `agenzie.py`,
     che sa quali pagine ha gia' visto).
     """
     platform_id = "jsonld"
-    MASSIMO_PAGINE = 200
+    MASSIMO_PAGINE = 1000
 
     def jobs(self, slug: str, sorgente_url: str | None = None) -> list[AtsJob]:
         from urllib.parse import urlparse
@@ -2132,7 +2152,7 @@ class JsonLd(BaseAdapter):
             urls = sorted(u for u in link if mio(u) and PATH_ANNUNCIO.search(urlparse(u).path)
                           and u.rstrip("/") != str(r.url).rstrip("/"))
         out: list[AtsJob] = []
-        # 26/09/2026: il taglio a 200 pagine non e' «finita» e una pagina
+        # 26/09/2026: il taglio delle pagine non e' «finita» e una pagina
         # che non risponde non e' «non esiste»: entrambi si dichiarano,
         # o la scadenza per presenza uccide offerte vive.
         if len(urls) > self.MASSIMO_PAGINE:
