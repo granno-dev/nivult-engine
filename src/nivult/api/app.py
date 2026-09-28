@@ -1010,14 +1010,15 @@ def create_app() -> FastAPI:
 
     @app.get("/me/chiavi")
     def mie_chiavi(uid: str = Depends(utente)):
+        extra = _chiavi.extra_per_utente(uid)
         lista = _chiavi.lista_per_utente(uid)
         if lista:
-            return {"chiavi": lista}
+            return {"chiavi": lista, "extra": extra}
         # primo accesso: la chiave trial nasce qui, e SI MOSTRA in chiaro
         # questa volta sola — in tabella resta solo l'hash
         chiave, chiave_id = _chiavi.nuova("principale (trial)", 1000,
                                           user_id=uid)
-        return {"chiavi": _chiavi.lista_per_utente(uid),
+        return {"chiavi": _chiavi.lista_per_utente(uid), "extra": extra,
                 "chiave_nuova": chiave,
                 "nota": "la chiave si vede solo ora: conservala tu"}
 
@@ -1168,12 +1169,13 @@ def create_app() -> FastAPI:
                             filename=os.path.basename(percorso))
 
     # ── l'export filtrato del portale: stima il costo, poi scarica ──
-    # Il prezzo (28/09/2026): 1 credito ogni 100 righe, per eccesso.
-    # Prima era 1 ogni 10.000: l'INTERO dataset veniva 292 crediti,
-    # meno di un euro al listino — svenduto. E un tetto: sopra le
-    # 250.000 righe il file non e' piu' un download da browser, e la
-    # stima lo dice prima di spendere.
-    EXPORT_RIGHE_PER_CREDITO = 100
+    # Il prezzo (28/09/2026): 1 credito ogni 10 righe, per eccesso.
+    # La taratura e' il piano gratis: 1.000 crediti/mese non devono
+    # comprare la fetta massima — a 1/10 il gratis assaggia (10.000
+    # righe), chi vuole di piu' paga. Prima 1/10.000 (il dataset intero
+    # a 292 crediti, svenduto), poi 1/100 (il gratis portava via il
+    # massimo consentito ogni mese).
+    EXPORT_RIGHE_PER_CREDITO = 10
     # il tetto tiene conto di Cloudflare: oltre i 100 secondi di attesa la
     # risposta cade; misurato il 28/09: 83k righe = ~55s di preparazione.
     EXPORT_TETTO_RIGHE = 100_000
@@ -1249,8 +1251,10 @@ def create_app() -> FastAPI:
         except Exception:                            # noqa: BLE001
             corpo = {}
         volume = int((corpo or {}).get("volume") or 0)
-        if volume not in _billing.volumi():
-            raise HTTPException(400, "volume non vendibile")
+        # qualunque volume entro la curva e' vendibile: il PREZZO lo
+        # calcola billing dalla curva, il client non decide mai gli euro
+        if not 100 <= volume <= 5_000_000:
+            raise HTTPException(400, "volume fuori dalla curva di prezzo")
         with conn.cursor() as cur:
             cur.execute("SELECT email FROM users WHERE id = %s", (uid,))
             riga = cur.fetchone()

@@ -1,21 +1,27 @@
-"""Il billing del portale B2B su Creem (27/09/2026).
+"""Il billing del portale B2B su Creem (27/09/2026; ricarica 28/09).
 
-Disegno: la landing vende volumi di crediti al mese (la curva dello
-slider). Ogni volume e' un PRODOTTO Creem, creato da Giuseppe nella
-dashboard; la mappa volume -> product_id vive in CREEM_PRODOTTI (JSON
-nell'env del server, es. {"100000": "prod_abc", ...}).
+Disegno: UN prodotto one-time "Crediti Nivult" nella dashboard Creem.
+Lo slider dell'account e' libero in euro, quindi il checkout nasce con
+`custom_price` (in centesimi): il PREZZO lo calcola il server dalla
+curva pubblica della landing (ANCORA), mai dal client — chi chiede
+1.000.000 di crediti si vede addebitare gli euro giusti perche' la
+curva euro<-crediti vive qui. Il volume comprato viaggia nella metadata
+del checkout e al pagamento finisce in users.crediti_extra: la ricarica
+NON scade e NON si azzera al primo del mese (si spende dopo la
+franchigia gratuita, vedi chiavi.py).
 
 Flusso: POST /me/checkout {volume} -> POST api.creem.io/v1/checkouts con
 metadata.user_id -> l'URL del checkout ospitato. Al pagamento Creem
 chiama POST /webhooks/creem: firma HMAC-SHA256 verificata sull'header
 creem-signature col webhook secret, evento idempotente (la stessa
 consegna puo' arrivare due volte: la deduplica e' per event id in
-tabella), e crediti_mensili delle chiavi attive dell'utente sale al
-volume comprato.
+tabella), e crediti_extra dell'utente sale del volume comprato.
 
 Le chiavi stanno SOLO in /opt/nivult/.env: CREEM_API_KEY,
-CREEM_WEBHOOK_SECRET, CREEM_PRODOTTI. Se mancano, il checkout risponde
-503 con garbo e il portale dice "scrivici" — niente mezze integrazioni.
+CREEM_WEBHOOK_SECRET, CREEM_PRODOTTO (il product id; in alternativa
+CREEM_PRODOTTI come mappa JSON, si prende il primo). Se mancano, il
+checkout risponde 503 con garbo e il portale dice "scrivici" — niente
+mezze integrazioni.
 """
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 
 import httpx
@@ -31,6 +38,30 @@ import psycopg
 log = logging.getLogger("nivult.api_clienti.billing")
 
 BASE = "https://api.creem.io/v1"
+
+# La curva della landing (crediti, euro): stessa ANCORE dello slider
+# nell'account. Qui si legge al contrario: dai crediti agli euro.
+ANCORA = [(10_000, 49), (25_000, 89), (50_000, 149), (100_000, 229),
+          (250_000, 399), (500_000, 599), (1_000_000, 899),
+          (2_500_000, 1_790), (5_000_000, 2_990)]
+MINIMO_EURO = 25   # sotto, le commissioni si mangiano il margine
+
+
+def euro_per_crediti(crediti: int) -> int:
+    """Il prezzo in euro per un volume di crediti, interpolazione
+    log-log fra le ancore (identica allo slider, letta al rovescio).
+    Arrotondato per eccesso: lo sconto non si regala per arrotondamento."""
+    c = max(100, min(int(crediti), ANCORA[-1][0]))
+    if c <= ANCORA[0][0]:
+        e = c / ANCORA[0][0] * ANCORA[0][1]
+    else:
+        e = ANCORA[-1][1]
+        for (c1, p1), (c2, p2) in zip(ANCORA, ANCORA[1:]):
+            if c <= c2:
+                t = (math.log(c) - math.log(c1)) / (math.log(c2) - math.log(c1))
+                e = math.exp(math.log(p1) + t * (math.log(p2) - math.log(p1)))
+                break
+    return max(MINIMO_EURO, math.ceil(e))
 
 
 class BillingNonPronto(Exception):
@@ -51,6 +82,21 @@ def _prodotti() -> dict[str, str]:
         raise BillingNonPronto("CREEM_PRODOTTI") from e
 
 
+def _prodotto() -> str:
+    """Il product id dell'UNICO prodotto (il prezzo e' custom_price).
+    Si accetta anche la vecchia mappa CREEM_PRODOTTI: primo valore."""
+    v = os.environ.get("CREEM_PRODOTTO")
+    if v:
+        return v
+    try:
+        mappa = _prodotti()
+    except BillingNonPronto:
+        mappa = {}
+    if mappa:
+        return next(iter(mappa.values()))
+    raise BillingNonPronto("CREEM_PRODOTTO")
+
+
 def volumi() -> list[int]:
     """I volumi vendibili, per la pagina account. Vuota = non configurato."""
     try:
@@ -61,16 +107,18 @@ def volumi() -> list[int]:
 
 def checkout(user_id: str, email: str, volume: int,
              success_url: str, cancel_url: str) -> str:
-    """L'URL del checkout Creem per il volume scelto."""
-    prod = _prodotti().get(str(volume))
-    if not prod:
-        raise BillingNonPronto(f"nessun prodotto per {volume}")
+    """L'URL del checkout Creem per il volume scelto. Il prezzo lo
+    decide il server: custom_price = la curva, non il client."""
+    euro = euro_per_crediti(volume)
     r = httpx.post(BASE + "/checkouts", timeout=20,
                    headers={"x-api-key": _env("CREEM_API_KEY")},
-                   json={"product_id": prod,
+                   json={"product_id": _prodotto(),
+                         "custom_price": euro * 100,
+                         "units": 1,
                          "success_url": success_url,
                          "cancel_url": cancel_url,
-                         "metadata": {"user_id": user_id, "volume": volume},
+                         "metadata": {"user_id": user_id, "volume": volume,
+                                      "euro": euro},
                          "customer": {"email": email}})
     if r.status_code not in (200, 201):
         log.warning("creem checkout fallito: %s %s", r.status_code,
@@ -95,9 +143,11 @@ def firma_valida(corpo: bytes, firma: str | None) -> bool:
 
 
 def applica_pagamento(dsn: str, evento: dict) -> str:
-    """checkout.completed / subscription.paid: i crediti salgono al
-    volume comprato. Idempotente per id evento: le riconsegne di Creem
-    non contano due volte."""
+    """checkout.completed: la ricarica entra in users.crediti_extra —
+    i crediti comprati NON scadono e non si azzerano a fine mese
+    (28/09/2026: prima alzavano crediti_mensili, cioe' un abbonamento
+    regalato a chi pagava una volta). Idempotente per id evento: le
+    riconsegne di Creem non contano due volte."""
     eid = str(evento.get("id") or "")
     tipo = str(evento.get("eventType") or evento.get("type") or "")
     if tipo not in ("checkout.completed", "subscription.paid"):
@@ -122,9 +172,9 @@ def applica_pagamento(dsn: str, evento: dict) -> str:
         if gia:
             return "duplicato"
         n = c.execute(
-            "UPDATE api_chiavi SET crediti_mensili = %s "
-            "WHERE user_id = %s AND revoked_at IS NULL",
+            "UPDATE users SET crediti_extra = crediti_extra + %s "
+            "WHERE id = %s",
             (volume, uid)).rowcount
-        log.info("creem: %s -> user %s a %s crediti/mese su %d chiavi",
+        log.info("creem: %s -> user %s +%s crediti di ricarica (%d righe)",
                  tipo, uid, volume, n)
-        return f"accreditato ({n} chiavi)"
+        return f"accreditato ({n} utente)"

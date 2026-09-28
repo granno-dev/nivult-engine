@@ -149,7 +149,7 @@ tailwind.config = {
           </div>
           <div>
             <h2 class="text-[15px] font-bold tracking-tight">Credits</h2>
-            <p class="text-[11.5px] font-semibold text-violet-600">free allowance + what you buy, one counter</p>
+            <p class="text-[11.5px] font-semibold text-violet-600">free every month + top-ups that never expire</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col justify-center">
@@ -164,7 +164,7 @@ tailwind.config = {
             <span class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold hidden"></span>
           </div>
-          <p class="mt-3 text-[12px] text-slate-400">Free credits reset on the 1st. Anything you buy shows up in the total above, the moment you buy it.</p>
+          <p class="mt-3 text-[12px] text-slate-400">Your free allowance resets on the 1st. Top-ups land here the moment you pay, never expire, and kick in when the free ones run out.</p>
         </div>
       </div>
 
@@ -176,8 +176,8 @@ tailwind.config = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="4"/></svg>
           </div>
           <div>
-            <h2 class="text-[15px] font-bold tracking-tight">Need more volume?</h2>
-            <p class="text-[11.5px] font-semibold text-mint-600">the unit price falls as it grows</p>
+            <h2 class="text-[15px] font-bold tracking-tight">Top up your credits</h2>
+            <p class="text-[11.5px] font-semibold text-mint-600">pay once, they never expire · the unit price falls as it grows</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col">
@@ -359,7 +359,7 @@ tailwind.config = {
             <span id="ex-righe" class="text-[15px] font-black tabular-nums text-slate-900">—</span>
           </div>
           <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
-            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">price · 1 credit / 100 rows</span>
+            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">price · 1 credit / 10 rows</span>
             <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent">—</span>
           </div>
           <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
@@ -439,6 +439,7 @@ async function magicLink(e) {
 
 /* ══ dashboard ══ */
 let chiavi = [];
+let creditiExtra = 0;
 async function carica() {
   const me = await (await api("/me")).json();
   const nome = (me.nome || "").trim();
@@ -449,6 +450,7 @@ async function carica() {
   document.getElementById("nav-stato").textContent = nome || me.email;
   const r = await (await api("/me/chiavi")).json();
   chiavi = r.chiavi || [];
+  creditiExtra = r.extra || 0;
   if (r.chiave_nuova) mostraChiaveNuova(r.chiave_nuova);
   disegna();
 }
@@ -478,14 +480,15 @@ function disegna() {
   }).join("");
   const tot = chiavi.filter(k => !k.revocata_il);
   const usati = tot.reduce((s, k) => s + (k.usati_mese || 0), 0);
-  // il volume e' DELL'ACCOUNT: il massimo fra le chiavi, non la somma
+  // il volume mensile e' DELL'ACCOUNT: il massimo fra le chiavi, non la
+  // somma. La ricarica comprata vive a parte e non scade mai.
   const max = Math.max(0, ...tot.map(k => k.crediti_mensili || 0)) || 1000;
   document.getElementById("uso-val").textContent = usati.toLocaleString("en-US");
   document.getElementById("uso-max").textContent = max.toLocaleString("en-US");
   document.getElementById("uso-barra").style.width = Math.min(100, Math.round(100 * usati / max)) + "%";
   const acc = document.getElementById("uso-acquistati");
-  if (max > 1000) {
-    acc.textContent = "+" + (max - 1000).toLocaleString("en-US") + " purchased";
+  if (creditiExtra > 0) {
+    acc.textContent = "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire";
     acc.classList.remove("hidden");
   } else acc.classList.add("hidden");
 }

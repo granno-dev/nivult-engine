@@ -154,8 +154,29 @@ def _consuma(chiave_id: str) -> int | None:
             "RETURNING usati_mese",
             (chiave_id,))
         r = cur.fetchone()
+        if r is not None:
+            conn.commit()
+            return r[0]
+        # Tetto mensile pieno: per le chiavi del PORTALE si attinge alla
+        # ricarica (users.crediti_extra, 28/09/2026 — i crediti comprati
+        # non scadono e si spendono solo a franchigia esaurita). Le
+        # chiavi interne (user_id NULL) non entrano nella FROM: per loro
+        # None, come e' sempre stato.
+        cur.execute(
+            "UPDATE users u SET crediti_extra = u.crediti_extra - 1 "
+            "FROM api_chiavi k "
+            "WHERE k.id = %s AND k.user_id = u.id "
+            "  AND k.revoked_at IS NULL AND u.crediti_extra > 0 "
+            "RETURNING u.crediti_extra", (chiave_id,))
+        r2 = cur.fetchone()
+        if r2 is None:
+            conn.commit()
+            return None
+        cur.execute("SELECT usati_mese FROM api_chiavi WHERE id = %s",
+                    (chiave_id,))
+        dopo = cur.fetchone()
         conn.commit()
-        return r[0] if r else None
+        return dopo[0] if dopo else 0
 
 
 def autentica(chiave: str) -> dict:
@@ -265,7 +286,9 @@ def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
 def spendi_per_utente(user_id: str) -> bool:
     """Un credito dalla prima chiave attiva dell'utente: il reveal del
     portale paga dallo stesso contatore dell'API (27/09/2026).
-    False se non c'e' una chiave attiva o il tetto del mese e' pieno."""
+    False se non c'e' una chiave attiva o se sono finiti sia la
+    franchigia del mese sia la ricarica (il tuffo nell'extra lo fa
+    _consuma, 28/09/2026)."""
     attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
     if not attive:
         return False
@@ -306,36 +329,54 @@ def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
 
 def spendi_n_per_utente(user_id: str, n: int) -> bool:
     """N crediti in una volta sola, atomici: l'export filtrato costa
-    righe/10.000. Tutto o niente: se il volume dell'account non basta,
-    non si addebita niente."""
+    righe/10. Prima si consuma la franchigia del mese, poi la ricarica
+    (users.crediti_extra, 28/09/2026). La riga utente presa FOR UPDATE
+    e' il semaforo che tiene insieme i due serbatoi: tutto o niente."""
     attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
     if not attive:
         return False
     kid = attive[0]["id"]
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute("SELECT crediti_extra FROM users WHERE id = %s "
+                    "FOR UPDATE", (user_id,))
+        ru = cur.fetchone()
+        if ru is None:
+            conn.rollback()
+            return False
+        extra = ru[0]
         cur.execute(
-            "UPDATE api_chiavi k SET "
-            "  usati_mese = CASE WHEN k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                    THEN %s ELSE k.usati_mese + %s END, "
-            "  mese_uso   = date_trunc('month', CURRENT_DATE)::date "
-            "WHERE k.id = %s AND k.revoked_at IS NULL "
-            "  AND (SELECT coalesce(sum(CASE WHEN o.mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                                THEN 0 ELSE o.usati_mese END), 0) "
-            "         FROM api_chiavi o "
-            "        WHERE o.user_id = k.user_id AND o.revoked_at IS NULL) + %s "
-            "      <= (SELECT max(m.crediti_mensili) FROM api_chiavi m "
-            "           WHERE m.user_id = k.user_id AND m.revoked_at IS NULL) "
-            "RETURNING usati_mese",
-            (n, n, kid, n))
-        r = cur.fetchone()
+            "SELECT coalesce(max(crediti_mensili), 0) FROM api_chiavi "
+            "WHERE user_id = %s AND revoked_at IS NULL", (user_id,))
+        cap = cur.fetchone()[0]
+        cur.execute(
+            "SELECT coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                     THEN 0 ELSE usati_mese END), 0) "
+            "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
+            (user_id,))
+        usati = cur.fetchone()[0]
+        dal_mese = min(n, max(0, cap - usati))
+        dall_extra = n - dal_mese
+        if dall_extra > extra:
+            conn.rollback()
+            return False
+        if dal_mese:
+            cur.execute(
+                "UPDATE api_chiavi SET "
+                "  usati_mese = CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
+                "                    THEN %s ELSE usati_mese + %s END, "
+                "  mese_uso = date_trunc('month', CURRENT_DATE)::date "
+                "WHERE id = %s AND revoked_at IS NULL",
+                (dal_mese, dal_mese, kid))
+        if dall_extra:
+            cur.execute("UPDATE users SET crediti_extra = crediti_extra - %s "
+                        "WHERE id = %s", (dall_extra, user_id))
         conn.commit()
-        return r is not None
+        return True
 
 
 def saldo_per_utente(user_id: str) -> int:
-    """Quanti crediti restano all'ACCOUNT questo mese: il volume massimo
-    meno la somma degli usati delle chiavi attive (stessa semantica del
-    tetto in _consuma: il contatore di un mese vecchio non pesa).
+    """Quanti crediti restano all'ACCOUNT: la franchigia del mese non
+    consumata PIU' la ricarica (users.crediti_extra, che non scade).
     Il modale dell'export lo mostra prima della spesa (28/09/2026)."""
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
@@ -344,7 +385,20 @@ def saldo_per_utente(user_id: str) -> int:
             "                           THEN 0 ELSE usati_mese END), 0) "
             "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
             (user_id,))
-        return max(0, cur.fetchone()[0])
+        mensile = max(0, cur.fetchone()[0])
+        cur.execute("SELECT crediti_extra FROM users WHERE id = %s",
+                    (user_id,))
+        r = cur.fetchone()
+        return mensile + (r[0] if r else 0)
+
+
+def extra_per_utente(user_id: str) -> int:
+    """La ricarica residua, per la card Credits del portale."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute("SELECT crediti_extra FROM users WHERE id = %s",
+                    (user_id,))
+        r = cur.fetchone()
+        return r[0] if r else 0
 
 
 def lista() -> list[dict]:
