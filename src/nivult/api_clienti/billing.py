@@ -163,11 +163,8 @@ def applica_pagamento(dsn: str, evento: dict) -> str:
         return "metadata mancanti"
     with psycopg.connect(dsn, autocommit=True) as c:
         c.execute("SET lock_timeout = '10s'")
-        if not c.execute("SELECT 1 FROM information_schema.tables "
-                         "WHERE table_name = 'creem_eventi'").fetchone():
-            c.execute("""CREATE TABLE creem_eventi (
-                           id text PRIMARY KEY,
-                           ricevuto_at timestamptz NOT NULL DEFAULT now())""")
+        # creem_eventi nasce con la migrazione 0067: il ruolo dell'API
+        # non ha CREATE TABLE, e mai dovra' averlo (least privilege)
         gia = c.execute(
             "INSERT INTO creem_eventi (id) VALUES (%s) "
             "ON CONFLICT DO NOTHING", (eid,)).rowcount == 0
