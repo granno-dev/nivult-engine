@@ -51,6 +51,69 @@ GIORNI_SCADENZA = 3
 
 # ── 1. EXPIRA ─────────────────────────────────────────────────────
 
+def _prova_vita_jsonld(dsn: str, giorni: int, limite: int = 2000) -> tuple[int, int]:
+    """jsonld scade per presenza SOLO dopo la prova di vita (28/09/2026).
+
+    Per i portali la sitemap e' una finestra rotante, non l'inventario:
+    «non piu' nella sitemap» non vuol dire «morta» (mindpal.co: 446
+    offerte vive, col JobPosting in pagina, scadute in ondata perche'
+    uscite dalla finestra). Ogni candidato si sonda sulla sua pagina:
+    JobPosting presente → visto vivo ora (fetched_at fresco, il giro
+    riparte); 404/410 o pagina leggibile senza JobPosting → scaduto
+    davvero; illeggibile ora → nessuna prova, resta per il giro dopo.
+    Ritorna (scadute, riviste vive)."""
+    import httpx
+    from concurrent.futures import ThreadPoolExecutor
+    from .jobposting import _estrai_ld
+
+    with psycopg.connect(dsn, autocommit=True) as conn, \
+            httpx.Client(timeout=15, follow_redirects=True,
+                         headers={"User-Agent": "nivult-ats/0.1"},
+                         limits=httpx.Limits(max_connections=16)) as cl:
+        cand = conn.execute("""
+            SELECT j.id, j.url FROM ats_jobs j
+             WHERE j.platform_id = 'jsonld' AND j.expired_at IS NULL
+               AND j.fetched_at < now() - make_interval(days => %s)
+               AND EXISTS (SELECT 1 FROM ats_companies c
+                            WHERE c.platform_id = j.platform_id AND c.slug = j.slug
+                              AND c.last_ok_at > j.fetched_at
+                              AND c.lettura_parziale = false)
+             ORDER BY j.fetched_at ASC LIMIT %s""", (giorni, limite)).fetchall()
+        if not cand:
+            return 0, 0
+
+        def sonda(r):
+            jid, url = r
+            try:
+                p = cl.get(url)
+            except httpx.HTTPError:
+                return jid, None
+            if p.status_code in (404, 410):
+                return jid, False
+            if p.status_code == 200:
+                try:
+                    return jid, bool(_estrai_ld(p.text))
+                except Exception:                 # noqa: BLE001
+                    return jid, None
+            return jid, None
+
+        vivi, morti = [], []
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            for jid, vivo in pool.map(sonda, cand):
+                if vivo is True:
+                    vivi.append(jid)
+                elif vivo is False:
+                    morti.append(jid)
+        for i in range(0, len(vivi), 5000):
+            conn.execute("UPDATE ats_jobs SET fetched_at = now() WHERE id = ANY(%s::uuid[])",
+                         (vivi[i:i + 5000],))
+        n = 0
+        for i in range(0, len(morti), 5000):
+            n += conn.execute("UPDATE ats_jobs SET expired_at = now() WHERE id = ANY(%s::uuid[])",
+                              (morti[i:i + 5000],)).rowcount
+        return n, len(vivi)
+
+
 def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     """Marca scadute le offerte non più viste dallo scraper.
 
@@ -94,12 +157,11 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     # (`removed` di Arbetsförmedlingen, assenza dopo una lettura completa
     # per ROME…) — finche' non c'e', non scadono per presenza.
     from .adapters import ADAPTERS
-    # 28/09/2026 — jsonld FUORI dalla scadenza per presenza finche' non
-    # c'e' la prova di vita: per i portali la sitemap e' una FINESTRA
-    # rotante, non l'inventario (mindpal.co: 446 offerte vive con
-    # JobPosting in pagina, fuori dalla sitemap da giorni, scadute in
-    # ondata — 2.522 in 6 ore con mediana 8 giorni). La regola e' giusta
-    # ma il dato mentiva: «non nella sitemap» non vuol dire «morta».
+    # 28/09/2026 — jsonld fuori dalla regola SEMPLICE: per i portali la
+    # sitemap e' una finestra rotante, non l'inventario (mindpal.co: 446
+    # offerte vive con JobPosting in pagina, fuori dalla sitemap da
+    # giorni, scadute in ondata — 2.522 in 6 ore, mediana 8 giorni).
+    # jsonld scade solo con la prova di vita, qui sotto.
     con_adapter = [p for p in sorted(ADAPTERS) if p != "jsonld"]
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -143,6 +205,13 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
             """, (giorni, con_adapter, escluse))
             n = cur.rowcount
         conn.commit()
+    # jsonld scade solo dopo la prova di vita sulla pagina: la sitemap dei
+    # portali e' una finestra, e dalla finestra la morte non si deduce.
+    n_j, vivi_j = _prova_vita_jsonld(dsn, giorni)
+    n += n_j
+    if n_j or vivi_j:
+        log.info("expira jsonld con prova di vita: %d scadute, %d riviste vive",
+                 n_j, vivi_j)
     _segna_rifiuto(rifiutate)
     log.info("expira: %d offerte scadute (non viste o pubblicate da troppo)", n)
     for pid, k, tot in rifiutate:
