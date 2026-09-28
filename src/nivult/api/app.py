@@ -1011,15 +1011,13 @@ def create_app() -> FastAPI:
     @app.get("/me/chiavi")
     def mie_chiavi(uid: str = Depends(utente)):
         extra = _chiavi.extra_per_utente(uid)
-        lista = _chiavi.lista_per_utente(uid)
+        lista, trial = _chiavi.trial_per_utente(uid)
         if lista:
             return {"chiavi": lista, "extra": extra}
-        # primo accesso: la chiave trial nasce qui, e SI MOSTRA in chiaro
-        # questa volta sola — in tabella resta solo l'hash
-        chiave, chiave_id = _chiavi.nuova("principale (trial)", 1000,
-                                          user_id=uid)
+        # primo accesso: la chiave trial SI MOSTRA in chiaro questa
+        # volta sola — in tabella resta solo l'hash
         return {"chiavi": _chiavi.lista_per_utente(uid), "extra": extra,
-                "chiave_nuova": chiave,
+                "chiave_nuova": trial,
                 "nota": "la chiave si vede solo ora: conservala tu"}
 
     @app.post("/me/chiavi")

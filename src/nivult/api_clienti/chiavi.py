@@ -231,6 +231,40 @@ def svuota_cache() -> None:
     _cache.clear()
 
 
+def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
+    """Le chiavi dell'utente, e se non ne ha nessuna la trial appena
+    creata in chiaro (si vede ORA, mai piu').
+
+    La creazione e' serializzata per utente (28/09/2026): due tab
+    aperte sulla stessa registrazione chiedevano /me/chiavi insieme,
+    vedevano entrambe l'elenco vuoto e creavano DUE trial — il
+    banner mostrava una, l'elenco l'altra. Il lock advisory vale per
+    la transazione: la seconda richiesta aspetta la prima e trova la
+    chiave gia' fatta."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"trial-chiave:{user_id}",))
+        cur.execute(
+            "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
+            "       usati_mese, mese_uso FROM api_chiavi "
+            "WHERE user_id = %s ORDER BY created_at", (user_id,))
+        righe = cur.fetchall()
+        if righe:
+            conn.commit()
+            return ([{"id": r[0], "etichetta": r[1],
+                      "creata_il": r[2].isoformat(),
+                      "revocata_il": r[3].isoformat() if r[3] else None,
+                      "crediti_mensili": r[4], "usati_mese": r[5],
+                      "mese_uso": r[6].isoformat()} for r in righe], None)
+        chiave = "nv_" + secrets.token_urlsafe(32)
+        cur.execute(
+            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id) "
+            "VALUES (%s, %s, %s, %s)",
+            (_hash(chiave), "principale (trial)", 1000, user_id))
+        conn.commit()
+        return ([], chiave)
+
+
 def nuova(etichetta: str, crediti: int, user_id: str | None = None) -> tuple[str, str]:
     """Crea la chiave e ritorna (chiave in chiaro, id). Si vede ORA, mai piu'.
 
