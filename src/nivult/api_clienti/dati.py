@@ -163,7 +163,9 @@ def offerte(filtri: dict, cursore: str | None,
             limite: int) -> tuple[list[dict], str | None]:
     filtri = filtri or {}
     limite = _limite(limite)
-    dove = ["TRUE"]
+    # posted_at nel futuro (data d'inizio contratto, guardia del 28/09):
+    # finche' l'export non e' ricostruito, fuori dalla risposta.
+    dove = ["(posted_at IS NULL OR posted_at <= current_timestamp)"]
     par: dict = {}
     for campo in ("country", "category", "ats", "seniority", "language"):
         if filtri.get(campo):
@@ -216,7 +218,11 @@ def cerca_portale(filtri: dict, cursore: str | None,
     tocca raw: il contenuto dell'annuncio non esce da qui."""
     filtri = filtri or {}
     limite = max(1, min(int(limite or 25), 50))
-    dove = ["TRUE"]
+    # posted_at nel futuro: le «Lehre» scrivono la data d'inizio contratto
+    # (guardia del 28/09 in adapters._dt); l'export di oggi e' nato prima
+    # della pulizia e, con l'ordinamento DESC, quelle righe finirebbero
+    # in cima alla vetrina. Fino al prossimo export si filtrano qui.
+    dove = ["(posted_at IS NULL OR posted_at <= current_timestamp)"]
     par: dict = {}
     for campo in ("country", "category", "ats", "seniority", "language"):
         if filtri.get(campo):
