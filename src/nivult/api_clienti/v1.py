@@ -241,17 +241,23 @@ def demo_stats(request: Request):
     return dati.demo_stats()
 
 
-# Il campione dell'export e' pubblico per scelta: la merce si ispeziona
-# prima di pagare. Percorso chiuso nel codice, niente input dal client.
-CAMPIONE_EXPORT = "/opt/nivult/exports/offerte-attive-campione-ultimo.jsonl.gz"
+CAMPIONI_EXPORT = {
+    "offerte": "/opt/nivult/exports/offerte-attive-campione-ultimo.jsonl.gz",
+    "aziende": "/opt/nivult/exports/aziende-segnali-campione-ultimo.jsonl.gz",
+}
 
 
 @router.get("/demo/export-campione")
-def demo_export_campione(request: Request):
-    """Il campione gratuito dell'export offerte, senza chiave (28/09/2026):
-    la landing lo linka, il buyer lo apre. Stessa difesa della demo."""
+def demo_export_campione(request: Request, tipo: str = Query(default="offerte")):
+    """Il campione gratuito dell'export, senza chiave (28/09/2026):
+    la landing lo linka, il buyer lo apre. Stessa difesa della demo.
+    `tipo` e' chiuso: offerte o aziende, nient'altro."""
     _demo_gate(request)
-    if not os.path.isfile(CAMPIONE_EXPORT):
+    p = CAMPIONI_EXPORT.get(tipo)
+    if not p:
+        raise HTTPException(404, "campione sconosciuto: valori ammessi "
+                            + ", ".join(CAMPIONI_EXPORT))
+    if not os.path.isfile(p):
         raise HTTPException(404, "campione non disponibile oggi")
-    return FileResponse(CAMPIONE_EXPORT, media_type="application/gzip",
-                        filename="nivult-campione.jsonl.gz")
+    return FileResponse(p, media_type="application/gzip",
+                        filename=f"nivult-campione-{tipo}.jsonl.gz")
