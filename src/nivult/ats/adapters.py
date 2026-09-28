@@ -421,7 +421,26 @@ class Workday(BaseAdapter):
             if r.status_code != 200:
                 self.lettura_parziale = True
                 break
-            corpo = r.json()
+            try:
+                corpo = r.json()
+            except json.JSONDecodeError:
+                # 28/09/2026: la CXS ogni tanto risponde 200 con una pagina
+                # HTML (WAF, manutenzione) invece del JSON. Un secondo
+                # tentativo assorbe il transitorio; poi — a offset 0 la
+                # lettura fallisce rumorosa, a meta' si dichiara parziale
+                # e si tiene cio' che si e' letto.
+                r2 = self.client.post(url, json={
+                    "appliedFacets": facets, "limit": self.LIMITE_PAGINA,
+                    "offset": offset})
+                try:
+                    corpo = r2.json() if r2.status_code == 200 else None
+                except json.JSONDecodeError:
+                    corpo = None
+                if corpo is None:
+                    if offset == 0 and not facets:
+                        raise LetturaFallita(200, str(r.url) + " (corpo non JSON)")
+                    self.lettura_parziale = True
+                    break
             if offset == 0 and not facets:
                 self.total_dichiarato = corpo.get("total")
             postings = corpo.get("jobPostings", [])
@@ -441,7 +460,11 @@ class Workday(BaseAdapter):
             "appliedFacets": {}, "limit": 1, "offset": 0})
         if r.status_code != 200:
             return []
-        for f in r.json().get("facets", []):
+        try:
+            corpo = r.json()
+        except json.JSONDecodeError:   # come _leggi_fetta: 200 HTML dal WAF
+            return []
+        for f in corpo.get("facets", []):
             if f.get("facetParameter") == campo:
                 return [v["id"] for v in f.get("values", []) if v.get("id")]
         return []
@@ -463,8 +486,11 @@ class Workday(BaseAdapter):
             facet = None
             r = self.client.post(url, json={"appliedFacets": {}, "limit": 1, "offset": 0})
             if r.status_code == 200:
-                cand = sorted(r.json().get("facets", []),
-                              key=lambda f: -len(f.get("values", [])))
+                try:
+                    cand = sorted(r.json().get("facets", []),
+                                  key=lambda f: -len(f.get("values", [])))
+                except json.JSONDecodeError:   # come _leggi_fetta: 200 HTML dal WAF
+                    cand = []
                 if cand:
                     facet = cand[0].get("facetParameter")
             if facet:
