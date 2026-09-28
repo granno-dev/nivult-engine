@@ -97,6 +97,7 @@ while true; do
   elif notte; then
     echo "-- classificatore a livelli: fermo di notte (scalda i 16 core)"
   else
+    battito "classificatore a livelli"
     nice -n 10 $PY -m nivult.ats.classificatore_livelli --no-glm --limite 20000 2>&1 | grep -E "classificate|viste|Traceback|Error" | tail -2 || true
   fi
   # nivult-v1 (mmBERT, 5 teste) sulla GPU: 26 offerte/s misurate il 07/09.
@@ -110,11 +111,15 @@ while true; do
   fi
   # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
   # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
+  battito "dichiarati"
   nice -n 10 $PY -m nivult.ats.dichiarati --limite 200000 2>&1 | tail -1 || true
   # La lettura di dettaglio SUBITO, non di notte: SuccessFactors, Rippling,
   # Breezy, Oracle entrano dall'elenco senza testo, e senza testo nessun
   # campo si legge ne' si stima (08/09/2026: 0% di testo sulle SF nuove).
   # 5.000 pagine per giro, le piu' recenti prima.
+  # battito per passo (28/09/2026): il dettaglio puo' durare due ore — la
+  # sentinella allarmava «operaio muto» col ciclo vivo che lavorava.
+  battito "dettaglio"
   nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
@@ -126,6 +131,7 @@ while true; do
   # I domini nuovi (pending: censimento CC, bacheche dei fornitori, certificati)
   # prima, poi il ripasso dei no_ats. Stava nel volano del server (800 ogni
   # 10 min): col censimento europeo da centomila domini serve il N5.
+  battito "detector e scoperta"
   nice -n 10 $PY -m nivult.ats.detector --rileva --limite $RILEVA --thread $THREAD 2>&1 | grep -E "Detector|visitati|Traceback" | tail -1 || true
   nice -n 10 $PY -m nivult.ats.detector --ripassa --limite $RIPASSA --thread $THREAD 2>&1 | grep -E "Ripasso|Traceback" | tail -2 || true
   nice -n 10 $PY -m nivult.ats.jsonld --scopri --limite $JSONLD --thread $THREAD 2>&1 | tail -1 || true
