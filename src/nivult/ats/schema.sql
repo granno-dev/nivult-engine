@@ -411,7 +411,11 @@ CREATE TRIGGER ats_companies_slug_minuscolo
 -- dove finiscono tecnologie e sintesi del 2B: meta' del prodotto.
 -- Il DDL viene dalla produzione (pg_dump --schema-only), reso idempotente.
 -- ===========================================================================
-\restrict cnb3z8qft1TwyAgQ6mQnyqFgbjbwT59tdHfJaE9dPihnrNDjFK10noYOAefgKB2
+-- (28/09/2026: qui c'era la riga `\restrict …` di pg_dump — un meta-comando
+-- psql, non SQL. runner --schema esegue il file con psycopg, che la
+-- rifiutava con SyntaxError: da quando era entrata, OGNI applicazione
+-- notturna dello schema falliva in rollback, e i DDL nuovi non arrivavano
+-- piu' in produzione. Rimossa, con la sua `\unrestrict` in fondo.)
 CREATE TABLE IF NOT EXISTS azienda_paese (
     platform_id text NOT NULL,
     slug text NOT NULL,
@@ -655,7 +659,6 @@ CREATE INDEX IF NOT EXISTS etichette_deepseek_family ON etichette_deepseek USING
 CREATE INDEX IF NOT EXISTS etichette_deepseek_tec ON etichette_deepseek USING gin (tecnologie);
 CREATE INDEX IF NOT EXISTS incidenti_aperti_idx ON incidenti USING btree (chiave) WHERE (stato <> 'risolto'::text);
 CREATE INDEX IF NOT EXISTS n5_vitali_at_idx ON n5_vitali USING btree (at DESC);
-\unrestrict cnb3z8qft1TwyAgQ6mQnyqFgbjbwT59tdHfJaE9dPihnrNDjFK10noYOAefgKB2
 
 -- ===========================================================================
 -- 19/09/2026 — Le sintesi di mT5, il livello dei domini, la tabella aziende.
