@@ -94,7 +94,13 @@ def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
     # (`removed` di Arbetsförmedlingen, assenza dopo una lettura completa
     # per ROME…) — finche' non c'e', non scadono per presenza.
     from .adapters import ADAPTERS
-    con_adapter = sorted(ADAPTERS)
+    # 28/09/2026 — jsonld FUORI dalla scadenza per presenza finche' non
+    # c'e' la prova di vita: per i portali la sitemap e' una FINESTRA
+    # rotante, non l'inventario (mindpal.co: 446 offerte vive con
+    # JobPosting in pagina, fuori dalla sitemap da giorni, scadute in
+    # ondata — 2.522 in 6 ore con mediana 8 giorni). La regola e' giusta
+    # ma il dato mentiva: «non nella sitemap» non vuol dire «morta».
+    con_adapter = [p for p in sorted(ADAPTERS) if p != "jsonld"]
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
             # La condizione che manca da sempre: il tenant e' stato RILETTO
