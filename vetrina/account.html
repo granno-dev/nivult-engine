@@ -114,6 +114,21 @@ tailwind.config = {
       <button onclick="esci()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
     </div>
 
+    <!-- la striscia utile: crediti, chiave, la prima chiamata pronta da copiare (28/09) -->
+    <div class="mt-6 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 flex flex-wrap items-center gap-x-5 gap-y-3 shadow-xl shadow-slate-900/15">
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">credits available</div>
+        <div id="hero-crediti" class="text-2xl font-black tabular-nums text-mint-400">—</div>
+      </div>
+      <div class="h-9 w-px bg-white/10 hidden sm:block"></div>
+      <div class="min-w-0">
+        <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">your key</div>
+        <code id="hero-chiave" class="font-mono text-[13px] text-slate-300">—</code>
+      </div>
+      <span id="hero-rivelazioni" class="text-[12px] text-slate-400"></span>
+      <button onclick="copiaCurl(this)" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-brand-500/25">Copy your first call →</button>
+    </div>
+
     <!-- la chiave appena creata: si vede UNA volta -->
     <div id="chiave-nuova" class="hidden mt-8 rounded-2xl border border-mint-500/40 bg-mint-500/5 p-6">
       <p class="text-[13px] font-black uppercase tracking-[0.12em] text-mint-600">Your new API key — shown once</p>
@@ -201,8 +216,8 @@ tailwind.config = {
     </div>
 
     <!-- ══ l'esploratore: offerte e aziende, gratis da guardare ══ -->
-    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/5 overflow-hidden">
-      <div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
+    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/5">
+      <div class="h-1.5 rounded-t-2xl bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 flex-wrap">
         <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
@@ -221,7 +236,8 @@ tailwind.config = {
       </div>
       <div class="px-5 pt-3 text-[12px] font-semibold text-slate-400" id="cerca-match"></div>
       <div class="p-5">
-        <div class="grid sm:grid-cols-5 gap-3 items-center">
+        <!-- i filtri restano in vista mentre la lista scorre (28/09) -->
+        <div class="grid sm:grid-cols-5 gap-3 items-center sticky top-20 z-30 bg-white/95 backdrop-blur py-2 -mx-2 px-2 rounded-xl">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <input id="f-tec" type="text" placeholder="Technology…"
@@ -442,6 +458,7 @@ async function magicLink(e) {
 /* ══ dashboard ══ */
 let chiavi = [];
 let creditiExtra = 0;
+let rivelazioni = 0;
 async function carica() {
   const me = await (await api("/me")).json();
   const nome = (me.nome || "").trim();
@@ -453,6 +470,7 @@ async function carica() {
   const r = await (await api("/me/chiavi")).json();
   chiavi = r.chiavi || [];
   creditiExtra = r.extra || 0;
+  rivelazioni = r.rivelazioni || 0;
   if (r.chiave_nuova) mostraChiaveNuova(r.chiave_nuova);
   disegna();
 }
@@ -497,11 +515,20 @@ function disegna() {
     acc.textContent = "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire";
     acc.classList.remove("hidden");
   } else acc.classList.add("hidden");
+  /* la striscia-eroe: crediti, chiave mascherata, rivelazioni in cassaforte */
+  document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
+  const prima = chiavi.find(k => !k.revocata_il);
+  document.getElementById("hero-chiave").textContent = prima ? "nv_···" + prima.id.slice(-6) : "—";
+  document.getElementById("hero-rivelazioni").textContent =
+    rivelazioni ? `${rivelazioni.toLocaleString("en-US")} companies revealed · yours forever, never paid twice` : "";
 }
 function mostraChiaveNuova(chiave) {
   const box = document.getElementById("chiave-nuova");
   box.classList.remove("hidden");
   document.getElementById("chiave-nuova-val").textContent = chiave;
+  /* la chiave fresca resta per la sessione: gli esempi del quickstart la
+     portano gia' dentro, pronti da copiare (28/09/2026) */
+  try { sessionStorage.setItem("nv_chiave_fresca", chiave); } catch (e) {}
   box.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 async function creaChiave() {
@@ -519,6 +546,17 @@ async function revoca(id) {
 function copiaChiave(btn) {
   navigator.clipboard.writeText(document.getElementById("chiave-nuova-val").textContent)
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
+}
+/* la prima chiamata, pronta: con la chiave vera se e' nata in questa
+   sessione, altrimenti col promemoria da completare */
+function curlPrimaChiamata() {
+  let k = "nv_your_key";
+  try { k = sessionStorage.getItem("nv_chiave_fresca") || "nv_your_key"; } catch (e) {}
+  return `curl -H "X-Api-Key: ${k}" "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`;
+}
+function copiaCurl(btn) {
+  navigator.clipboard.writeText(curlPrimaChiamata())
+    .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy your first call →", 1600); });
 }
 function esci() {
   api("/auth/logout", { method: "POST" }).catch(() => {});

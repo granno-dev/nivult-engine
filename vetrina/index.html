@@ -10,6 +10,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nivult | Hiring and company data you can audit</title>
 <meta name="description" content="2.9M+ active job postings and 67K companies captured directly from employer ATS platforms, with per-field provenance.">
+<meta property="og:title" content="Nivult | Hiring and company data you can audit">
+<meta property="og:description" content="2.9M+ active job postings and 67K companies read directly from employer career systems. Every field carries its source.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Nivult | Hiring and company data you can audit">
+<meta name="twitter:description" content="2.9M+ active job postings, 67K companies, 58 ATS platforms. Every field carries its source.">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,6 +73,7 @@ tailwind.config = {
 /* pricing slider */
 .pz-slider { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 99px;
   background: linear-gradient(90deg,#3b6ef6 var(--fill,50%), #e7eaf3 var(--fill,50%)); outline: none; }
+.pz-dark .pz-slider { background: linear-gradient(90deg,#5e8bff var(--fill,50%), #1e293b var(--fill,50%)); }
 .pz-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; border-radius: 50%;
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
 .pz-slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%;
@@ -90,6 +97,17 @@ tailwind.config = {
 .in .underline-draw::after { right: 0; }
 /* faint dot grid behind quiet sections, so the paper is not flat */
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
+/* i loghi della marquee: a riposo in grigio, al tocco a colori */
+#marquee img { filter: grayscale(1) opacity(.72); transition: filter .35s; }
+#marquee div:hover img { filter: none; }
+/* chi chiede meno moto lo ottiene: niente drift, tick, fluttuazioni, mesh */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track, .tick-track, .float-a, .float-b, .float-c, .mesh-a, .mesh-b,
+  .live-dot, .spinner { animation: none !important; }
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .stat-num { transition: none !important; }
+  html { scroll-behavior: auto; }
+}
 /* soft band of color that separates the stats from the rest */
 .statcard { position: relative; overflow: hidden; }
 .statcard::before { content:""; position:absolute; inset:0 0 auto 0; height:3px;
@@ -142,17 +160,41 @@ tailwind.config = {
         Know what every company is hiring for. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Trust every field.</span>
       </h1>
       <p class="mt-6 text-lg text-slate-600 max-w-xl leading-relaxed">
-        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold">67,358 employers across 58 ATS platforms and 243 countries</b>, enriches every record with our own measured models, and stamps each field with its source. You get the number and the receipt.
+        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold">67,358 employers across 58 ATS platforms and 243 countries and territories</b>, enriches every record with our own measured models, and stamps each field with its source. You get the number and the receipt.
       </p>
       <div class="mt-9 flex flex-wrap gap-4">
         <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Get a trial key →</button>
         <a href="#coverage" class="rounded-xl border border-slate-900/15 hover:border-brand-500/60 hover:bg-white/60 transition px-7 py-3.5 font-bold text-slate-800">See field coverage</a>
       </div>
-      <div class="mt-4 text-[13px] text-slate-500 font-medium">No credit card required · instant sandbox access</div>
+      <div class="mt-4 text-[13px] text-slate-500 font-medium">No credit card required · your trial key with 1,000 credits appears right after sign-in</div>
       <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-slate-500">
         <span><span class="text-mint-600 font-bold mr-1.5">✓</span>Free sample export</span>
         <span><span class="text-mint-600 font-bold mr-1.5">✓</span>Per-field provenance</span>
         <span><span class="text-mint-600 font-bold mr-1.5">✓</span>No seat minimums</span>
+      </div>
+
+      <!-- la prova su mobile: le card fluttuanti restano ai desktop,
+           qui una sola, ferma, con la stessa merce -->
+      <div class="lg:hidden mt-8 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-[10px] font-bold tracking-[0.16em] uppercase text-slate-500">Company record</span>
+          <span class="rounded-md bg-mint-500/15 text-mint-400 px-2 py-0.5 text-[10px] font-bold">verified sources</span>
+        </div>
+        <div class="flex items-baseline justify-between">
+          <b class="text-xl font-extrabold tracking-tight">Danone</b>
+          <span class="text-[11px] text-slate-500">danone.com</span>
+        </div>
+        <div class="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
+          <span class="text-slate-400">Industry</span><span class="text-right font-semibold">Food &amp; Beverage <code class="ml-1 rounded bg-white/10 px-1 py-0.5 text-[9px] text-brand-400">sirene</code></span>
+          <span class="text-slate-400">Size</span><span class="text-right font-semibold">10001+ <code class="ml-1 rounded bg-white/10 px-1 py-0.5 text-[9px] text-brand-400">pdl</code></span>
+          <span class="text-slate-400">Active postings</span><span class="text-right font-semibold tabular-nums">980</span>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-1.5">
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-300">SAP</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-300">Excel</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-300">Power BI</span>
+          <span class="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold text-slate-500">+ more</span>
+        </div>
       </div>
     </div>
 
@@ -195,15 +237,6 @@ tailwind.config = {
           </div>
         </div>
       </div>
-      <!-- coverage chip card -->
-      <div class="float-c absolute -bottom-2 left-2 rounded-2xl border border-slate-900/10 bg-white/90 backdrop-blur px-5 py-4 shadow-lg shadow-slate-900/10 z-30">
-        <div class="text-[11px] font-bold tracking-[0.12em] uppercase text-slate-400">Field coverage, published</div>
-        <div class="mt-2 flex items-center gap-3">
-          <div class="h-2 w-36 rounded-full bg-slate-100 overflow-hidden"><div class="h-full w-[87%] rounded-full bg-gradient-to-r from-brand-500 to-mint-400"></div></div>
-          <span class="text-[13px] font-black tabular-nums">87.0%</span>
-        </div>
-        <div class="mt-1 text-[11.5px] text-slate-500">country · declared gaps included</div>
-      </div>
     </div>
   </div>
 </header>
@@ -219,7 +252,7 @@ tailwind.config = {
 </section>
 
 <!-- ══ Stats band (Stripe style: quiet numbers, big type) ══ -->
-<section class="pt-16 pb-12">
+<section class="py-14 border-y border-slate-900/5 bg-white/70">
   <div class="max-w-7xl mx-auto px-6">
     <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-10">The index, measured this morning</p>
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-5">
@@ -352,6 +385,10 @@ tailwind.config = {
           </div>
           <pre id="json-offerta" class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[430px]"></pre>
         </div>
+        <a href="https://api.nivult.com/v1/demo/export-campione" class="mt-4 inline-flex items-center gap-2 self-start rounded-lg border border-mint-500/40 bg-mint-500/10 px-4 py-2 text-[13px] font-bold text-mint-600 hover:bg-mint-500/20 transition">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          Free sample export · 2,000 real records (JSONL)
+        </a>
       </div>
     </div>
 
@@ -365,9 +402,13 @@ tailwind.config = {
           <h3 class="text-lg font-bold tracking-tight flex items-center gap-2.5">Query the index
             <span class="relative flex h-2 w-2"><span class="live-dot absolute inline-flex h-full w-full rounded-full bg-mint-400"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-mint-500"></span></span>
           </h3>
-          <p class="mt-0.5 text-[13px] font-semibold text-brand-600">type a technology, see who is hiring for it</p>
+          <p class="mt-0.5 text-[13px] font-semibold text-brand-600">type a technology or a role, see who is hiring</p>
         </div>
         <span id="demo-fonte" class="ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-400"></span>
+      </div>
+      <div class="px-5 pt-4 flex gap-2">
+        <button id="tab-tec" class="rounded-lg bg-brand-500 text-white px-4 py-1.5 text-[13px] font-bold transition">Companies by technology</button>
+        <button id="tab-off" class="rounded-lg bg-slate-100 text-slate-500 px-4 py-1.5 text-[13px] font-bold transition hover:bg-slate-200">Postings</button>
       </div>
       <div class="p-5">
         <div class="relative">
@@ -388,13 +429,13 @@ tailwind.config = {
   <div class="max-w-7xl mx-auto px-6">
     <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Radical transparency</p>
-    <h2 class="text-4xl font-black tracking-tight">Coverage you <span class="accent underline-draw">never ask</span> for</h2>
+    <h2 class="text-4xl font-black tracking-tight">Coverage you <span class="accent underline-draw">never have to ask</span> for</h2>
     <p class="mt-4 text-lg text-slate-600">The fill rate of every field, measured on the latest daily export. No marketing percentages: the bar is the number, and the low ones stay in sight by design.</p>
     </div>
     <div class="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[12px] font-semibold text-slate-500">
       <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#3b6ef6,#0fbf9a)"></i>solid coverage</span>
       <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#8b5cf6,#3b6ef6)"></i>filling in</span>
-      <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#f59e0b,#f43f5e)"></i>declared gap</span>
+      <span class="flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full inline-block" style="background:linear-gradient(90deg,#cbd5e1,#94a3b8)"></i>declared gap</span>
       <span class="text-slate-400">a declared gap protects your analysis</span>
     </div>
     <div class="mt-6 grid lg:grid-cols-2 gap-5 items-stretch">
@@ -409,7 +450,7 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-mint-600">what we know about each employer</p>
           </div>
         </div>
-        <div class="cov-scroll overflow-auto">
+        <div>
           <table class="w-full text-[15px]"><tbody id="tab-copertura-az" class="divide-y divide-slate-100"></tbody></table>
         </div>
       </div>
@@ -424,7 +465,7 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-brand-600">what we know about each opening</p>
           </div>
         </div>
-        <div class="cov-scroll overflow-auto">
+        <div>
           <table class="w-full text-[15px]"><tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody></table>
         </div>
       </div>
@@ -521,31 +562,34 @@ tailwind.config = {
       <p class="mt-4 text-lg text-slate-600">One credit is one API call. The more you pull, the less each call costs. Move the slider and watch the unit price fall.</p>
     </div>
 
-    <div class="reveal mt-10 max-w-3xl mx-auto rounded-3xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/10 overflow-hidden">
+    <div class="reveal mt-10 max-w-3xl mx-auto rounded-3xl border border-slate-900/10 bg-slate-950 shadow-2xl shadow-slate-900/40 overflow-hidden">
       <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
-      <div class="p-8 sm:p-10">
+      <div class="p-8 sm:p-10 pz-dark">
         <div class="flex items-end justify-between flex-wrap gap-4">
           <div>
-            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">credits per month</div>
-            <div id="pz-crediti" class="mt-1 text-3xl font-black tracking-tight tabular-nums">100,000</div>
+            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">credits per month</div>
+            <div id="pz-crediti" class="mt-1 text-3xl font-black tracking-tight tabular-nums text-white">100,000</div>
           </div>
           <div class="text-right">
-            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">per month</div>
-            <div id="pz-prezzo" class="mt-1 text-4xl font-black tracking-tight tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">€229</div>
+            <div class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">per month</div>
+            <div id="pz-prezzo" class="mt-1 text-4xl font-black tracking-tight tabular-nums bg-gradient-to-r from-brand-400 to-mint-400 bg-clip-text text-transparent">€229</div>
           </div>
         </div>
 
         <input id="pz-slider" type="range" min="0" max="1000" value="500"
           class="pz-slider mt-8 w-full" aria-label="Credits per month">
+        <div class="mt-2 flex justify-between text-[11px] font-bold text-slate-500">
+          <span>10K</span><span class="text-mint-400">100K ★ most popular</span><span>1M</span><span>5M</span>
+        </div>
 
-        <div class="mt-6 flex items-center gap-4">
+        <div class="mt-5 flex items-center gap-4">
           <div class="flex-1">
             <div class="flex justify-between text-[12px] font-bold mb-1.5">
-              <span class="text-slate-500">price per 1,000 calls</span>
-              <span><span id="pz-unit" class="text-slate-900 tabular-nums">€2.29</span>
-              <span id="pz-sconto" class="ml-2 rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px]">−53% vs entry</span></span>
+              <span class="text-slate-400">price per 1,000 calls</span>
+              <span><span id="pz-unit" class="text-white tabular-nums">€2.29</span>
+              <span id="pz-sconto" class="ml-2 rounded-md bg-mint-500/15 text-mint-400 px-2 py-0.5 text-[11px]">−53% vs entry</span></span>
             </div>
-            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div class="h-2 rounded-full bg-white/10 overflow-hidden">
               <div id="pz-barra" class="h-full rounded-full bg-gradient-to-r from-amber-500 via-brand-500 to-mint-500 transition-all duration-500" style="width:47%"></div>
             </div>
           </div>
@@ -555,8 +599,9 @@ tailwind.config = {
 
         <div class="mt-7 flex flex-wrap items-center gap-4">
           <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Start with this volume →</button>
-          <span class="text-[13px] text-slate-500 font-medium">First 1,000 credits every month are free. No card required.</span>
+          <span class="text-[13px] text-slate-400 font-medium">First 1,000 credits every month are free. No card required.</span>
         </div>
+        <p class="mt-5 text-[12.5px] text-slate-500">Entry is €4.90 per 1,000 calls — the market enters at ~$30/1K (TheirStack, Coresignal). The more you pull, the wider the gap.</p>
       </div>
     </div>
 
@@ -593,6 +638,31 @@ tailwind.config = {
       </div>
     </div>
     <p class="reveal mt-8 text-center text-[13px] text-slate-400 max-w-xl mx-auto">Fields are added over time and never renamed. Your integration never breaks because we shipped an improvement.</p>
+  </div>
+</section>
+
+<!-- ══ FAQ: le quattro domande che arrivano sempre ══ -->
+<section class="py-16 border-t border-slate-900/5">
+  <div class="max-w-3xl mx-auto px-6">
+    <h2 class="reveal text-2xl font-black tracking-tight text-center mb-8">The four questions every buyer asks</h2>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-6">
+        <h3 class="font-bold text-[15px]">What happens when my credits run out?</h3>
+        <p class="mt-2 text-sm text-slate-600 leading-relaxed">Calls return 429 until you top up. The first 1,000 each month are free again on the 1st; purchased credits never expire.</p>
+      </div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-6">
+        <h3 class="font-bold text-[15px]">What formats do I get?</h3>
+        <p class="mt-2 text-sm text-slate-600 leading-relaxed">JSON API with cursor pagination for slices, daily JSONL exports for the full corpus, and the changes feed to stay in sync.</p>
+      </div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-6">
+        <h3 class="font-bold text-[15px]">How fresh is the index?</h3>
+        <p class="mt-2 text-sm text-slate-600 leading-relaxed">Rebuilt every morning from the boards themselves; the delta feed carries new, updated and closed postings daily.</p>
+      </div>
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-6">
+        <h3 class="font-bold text-[15px]">How do I pay?</h3>
+        <p class="mt-2 text-sm text-slate-600 leading-relaxed">One-time top-ups from the account page — no subscription to cancel, no seats, no card needed for the trial.</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -662,9 +732,10 @@ document.querySelectorAll('.reveal,.stat-num').forEach(el=>io.observe(el));
       x:Math.random()*W,y:Math.random()*H,
       vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35}));}
   ridimensiona();addEventListener('resize',ridimensiona);
+  const ferma=matchMedia('(prefers-reduced-motion: reduce)').matches;
   (function frame(){
     ctx.clearRect(0,0,W,H);
-    for(const n of nodi){n.x+=n.vx;n.y+=n.vy;
+    for(const n of nodi){if(!ferma){n.x+=n.vx;n.y+=n.vy;}
       if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
     for(let i=0;i<nodi.length;i++)for(let j=i+1;j<nodi.length;j++){
       const a=nodi[i],b=nodi[j],d=Math.hypot(a.x-b.x,a.y-b.y);
@@ -672,7 +743,7 @@ document.querySelectorAll('.reveal,.stat-num').forEach(el=>io.observe(el));
         ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
     for(const n of nodi){ctx.fillStyle='rgba(59,110,246,.35)';
       ctx.beginPath();ctx.arc(n.x,n.y,1.8,0,7);ctx.fill();}
-    requestAnimationFrame(frame);})();
+    if(!ferma)requestAnimationFrame(frame);})();
 })();
 
 /* ══ ATS marquee: local logos (downloaded once, no network at runtime) ══ */
@@ -731,6 +802,26 @@ const AZIENDE=[
  {nome:"Danone",dominio:"danone.com",size:"10001+",paese:"FR",tecnologie:["SAP","Excel","Power BI"]}
 ];
 const SUGS=["SAP","Python","Excel","HACCP","COBOL","EPIC","TIG welding","C++"];
+/* tab «Postings»: offerte vere viste nell'indice il 28/09/2026, embedded —
+   la demo deve funzionare anche a rete spenta */
+const OFFERTE=[
+ {t:"Data Engineer",a:"Danone",dove:"Paris · FR",rem:"hybrid",tec:["Python","Snowflake","dbt","Airflow"]},
+ {t:"PR and Marketing Executive",a:"Platform Media",dove:"London · GB",rem:"hybrid",tec:["Instagram","LinkedIn"]},
+ {t:"Personal Assistant to the CEO",a:"Platform Media",dove:"London · GB",rem:"hybrid",tec:["Google Workspace","Microsoft Office"]},
+ {t:"Freelance Producer & Editor (audio/video)",a:"Fashioned",dove:"London · GB",rem:"remote",tec:["Audition","Descript","Premiere Pro","Reels"]},
+ {t:"Early Childhood Educator",a:"alpha plus",dove:"Sydney · AU",rem:"onsite",tec:[]},
+ {t:"Pädagogische Fachberatung (m/w/d)",a:"step kids kitas gmbh",dove:"Bremen · DE",rem:"onsite",tec:["MS Office","Microsoft Teams","Zoom"]},
+ {t:"Heilpädagogen/Heilziehungspfleger (m/w/d)",a:"step kids kitas gmbh",dove:"Kaarst · DE",rem:"onsite",tec:[]},
+ {t:"Material Planning Analyst",a:"Flextronics (Sweden)",dove:"Israel · IL",rem:"onsite",tec:["SAP","Excel"]},
+ {t:"Troubleshooter",a:"Hitachi Energy",dove:"Hitachi-Shi · JP",rem:"onsite",tec:["GCB","GIS","TR"]},
+ {t:"Analista de Contratos Pleno",a:"Hitachi Energy",dove:"Guarulhos · BR",rem:"onsite",tec:["CLM","Excel","Power BI","SharePoint"]},
+ {t:"Seasonal Stock Associate",a:"Under Armour",dove:"Mercedes · US",rem:"onsite",tec:[]},
+ {t:"Intern — Youth Programs",a:"Careers Centerusa",dove:"Jacksonville · US",rem:"onsite",tec:[]},
+ {t:"Nurse Practitioner",a:"Carle Health",dove:"Springfield · US",rem:"onsite",tec:["EPIC","EMR","IV pumps"]},
+ {t:"COBOL Developer",a:"Questronix",dove:"Quezon City · PH",rem:"onsite",tec:["COBOL","SQL","Control-M"]},
+ {t:"TIG Welder",a:"Aston Advantage",dove:"Brisbane · AU",rem:"onsite",tec:["MIG","TIG welding"]},
+ {t:"Line Cook",a:"Groupement Mousquetaires",dove:"Lyon · FR",rem:"onsite",tec:["HACCP"]}
+];
 const q=document.getElementById('q'),ris=document.getElementById('risultati'),
       sugs=document.getElementById('sugs'),spin=document.getElementById('spin'),
       fonte=document.getElementById('demo-fonte');
@@ -779,13 +870,47 @@ async function mostraLive(f){
     </div>` : '';
   ris.innerHTML = chiare + sfocate;
 }
+function rigaOff(o){
+  const f=(q.value||"").toLowerCase().trim();
+  return `<div class="flex items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+    <div><b class="text-[14.5px]">${o.t}</b><div class="text-[12.5px] text-slate-500">${o.a} · ${o.dove} · ${o.rem}</div></div>
+    <div class="flex flex-wrap justify-end gap-1.5">${o.tec.map(t=>`<span class="rounded-lg px-2 py-0.5 text-[11.5px] font-bold ${f&&t.toLowerCase().includes(f)?'bg-amber-100 text-amber-700 ring-1 ring-amber-300':'bg-mint-500/10 text-mint-600'}">${t}</span>`).join('')}</div>
+  </div>`;
+}
+function mostraOfferte(f){
+  fonte.textContent="sample";
+  fonte.className="ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold bg-slate-100 text-slate-500";
+  const ff=(f||"").toLowerCase().trim();
+  const trovate=OFFERTE.filter(o=>!ff||[o.t,o.a,o.dove,...o.tec].join(" ").toLowerCase().includes(ff));
+  const chiare=trovate.slice(0,3).map(rigaOff).join('');
+  const sfocata=trovate.length>3?`
+    <div class="relative rounded-xl border border-slate-100 overflow-hidden">
+      <div class="blur-sm select-none pointer-events-none px-4 py-3"><b class="text-[14.5px]">████████████</b><div class="text-[12.5px] text-slate-500">████ · ████████</div></div>
+      <div class="absolute inset-0 grid place-items-center bg-white/55 backdrop-blur-[2px]">
+        <button onclick="apriModale()" class="rounded-lg bg-brand-500 px-4 py-2 text-[12.5px] font-bold text-white shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition">The full index unlocks with a trial key</button>
+      </div>
+    </div>`:'';
+  ris.innerHTML=trovate.length?chiare+sfocata
+    :`<div class="py-6 text-center text-sm text-slate-500">No match in this sample. The full index holds millions of postings.</div>`;
+}
+/* i due tab della demo: aziende (live) e offerte (campione) */
+let modoDemo="tec";
+const tabTec=document.getElementById('tab-tec'),tabOff=document.getElementById('tab-off');
+function dipingeTab(){
+  const on="rounded-lg bg-brand-500 text-white px-4 py-1.5 text-[13px] font-bold transition";
+  const off="rounded-lg bg-slate-100 text-slate-500 px-4 py-1.5 text-[13px] font-bold transition hover:bg-slate-200";
+  tabTec.className=modoDemo==="tec"?on:off; tabOff.className=modoDemo==="off"?on:off;
+}
+tabTec.onclick=()=>{modoDemo="tec";dipingeTab();q.placeholder="Type a technology, from SAP to forklift…";cerca(q.value);};
+tabOff.onclick=()=>{modoDemo="off";dipingeTab();q.placeholder="Type a role, a city, a technology…";cerca(q.value);};
 function cerca(f){
   spin.classList.remove('hidden');
   clearTimeout(timer);
   timer=setTimeout(async()=>{
     f=(f||"").trim();
     try{
-      if(f.length>=2){await mostraLive(f);}
+      if(modoDemo==="off"){mostraOfferte(f);}
+      else if(f.length>=2){await mostraLive(f);}
       else mostraLocale(f);
     }catch(e){mostraLocale(f);}
     spin.classList.add('hidden');
@@ -854,17 +979,26 @@ const copAzFallback=[["keywords",96.7],["languages",94.0],["headquarters",86.3],
 const tb=document.getElementById('tab-copertura');
 const tbAz=document.getElementById('tab-copertura-az');
 function fasciaColore(v){
-  if(v>=70)return["#3b6ef6","#0fbf9a","bg-mint-500/10 text-mint-600"];
-  if(v>=30)return["#8b5cf6","#3b6ef6","bg-brand-50 text-brand-600"];
-  return["#f59e0b","#f43f5e","bg-amber-50 text-amber-600"];
+  if(v>=70)return["#3b6ef6","#0fbf9a","bg-mint-500/10 text-mint-600","Solid coverage"];
+  if(v>=30)return["#8b5cf6","#3b6ef6","bg-brand-50 text-brand-600","Filling in"];
+  /* il buco resta dichiarato (e' il patto), ma in toni quieti:
+     la percentuale e' il dato, non il semaforo (28/09/2026) */
+  return["#cbd5e1","#94a3b8","bg-slate-100 text-slate-500","Declared gap"];
 }
 function disegnaCopertura(righe, tbody, nomi){
   tbody.innerHTML="";
+  let fasciaPre=null;
   righe.forEach(([tecnico,v],i)=>{
     const umano=nomi[tecnico]||tecnico;
+    const[c1,c2,pill,fascia]=fasciaColore(v);
+    if(fascia!==fasciaPre){
+      fasciaPre=fascia;
+      const th=document.createElement('tr');
+      th.innerHTML=`<td colspan="3" class="px-6 pt-5 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">${fascia}</td>`;
+      tbody.appendChild(th);
+    }
     const tr=document.createElement('tr');
     tr.className="hover:bg-slate-50/70 transition";
-    const[c1,c2,pill]=fasciaColore(v);
     tr.innerHTML=`<td class="px-6 py-3">
         <div class="font-semibold text-slate-800 text-[14.5px]">${umano}</div>
         <div class="font-mono text-[11px] text-slate-400 mt-0.5">${tecnico}</div></td>
@@ -950,7 +1084,7 @@ function aggiornaPrezzo(){
   const sconto=Math.round((1-unit/UNIT_ENTRATA)*100);
   const el=document.getElementById('pz-sconto');
   el.textContent=sconto>0?`−${sconto}% vs entry`:"entry rate";
-  el.className="ml-2 rounded-md px-2 py-0.5 text-[11px] "+(sconto>0?"bg-mint-500/10 text-mint-600":"bg-slate-100 text-slate-500");
+  el.className="ml-2 rounded-md px-2 py-0.5 text-[11px] "+(sconto>0?"bg-mint-500/15 text-mint-400":"bg-white/10 text-slate-400");
   document.getElementById('pz-barra').style.width=Math.max(4,Math.round(100*unit/UNIT_ENTRATA))+"%";
   sl.style.setProperty('--fill',(sl.value/10)+"%");
   const chips=[...CHIP_BASE];
@@ -958,7 +1092,7 @@ function aggiornaPrezzo(){
   if(c>=200000)chips.push("Delta feed: new · updated · closed");
   if(c>=1000000)chips.push("Historical backfill");
   document.getElementById('pz-incluso').innerHTML=chips.map(x=>
-    `<span class="rounded-lg bg-slate-100 text-slate-600 px-3 py-1.5 text-[12px] font-bold">✓ ${x}</span>`).join('');
+    `<span class="rounded-lg bg-white/10 text-slate-300 px-3 py-1.5 text-[12px] font-bold">✓ ${x}</span>`).join('');
 }
 sl.addEventListener('input',aggiornaPrezzo);
 aggiornaPrezzo();
