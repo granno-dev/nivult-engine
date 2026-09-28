@@ -10,8 +10,11 @@ smartrecruiters e ashby: stesso totale, stesso primo annuncio).
 
 Per ogni gruppo (platform_id, lower(slug)) con piu' di un tenant:
 
-  1. CANONICO: la forma tutta minuscola se esiste, altrimenti chi ha piu'
-     offerte, a parita' il piu' vecchio;
+  1. CANONICO: il tenant VIVO (attivo, con offerte) — la lezione di Lever,
+     che e' case-sensitive («academy» torna Document not found, «Academy»
+     torna le offerte, misurato il 28/09): la forma minuscola puo' essere
+     il guscio morto di una scoperta sbagliata. A parita' vince il
+     minuscolo, poi il piu' ricco, il piu' vecchio;
   2. PROVA CHE E' LA STESSA BACHECA: almeno il 40% degli external_id del
      duplicato deve esistere gia' sotto il canonico (misurato sul caso
      dominos: 95% — i gemelli leggono la stessa finestra ogni giro, le
@@ -57,14 +60,18 @@ def gruppi(conn, solo: str | None):
 
 
 def canonico_del(conn, pid: str, slugs: list[str]) -> str:
-    """La forma minuscola se c'e'; altrimenti il piu' ricco, a parita' il piu' vecchio."""
-    for s in slugs:
-        if s == s.lower():
-            return s
+    """Chi si tiene il nome? Prima il tenant VIVO (attivo e con offerte):
+    la lezione di Lever (28/09, case-sensitive: «academy» 404, «Academy»
+    vive) — la forma minuscola puo' essere il guscio morto e quella
+    maiuscola la bacheca vera. A parita' di vita vince il minuscolo, che
+    e' la forma normalizzata dal trigger; poi il piu' ricco, il piu'
+    vecchio."""
     r = conn.execute("""
         SELECT slug FROM ats_companies
         WHERE platform_id = %s AND slug = ANY(%s)
-        ORDER BY job_count DESC, created_at ASC, slug ASC LIMIT 1""", (pid, slugs)).fetchone()
+        ORDER BY is_active DESC, (job_count > 0) DESC,
+                 (slug = lower(slug)) DESC, job_count DESC, created_at ASC, slug ASC
+        LIMIT 1""", (pid, slugs)).fetchone()
     return r[0]
 
 
@@ -104,10 +111,28 @@ def fondi(conn, pid: str, canonico: str, dupe: str, applica: bool) -> dict:
         conn.commit()
         time.sleep(PAUSA)
     for i in range(0, len(togliere), LOTTO):
-        conn.execute("DELETE FROM ats_jobs WHERE id = ANY(%s::uuid[])", (togliere[i:i + LOTTO]))
+        conn.execute("DELETE FROM ats_jobs WHERE id = ANY(%s::uuid[])", (togliere[i:i + LOTTO],))
         conn.commit()
         time.sleep(PAUSA)
     return st
+
+
+def orfani_globali(conn, solo: str | None):
+    """(platform_id, slug) presenti in ats_jobs ma SENZA piu' una riga in
+    ats_companies, con un gemello minuscolo esistente: i resti di una
+    fusione interrotta a meta' (o di uno scraper in volo). E' cio' che
+    rende lo script riprendibile: qualunque cosa si sia fermata, il giro
+    dopo la raccoglie."""
+    righe = conn.execute("""
+        SELECT DISTINCT j.platform_id, j.slug FROM ats_jobs j
+        WHERE NOT EXISTS (SELECT 1 FROM ats_companies c
+                          WHERE c.platform_id = j.platform_id AND c.slug = j.slug)
+          AND EXISTS (SELECT 1 FROM ats_companies t
+                      WHERE t.platform_id = j.platform_id AND t.slug = lower(j.slug)
+                        AND t.slug <> j.slug)""").fetchall()
+    if solo:
+        righe = [r for r in righe if solo.lower() in r[1].lower()]
+    return righe
 
 
 def spazzata(conn, pid: str, canonico: str, dupe: str, applica: bool) -> dict:
@@ -125,12 +150,14 @@ def spazzata(conn, pid: str, canonico: str, dupe: str, applica: bool) -> dict:
     muovere = [i for i, e in righe if e not in ids_can]
     togliere = [i for i, e in righe if e in ids_can]
     if applica:
-        if muovere:
+        for i in range(0, len(muovere), LOTTO):
             conn.execute("UPDATE ats_jobs SET slug = %s WHERE id = ANY(%s::uuid[])",
-                         (canonico, muovere))
-        if togliere:
-            conn.execute("DELETE FROM ats_jobs WHERE id = ANY(%s::uuid[])", (togliere,))
-        conn.commit()
+                         (canonico, muovere[i:i + LOTTO]))
+            conn.commit()
+        for i in range(0, len(togliere), LOTTO):
+            conn.execute("DELETE FROM ats_jobs WHERE id = ANY(%s::uuid[])", (togliere[i:i + LOTTO],))
+            conn.commit()
+            time.sleep(PAUSA)
     return {"orfane": len(righe)}
 
 
@@ -163,6 +190,13 @@ def main() -> int:
                 if orf["orfane"]:
                     tot["orfane"] += orf["orfane"]
                     print(f"  spazzata: {orf['orfane']} orfane raccolte")
+        # i resti di fusioni interrotte (o dello scraper in volo): tenant
+        # spariti da ats_companies ma con righe ancora sotto il loro slug
+        for pid, dupe in orfani_globali(conn, a.solo):
+            orf = spazzata(conn, pid, dupe.lower(), dupe, a.applica)
+            if orf["orfane"]:
+                tot["orfane"] += orf["orfane"]
+                print(f"  orfani globali {pid}/{dupe!r}: {orf['orfane']} righe -> {dupe.lower()!r}")
     modo = "APPLICATO" if a.applica else "SOLO PIANO (niente scritture)"
     print(f"\n{modo} in {time.time() - t0:.0f}s: {tot['gruppi']} gruppi, {tot['fusi']} duplicati fusi, "
           f"{tot['saltati']} saltati, {tot['mosse']} righe spostate, "

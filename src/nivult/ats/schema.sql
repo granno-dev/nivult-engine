@@ -379,18 +379,22 @@ DO $$ BEGIN
 END $$;
 
 
--- SLUG TUTTI MINUSCOLI (28/09/2026). Le fonti consegnano lo slug con le
--- maiuscole a caso («Dominos» e «dominos» erano due tenant: 60.121 righe
--- dove ne bastavano ~30.000) e la chiave (platform_id, slug) non le vede
--- uguali: stessa bacheca letta due volte per migliaia di aziende. Le API
--- degli ATS sono case-insensitive (verificato dal vivo su smartrecruiters
--- e ashby: stesso totale, stesso primo annuncio), quindi il caso non
--- porta informazione e lo slug si normalizza all'ingresso — l'ON CONFLICT
--- (platform_id, slug) degli inserimenti fa il resto. I duplicati gia'
--- esistenti li fonde scripts/consolida_slug_caso.py.
+-- SLUG MINUSCOLI, SOLO DOVE E' SICURO (28/09/2026). Le fonti consegnano lo
+-- slug con le maiuscole a caso («Dominos» e «dominos» erano due tenant:
+-- 60.121 righe dove ne bastavano ~30.000) e la chiave (platform_id, slug)
+-- non le vede uguali: stessa bacheca letta due volte per migliaia di
+-- aziende. Si normalizza SOLO sulle piattaforme misurate case-insensitive
+-- dal vivo (smartrecruiters e ashby: stesso totale, stesso primo annuncio
+-- sotto le due forme). Lever NO: e' case-sensitive («academy» torna
+-- Document not found, «Academy» torna le offerte — misurato il 28/09) e
+-- abbassare lo slug renderebbe i tenant illeggibili. Sulle altre
+-- piattaforme, non verificate, non si tocca niente: i gemelli che
+-- sfuggono li raccoglie scripts/consolida_slug_caso.py.
 CREATE OR REPLACE FUNCTION ats_slug_minuscolo() RETURNS trigger AS $f$
 BEGIN
-    NEW.slug := lower(NEW.slug);
+    IF NEW.platform_id IN ('smartrecruiters', 'ashby') THEN
+        NEW.slug := lower(NEW.slug);
+    END IF;
     RETURN NEW;
 END $f$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS ats_companies_slug_minuscolo ON ats_companies;
