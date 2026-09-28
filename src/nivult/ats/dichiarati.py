@@ -479,7 +479,7 @@ def remoto(pid: str, r: dict) -> str | None:
     if pid == "smartrecruiters":
         return "remote" if str((r.get("location") or {}).get("remote")).lower() == "true" else None
     if pid == "arbetsformedlingen":
-        lab = (r.get("workplace_model") or {}).get("label", "")
+        lab = (r.get("workplace_model") or {}).get("label") or ""
         return "onsite" if "på plats" in lab else ("remote" if "distans" in lab.lower() else None)
     if pid == "icims":
         # «Regional» non dice se si sta in sede: resta fuori
