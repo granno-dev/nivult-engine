@@ -155,16 +155,16 @@ tailwind.config = {
         <div class="p-6 flex-1 flex flex-col justify-center">
           <div class="flex items-baseline gap-2">
             <b id="uso-val" class="text-4xl font-black tabular-nums bg-gradient-to-r from-violet-500 to-pink-500 bg-clip-text text-transparent">0</b>
-            <span class="text-[13px] text-slate-500">used of <span id="uso-max">1,000</span> this month</span>
+            <span class="text-[13px] text-slate-500">credits available</span>
           </div>
           <div class="mt-4 h-2.5 rounded-full bg-slate-100 overflow-hidden">
             <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700" style="width:0"></div>
           </div>
-          <div class="mt-4 flex items-center gap-2 text-[12px]">
-            <span class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
+          <div class="mt-4 flex items-center gap-2 text-[12px] flex-wrap">
+            <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold hidden"></span>
           </div>
-          <p class="mt-3 text-[12px] text-slate-400">Your free allowance resets on the 1st. Top-ups land here the moment you pay, never expire, and kick in when the free ones run out.</p>
+          <p class="mt-3 text-[12px] text-slate-400">The bar is this month's free allowance — it resets on the 1st. Top-ups kick in when the free ones run out and never expire.</p>
         </div>
       </div>
 
@@ -481,11 +481,15 @@ function disegna() {
   const tot = chiavi.filter(k => !k.revocata_il);
   const usati = tot.reduce((s, k) => s + (k.usati_mese || 0), 0);
   // il volume mensile e' DELL'ACCOUNT: il massimo fra le chiavi, non la
-  // somma. La ricarica comprata vive a parte e non scade mai.
+  // somma. Il numero eroe e' quanto RESTA da spendere (gratis rimasti +
+  // ricarica che non scade): il consumato e' dettaglio, non il titolo.
   const max = Math.max(0, ...tot.map(k => k.crediti_mensili || 0)) || 1000;
-  document.getElementById("uso-val").textContent = usati.toLocaleString("en-US");
-  document.getElementById("uso-max").textContent = max.toLocaleString("en-US");
+  const liberi = Math.max(0, max - usati);
+  document.getElementById("uso-val").textContent =
+    (liberi + creditiExtra).toLocaleString("en-US");
   document.getElementById("uso-barra").style.width = Math.min(100, Math.round(100 * usati / max)) + "%";
+  document.getElementById("uso-liberi").textContent =
+    liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " free left";
   const acc = document.getElementById("uso-acquistati");
   if (creditiExtra > 0) {
     acc.textContent = "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire";
