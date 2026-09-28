@@ -77,14 +77,11 @@ tailwind.config = {
         <p class="mt-2 text-sm text-slate-500">One account for the API, the exports and the credits. Your first 1,000 credits every month are free.</p>
 
         <div class="mt-6 grid gap-2.5">
-          <button onclick="oauth('google')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700">
-            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+          <button onclick="oauth('google')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700"><span class="h-5 w-5 grid place-items-center shrink-0"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg></span>
             Continue with Google</button>
-          <button onclick="oauth('microsoft')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700">
-            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#00a4ef" d="M1 13h10v10H1z"/><path fill="#7fba00" d="M13 1h10v10H13z"/><path fill="#ffb900" d="M13 13h10v10H13z"/></svg>
+          <button onclick="oauth('microsoft')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700"><span class="h-5 w-5 grid place-items-center shrink-0"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#00a4ef" d="M1 13h10v10H1z"/><path fill="#7fba00" d="M13 1h10v10H13z"/><path fill="#ffb900" d="M13 13h10v10H13z"/></svg></span>
             Continue with Microsoft</button>
-          <button onclick="oauth('github')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#1b1f23"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.54-3.87-1.54-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.41-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg>
+          <button onclick="oauth('github')" class="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 transition px-4 py-3 text-[14.5px] font-bold text-slate-700"><span class="h-5 w-5 grid place-items-center shrink-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="#1b1f23"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.54-3.87-1.54-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.41-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></span>
             Continue with GitHub</button>
         </div>
 
@@ -128,6 +125,7 @@ tailwind.config = {
     <div class="mt-8 grid lg:grid-cols-3 gap-5 items-stretch">
       <!-- chiavi -->
       <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
@@ -144,32 +142,36 @@ tailwind.config = {
 
       <!-- consumo -->
       <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 grid place-items-center shadow-md shadow-violet-500/25">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
           </div>
           <div>
-            <h2 class="text-[15px] font-bold tracking-tight">Credits this month</h2>
-            <p class="text-[11.5px] font-semibold text-violet-600">resets on the 1st · upgrades apply right away</p>
+            <h2 class="text-[15px] font-bold tracking-tight">Credits</h2>
+            <p class="text-[11.5px] font-semibold text-violet-600">free allowance + what you buy, one counter</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col justify-center">
           <div class="flex items-baseline gap-2">
             <b id="uso-val" class="text-4xl font-black tabular-nums bg-gradient-to-r from-violet-500 to-pink-500 bg-clip-text text-transparent">0</b>
-            <span class="text-[13px] text-slate-500">/ <span id="uso-max">1,000</span> used</span>
+            <span class="text-[13px] text-slate-500">used of <span id="uso-max">1,000</span> this month</span>
           </div>
           <div class="mt-4 h-2.5 rounded-full bg-slate-100 overflow-hidden">
             <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700" style="width:0"></div>
           </div>
-          <button onclick="scaricaExport()" id="export-btn" class="mt-5 w-full rounded-xl border border-violet-200 text-violet-600 px-4 py-2.5 text-[13px] font-bold hover:bg-violet-50 transition flex items-center justify-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            Download today's full export</button>
-          <p class="mt-2 text-[11px] text-slate-400 text-center">every posting, as JSONL · uses one credit</p>
+          <div class="mt-4 flex items-center gap-2 text-[12px]">
+            <span class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
+            <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold hidden"></span>
+          </div>
+          <p class="mt-3 text-[12px] text-slate-400">Free credits reset on the 1st. Anything you buy shows up in the total above, the moment you buy it.</p>
+        </div>
         </div>
       </div>
 
       <!-- acquisto -->
       <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
+        <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="4"/></svg>
@@ -181,10 +183,14 @@ tailwind.config = {
         </div>
         <div class="p-6 flex-1 flex flex-col">
           <div class="flex items-center justify-between">
-            <span id="buy-vol" class="text-xl font-black tabular-nums">100,000</span>
-            <span id="buy-prezzo" class="text-xl font-black tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">€229/mo</span>
+            <span id="buy-euro" class="text-xl font-black tabular-nums">€229</span>
+            <span class="text-right">
+              <span id="buy-vol" class="text-lg font-black tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">100,000</span>
+              <span class="block text-[11px] text-slate-400">credits</span>
+            </span>
           </div>
-          <input id="buy-slider" type="range" min="0" max="8" value="3" class="pz-slider mt-4 w-full" aria-label="Monthly volume">
+          <input id="buy-slider" type="range" min="25" max="2990" value="229" class="pz-slider mt-4 w-full" aria-label="Amount in euros">
+          <div class="mt-2 flex justify-between text-[11px] text-slate-400 font-semibold"><span>€25</span><span id="buy-unit">€2.29 per 1,000 calls</span><span>€2,990</span></div>
           <div class="mt-auto pt-5">
             <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3 font-bold text-white shadow-lg shadow-brand-500/25">Continue to checkout →</button>
             <p id="buy-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
@@ -254,6 +260,7 @@ tailwind.config = {
 
     <!-- ══ la guida per chi integra ══ -->
     <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
         <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg>
@@ -276,18 +283,70 @@ tailwind.config = {
             <span class="text-brand-500 font-black text-sm leading-none mt-0.5">i</span>
             <p id="guida-nota" class="text-[12.5px] text-slate-600"></p>
           </div>
-          <div class="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2">
-            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mr-1">quick reference</span>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/jobs</code>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/companies</code>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/changes?since=</code>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/coverage</code>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/exports/latest</code>
-            <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/usage</code>
-            <span class="text-[11.5px] text-slate-400 ml-auto font-mono">api.nivult.com · X-Api-Key header</span>
+          <div class="mt-5 pt-4 border-t border-slate-100">
+            <p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2.5">quick reference</p>
+            <div class="flex flex-wrap gap-2">
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/jobs</code>
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/companies</code>
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/changes?since=</code>
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/coverage</code>
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/exports/latest</code>
+              <code class="rounded-lg bg-slate-950 text-slate-300 px-2.5 py-1 text-[11.5px] font-mono">GET /v1/usage</code>
+            </div>
+            <p class="mt-2.5 text-[11.5px] text-slate-400 font-mono">api.nivult.com · your key travels in the X-Api-Key header</p>
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- ══ gli export filtrati, con stima del costo ══ -->
+    <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-500/10 to-transparent flex-wrap">
+        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-amber-500 to-pink-500 grid place-items-center shadow-md shadow-amber-500/25">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[15px] font-bold tracking-tight">Exports</h2>
+          <p class="text-[11.5px] font-semibold text-amber-600">filtered JSONL downloads, priced in credits</p>
+        </div>
+        <button onclick="apriExport()" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-[12.5px] font-bold text-white shadow-md shadow-brand-500/25">Build a download →</button>
+      </div>
+      <p class="px-6 py-4 text-[13.5px] text-slate-600">Choose a slice of the index — a country, a technology, a date — and download it as JSONL. You see the cost in credits before you spend anything.</p>
+    </div>
+  </div>
+
+  <!-- ══ il modale dell'export: filtri + stima, sfondo sfocato ══ -->
+  <div id="export-modale" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()"></div>
+    <div class="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
+      <button onclick="chiudiExport()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
+      <h3 class="text-xl font-black tracking-tight">Build a download</h3>
+      <p class="mt-1.5 text-sm text-slate-500">A filtered slice of today's export, as JSONL.</p>
+      <div class="mt-5 grid gap-4">
+        <div>
+          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Country</label>
+          <select id="ex-paese" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 transition">
+            <option value="">Everywhere</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Technology</label>
+          <input id="ex-tec" type="text" placeholder="optional — e.g. SAP"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+        </div>
+        <div>
+          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Posted since</label>
+          <input id="ex-dal" type="date"
+            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+        </div>
+      </div>
+      <div class="mt-5 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 flex items-center justify-between">
+        <span class="text-[12.5px] font-semibold text-slate-500">estimated cost</span>
+        <span id="ex-stima" class="text-[14px] font-black tabular-nums text-slate-900">—</span>
+      </div>
+      <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3.5 font-bold text-white shadow-lg shadow-brand-500/25">Download →</button>
+      <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
     </div>
   </div>
 </main>
@@ -392,10 +451,16 @@ function disegna() {
   }).join("");
   const tot = chiavi.filter(k => !k.revocata_il);
   const usati = tot.reduce((s, k) => s + (k.usati_mese || 0), 0);
-  const max = tot.reduce((s, k) => s + (k.crediti_mensili || 0), 0) || 1000;
+  // il volume e' DELL'ACCOUNT: il massimo fra le chiavi, non la somma
+  const max = Math.max(0, ...tot.map(k => k.crediti_mensili || 0)) || 1000;
   document.getElementById("uso-val").textContent = usati.toLocaleString("en-US");
   document.getElementById("uso-max").textContent = max.toLocaleString("en-US");
   document.getElementById("uso-barra").style.width = Math.min(100, Math.round(100 * usati / max)) + "%";
+  const acc = document.getElementById("uso-acquistati");
+  if (max > 1000) {
+    acc.textContent = "+" + (max - 1000).toLocaleString("en-US") + " purchased";
+    acc.classList.remove("hidden");
+  } else acc.classList.add("hidden");
 }
 function mostraChiaveNuova(chiave) {
   const box = document.getElementById("chiave-nuova");
@@ -419,57 +484,46 @@ function copiaChiave(btn) {
   navigator.clipboard.writeText(document.getElementById("chiave-nuova-val").textContent)
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
 }
-
-/* l'export del giorno, scaricato con la chiave dell'utente: la chiave
-   viaggia nell'header, mai nell'URL (le URL finiscono nei log) */
-async function scaricaExport() {
-  const btn = document.getElementById("export-btn");
-  const attive = chiavi.filter(k => !k.revocata_il);
-  if (!attive.length) { btn.textContent = "create a key first"; return; }
-  btn.textContent = "preparing…";
-  const chiave = attive[0];
-  /* la chiave in chiaro non la abbiamo piu' (solo l'hash): il download
-     passa dall'endpoint col Bearer della sessione, che risolve la
-     chiave dell'utente lato server */
-  const r = await api("/portale/export/offerte");
-  if (!r.ok) {
-    btn.textContent = r.status === 402 ? "daily export needs a plan of 50K+ credits"
-                                      : "not available right now";
-    setTimeout(() => btn.innerHTML = "Download today's full export", 2500);
-    return;
-  }
-  const blob = await r.blob();
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "nivult-jobs.jsonl.gz";
-  a.click();
-  URL.revokeObjectURL(a.href);
-  btn.innerHTML = "Download today's full export";
-  await carica();
-}
 function esci() {
   api("/auth/logout", { method: "POST" }).catch(() => {});
   setTok(""); mostraLogin();
 }
 
-/* ══ acquisto: stessa curva della landing ══ */
+/* ══ acquisto: l'importo lo sceglie il cliente, in euro, da 25 ══ */
+/* la stessa curva della landing, letta al contrario: dagli euro ai
+   crediti. Sotto i 49 EUR vale il prezzo d'ingresso (4,90 per mille). */
 const ANCORE = [[10000, 49], [25000, 89], [50000, 149], [100000, 229], [250000, 399],
                 [500000, 599], [1000000, 899], [2500000, 1790], [5000000, 2990]];
 const bsl = document.getElementById("buy-slider");
+function creditiPerEuro(e) {
+  if (e <= ANCORE[0][1]) return Math.round(e / ANCORE[0][1] * ANCORE[0][0] / 100) * 100;
+  for (let i = 1; i < ANCORE.length; i++) {
+    const [c1, p1] = ANCORE[i - 1], [c2, p2] = ANCORE[i];
+    if (e <= p2) {
+      const t = (Math.log(e) - Math.log(p1)) / (Math.log(p2) - Math.log(p1));
+      return Math.round(Math.exp(Math.log(c1) + t * (Math.log(c2) - Math.log(c1))) / 100) * 100;
+    }
+  }
+  return ANCORE[ANCORE.length - 1][0];
+}
 function aggiornaBuy() {
-  const [c, p] = ANCORE[+bsl.value];
+  const e = +bsl.value;
+  const c = creditiPerEuro(e);
+  document.getElementById("buy-euro").textContent = "€" + e.toLocaleString("en-US");
   document.getElementById("buy-vol").textContent = c.toLocaleString("en-US");
-  document.getElementById("buy-prezzo").textContent = "€" + p.toLocaleString("en-US") + "/mo";
-  bsl.style.setProperty("--fill", (bsl.value / 8 * 100) + "%");
+  document.getElementById("buy-unit").textContent =
+    "€" + (e / (c / 1000)).toFixed(2) + " per 1,000 calls";
+  bsl.style.setProperty("--fill", ((e - 25) / (2990 - 25) * 100) + "%");
 }
 bsl.addEventListener("input", aggiornaBuy);
 aggiornaBuy();
 async function compra() {
-  const [c] = ANCORE[+bsl.value];
+  const e = +bsl.value;
+  const c = creditiPerEuro(e);
   const r = await api("/me/checkout", { method: "POST", body: JSON.stringify({ volume: c }) });
   if (r.status === 503) {
     document.getElementById("buy-nota").innerHTML =
-      'Checkout opens soon. Meanwhile <a class="text-brand-600 font-bold" href="mailto:hello@nivult.com?subject=Volume%20' + c + '">write us</a> and we set it up by hand.';
+      'Checkout opens soon. Meanwhile <a class="text-brand-600 font-bold" href="mailto:hello@nivult.com?subject=Credits%20' + c + '">write us</a> and we set it up by hand.';
     return;
   }
   if (!r.ok) { alert("Something went wrong. Retry in a moment."); return; }
@@ -799,6 +853,61 @@ document.addEventListener("click", e => {
   if (!e.target.closest("#f-paese") && !e.target.closest("#f-paese-lista"))
     listaP.classList.add("hidden");
 });
+
+/* ══ l'export filtrato: stima prima, download dopo ══ */
+let exStimaTimer = null;
+function apriExport() {
+  const sel = document.getElementById("ex-paese");
+  if (sel.options.length <= 1)
+    PAESI.forEach(([n, c]) => sel.add(new Option(n + " (" + c + ")", c)));
+  document.getElementById("export-modale").classList.remove("hidden");
+  stimaExport();
+}
+function chiudiExport() { document.getElementById("export-modale").classList.add("hidden"); }
+function filtriExport() {
+  const f = {};
+  const p = document.getElementById("ex-paese").value;
+  const t = document.getElementById("ex-tec").value.trim();
+  const d = document.getElementById("ex-dal").value;
+  if (p) f.country = p;
+  if (t) f.technology = t;
+  if (d) f.dal = d;
+  return f;
+}
+async function stimaExport() {
+  const r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) });
+  if (!r.ok) return;
+  const d = await r.json();
+  document.getElementById("ex-stima").textContent =
+    d.righe.toLocaleString("en-US") + " rows · " + d.crediti.toLocaleString("en-US") + " credits";
+}
+["ex-paese", "ex-tec", "ex-dal"].forEach(id =>
+  document.getElementById(id).addEventListener("input", () => {
+    clearTimeout(exStimaTimer); exStimaTimer = setTimeout(stimaExport, 350);
+  }));
+async function scaricaExportFiltrato() {
+  const btn = document.getElementById("ex-vai");
+  btn.disabled = true; btn.textContent = "preparing…";
+  const r = await api("/portale/export/scarica", { method: "POST", body: JSON.stringify(filtriExport()) });
+  if (r.status === 429) {
+    document.getElementById("ex-nota").innerHTML = "Not enough credits for this slice — top up above and retry.";
+    btn.disabled = false; btn.textContent = "Download →";
+    return;
+  }
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = "Download →";
+    return;
+  }
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "nivult-export.jsonl.gz";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  btn.disabled = false; btn.textContent = "Download →";
+  chiudiExport();
+  await carica();
+}
 
 /* ══ avvio ══ */
 (async () => {

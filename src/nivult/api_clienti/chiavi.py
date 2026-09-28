@@ -124,18 +124,33 @@ def _consuma(chiave_id: str) -> int | None:
     vecchio il contatore riparte da 1, altrimenti sale di 1. E il TETTO e'
     nello stesso UPDATE (26/09/2026): prima si leggeva il contatore dalla
     cache del processo e con N worker il cliente riceveva N x crediti.
+
+    28/09/2026: il tetto per le chiavi del PORTALE e' dell'ACCOUNT, non
+    della chiave: la somma degli usati delle chiavi attive dell'utente
+    contro il volume massimo. Senza, N chiavi nuove erano N volte i
+    crediti gratis del mese. Le chiavi interne (user_id NULL) restano col
+    tetto proprio, com'e' sempre stato.
     Torna il conteggio dopo la scrittura, o None se il tetto e' pieno
     (o la chiave revocata — il chiamante distingue).
     """
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
-            "UPDATE api_chiavi SET "
-            "  usati_mese = CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                    THEN 1 ELSE usati_mese + 1 END, "
+            "UPDATE api_chiavi k SET "
+            "  usati_mese = CASE WHEN k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                    THEN 1 ELSE k.usati_mese + 1 END, "
             "  mese_uso   = date_trunc('month', CURRENT_DATE)::date "
-            "WHERE id = %s AND revoked_at IS NULL "
-            "  AND (mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "       OR usati_mese < crediti_mensili) "
+            "WHERE k.id = %s AND k.revoked_at IS NULL "
+            "  AND ( "
+            "    (k.user_id IS NULL AND (k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                            OR k.usati_mese < k.crediti_mensili)) "
+            "    OR (k.user_id IS NOT NULL AND "
+            "        (SELECT coalesce(sum(CASE WHEN o.mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                                  THEN 0 ELSE o.usati_mese END), 0) "
+            "           FROM api_chiavi o "
+            "          WHERE o.user_id = k.user_id AND o.revoked_at IS NULL) "
+            "        < (SELECT max(m.crediti_mensili) FROM api_chiavi m "
+            "            WHERE m.user_id = k.user_id AND m.revoked_at IS NULL)) "
+            "  ) "
             "RETURNING usati_mese",
             (chiave_id,))
         r = cur.fetchone()
@@ -196,7 +211,16 @@ def svuota_cache() -> None:
 
 
 def nuova(etichetta: str, crediti: int, user_id: str | None = None) -> tuple[str, str]:
-    """Crea la chiave e ritorna (chiave in chiaro, id). Si vede ORA, mai piu'."""
+    """Crea la chiave e ritorna (chiave in chiaro, id). Si vede ORA, mai piu'.
+
+    Per un utente del portale il volume e' DELL'ACCOUNT: la chiave nuova
+    eredita il volume massimo delle chiavi esistenti (28/09/2026 — prima
+    ogni chiave nasceva con 1.000 crediti suoi: N chiavi = N volte i
+    crediti gratis. Chiuso il giorno in cui l'abbiamo visto)."""
+    if user_id:
+        esistenti = lista_per_utente(user_id)
+        volumi = [r["crediti_mensili"] for r in esistenti if not r["revocata_il"]]
+        crediti = max(volumi) if volumi else crediti
     chiave = "nv_" + secrets.token_urlsafe(32)
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
@@ -278,6 +302,34 @@ def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
             "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
             (user_id, tipo, riferimento))
         return cur.fetchone() is not None
+
+
+def spendi_n_per_utente(user_id: str, n: int) -> bool:
+    """N crediti in una volta sola, atomici: l'export filtrato costa
+    righe/10.000. Tutto o niente: se il volume dell'account non basta,
+    non si addebita niente."""
+    attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
+    if not attive:
+        return False
+    kid = attive[0]["id"]
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE api_chiavi k SET "
+            "  usati_mese = CASE WHEN k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                    THEN %s ELSE k.usati_mese + %s END, "
+            "  mese_uso   = date_trunc('month', CURRENT_DATE)::date "
+            "WHERE k.id = %s AND k.revoked_at IS NULL "
+            "  AND (SELECT coalesce(sum(CASE WHEN o.mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                                THEN 0 ELSE o.usati_mese END), 0) "
+            "         FROM api_chiavi o "
+            "        WHERE o.user_id = k.user_id AND o.revoked_at IS NULL) + %s "
+            "      <= (SELECT max(m.crediti_mensili) FROM api_chiavi m "
+            "           WHERE m.user_id = k.user_id AND m.revoked_at IS NULL) "
+            "RETURNING usati_mese",
+            (n, n, kid, n))
+        r = cur.fetchone()
+        conn.commit()
+        return r is not None
 
 
 def lista() -> list[dict]:

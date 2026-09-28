@@ -272,6 +272,45 @@ def rivela_offerta(offerta_id: str) -> dict | None:
     return json.loads(r[0]) if r else None
 
 
+def _dove_export(filtri: dict) -> tuple[str, dict]:
+    """I filtri del download, condivisi fra stima e scrittura."""
+    dove = ["TRUE"]
+    par: dict = {}
+    if filtri.get("country"):
+        dove.append("country = $country")
+        par["country"] = str(filtri["country"])[:2].upper()
+    if filtri.get("technology"):
+        dove.append(_TEC.format(nome="technology"))
+        par["technology"] = str(filtri["technology"])
+    if filtri.get("dal"):
+        dove.append("posted_at >= CAST($dal AS TIMESTAMP)")
+        par["dal"] = _norm_ts(filtri["dal"])
+    return " AND ".join(dove), par
+
+
+def stima_export(filtri: dict) -> int:
+    """Quante righe uscirebbero: il costo in crediti si calcola su questo."""
+    dove, par = _dove_export(filtri)
+    with _lock:
+        return _conn().execute(
+            f"SELECT count(*) FROM offerte WHERE {dove}", par).fetchone()[0]
+
+
+def scrivi_export(filtri: dict, percorso: str) -> int:
+    """Scrive il JSONL filtrato e torna le righe scritte. Il download
+    del portale: la riga intera, gia' pagata in crediti."""
+    import gzip
+    dove, par = _dove_export(filtri)
+    with _lock:
+        righe = _conn().execute(
+            f"SELECT raw FROM offerte WHERE {dove} "
+            "ORDER BY posted_at DESC NULLS LAST", par).fetchall()
+    with gzip.open(percorso, "wt", encoding="utf-8") as f:
+        for (raw,) in righe:
+            f.write(raw + "\n")
+    return len(righe)
+
+
 def offerta_dettaglio_portale(offerta_id: str) -> dict | None:
     """Il dettaglio SENZA azienda ne' URL: il testo si legge gratis,
     l'identita' di chi assume si rivela. Toglie dal raw i tre campi

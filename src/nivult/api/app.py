@@ -1166,6 +1166,40 @@ def create_app() -> FastAPI:
         return FileResponse(percorso, media_type="application/gzip",
                             filename=os.path.basename(percorso))
 
+    # ── l'export filtrato del portale: stima il costo, poi scarica ──
+    @app.post("/portale/export/stima")
+    async def stima_export_portale(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        filtri = {k: v for k, v in (corpo or {}).items()
+                  if k in ("country", "technology", "dal") and v}
+        righe = _dati.stima_export(filtri)
+        # 1 credito ogni 10.000 righe, minimo 1: il prezzo e' il volume
+        return {"righe": righe, "crediti": max(1, righe // 10_000)}
+
+    @app.post("/portale/export/scarica")
+    async def scarica_export_portale(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        filtri = {k: v for k, v in (corpo or {}).items()
+                  if k in ("country", "technology", "dal") and v}
+        righe = _dati.stima_export(filtri)
+        costo = max(1, righe // 10_000)
+        if not _chiavi.spendi_n_per_utente(uid, costo):
+            raise HTTPException(429, "crediti insufficienti per questo export: "
+                                f"ne servono {costo}")
+        import tempfile
+        fd, percorso = tempfile.mkstemp(suffix=".jsonl.gz",
+                                        prefix="export-portale-")
+        os.close(fd)
+        scritte = _dati.scrivi_export(filtri, percorso)
+        return FileResponse(percorso, media_type="application/gzip",
+                            filename=f"nivult-{scritte}-righe.jsonl.gz")
+
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):
         """I volumi comprabili (configurati su Creem da noi)."""
