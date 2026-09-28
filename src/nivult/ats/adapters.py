@@ -398,6 +398,17 @@ class Workday(BaseAdapter):
     taglia la risposta: si spezza l'enumerazione per facet (sede, poi
     famiglia) finche' ogni fetta sta sotto il tetto — la tecnica
     documentata da chi fa questo per mestiere (JobsPipe, 26/09).
+
+    28/09/2026 — il tetto puo' essere BEN piu' basso e SILENZIOSO: alcune
+    bacheche (accenture, nvidia, leidos e altre venti) dichiarano un
+    `total` tondo (2.000) che e' il tetto di enumerazione, non la
+    dimensione vera (accenture: 43.028 misurati dai `count` dei facet).
+    Ogni riga oltre la finestra era invisibile, e dopo tre giorni senza
+    essere vista l'offerta moriva pur essendo viva — trovata una, reale,
+    su accenture (Gurugram, pubblicata il 24/09). Ora i totali tondi
+    scattano lo spezzamento ricorsivo con budget (`_enumera`): chi si
+    copre tutto torna completo con prova (carlislellc: 248), chi non si
+    copre si dichiara parziale invece di uccidere a rotazione.
     """
     platform_id = "workday"
 
@@ -409,10 +420,11 @@ class Workday(BaseAdapter):
         super().__init__(*a, **k)
         self.total_dichiarato: int | None = None   # il totale che Workday dichiara
 
-    def _leggi_fetta(self, url: str, facets: dict) -> list[dict]:
+    def _leggi_fetta(self, url: str, facets: dict) -> tuple[list[dict], int | None]:
         """Una fetta di enumerazione (un valore di facet o la board intera).
-        Pagina fino in fondo; misura il totale sulla prima chiamata."""
+        Pagina fino in fondo; ritorna (righe, totale dichiarato dalla fetta)."""
         out: list[dict] = []
+        dichiarato: int | None = None
         offset = 0
         while True:
             r = self.client.post(url, json={
@@ -441,8 +453,10 @@ class Workday(BaseAdapter):
                         raise LetturaFallita(200, str(r.url) + " (corpo non JSON)")
                     self.lettura_parziale = True
                     break
-            if offset == 0 and not facets:
-                self.total_dichiarato = corpo.get("total")
+            if offset == 0:
+                dichiarato = corpo.get("total")
+                if not facets:
+                    self.total_dichiarato = dichiarato
             postings = corpo.get("jobPostings", [])
             if not postings:
                 break
@@ -451,13 +465,27 @@ class Workday(BaseAdapter):
             totale = corpo.get("total") or 0
             if offset >= totale and totale:
                 break
-        return out
+        return out, dichiarato
 
-    def _facet_values(self, url: str, campo: str) -> list[str]:
-        """I valori di un facet (chiave `id` nella risposta CXS, misurato
-        su CVS il 26/09): una chiamata minima."""
+    def _sonda(self, url: str, facets: dict) -> int | None:
+        """Il totale dichiarato di una fetta con UNA chiamata (limit 1).
+        None se la risposta non si legge: la fetta non si e' letta."""
         r = self.client.post(url, json={
-            "appliedFacets": {}, "limit": 1, "offset": 0})
+            "appliedFacets": facets, "limit": 1, "offset": 0})
+        if r.status_code != 200:
+            return None
+        try:
+            return r.json().get("total")
+        except json.JSONDecodeError:   # come _leggi_fetta: 200 HTML dal WAF
+            return None
+
+    def _facet_values(self, url: str, campo: str, facets: dict) -> list[tuple[str, int]]:
+        """I valori di un facet col CONTEGGIO VERO di ciascuno, dentro la
+        fetta corrente (chiavi `id` e `count`, misurate su accenture il
+        28/09: la count dice 43.028 dove il `total` delle query si ferma
+        a 2.000)."""
+        r = self.client.post(url, json={
+            "appliedFacets": facets, "limit": 1, "offset": 0})
         if r.status_code != 200:
             return []
         try:
@@ -466,8 +494,106 @@ class Workday(BaseAdapter):
             return []
         for f in corpo.get("facets", []):
             if f.get("facetParameter") == campo:
-                return [v["id"] for v in f.get("values", []) if v.get("id")]
+                return [(v["id"], v.get("count") or 0)
+                        for v in f.get("values", []) if v.get("id")]
         return []
+
+    @staticmethod
+    def _totale_tondo(t: int | None) -> bool:
+        """Un totale tondo (2.000, 10.000) non e' la dimensione della
+        bacheca: e' il tetto di enumerazione della CXS. Scoperto il 28/09
+        su accenture — dichiarati 2.000, annunci veri 43.028, e un
+        annuncio VIVO in CXS-dettaglio sparito dalla finestra e fatto
+        scadere: con la riconciliazione sul numero troncato la lettura
+        passava sempre il 95%, e le offerte fuori finestra morivano a
+        rotazione. Sedici tenant nello stesso stato (nvidia, leidos,
+        genpact, bah, trinityhealth…), tutti esattamente a 2.000."""
+        return bool(t) and t >= 1000 and t % 1000 == 0
+
+    def _facet_ricco(self, url: str, facets: dict, esclusi: tuple = ()) -> str | None:
+        """Il facet con piu' valori fra quelli non gia' usati per spezzare,
+        dentro la fetta corrente."""
+        r = self.client.post(url, json={"appliedFacets": facets, "limit": 1, "offset": 0})
+        if r.status_code != 200:
+            return None
+        try:
+            cand = sorted((f for f in r.json().get("facets", [])
+                           if f.get("facetParameter") not in esclusi),
+                          key=lambda f: -len(f.get("values", [])))
+        except json.JSONDecodeError:   # come _leggi_fetta: 200 HTML dal WAF
+            return None
+        return cand[0].get("facetParameter") if cand else None
+
+    # oltre il budget la ricorsione si ferma e la lettura si dichiara
+    # parziale: accenture da sola varrebbe ~2.400 chiamate (28/09)
+    BUDGET_CHIAMATE = 3500
+    # margine sotto il tetto dei 2.000: una fetta con count vera minore si
+    # legge diretta, senza sonda ne' spezzamento
+    SOTTO_TETTO = 1900
+
+    def _enumera(self, url: str, facets: dict, usati: tuple,
+                 raccolta: list, budget: list, dichiarato_noto: int | None = None) -> bool:
+        """Enumera una fetta in `raccolta`; se e' troncata (oltre 10.000, o
+        totale tondo = tetto CXS) la spezza col facet piu' ricco non
+        ancora usato, fino a due livelli e dentro un budget di chiamate.
+        Torna True solo se ogni fetta e' stata letta fino in fondo."""
+        if budget[0] <= 0:
+            return False
+        if dichiarato_noto is None:
+            dichiarato = self._sonda(url, facets)
+            budget[0] -= 1
+        else:
+            dichiarato = dichiarato_noto
+        if dichiarato is None:
+            self.lettura_parziale = True
+            return False
+        if dichiarato == 0:
+            return True
+        troncata = dichiarato > self.TETTO_QUERY or self._totale_tondo(dichiarato)
+        if not troncata:
+            righe, _ = self._leggi_fetta(url, facets)
+            budget[0] -= (len(righe) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA
+            raccolta.extend(righe)
+            return True
+        if len(usati) >= 2:
+            # ultimo livello: si prende la finestra che c'e' e si dichiara
+            righe, _ = self._leggi_fetta(url, facets)
+            budget[0] -= (len(righe) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA
+            raccolta.extend(righe)
+            return False
+        facet = self._facet_ricco(url, facets, esclusi=usati)
+        budget[0] -= 1
+        if not facet:
+            righe, _ = self._leggi_fetta(url, facets)
+            budget[0] -= (len(righe) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA
+            raccolta.extend(righe)
+            return False
+        valori = self._facet_values(url, facet, facets)
+        budget[0] -= 1
+        if not valori:
+            # il facet scelto non da valori: la fetta resta troncata, si
+            # prende la finestra e si dichiara (mai «completa» per errore)
+            righe, _ = self._leggi_fetta(url, facets)
+            budget[0] -= (len(righe) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA
+            raccolta.extend(righe)
+            return False
+        completa = True
+        for val, conto in valori:
+            if budget[0] <= 0:
+                completa = False
+                break
+            if conto and conto < self.SOTTO_TETTO:
+                # la count vera sta sotto il tetto: lettura diretta, e se
+                # torna corta (la count mentiva) si dichiara incompleta
+                righe, _ = self._leggi_fetta(url, {**facets, facet: [val]})
+                budget[0] -= (len(righe) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA
+                raccolta.extend(righe)
+                if len(righe) < conto * 0.95:
+                    completa = False
+                continue
+            if not self._enumera(url, {**facets, facet: [val]}, usati + (facet,), raccolta, budget):
+                completa = False
+        return completa
 
     def jobs(self, slug: str, wd_server: str | None = None,
              wd_instance: str | None = None) -> list[AtsJob]:
@@ -477,35 +603,16 @@ class Workday(BaseAdapter):
         url = (f"https://{slug}.{wd_server}.myworkdayjobs.com"
                f"/wday/cxs/{slug}/{wd_instance}/jobs")
 
-        # prima la board intera: sotto il tetto della CXS basta lei
-        grezzi = self._leggi_fetta(url, {})
-        if (self.total_dichiarato or 0) > self.TETTO_QUERY:
-            # oltre il tetto la CXS tronca: si spezza per il facet piu'
-            # ricco (misurato su CVS 26/09: jobFamilyGroup con 24 valori;
-            # «locations» non esiste ovunque). Una fetta per valore.
-            facet = None
-            r = self.client.post(url, json={"appliedFacets": {}, "limit": 1, "offset": 0})
-            if r.status_code == 200:
-                try:
-                    cand = sorted(r.json().get("facets", []),
-                                  key=lambda f: -len(f.get("values", [])))
-                except json.JSONDecodeError:   # come _leggi_fetta: 200 HTML dal WAF
-                    cand = []
-                if cand:
-                    facet = cand[0].get("facetParameter")
-            if facet:
-                # 26/09: la board gia' letta NON si butta (copre chi non ha
-                # il facet), e ogni fetta dichiara se ha toccato il tetto:
-                # la somma si riconcilia col totale dichiarato alla fine.
-                per_fetta: list[dict] = []
-                for val in self._facet_values(url, facet):
-                    fetta = self._leggi_fetta(url, {facet: [val]})
-                    if len(fetta) >= self.TETTO_QUERY:
-                        self.lettura_parziale = True   # la fetta stessa e' troppo grande
-                    per_fetta.extend(fetta)
-                grezzi.extend(per_fetta)
-            else:
-                # niente facets: resta la lettura troncata e si dichiara
+        # la finestra della board (copre chi non ha il facet) e poi, se il
+        # totale e' troncato (oltre 10.000 o tondo = tetto CXS, vedi
+        # _totale_tondo), lo spezzamento per facet dentro un budget.
+        grezzi: list[dict] = []
+        board, _ = self._leggi_fetta(url, {})
+        grezzi.extend(board)
+        if (self.total_dichiarato or 0) > self.TETTO_QUERY or self._totale_tondo(self.total_dichiarato):
+            budget = [self.BUDGET_CHIAMATE - (len(board) + self.LIMITE_PAGINA - 1) // self.LIMITE_PAGINA]
+            if not self._enumera(url, {}, (), grezzi, budget,
+                                 dichiarato_noto=self.total_dichiarato):
                 self.lettura_parziale = True
         visti: dict[str, AtsJob] = {}
         out = []
@@ -548,9 +655,10 @@ class Workday(BaseAdapter):
         # dichiarava parziali letture complete (misurato dal vivo: mango
         # 350 annunci su 1.665 righe, ezcorp 592/699, carlislellc
         # 248/2.000). La completezza si misura sulle righe enumerate:
-        # se ne mancano, qualcosa si e' interrotto davvero.
-        if (self.total_dichiarato and
-                len(grezzi) < self.total_dichiarato * 0.95):
+        # se ne mancano, qualcosa si e' interrotto davvero. MA non su un
+        # totale tondo: quello e' il tetto CXS, e la prova e' _enumera.
+        if (self.total_dichiarato and not self._totale_tondo(self.total_dichiarato)
+                and len(grezzi) < self.total_dichiarato * 0.95):
             self.lettura_parziale = True
         return out
 
