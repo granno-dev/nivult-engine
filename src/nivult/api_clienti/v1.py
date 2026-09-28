@@ -239,3 +239,19 @@ def demo_stats(request: Request):
     la superficie d'attacco e' il nulla, e' il punto (26/09/2026)."""
     _demo_gate(request)
     return dati.demo_stats()
+
+
+# Il campione dell'export e' pubblico per scelta: la merce si ispeziona
+# prima di pagare. Percorso chiuso nel codice, niente input dal client.
+CAMPIONE_EXPORT = "/opt/nivult/exports/offerte-attive-campione-ultimo.jsonl.gz"
+
+
+@router.get("/demo/export-campione")
+def demo_export_campione(request: Request):
+    """Il campione gratuito dell'export offerte, senza chiave (28/09/2026):
+    la landing lo linka, il buyer lo apre. Stessa difesa della demo."""
+    _demo_gate(request)
+    if not os.path.isfile(CAMPIONE_EXPORT):
+        raise HTTPException(404, "campione non disponibile oggi")
+    return FileResponse(CAMPIONE_EXPORT, media_type="application/gzip",
+                        filename="nivult-campione.jsonl.gz")

@@ -361,6 +361,16 @@ def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
         return cur.fetchone() is not None
 
 
+def conta_rivelazioni(user_id: str) -> int:
+    """Quante rivelazioni ha in cassaforte l'utente: il cruscotto lo
+    mostra («hai rivelato N aziende») — sono crediti spesi che TORNANO,
+    perche' una rivelata non si ripaga mai due volte (28/09/2026)."""
+    with psycopg.connect(_url()) as conn:
+        return conn.execute(
+            "SELECT count(*) FROM portale_rivelazioni WHERE user_id = %s",
+            (user_id,)).fetchone()[0]
+
+
 def rivelate_per_utente(user_id: str, tipo: str,
                         riferimenti: list[str]) -> set:
     """Quali di questi riferimenti sono gia' dell'utente (una query sola:

@@ -1012,11 +1012,13 @@ def create_app() -> FastAPI:
     def mie_chiavi(uid: str = Depends(utente)):
         extra = _chiavi.extra_per_utente(uid)
         lista, trial = _chiavi.trial_per_utente(uid)
+        rivelazioni = _chiavi.conta_rivelazioni(uid)
         if lista:
-            return {"chiavi": lista, "extra": extra}
+            return {"chiavi": lista, "extra": extra, "rivelazioni": rivelazioni}
         # primo accesso: la chiave trial SI MOSTRA in chiaro questa
         # volta sola — in tabella resta solo l'hash
         return {"chiavi": _chiavi.lista_per_utente(uid), "extra": extra,
+                "rivelazioni": rivelazioni,
                 "chiave_nuova": trial,
                 "nota": "la chiave si vede solo ora: conservala tu"}
 
