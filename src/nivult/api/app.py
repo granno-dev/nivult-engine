@@ -33,6 +33,7 @@ from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
                                RedirectResponse)
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
 
 from nivult import auth, oauth
@@ -1167,6 +1168,19 @@ def create_app() -> FastAPI:
                             filename=os.path.basename(percorso))
 
     # ── l'export filtrato del portale: stima il costo, poi scarica ──
+    # Il prezzo (28/09/2026): 1 credito ogni 100 righe, per eccesso.
+    # Prima era 1 ogni 10.000: l'INTERO dataset veniva 292 crediti,
+    # meno di un euro al listino — svenduto. E un tetto: sopra le
+    # 250.000 righe il file non e' piu' un download da browser, e la
+    # stima lo dice prima di spendere.
+    EXPORT_RIGHE_PER_CREDITO = 100
+    # il tetto tiene conto di Cloudflare: oltre i 100 secondi di attesa la
+    # risposta cade; misurato il 28/09: 83k righe = ~55s di preparazione.
+    EXPORT_TETTO_RIGHE = 100_000
+
+    def _prezzo_export(righe: int) -> int:
+        return max(1, -(-righe // EXPORT_RIGHE_PER_CREDITO))
+
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
         try:
@@ -1175,9 +1189,12 @@ def create_app() -> FastAPI:
             corpo = {}
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "technology", "dal") and v}
-        righe = _dati.stima_export(filtri)
-        # 1 credito ogni 10.000 righe, minimo 1: il prezzo e' il volume
-        return {"righe": righe, "crediti": max(1, righe // 10_000)}
+        righe = await run_in_threadpool(_dati.stima_export, filtri)
+        saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
+        return {"righe": righe, "crediti": _prezzo_export(righe),
+                "saldo": saldo,
+                "tetto": EXPORT_TETTO_RIGHE,
+                "troppo": righe > EXPORT_TETTO_RIGHE}
 
     @app.post("/portale/export/scarica")
     async def scarica_export_portale(request: Request, uid: str = Depends(utente)):
@@ -1187,18 +1204,37 @@ def create_app() -> FastAPI:
             corpo = {}
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "technology", "dal") and v}
-        righe = _dati.stima_export(filtri)
-        costo = max(1, righe // 10_000)
-        if not _chiavi.spendi_n_per_utente(uid, costo):
-            raise HTTPException(429, "crediti insufficienti per questo export: "
-                                f"ne servono {costo}")
+        # DuckDB e Postgres qui sotto sono chiamate SINCROME e pesanti:
+        # sul thread dell'event loop un export lento inchioda TUTTA l'API
+        # (misurato il 28/09/2026: API muta 10 minuti per un download da
+        # 937 righe). Si girano al pool di thread.
+        righe = await run_in_threadpool(_dati.stima_export, filtri)
+        if righe > EXPORT_TETTO_RIGHE:
+            raise HTTPException(413, f"questa fetta ha {righe} righe: oltre il "
+                                f"tetto di {EXPORT_TETTO_RIGHE}. Stringi i "
+                                "filtri o scrivici per l'export completo")
+        costo = _prezzo_export(righe)
+        # Prima si SCRIVE il file, poi si paga: se la scrittura fallisce
+        # nessun credito bruciato; se il saldo non basta, il file si butta.
         import tempfile
         fd, percorso = tempfile.mkstemp(suffix=".jsonl.gz",
                                         prefix="export-portale-")
         os.close(fd)
-        scritte = _dati.scrivi_export(filtri, percorso)
+        try:
+            scritte = await run_in_threadpool(
+                _dati.scrivi_export, filtri, percorso, EXPORT_TETTO_RIGHE)
+        except Exception:                            # noqa: BLE001
+            os.unlink(percorso)
+            raise
+        if not await run_in_threadpool(_chiavi.spendi_n_per_utente, uid, costo):
+            os.unlink(percorso)
+            raise HTTPException(429, "crediti insufficienti per questo export: "
+                                f"ne servono {costo}")
+        sfondo = BackgroundTasks()
+        sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
         return FileResponse(percorso, media_type="application/gzip",
-                            filename=f"nivult-{scritte}-righe.jsonl.gz")
+                            filename=f"nivult-{scritte}-righe.jsonl.gz",
+                            background=sfondo)
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):

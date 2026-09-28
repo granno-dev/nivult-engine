@@ -318,34 +318,62 @@ tailwind.config = {
   <!-- ══ il modale dell'export: filtri + stima, sfondo sfocato ══ -->
   <div id="export-modale" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()"></div>
-    <div class="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl">
-      <button onclick="chiudiExport()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
-      <h3 class="text-xl font-black tracking-tight">Build a download</h3>
-      <p class="mt-1.5 text-sm text-slate-500">A filtered slice of today's export, as JSONL.</p>
-      <div class="mt-5 grid gap-4">
-        <div>
-          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Country</label>
-          <select id="ex-paese" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 transition">
-            <option value="">Everywhere</option>
-          </select>
+    <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
+      <div class="h-1.5 bg-gradient-to-r from-amber-500 via-pink-500 to-violet-500"></div>
+      <button onclick="chiudiExport()" class="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
+      <div class="p-8">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-pink-500 grid place-items-center shadow-md shadow-amber-500/25 shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </div>
+          <div>
+            <h3 class="text-xl font-black tracking-tight">Build a download</h3>
+            <p class="text-[13px] text-slate-500">A filtered slice of today's index, as JSONL. Every row is the full record.</p>
+          </div>
         </div>
-        <div>
-          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Technology</label>
-          <input id="ex-tec" type="text" placeholder="optional — e.g. SAP"
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+        <div class="mt-6 grid gap-4">
+          <div>
+            <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Country</label>
+            <select id="ex-paese" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 transition">
+              <option value="">Everywhere</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Technology</label>
+              <input id="ex-tec" type="text" placeholder="e.g. SAP"
+                class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+            </div>
+            <div>
+              <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Posted since</label>
+              <input id="ex-dal" type="date"
+                class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+            </div>
+          </div>
         </div>
-        <div>
-          <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Posted since</label>
-          <input id="ex-dal" type="date"
-            class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+
+        <!-- il conto, prima di spendere -->
+        <div class="mt-6 rounded-xl border border-slate-200 overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 flex items-center justify-between gap-3">
+            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">your slice</span>
+            <span id="ex-righe" class="text-[15px] font-black tabular-nums text-slate-900">—</span>
+          </div>
+          <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
+            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">price · 1 credit / 100 rows</span>
+            <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent">—</span>
+          </div>
+          <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
+            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">you have</span>
+            <span id="ex-saldo" class="text-[15px] font-black tabular-nums text-slate-900">—</span>
+          </div>
         </div>
+
+        <p id="ex-avviso" class="hidden mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed"></p>
+
+        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3.5 font-bold text-white shadow-lg shadow-brand-500/25 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none" disabled>Download →</button>
+        <button id="ex-ricarica" onclick="vaiAllaRicarica()" class="hidden mt-3 w-full rounded-xl border-2 border-brand-500/60 text-brand-600 hover:bg-brand-50 transition py-3 font-bold">Top up to download this slice →</button>
+        <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
       </div>
-      <div class="mt-5 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 flex items-center justify-between">
-        <span class="text-[12.5px] font-semibold text-slate-500">estimated cost</span>
-        <span id="ex-stima" class="text-[14px] font-black tabular-nums text-slate-900">—</span>
-      </div>
-      <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3.5 font-bold text-white shadow-lg shadow-brand-500/25">Download →</button>
-      <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
     </div>
   </div>
 </main>
@@ -860,7 +888,7 @@ document.addEventListener("click", e => {
 });
 
 /* ══ l'export filtrato: stima prima, download dopo ══ */
-let exStimaTimer = null;
+let exStimaTimer = null, exDati = null;
 function apriExport() {
   const sel = document.getElementById("ex-paese");
   if (sel.options.length <= 1)
@@ -879,12 +907,54 @@ function filtriExport() {
   if (d) f.dal = d;
   return f;
 }
+function euroPer(crediti) {
+  /* il minimo slider che copre il conto: la curva e' crescente, si
+     scansisce e basta */
+  for (let e = 25; e <= 2990; e++) if (creditiPerEuro(e) >= crediti) return e;
+  return 2990;
+}
 async function stimaExport() {
+  const avviso = document.getElementById("ex-avviso");
+  const vai = document.getElementById("ex-vai");
+  const ricarica = document.getElementById("ex-ricarica");
+  ["ex-righe", "ex-costo", "ex-saldo"].forEach(id =>
+    document.getElementById(id).textContent = "…");
+  vai.disabled = true; ricarica.classList.add("hidden"); avviso.classList.add("hidden");
   const r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) });
-  if (!r.ok) return;
-  const d = await r.json();
-  document.getElementById("ex-stima").textContent =
-    d.righe.toLocaleString("en-US") + " rows · " + d.crediti.toLocaleString("en-US") + " credits";
+  if (!r.ok) { ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—"); return; }
+  const d = await r.json(); exDati = d;
+  document.getElementById("ex-righe").textContent = d.righe.toLocaleString("en-US") + " rows";
+  document.getElementById("ex-costo").textContent = d.crediti.toLocaleString("en-US") + " credits";
+  const saldoEl = document.getElementById("ex-saldo");
+  saldoEl.textContent = d.saldo.toLocaleString("en-US") + " credits";
+  saldoEl.className = "text-[15px] font-black tabular-nums " + (d.saldo >= d.crediti ? "text-mint-600" : "text-rose-500");
+  if (d.troppo) {
+    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-amber-50 border border-amber-200 text-amber-800";
+    avviso.innerHTML = "This slice is <b>" + d.righe.toLocaleString("en-US") + " rows</b> — past the " + d.tetto.toLocaleString("en-US") +
+      "-row ceiling for a browser download. Narrow the filters, or <a class='underline font-bold' href='mailto:hello@nivult.com?subject=Full%20feed'>ask us about the full feed</a>.";
+    avviso.classList.remove("hidden");
+    return;
+  }
+  if (d.saldo < d.crediti) {
+    const mancano = d.crediti - d.saldo;
+    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-rose-50 border border-rose-200 text-rose-700";
+    avviso.innerHTML = "You're short <b>" + mancano.toLocaleString("en-US") + " credits</b> for this slice.";
+    avviso.classList.remove("hidden");
+    ricarica.textContent = "Top up €" + euroPer(mancano) + " to download this slice →";
+    ricarica.classList.remove("hidden");
+    return;
+  }
+  vai.disabled = d.righe === 0;
+}
+function vaiAllaRicarica() {
+  if (exDati) {
+    const mancano = exDati.crediti - exDati.saldo;
+    const bsl = document.getElementById("buy-slider");
+    bsl.value = euroPer(Math.max(mancano, 1));
+    bsl.dispatchEvent(new Event("input"));
+  }
+  chiudiExport();
+  document.getElementById("buy-slider").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 ["ex-paese", "ex-tec", "ex-dal"].forEach(id =>
   document.getElementById(id).addEventListener("input", () => {
@@ -892,14 +962,16 @@ async function stimaExport() {
   }));
 async function scaricaExportFiltrato() {
   const btn = document.getElementById("ex-vai");
-  btn.disabled = true; btn.textContent = "preparing…";
+  const nota = document.getElementById("ex-nota");
+  btn.disabled = true; btn.textContent = "Preparing the file…"; nota.textContent = "";
   const r = await api("/portale/export/scarica", { method: "POST", body: JSON.stringify(filtriExport()) });
   if (r.status === 429) {
-    document.getElementById("ex-nota").innerHTML = "Not enough credits for this slice — top up above and retry.";
-    btn.disabled = false; btn.textContent = "Download →";
+    await stimaExport();   // mostra lo stato «crediti insufficienti»
+    btn.textContent = "Download →";
     return;
   }
   if (!r.ok) {
+    nota.textContent = "The download failed before charging you — no credits spent. Retry in a moment.";
     btn.disabled = false; btn.textContent = "Download →";
     return;
   }

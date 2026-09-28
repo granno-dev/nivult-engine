@@ -71,6 +71,15 @@ def _conn() -> duckdb.DuckDBPyConnection:
             _con = None
         if _con is None:
             _con = duckdb.connect(_percorso, read_only=True)
+            # 28/09/2026: senza un tetto di memoria, leggere la colonna
+            # `raw` (17 GB) con qualunque filtro gonfiava il processo
+            # finche' il kernel lo ammazzava (misurato: 4,9 GB di RSS
+            # per 937 righe; con il tetto: 1,2 GB e 25s). DuckDB oltre il
+            # tetto svuota su disco — sul volume, non sul root da 75 GB.
+            tmp = os.path.join(os.path.dirname(_percorso), "duckdb-tmp")
+            os.makedirs(tmp, exist_ok=True)
+            _con.execute("SET memory_limit = '1500MB'")
+            _con.execute(f"SET temp_directory = '{tmp}'")
             _con_mtime = m
         return _con
 
@@ -280,7 +289,9 @@ def rivela_offerta(offerta_id: str) -> dict | None:
 
 def _dove_export(filtri: dict) -> tuple[str, dict]:
     """I filtri del download, condivisi fra stima e scrittura."""
-    dove = ["TRUE"]
+    # posted_at nel futuro (data d'inizio contratto): mai venduta come
+    # data di pubblicazione, la stessa guardia delle ricerche (28/09).
+    dove = ["(posted_at IS NULL OR posted_at <= current_timestamp)"]
     par: dict = {}
     if filtri.get("country"):
         dove.append("country = $country")
@@ -302,19 +313,48 @@ def stima_export(filtri: dict) -> int:
             f"SELECT count(*) FROM offerte WHERE {dove}", par).fetchone()[0]
 
 
-def scrivi_export(filtri: dict, percorso: str) -> int:
+def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
     """Scrive il JSONL filtrato e torna le righe scritte. Il download
-    del portale: la riga intera, gia' pagata in crediti."""
+    del portale: la riga intera, gia' pagata in crediti.
+
+    La strada misurata il 28/09/2026 (due OOM-kill e un box in ginocchio
+    per impararla): `SELECT raw` filtrata fa leggere a DuckDB l'intera
+    colonna da 17 GB; fetchall di una fetta grossa materializza ~25 KB a
+    riga in RAM python (83k righe = 2,3 GB). Quindi: una TEMP TABLE su
+    una CONNESSIONE DEDICATA (il build da ~1 min non tiene il lock delle
+    ricerche), che sotto memory_limit svuota su disco, poi lettura a
+    pezzi da 10.000 — RSS misurato 1,8 GB e stabile. Se `tetto` e' >0 e
+    le righe lo superano, alza ValueError: il chiamante ha gia' rifiutato
+    la stima, questa e' la cintura."""
     import gzip
     dove, par = _dove_export(filtri)
-    with _lock:
-        righe = _conn().execute(
-            f"SELECT raw FROM offerte WHERE {dove} "
-            "ORDER BY posted_at DESC NULLS LAST", par).fetchall()
-    with gzip.open(percorso, "wt", encoding="utf-8") as f:
-        for (raw,) in righe:
-            f.write(raw + "\n")
-    return len(righe)
+    nome = f"ex_{int(time.time() * 1000)}"   # solo cifre: nome sicuro
+    tmp = os.path.join(os.path.dirname(_percorso), "duckdb-tmp")
+    os.makedirs(tmp, exist_ok=True)
+    con = duckdb.connect(_percorso, read_only=True)
+    try:
+        con.execute("SET memory_limit = '1500MB'")
+        con.execute(f"SET temp_directory = '{tmp}'")
+        con.execute(
+            f"CREATE TEMP TABLE {nome} AS SELECT raw FROM offerte "
+            f"WHERE {dove} ORDER BY posted_at DESC NULLS LAST, id", par)
+        tot = con.execute(f"SELECT count(*) FROM {nome}").fetchone()[0]
+        if tetto and tot > tetto:
+            raise ValueError(f"export oltre il tetto ({tetto} righe)")
+        scritte = 0
+        with gzip.open(percorso, "wt", encoding="utf-8") as f:
+            while True:
+                pezzo = con.execute(
+                    f"SELECT raw FROM {nome} LIMIT 10000 "
+                    f"OFFSET {scritte}").fetchall()
+                if not pezzo:
+                    break
+                for (raw,) in pezzo:
+                    f.write(raw + "\n")
+                scritte += len(pezzo)
+        return scritte
+    finally:
+        con.close()
 
 
 def offerta_dettaglio_portale(offerta_id: str) -> dict | None:

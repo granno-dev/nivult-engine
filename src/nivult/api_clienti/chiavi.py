@@ -332,6 +332,21 @@ def spendi_n_per_utente(user_id: str, n: int) -> bool:
         return r is not None
 
 
+def saldo_per_utente(user_id: str) -> int:
+    """Quanti crediti restano all'ACCOUNT questo mese: il volume massimo
+    meno la somma degli usati delle chiavi attive (stessa semantica del
+    tetto in _consuma: il contatore di un mese vecchio non pesa).
+    Il modale dell'export lo mostra prima della spesa (28/09/2026)."""
+    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT coalesce(max(crediti_mensili), 0) "
+            "       - coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
+            "                           THEN 0 ELSE usati_mese END), 0) "
+            "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
+            (user_id,))
+        return max(0, cur.fetchone()[0])
+
+
 def lista() -> list[dict]:
     """Le chiavi che esistono. MAI la chiave ne' il suo hash: non servono."""
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
