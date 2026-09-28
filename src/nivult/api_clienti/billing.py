@@ -52,6 +52,9 @@ def euro_per_crediti(crediti: int) -> int:
     log-log fra le ancore (identica allo slider, letta al rovescio).
     Arrotondato per eccesso: lo sconto non si regala per arrotondamento."""
     c = max(100, min(int(crediti), ANCORA[-1][0]))
+    for c2, p2 in ANCORA:
+        if c == c2:
+            return max(MINIMO_EURO, p2)   # l'ancora e' il prezzo esatto
     if c <= ANCORA[0][0]:
         e = c / ANCORA[0][0] * ANCORA[0][1]
     else:
@@ -116,7 +119,6 @@ def checkout(user_id: str, email: str, volume: int,
                          "custom_price": euro * 100,
                          "units": 1,
                          "success_url": success_url,
-                         "cancel_url": cancel_url,
                          "metadata": {"user_id": user_id, "volume": volume,
                                       "euro": euro},
                          "customer": {"email": email}})
