@@ -236,8 +236,10 @@ tailwind.config = {
       </div>
       <div class="px-5 pt-3 text-[12px] font-semibold text-slate-400" id="cerca-match"></div>
       <div class="p-5">
-        <!-- i filtri restano in vista mentre la lista scorre (28/09) -->
-        <div class="grid sm:grid-cols-5 gap-3 items-center sticky top-20 z-30 bg-white/95 backdrop-blur py-2 -mx-2 px-2 rounded-xl">
+        <!-- i filtri non si muovono mai: la lista scorre DENTRO, sotto di
+             loro — niente barra appiccicosa sopra le offerte (28/09) -->
+        <div class="-mx-1 rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 p-3">
+          <div class="grid sm:grid-cols-5 gap-3 items-center">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
           <input id="f-tec" type="text" placeholder="Technology…"
@@ -256,8 +258,10 @@ tailwind.config = {
           <select id="f-stato" class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] text-slate-600 outline-none focus:border-brand-500 transition">
             <option value="aperte">Open postings</option>
             <option value="chiuse">Closed postings</option>
-          </select>
+            </select>
+          </div>
         </div>
+        <div class="mt-1.5 h-[3px] rounded-full bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500 opacity-80"></div>
         <div class="mt-3 flex items-center justify-between">
           <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
           <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
