@@ -379,6 +379,26 @@ DO $$ BEGIN
 END $$;
 
 
+-- SLUG TUTTI MINUSCOLI (28/09/2026). Le fonti consegnano lo slug con le
+-- maiuscole a caso («Dominos» e «dominos» erano due tenant: 60.121 righe
+-- dove ne bastavano ~30.000) e la chiave (platform_id, slug) non le vede
+-- uguali: stessa bacheca letta due volte per migliaia di aziende. Le API
+-- degli ATS sono case-insensitive (verificato dal vivo su smartrecruiters
+-- e ashby: stesso totale, stesso primo annuncio), quindi il caso non
+-- porta informazione e lo slug si normalizza all'ingresso — l'ON CONFLICT
+-- (platform_id, slug) degli inserimenti fa il resto. I duplicati gia'
+-- esistenti li fonde scripts/consolida_slug_caso.py.
+CREATE OR REPLACE FUNCTION ats_slug_minuscolo() RETURNS trigger AS $f$
+BEGIN
+    NEW.slug := lower(NEW.slug);
+    RETURN NEW;
+END $f$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS ats_companies_slug_minuscolo ON ats_companies;
+CREATE TRIGGER ats_companies_slug_minuscolo
+    BEFORE INSERT ON ats_companies
+    FOR EACH ROW EXECUTE FUNCTION ats_slug_minuscolo();
+
+
 -- ===========================================================================
 -- TABELLE RIMESSE NEL DOCUMENTO il 19/09/2026.
 --
