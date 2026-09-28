@@ -261,12 +261,22 @@ def cerca_portale(filtri: dict, cursore: str | None,
         totale = _conn().execute(
             f"SELECT count(*) FROM offerte WHERE {' AND '.join(dove)}",
             par).fetchone()[0]
+        # la regola della vetrina (28/09): max 3 righe per datore — una
+        # bacheca sola non deve occupare la pagina e far pensare al
+        # cliente «c'e' solo quella». Chi senza azienda non si tappa
+        # (partition per id = nessun tappo). Il TOTALE resta quello
+        # pieno: la diversita' e' presentazione, non misura.
         righe = _conn().execute(
             f"""SELECT id, title, country, city, seniority, remote,
                        category, posted_at, technologies, ats,
                        company, company_slug
-                  FROM offerte
-                 WHERE {' AND '.join(dove)}
+                  FROM (
+                    SELECT *, row_number() OVER (
+                        PARTITION BY coalesce(company_slug, company, id)
+                        ORDER BY posted_at DESC NULLS LAST, id) AS _rn
+                      FROM offerte
+                     WHERE {' AND '.join(dove)})
+                 WHERE _rn <= 3
                  ORDER BY posted_at DESC NULLS LAST, id
                  LIMIT {limite + 1}""", par).fetchall()
     prossimo = None
@@ -472,12 +482,23 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
         totale = _conn().execute(
             f"SELECT count(*) FROM flusso WHERE {' AND '.join(dove)}",
             par).fetchone()[0]
+        # anche le chiuse: max 3 righe per datore (la stessa regola
+        # della vetrina delle attive)
         righe = _conn().execute(
-            f"""SELECT id, raw->>'title', raw->>'country', raw->>'city',
-                       t, coalesce(raw->'skills', '[]'::json),
-                       raw->>'company', raw->>'company_slug', raw->>'ats'
-                  FROM flusso
-                 WHERE {' AND '.join(dove)}
+            f"""SELECT id, titolo, paese, citta, t, skills, azienda, slug, fonte
+                  FROM (
+                    SELECT id, raw->>'title' AS titolo,
+                           raw->>'country' AS paese, raw->>'city' AS citta,
+                           t, coalesce(raw->'skills', '[]'::json) AS skills,
+                           raw->>'company' AS azienda,
+                           raw->>'company_slug' AS slug, raw->>'ats' AS fonte,
+                           row_number() OVER (
+                             PARTITION BY coalesce(raw->>'company_slug',
+                                                   raw->>'company', id)
+                             ORDER BY t DESC, id) AS _rn
+                      FROM flusso
+                     WHERE {' AND '.join(dove)})
+                 WHERE _rn <= 3
                  ORDER BY t DESC, id LIMIT {limite + 1}""", par).fetchall()
     prossimo = None
     if len(righe) > limite:

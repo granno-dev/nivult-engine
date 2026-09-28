@@ -585,10 +585,29 @@ function filtri() {
     f.stato = "chiuse";
   return f;
 }
+/* gli ATS con i colori di marca: il chip in coda alla riga dice la
+   fonte senza rubare la scena (la data vive nel dettaglio, non in riga) */
+const ATS_INFO = {
+  greenhouse: ["GH", "#24a47c"], lever: ["Lv", "#f0653a"],
+  workday: ["Wd", "#2261b5"], smartrecruiters: ["SR", "#14957a"],
+  ashby: ["As", "#7c5cf0"], icims: ["iC", "#3a6ea5"],
+  teamtailor: ["TT", "#e0508c"], successfactors: ["SF", "#0a6ed1"],
+  recruitee: ["Rc", "#e11d48"], workable: ["Wk", "#0ea5e9"],
+  bamboohr: ["Bh", "#73a51d"], jazzhr: ["Jz", "#f97316"],
+  personio: ["Pe", "#0369a1"], breezyhr: ["Bz", "#f59e0b"],
+  reed: ["Re", "#cf102d"], arbeitsagentur: ["AA", "#1d4ed8"],
+  agenzie: ["Ag", "#d97706"], jsonld: ["◆", "#64748b"],
+};
+function chipAts(ats) {
+  if (!ats) return "";
+  const [mono, colore] = ATS_INFO[ats] || [ats.slice(0, 2), "#64748b"];
+  return `<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1" title="source: ${ats}">
+    <span class="grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black" style="background:${colore}">${mono}</span>
+    <span class="text-[11px] font-semibold text-slate-500">${ats}</span></span>`;
+}
 function rigaJob(o) {
   const tec = (o.technologies || []).slice(0, 4).map(t =>
     `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${t}</span>`).join("");
-  const data = (o.posted_at || o.closed_at || "").slice(0, 10);
   const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
   const rif = (o.ats && o.company_slug) ? `${o.ats}:${o.company_slug}` : "";
   const logo = o.company_slug
@@ -606,9 +625,7 @@ function rigaJob(o) {
       <div class="text-[12px] text-slate-500 mt-0.5 truncate">${az}${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
       <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
     </div>
-    <div class="text-right shrink-0">
-      <div class="text-[11px] text-slate-400">${data}${o.ats ? " · " + o.ats : ""}</div>
-    </div>
+    <div class="shrink-0">${chipAts(o.ats)}</div>
   </div>`;
 }
 function rigaAzienda(a) {
