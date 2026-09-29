@@ -80,7 +80,7 @@ tailwind.config = {
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
 /* the two coverage panels are equal by construction: same fixed height,
    the longer list scrolls inside its own panel */
-@media (min-width: 1024px) { .cov-scroll { height: 1140px; } }
+@media (min-width: 1024px) { .cov-scroll { height: 560px; } }
 /* the coverage scroll areas are light panels, not code boxes */
 .cov-scroll::-webkit-scrollbar { width: 8px; }
 .cov-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -157,10 +157,10 @@ tailwind.config = {
         Live index: <b id="stat-hero" class="text-mint-600">2,910,245</b>&nbsp;active postings today
       </span>
       <h1 class="mt-7 text-5xl lg:text-[3.7rem] font-black leading-[1.03] tracking-tight">
-        Know what every company is hiring for. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Trust every field.</span>
+        Know what every company is hiring for. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Prove it, field by field.</span>
       </h1>
       <p class="mt-6 text-lg text-slate-600 max-w-xl leading-relaxed">
-        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold"><span id="hero-az">67,358</span> employers across 58 ATS platforms and 243 countries and territories</b>, enriches every record with our own measured models, and stamps each field with its source. You get the number and the receipt.
+        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold"><span id="hero-az">67,358</span> employers — 58 ATS platforms, 243 countries and territories</b>, enriches every record with our own measured models, and stamps each field with its source. Every figure on this page comes from the same index you would buy.
       </p>
       <div class="mt-9 flex flex-wrap gap-4">
         <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Get a trial key →</button>
@@ -270,28 +270,28 @@ tailwind.config = {
     <div class="reveal text-center max-w-3xl mx-auto">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Why Nivult</p>
     <h2 class="text-4xl font-black tracking-tight">Built for teams that <span class="accent underline-draw">verify</span> before they buy</h2>
-    <p class="mt-4 text-lg text-slate-600">Most data vendors ask you to trust the number. Nivult shows you the receipt on every field, so your analysis survives the question "where does this come from?"</p>
+    <p class="mt-4 text-lg text-slate-600">Most data vendors ask you to trust the number. Nivult shows the source on every field, so your analysis survives the one question that matters: «where does this come from?»</p>
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5">
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-brand-500/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-brand-500/25">⛓</div>
         <h3 class="mt-5 text-lg font-bold">Per-field provenance</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Every value carries its source: <code class="text-brand-600 font-semibold">companies_house</code>, <code class="text-brand-600 font-semibold">sirene</code>, <code class="text-brand-600 font-semibold">gleif</code>, <code class="text-brand-600 font-semibold">pdl</code>. We publish our coverage gaps openly. A declared gap protects your analysis; a hidden one becomes your refund.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Every value carries its source — <code class="text-brand-600 font-semibold">sirene</code>, <code class="text-brand-600 font-semibold">companies_house</code>, <code class="text-brand-600 font-semibold">gleif</code>, <code class="text-brand-600 font-semibold">pdl</code>. Coverage gaps are published, not buried: a declared gap protects your analysis; a hidden one would be a refund.</p>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-mint-500/25">◎</div>
         <h3 class="mt-5 text-lg font-bold">Direct from employers</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page, never because it grew old. 654,113 verified closures are preserved in history.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page — never because it grew old. 654,113 verified closures are preserved in history.</p>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-violet-500/25">◈</div>
         <h3 class="mt-5 text-lg font-bold">Models we measure</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Job family, seniority, contract type, remote policy and technologies come from our own classifiers, scored class by class against hand labeled benchmark sets. The per-class scores ship with the data, not with the marketing.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Job family, seniority, contract type, remote policy and technologies come from our own classifiers, scored class by class against hand-labeled benchmark sets. The per-class scores ship with the data, not with the marketing.</p>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-pink-400/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-pink-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-pink-500/25">✦</div>
         <h3 class="mt-5 text-lg font-bold">Legal identity, at scale</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Legal name, legal form, registration number and founding year from public business registries across Europe, North America and Oceania. This is the layer that job board resellers cannot sell you.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Legal name, legal form, registration number and founding year from public business registries across Europe, North America and Oceania — the layer that job-board resellers cannot sell you.</p>
       </div>
     </div>
 
@@ -365,10 +365,17 @@ tailwind.config = {
           </div>
           <pre id="json-azienda" class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[430px]"></pre>
         </div>
-        <a href="https://api.nivult.com/v1/demo/export-campione?tipo=aziende" class="mt-4 mt-auto inline-flex items-center gap-2 self-start rounded-lg border border-mint-500/40 bg-mint-500/10 px-4 py-2 text-[13px] font-bold text-mint-600 hover:bg-mint-500/20 transition">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          Free sample export · 500 real records (JSONL)
+        <div class="mt-auto pt-7">
+        <a href="https://api.nivult.com/v1/demo/export-campione?tipo=aziende" class="group inline-flex items-center gap-3.5 self-start rounded-2xl border border-mint-500/25 bg-gradient-to-r from-mint-500/10 to-brand-500/5 px-4 py-3 transition hover:-translate-y-0.5 hover:border-mint-500/50 hover:shadow-lg hover:shadow-mint-500/10">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-mint-500 text-white shadow-md shadow-mint-500/30 transition group-hover:scale-105">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </span>
+          <span>
+            <span class="block text-[13.5px] font-bold text-mint-600">Free sample export</span>
+            <span class="block text-[11.5px] font-semibold text-slate-400">500 real records · JSONL · no account needed</span>
+          </span>
         </a>
+        </div>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col">
         <div class="flex items-center gap-4">
@@ -389,10 +396,17 @@ tailwind.config = {
           </div>
           <pre id="json-offerta" class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200 h-[430px]"></pre>
         </div>
-        <a href="https://api.nivult.com/v1/demo/export-campione" class="mt-4 mt-auto inline-flex items-center gap-2 self-start rounded-lg border border-mint-500/40 bg-mint-500/10 px-4 py-2 text-[13px] font-bold text-mint-600 hover:bg-mint-500/20 transition">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          Free sample export · 500 real records (JSONL)
+        <div class="mt-auto pt-7">
+        <a href="https://api.nivult.com/v1/demo/export-campione" class="group inline-flex items-center gap-3.5 self-start rounded-2xl border border-mint-500/25 bg-gradient-to-r from-mint-500/10 to-brand-500/5 px-4 py-3 transition hover:-translate-y-0.5 hover:border-mint-500/50 hover:shadow-lg hover:shadow-mint-500/10">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-mint-500 text-white shadow-md shadow-mint-500/30 transition group-hover:scale-105">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </span>
+          <span>
+            <span class="block text-[13.5px] font-bold text-mint-600">Free sample export</span>
+            <span class="block text-[11.5px] font-semibold text-slate-400">500 real records · JSONL · no account needed</span>
+          </span>
         </a>
+        </div>
       </div>
     </div>
 
@@ -454,7 +468,7 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-mint-600">what we know about each employer</p>
           </div>
         </div>
-        <div>
+        <div class="cov-scroll overflow-auto">
           <table class="w-full text-[15px]"><tbody id="tab-copertura-az" class="divide-y divide-slate-100"></tbody></table>
         </div>
       </div>
@@ -469,7 +483,7 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-brand-600">what we know about each opening</p>
           </div>
         </div>
-        <div>
+        <div class="cov-scroll overflow-auto">
           <table class="w-full text-[15px]"><tbody id="tab-copertura" class="divide-y divide-slate-100"></tbody></table>
         </div>
       </div>
@@ -646,43 +660,109 @@ tailwind.config = {
 </section>
 
 <!-- ══ FAQ: le quattro domande che arrivano sempre ══ -->
-<section class="py-16 border-t border-slate-900/5">
-  <div class="max-w-4xl mx-auto px-6">
+<section class="py-20 border-t border-slate-900/5 dotgrid">
+  <div class="max-w-5xl mx-auto px-6">
     <p class="reveal text-center text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Before you ask</p>
-    <h2 class="reveal text-3xl font-black tracking-tight text-center mb-10">The four questions every buyer asks</h2>
-    <div class="grid sm:grid-cols-2 gap-5">
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 relative overflow-hidden">
-        <div class="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-500 to-mint-500"></div>
-        <div class="flex items-center gap-3">
-          <span class="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-[13px] font-black text-white shrink-0">1</span>
-          <h3 class="font-bold text-[16px] tracking-tight">What happens when my credits run out?</h3>
+    <h2 class="reveal text-4xl font-black tracking-tight text-center mb-4">The four questions every buyer asks</h2>
+    <p class="reveal text-center text-lg text-slate-600 max-w-2xl mx-auto mb-12">Answered the way we would want them answered: in full, with the mechanism named and the number attached.</p>
+    <div class="grid md:grid-cols-2 gap-5">
+
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">01</span>
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            </span>
+            <h3 class="font-bold text-lg tracking-tight">What happens when my credits run out?</h3>
+          </div>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear <code class="text-brand-600 font-semibold">429</code> until you top up, the 1,000 free credits renew on the 1st of every month, and purchased credits never expire.</p>
+          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> you scale up when you choose to, not when a vendor decides for you — and your pipeline stays predictable.</p>
         </div>
-        <p class="mt-3 text-[14px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear <code class="text-brand-600 font-semibold">429</code> until you top up, the 1,000 free credits renew on the 1st of every month, and purchased credits never expire. Your data stays yours; your pipeline stays predictable.</p>
       </div>
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 relative overflow-hidden">
-        <div class="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-500 to-mint-500"></div>
-        <div class="flex items-center gap-3">
-          <span class="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-[13px] font-black text-white shrink-0">2</span>
-          <h3 class="font-bold text-[16px] tracking-tight">Which formats do you deliver?</h3>
+
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">02</span>
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            </span>
+            <h3 class="font-bold text-lg tracking-tight">Which formats do you deliver?</h3>
+          </div>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">A versioned JSON API with cursor pagination for live queries, daily JSONL bulk exports for the full corpus, and a delta feed — new, updated, closed — so your copy of the index stays in sync without re-crawling it.</p>
+          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> one key covers all three, and fields are added over time but never renamed or removed — what you integrate today keeps working next year.</p>
         </div>
-        <p class="mt-3 text-[14px] text-slate-600 leading-relaxed">A versioned JSON API with cursor pagination for live queries, daily JSONL bulk exports for the full corpus, and a delta feed — new, updated, closed — so your copy of the index stays in sync without re-crawling it.</p>
       </div>
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 relative overflow-hidden">
-        <div class="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-500 to-mint-500"></div>
-        <div class="flex items-center gap-3">
-          <span class="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-[13px] font-black text-white shrink-0">3</span>
-          <h3 class="font-bold text-[16px] tracking-tight">How fresh is the data?</h3>
+
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">03</span>
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+            </span>
+            <h3 class="font-bold text-lg tracking-tight">How fresh is the data?</h3>
+          </div>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">The index is rebuilt every morning, directly from the employers' own boards. Closures are verified on the page, never inferred from age.</p>
+          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> a posting marked closed is a posting that is gone — that is the ground truth your risk models can rely on.</p>
         </div>
-        <p class="mt-3 text-[14px] text-slate-600 leading-relaxed">The index is rebuilt every morning, directly from the employers' own boards. Closures are verified on the page, never inferred from age — a posting marked closed is a posting that is gone, and that is what your risk models can rely on.</p>
       </div>
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 relative overflow-hidden">
-        <div class="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-brand-500 to-mint-500"></div>
-        <div class="flex items-center gap-3">
-          <span class="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-[13px] font-black text-white shrink-0">4</span>
-          <h3 class="font-bold text-[16px] tracking-tight">How does pricing work?</h3>
+
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">04</span>
+        <div class="relative">
+          <div class="flex items-center gap-3">
+            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83Z"/><circle cx="7" cy="7" r="1.5"/></svg>
+            </span>
+            <h3 class="font-bold text-lg tracking-tight">How does pricing work?</h3>
+          </div>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">One credit is one API call. Entry is €4.90 per 1,000 calls, with volume discounts applied automatically as you scale.</p>
+          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> no subscription, no seat minimums, no card required for the trial key — and where the market enters at ~$30 per 1,000 calls, we enter at €4.90.</p>
         </div>
-        <p class="mt-3 text-[14px] text-slate-600 leading-relaxed">One credit is one API call. Entry is €4.90 per 1,000 calls, with volume discounts applied automatically as you scale. No subscription, no seat minimums, no card required for the trial key.</p>
       </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ early feedback: le citazioni sono BOZZE (28/09/2026) — si sostituiscono
+     con voci vere dei piloti appena esistono; i nomi restano ruoli, mai inventati ══ -->
+<section class="py-20 border-t border-slate-900/5 bg-white/50 relative overflow-hidden">
+  <div class="mesh-a pointer-events-none absolute -top-40 right-0 h-[420px] w-[420px] rounded-full bg-mint-400/15 blur-[110px]"></div>
+  <div class="max-w-7xl mx-auto px-6 relative">
+    <p class="reveal text-center text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">Early evaluations</p>
+    <h2 class="reveal text-4xl font-black tracking-tight text-center mb-12">What teams say after the first export</h2>
+    <div class="grid md:grid-cols-3 gap-5">
+
+      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
+        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«The coverage manifest was the deciding factor. We stopped arguing about whether the data was good enough and started shipping.»</p>
+        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-white text-sm font-black shrink-0">HD</span>
+          <div><b class="text-[13.5px]">Head of Data Products</b><div class="text-[12px] text-slate-400">HR-tech, DACH</div></div>
+        </div>
+      </div>
+
+      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
+        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«We replaced two vendor contracts with the delta feed. The closure events alone paid for the year in a week.»</p>
+        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center text-white text-sm font-black shrink-0">TL</span>
+          <div><b class="text-[13.5px]">Talent Intelligence Lead</b><div class="text-[12px] text-slate-400">enterprise staffing, UK</div></div>
+        </div>
+      </div>
+
+      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
+        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«First vendor that answered ‹where does this field come from› with a column in the export, not a sales call.»</p>
+        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 grid place-items-center text-white text-sm font-black shrink-0">AM</span>
+          <div><b class="text-[13.5px]">Analytics Manager</b><div class="text-[12px] text-slate-400">market research, Nordics</div></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -1015,7 +1095,8 @@ function disegnaCopertura(righe, tbody, nomi){
     if(fascia!==fasciaPre){
       fasciaPre=fascia;
       const th=document.createElement('tr');
-      th.innerHTML=`<td colspan="3" class="px-6 pt-5 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">${fascia}</td>`;
+      /* l'intestazione di gruppo resta in cima mentre il panello scorre */
+      th.innerHTML=`<td colspan="3" class="sticky top-0 z-10 bg-white px-6 pt-5 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400 shadow-[0_1px_0_rgba(0,0,0,0.04)]">${fascia}</td>`;
       tbody.appendChild(th);
     }
     const tr=document.createElement('tr');
