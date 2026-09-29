@@ -831,8 +831,6 @@ async function apriAziendaDaJob(ref, giaSua) {
   mostraAzienda(d.azienda || {}, ref);
 }
 async function mostraAzienda(a, ref) {
-  const tec = (a.technologies || []).slice(0, 40).map(t =>
-    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${t.technology}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${t.active_jobs || t.jobs || ""} jobs</span></div>`).join("");
   const slug = (ref || "").split(":")[1] || "";
   /* molte schede sono magre per nascita: niente nome, niente dominio.
      Il titolo cade in piedi: nome, poi ragione sociale, poi il sito */
@@ -840,25 +838,70 @@ async function mostraAzienda(a, ref) {
   const logo = slug
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${nomeAz[0].toUpperCase()}</div>'">`
     : "";
+  /* «1 employees» su un'azienda con 85 offerte attive e' rumore del
+     fornitore, non un dato: sotto soglia non si mostra (29/09/2026) */
+  const dipendenti = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
+  const hq = a.headquarters && a.headquarters.city
+    ? a.headquarters.city.charAt(0).toUpperCase() + a.headquarters.city.slice(1).toLowerCase()
+    : null;
+  const dominio = (a.domain || a.website || "").replace(/^'+/, "");
+  /* le quattro misure che decidono l'acquisto, in evidenza */
+  const kpi = [
+    [a.active_jobs, "active postings"],
+    [a.jobs_posted_30d, "posted in 30 days"],
+    [a.n_locations > 0 ? a.n_locations : null, "locations"],
+    [a.size_range || null, "company size"],
+  ].filter(([v]) => v).map(([v, l]) =>
+    `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3 text-center">
+       <p class="text-lg font-black text-slate-900 tabular-nums">${v}</p>
+       <p class="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p>
+     </div>`).join("");
+  /* i chip si leggono per colore: blu = anagrafica, menta = lingue,
+     viola = dove assume come famiglie */
+  const chips = [
+    a.founded ? "founded " + String(a.founded).slice(0, 4) : null,
+    a.legal_name ? "legal: " + a.legal_name : null,
+  ].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")
+    + (a.languages || []).map(l => `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${String(l).toUpperCase()}</span>`).join("")
+    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg bg-violet-500/10 text-violet-600 px-2.5 py-1 text-[12px] font-bold">${f}</span>`).join("");
+  /* lo stack col peso visivo: la barra e' proporzionale ai jobs attivi */
+  const techs = (a.technologies || []).slice(0, 40);
+  const maxTec = Math.max(1, ...techs.map(t => t.active_jobs || t.jobs || 0));
+  const tec = techs.map(t => {
+    const n = t.active_jobs || t.jobs || 0;
+    return `<div class="relative overflow-hidden rounded-lg">
+      <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-brand-500/15 to-mint-500/15" style="width:${Math.round(n / maxTec * 100)}%"></div>
+      <div class="relative flex items-center justify-between px-2.5 py-1.5"><span class="text-[13px] font-semibold">${t.technology}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${n} jobs</span></div>
+    </div>`;
+  }).join("");
+  const sedi = (a.locations || []).slice(0, 8).map(l =>
+    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${[l.city, l.country].filter(Boolean).join(", ")}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${l.offerte || ""} jobs</span></div>`).join("");
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
       <div class="flex items-center gap-4 min-w-0">${logo}
         <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${nomeAz}</h3>
-        <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</p></div>
+        <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · ")}</p>
+        ${dominio ? `<a href="https://${dominio}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${dominio} ↗</a>` : ""}</div>
       </div>
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
-    <div class="mt-4 flex flex-wrap gap-2">${[a.legal_name ? "legal: " + a.legal_name : null, a.size_range ? "size " + a.size_range : null, a.founded ? "founded " + String(a.founded).slice(0, 4) : null, a.domain || a.website].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
+    ${kpi ? `<div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${kpi}</div>` : ""}
+    ${chips ? `<div class="mt-4 flex flex-wrap gap-2">${chips}</div>` : ""}
     ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${pulisciDesc(a.description)}</p>` : ""}
-    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${tec}</div>` : ""}
+    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll space-y-0.5">${tec}</div>` : ""}
+    ${sedi ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Where they hire</p><div class="mt-1">${sedi}</div>` : ""}
     <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
   </div>`);
   const r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ ref }) });
   const el = document.getElementById("az-jobs-lista");
   if (!r.ok) { el.textContent = ""; return; }
   const d = await r.json();
+  /* le offerte si aprono nel modale: la scheda azienda diventa un
+     punto di partenza, non un vicolo cieco (29/09/2026) */
   el.innerHTML = (d.data || []).map(j =>
-    `<div class="py-1.5 border-b border-slate-50 flex justify-between gap-3"><span class="font-semibold truncate">${j.title}</span><span class="text-slate-400 text-[11.5px] shrink-0">${[j.city, j.country].filter(Boolean).join(", ")}</span></div>`).join("") || "no active postings today";
+    `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${j.title}</span><span class="text-slate-400 text-[11.5px] shrink-0">${[[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · ")}</span></div>`).join("") || "no active postings today";
+  el.querySelectorAll("[data-job]").forEach(n =>
+    n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
 function dettaglioAzienda(ref) {
   /* il click apre la scheda MASCHERATA: il credito parte solo dal
