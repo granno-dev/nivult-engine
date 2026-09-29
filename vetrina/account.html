@@ -760,6 +760,11 @@ async function rivelaAzienda(ref, btn) {
 
 /* il dettaglio: il modale sopra tutto */
 function chiudiDettaglio() { document.getElementById("dettaglio").classList.add("hidden"); }
+/* la descrizione e' testo di terzi: si mostra INTEGRA (la vendiamo cosi'),
+   ma script e compagnia non si eseguono mai (29/09/2026) */
+function pulisciDesc(s) {
+  return String(s || "").replace(/<\s*(script|iframe|object|embed|form|link|meta|style)\b[\s\S]*?(<\s*\/\s*\1\s*>|$)/gi, "");
+}
 function apriDettaglio(html) {
   document.getElementById("dettaglio-box").innerHTML = html;
   document.getElementById("dettaglio").classList.remove("hidden");
@@ -795,7 +800,7 @@ async function dettaglioJob(id) {
       o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
       .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${String(o.description).slice(0, 1200)}</p></div>` : ""}
+    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${pulisciDesc(o.description)}</p></div>` : ""}
     ${azienda}
   </div>`);
 }
@@ -829,7 +834,7 @@ async function mostraAzienda(a, ref) {
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">${[a.legal_name ? "legal: " + a.legal_name : null, a.size_range ? "size " + a.size_range : null, a.founded ? "founded " + String(a.founded).slice(0, 4) : null, a.domain || a.website].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
-    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${String(a.description).slice(0, 600)}</p>` : ""}
+    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${pulisciDesc(a.description)}</p>` : ""}
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${tec}</div>` : ""}
     <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
   </div>`);
