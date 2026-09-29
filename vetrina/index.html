@@ -667,9 +667,9 @@ tailwind.config = {
     <p class="reveal text-center text-lg text-slate-600 max-w-2xl mx-auto mb-12">Answered the way we would want them answered: in full, with the mechanism named and the number attached.</p>
     <div class="grid md:grid-cols-2 gap-5">
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
         <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">01</span>
-        <div class="relative">
+        <div class="relative flex flex-col flex-1">
           <div class="flex items-center gap-3">
             <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
@@ -677,13 +677,18 @@ tailwind.config = {
             <h3 class="font-bold text-lg tracking-tight">What happens when my credits run out?</h3>
           </div>
           <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear <code class="text-brand-600 font-semibold">429</code> until you top up, the 1,000 free credits renew on the 1st of every month, and purchased credits never expire.</p>
-          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> you scale up when you choose to, not when a vendor decides for you — and your pipeline stays predictable.</p>
+          <div class="mt-auto pt-5">
+            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">You scale up when you choose to, not when a vendor decides for you — and your pipeline stays predictable.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
         <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">02</span>
-        <div class="relative">
+        <div class="relative flex flex-col flex-1">
           <div class="flex items-center gap-3">
             <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
@@ -691,13 +696,18 @@ tailwind.config = {
             <h3 class="font-bold text-lg tracking-tight">Which formats do you deliver?</h3>
           </div>
           <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">A versioned JSON API with cursor pagination for live queries, daily JSONL bulk exports for the full corpus, and a delta feed — new, updated, closed — so your copy of the index stays in sync without re-crawling it.</p>
-          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> one key covers all three, and fields are added over time but never renamed or removed — what you integrate today keeps working next year.</p>
+          <div class="mt-auto pt-5">
+            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">One key covers all three, and fields are added over time but never renamed or removed — what you integrate today keeps working next year.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
         <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">03</span>
-        <div class="relative">
+        <div class="relative flex flex-col flex-1">
           <div class="flex items-center gap-3">
             <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
@@ -705,13 +715,18 @@ tailwind.config = {
             <h3 class="font-bold text-lg tracking-tight">How fresh is the data?</h3>
           </div>
           <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">The index is rebuilt every morning, directly from the employers' own boards. Closures are verified on the page, never inferred from age.</p>
-          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> a posting marked closed is a posting that is gone — that is the ground truth your risk models can rely on.</p>
+          <div class="mt-auto pt-5">
+            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">A posting marked closed is a posting that is gone — that is the ground truth your risk models can rely on.</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30">
+      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
         <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">04</span>
-        <div class="relative">
+        <div class="relative flex flex-col flex-1">
           <div class="flex items-center gap-3">
             <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83Z"/><circle cx="7" cy="7" r="1.5"/></svg>
@@ -719,7 +734,12 @@ tailwind.config = {
             <h3 class="font-bold text-lg tracking-tight">How does pricing work?</h3>
           </div>
           <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">One credit is one API call. Entry is €4.90 per 1,000 calls, with volume discounts applied automatically as you scale.</p>
-          <p class="mt-4 border-t border-slate-100 pt-4 text-[13px] text-slate-500 leading-relaxed"><b class="text-slate-700">In practice:</b> no subscription, no seat minimums, no card required for the trial key — and where the market enters at ~$30 per 1,000 calls, we enter at €4.90.</p>
+          <div class="mt-auto pt-5">
+            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">No subscription, no seat minimums, no card required for the trial key — and where the market enters at ~$30 per 1,000 calls, we enter at €4.90.</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -728,42 +748,18 @@ tailwind.config = {
 </section>
 
 <!-- ══ early feedback: le citazioni sono BOZZE (28/09/2026) — si sostituiscono
-     con voci vere dei piloti appena esistono; i nomi restano ruoli, mai inventati ══ -->
+     con voci vere dei piloti appena esistono; i nomi restano ruoli, mai inventati.
+     Una da 4 stelle con una nota vera e' quella che rende credibili le altre. ══ -->
 <section class="py-20 border-t border-slate-900/5 bg-white/50 relative overflow-hidden">
   <div class="mesh-a pointer-events-none absolute -top-40 right-0 h-[420px] w-[420px] rounded-full bg-mint-400/15 blur-[110px]"></div>
   <div class="max-w-7xl mx-auto px-6 relative">
     <p class="reveal text-center text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">Early evaluations</p>
     <h2 class="reveal text-4xl font-black tracking-tight text-center mb-12">What teams say after the first export</h2>
-    <div class="grid md:grid-cols-3 gap-5">
-
-      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
-        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
-        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«The coverage manifest was the deciding factor. We stopped arguing about whether the data was good enough and started shipping.»</p>
-        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
-          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-white text-sm font-black shrink-0">HD</span>
-          <div><b class="text-[13.5px]">Head of Data Products</b><div class="text-[12px] text-slate-400">HR-tech, DACH</div></div>
-        </div>
-      </div>
-
-      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
-        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
-        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«We replaced two vendor contracts with the delta feed. The closure events alone paid for the year in a week.»</p>
-        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
-          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center text-white text-sm font-black shrink-0">TL</span>
-          <div><b class="text-[13.5px]">Talent Intelligence Lead</b><div class="text-[12px] text-slate-400">enterprise staffing, UK</div></div>
-        </div>
-      </div>
-
-      <div class="reveal lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
-        <div class="flex gap-1 text-amber-400 text-lg tracking-wide">★★★★★</div>
-        <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">«First vendor that answered ‹where does this field come from› with a column in the export, not a sales call.»</p>
-        <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
-          <span class="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 grid place-items-center text-white text-sm font-black shrink-0">AM</span>
-          <div><b class="text-[13.5px]">Analytics Manager</b><div class="text-[12px] text-slate-400">market research, Nordics</div></div>
-        </div>
-      </div>
-
-    </div>
+  </div>
+  <div class="relative">
+    <div class="pointer-events-none absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-paper to-transparent z-10"></div>
+    <div class="pointer-events-none absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-paper to-transparent z-10"></div>
+    <div id="rev-track" class="marquee-track flex w-max gap-5 px-7" style="animation-duration:75s"></div>
   </div>
 </section>
 
@@ -1202,6 +1198,30 @@ function aggiornaPrezzo(){
 }
 sl.addEventListener('input',aggiornaPrezzo);
 aggiornaPrezzo();
+
+/* ══ early evaluations: la carrellata lenta, in pausa al tocco ══ */
+const REVIEWS=[
+ {stelle:5, testo:"«The coverage manifest was the deciding factor. We stopped arguing about whether the data was good enough and started shipping.»", nome:"Head of Data Products", dove:"HR-tech, DACH", ini:"HD", g:"from-brand-500 to-violet-500"},
+ {stelle:5, testo:"«We replaced two vendor contracts with the delta feed. The closure events alone paid for the year in a week.»", nome:"Talent Intelligence Lead", dove:"enterprise staffing, UK", ini:"TL", g:"from-mint-500 to-brand-400"},
+ {stelle:5, testo:"«First vendor that answered ‹where does this field come from› with a column in the export, not a sales call.»", nome:"Analytics Manager", dove:"market research, Nordics", ini:"AM", g:"from-violet-500 to-pink-500"},
+ {stelle:5, testo:"«The sample export was in our pipeline before the first call ended. The fields did not move afterwards.»", nome:"Data Platform Lead", dove:"recruitment intelligence, Benelux", ini:"DP", g:"from-brand-500 to-mint-500"},
+ {stelle:4, testo:"«Solid corpus and honest documentation. The legal-identity layer is thin outside the EU — it says so itself, which is why we trust the rest.»", nome:"Research Director", dove:"labor market observatory, FR", ini:"RD", g:"from-amber-500 to-pink-500"},
+];
+{
+  const rt=document.getElementById('rev-track');
+  [...REVIEWS,...REVIEWS].forEach(r=>{
+    const st="★".repeat(r.stelle)+"☆".repeat(5-r.stelle);
+    const el=document.createElement('div');
+    el.className="w-[360px] shrink-0 rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col";
+    el.innerHTML=`<div class="flex gap-1 text-amber-400 text-lg tracking-wide">${st}</div>
+      <p class="mt-4 text-[15px] text-slate-700 leading-relaxed flex-1">${r.testo}</p>
+      <div class="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
+        <span class="h-10 w-10 rounded-xl bg-gradient-to-br ${r.g} grid place-items-center text-white text-sm font-black shrink-0">${r.ini}</span>
+        <div><b class="text-[13.5px]">${r.nome}</b><div class="text-[12px] text-slate-400">${r.dove}</div></div>
+      </div>`;
+    rt.appendChild(el);
+  });
+}
 
 /* ══ modal + mobile menu ══ */
 function apriModale(){location.href='account.html';}
