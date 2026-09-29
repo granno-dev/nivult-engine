@@ -104,6 +104,9 @@ RIGHE=$(cat <<'EOF'
 # alle 07:17-07:21 misurati, quindi il builder delle 05:55 fotografava
 # l'export di IERI e l'API serviva dati vecchi di 30 ore. Ora parte a
 # export completato e la pagina /v1 serve la mattina stessa.
+# E se l'export sfora (07:58 il 29/09/2026, cresce coi dati) il builder
+# ASPETTA il file di oggi fino a 60 minuti invece di costruire con le
+# tabelle vuote — e se manca del tutto tiene il db di ieri.
 40 7 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
 0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 600000

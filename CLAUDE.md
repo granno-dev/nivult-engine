@@ -1212,8 +1212,12 @@ dei fill-rate — l'argomento di vendita dichiarato), `usage`.
 Le regole non negoziabili, scritte nel codice e qui:
 
 - **I dati NON vengono dal Postgres di produzione**: un DuckDB ricostruito
-  ogni mattina alle 05:55 DAGLI EXPORT (`nivult.api_clienti.aggiorna`,
-  in `deploy/cron.sh`), atomico (tmp + os.replace), letto read-only. Vive
+  ogni mattina alle 07:40 DAGLI EXPORT (`nivult.api_clienti.aggiorna`,
+  in `deploy/cron.sh`), atomico (tmp + os.replace), letto read-only. Il
+  builder **aspetta gli export di oggi fino a 60 minuti** (l'export sfora:
+  07:58 il 29/09/2026) e, se mancano del tutto, **conserva il db di ieri
+  invece di sostituirlo con tabelle vuote** — il 29/09 un giro senza il
+  file aziende ha azzerato i reveal dei clienti per ore. Vive
   sul **volume dedicato** `/mnt/HC_Volume_106941692/` — il 23/09 il file da
   15,4 GB non stava sul disco da 75 GB insieme al ciclo backup+export:
   misurato, non ipotizzato. Il path sta in `API_CLIENTI_DB` (in

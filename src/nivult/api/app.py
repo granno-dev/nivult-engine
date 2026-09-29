@@ -1116,13 +1116,15 @@ def create_app() -> FastAPI:
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
             raise HTTPException(400, "id mancante")
+        # Si guarda prima e si paga dopo: un credito speso sul vuoto
+        # (offerta sparita dall'export di oggi) non si perdona (29/09/2026).
+        riga = _dati.rivela_offerta(offerta_id)
+        if riga is None:
+            raise HTTPException(404, "offerta non trovata")
         esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
         if esito == "senza_crediti":
             raise HTTPException(429, "crediti del mese finiti: "
                                 "aumenta il volume dalla dashboard")
-        riga = _dati.rivela_offerta(offerta_id)
-        if riga is None:
-            raise HTTPException(404, "offerta non trovata")
         return {"offerta": riga, "esito": esito}
 
     @app.post("/portale/rivela-azienda")
@@ -1134,13 +1136,16 @@ def create_app() -> FastAPI:
         rif = str((corpo or {}).get("ref") or "").strip()
         if not rif:
             raise HTTPException(400, "ref mancante")
+        # Si guarda prima e si paga dopo: rivelare un'azienda che il
+        # DuckDB non ha (export di oggi mancante) non deve costare
+        # nulla (29/09/2026).
+        riga = _dati.rivela_azienda(rif)
+        if riga is None:
+            raise HTTPException(404, "azienda non trovata")
         esito = _chiavi.rivela_per_utente(uid, "azienda", rif)
         if esito == "senza_crediti":
             raise HTTPException(429, "crediti del mese finiti: "
                                 "aumenta il volume dalla dashboard")
-        riga = _dati.rivela_azienda(rif)
-        if riga is None:
-            raise HTTPException(404, "azienda non trovata")
         return {"azienda": riga, "esito": esito}
 
     @app.post("/portale/azienda-jobs")

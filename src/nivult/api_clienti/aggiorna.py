@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import re
+import time
 
 import duckdb
 
@@ -58,6 +59,43 @@ def _ultimo(cartella: str, prefisso: str) -> str | None:
     cand = [p for p in glob.glob(os.path.join(cartella, f"{prefisso}-*.jsonl.gz"))
             if _DATA_RX.search(p) and "-campione" not in p]
     return max(cand) if cand else None
+
+
+def _ultimo_di_oggi(cartella: str, prefisso: str) -> str | None:
+    """Come _ultimo, ma solo se il file e' datato oggi (data nel nome)."""
+    p = _ultimo(cartella, prefisso)
+    if p and _DATA_RX.search(p).group(1) == dt.date.today().isoformat():
+        return p
+    return None
+
+
+def _aspetta_export_oggi(cartella: str, minuti: int) -> None:
+    """Pazienta che gli export DI OGGI ci siano entrambi.
+
+    L'export delle 05:45 finisce quando finisce (07:17-07:21 misurati al
+    momento del cron delle 07:40, gia' 07:58 il 29/09/2026: cresce coi
+    dati) e l'archivia delle 06:20 porta via i file di ieri NEL
+    FRATTEMPO — chi parte a orario fisso puo' trovare la cartella senza
+    il file di oggi e costruire un db con le tabelle vuote (successo il
+    29/09: aziende a zero per ore, reveal dei clienti a vuoto). Si
+    aspetta a passi di 30 secondi; scaduta l'attesa si costruisce con
+    quello che c'e' (il file di ieri vale piu' del vuoto).
+    """
+    if minuti <= 0:
+        return
+    scadenza = time.monotonic() + minuti * 60
+    while True:
+        mancanti = [p for p in ("offerte-attive", "aziende-segnali")
+                    if not _ultimo_di_oggi(cartella, p)]
+        if not mancanti:
+            return
+        if time.monotonic() >= scadenza:
+            log.warning("export di oggi non comparsi entro %d minuti (%s): "
+                        "costruisco con quello che c'e'", minuti, mancanti)
+            return
+        log.info("export di oggi ancora mancanti (%s): riprovo fra 30 secondi",
+                 mancanti)
+        time.sleep(30)
 
 
 def _crea_tabelle(con: duckdb.DuckDBPyConnection) -> None:
@@ -214,8 +252,25 @@ def _carica_copertura(con: duckdb.DuckDBPyConnection, cartella: str) -> dict:
     return manifest
 
 
+def _tabella_non_vuota(db_path: str, tabella: str) -> bool:
+    """La build live attuale ha righe in quella tabella? (False anche se
+    il db non esiste o non si apre: in quel caso non c'e' nulla da
+    proteggere e si costruisce normalmente.)"""
+    try:
+        con = duckdb.connect(db_path, read_only=True)
+    except Exception:                            # noqa: BLE001
+        return False
+    try:
+        return con.execute(f"SELECT 1 FROM {tabella} LIMIT 1"
+                           ).fetchone() is not None
+    except Exception:                            # noqa: BLE001
+        return False
+    finally:
+        con.close()
+
+
 def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
-               db_path: str | None = None) -> dict:
+               db_path: str | None = None, attesa_minuti: int = 60) -> dict:
     # dove finisce il db: l'argomento vince, poi l'ambiente, poi il
     # default accanto agli export. I banchi passano --cartella e restano
     # nella loro sabbia; in produzione API_CLIENTI_DB manda sul volume.
@@ -236,6 +291,7 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
             os.remove(p)
         except OSError:
             pass
+    _aspetta_export_oggi(cartella, attesa_minuti)
     f_offerte = _ultimo(cartella, "offerte-attive")
     f_aziende = _ultimo(cartella, "aziende-segnali")
     mancanti = [nome for nome, p in (("offerte-attive", f_offerte),
@@ -278,6 +334,19 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     con.executemany("INSERT INTO meta VALUES (?, ?)",
                     [(k, str(v)) for k, v in meta.items()])
     con.close()  # la chiusura pulita svuota il WAL dentro il .tmp
+    # Mai sostituire un db buono con uno vuoto: se l'export di oggi manca
+    # anche dopo l'attesa (export rotto, non solo lento), il db live di
+    # ieri sono dati vecchi di 24 ore — il db di oggi senza aziende e' un
+    # prodotto rotto (reveal dei clienti a vuoto, 29/09/2026).
+    svuotate = [t for t, n in (("offerte", n_offerte), ("aziende", n_aziende))
+                if n == 0 and _tabella_non_vuota(destinazione, t)]
+    if svuotate:
+        os.remove(tmp)
+        log.error("tabelle che diventerebbero vuote: %s — il db live "
+                  "precedente resta al suo posto", svuotate)
+        meta["stato"] = ("export mancanti: conservato il db precedente "
+                         "con le tabelle piene")
+        return meta
     os.replace(tmp, destinazione)  # atomico: i lettori restano sul vecchio inode
     log.info("api-clienti.duckdb: %d offerte, %d aziende, %d eventi flusso, "
              "copertura %d campi, export del %s — %.1f MB",
@@ -294,8 +363,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--flusso-giorni", type=int, default=7,
                     help="quanti giorni di delta feed tenere (default %(default)s; "
                          "il cron conserva i file novita per 7 giorni)")
+    ap.add_argument("--attesa-export", type=int, default=60, metavar="MINUTI",
+                    help="quanto aspettare gli export di oggi prima di "
+                         "costruire comunque (default %(default)s; 0 = subito)")
     args = ap.parse_args(argv)
-    print(json.dumps(costruisci(args.cartella, args.flusso_giorni),
+    print(json.dumps(costruisci(args.cartella, args.flusso_giorni,
+                                attesa_minuti=args.attesa_export),
                      ensure_ascii=False))
     return 0
 
