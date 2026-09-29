@@ -22,6 +22,7 @@ import re
 import os
 import secrets
 import socket
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -1045,6 +1046,35 @@ def create_app() -> FastAPI:
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
 
+    # Anti-raccolta (29/09/2026): la lettura del portale e' gratis per gli
+    # UMANI; i domini delle aziende sono il prodotto e non si portano via
+    # con la paginazione. Oltre 60 letture al minuto o 1.000 al giorno per
+    # account non c'e' navigazione, c'e' un estrattore — e per i volumi
+    # c'e' l'export a crediti. In memoria: il riavvio azzera, e' un freno
+    # gentile, non una cassaforte.
+    _colpi: dict[str, tuple[float, int, float, int]] = {}
+
+    def _freno_portale(uid: str) -> None:
+        now = time.time()
+        m0, nm, g0, ng = _colpi.get(uid, (now, 0, now, 0))
+        if now - m0 >= 60:
+            m0, nm = now, 0
+        if now - g0 >= 86400:
+            g0, ng = now, 0
+        _colpi[uid] = (m0, nm + 1, g0, ng + 1)
+        if nm + 1 > 60 or ng + 1 > 1000:
+            raise HTTPException(429, "troppe letture dal portale: la "
+                                "navigazione e' libera, l'estrazione "
+                                "massiva no — per i volumi c'e' l'export")
+
+    # I campi che consegnano il dominio o il contatto: nel dettaglio
+    # gratuito si tolgono, tornano col reveal dell'azienda (29/09/2026).
+    # url e' ovvio; job_sources porta le URL dei gemelli; external_id e
+    # path ricostruiscono l'URL delle piattaforme prevedibili.
+    _CAMPI_COPERTI = ("url", "contact_email", "recruiter", "job_sources",
+                      "latitude", "longitude", "postal_code", "external_id",
+                      "path")
+
     @app.post("/portale/cerca")
     async def cerca_nel_portale(request: Request, uid: str = Depends(utente)):
         """La ricerca del portale: gratis, CON il nome dell'azienda
@@ -1059,6 +1089,7 @@ def create_app() -> FastAPI:
                   if k in ("country", "category", "ats", "seniority",
                            "language", "remote", "q", "technology", "dal")}
         cur = (corpo or {}).get("cursor")
+        _freno_portale(uid)
         if (corpo or {}).get("stato") == "chiuse":
             righe, prossimo, totale = _dati.cerca_chiuse_portale(filtri, cur)
         else:
@@ -1080,15 +1111,17 @@ def create_app() -> FastAPI:
             corpo = {}
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "industry", "technology")}
+        _freno_portale(uid)
         righe, prossimo, totale = _dati.cerca_aziende_portale(
             filtri, (corpo or {}).get("cursor"))
         return {"data": righe, "next_cursor": prossimo, "totale": totale}
 
     @app.post("/portale/offerta-dettaglio")
     async def dettaglio_offerta_portale(request: Request, uid: str = Depends(utente)):
-        """Il dettaglio COMPLETO dell'offerta, gratis (28/09: il datore
-        non si maschera piu', e' pubblico alla fonte). Il modale offre
-        poi la scheda azienda: gia' sua, o da 1 credito."""
+        """Il dettaglio dell'offerta, gratis (28/09: il datore non si
+        maschera piu', e' pubblico alla fonte). GRATIS ma non tutto: link
+        alla fonte, contatti e geo precisa tornano col reveal dell'azienda
+        (29/09 — sono il dominio, cioe' il prodotto)."""
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
@@ -1096,16 +1129,20 @@ def create_app() -> FastAPI:
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
             raise HTTPException(400, "id mancante")
+        _freno_portale(uid)
         riga = _dati.offerta_dettaglio_portale(offerta_id)
         if riga is None:
             raise HTTPException(404, "offerta non trovata")
         rif = None
         if riga.get("ats") and riga.get("company_slug"):
             rif = f"{riga['ats']}:{riga['company_slug']}"
+        rivelata = bool(rif) and _chiavi.e_rivelata(uid, "azienda", rif)
+        if not rivelata:
+            for k in _CAMPI_COPERTI:
+                riga.pop(k, None)
         return {"offerta": riga, "rivelata": True,
                 "azienda_ref": rif,
-                "azienda_rivelata": bool(rif) and _chiavi.e_rivelata(
-                    uid, "azienda", rif)}
+                "azienda_rivelata": rivelata}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
@@ -1158,6 +1195,7 @@ def create_app() -> FastAPI:
         rif = str((corpo or {}).get("ref") or "").strip()
         if not _chiavi.e_rivelata(uid, "azienda", rif):
             raise HTTPException(402, "rivela prima l'azienda")
+        _freno_portale(uid)
         return {"data": _dati.azienda_jobs_portale(rif)}
 
     @app.get("/portale/export/{nome}")
