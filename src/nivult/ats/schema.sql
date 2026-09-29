@@ -517,12 +517,15 @@ CREATE TABLE IF NOT EXISTS incidenti (
     telegram_id text,
     escalato boolean DEFAULT false NOT NULL
 );
-CREATE SEQUENCE incidenti_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
+-- 29/09/2026: CREATE SEQUENCE non ha IF NOT EXISTS in Postgres, e queste
+-- due venivano dal dump del 19/09 nude: ogni notte lo schema moriva qui
+-- («relation incidenti_id_seq already exists») e NULLA di nuovo arrivava
+-- piu' in produzione via runner --schema. La guardia e' lo stile del file.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'incidenti_id_seq' AND relkind = 'S') THEN
+    CREATE SEQUENCE incidenti_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+  END IF;
+END $$;
 ALTER SEQUENCE incidenti_id_seq OWNED BY incidenti.id;
 CREATE TABLE IF NOT EXISTS medico_visite (
     id bigint NOT NULL,
@@ -534,12 +537,11 @@ CREATE TABLE IF NOT EXISTS medico_visite (
     rivista boolean DEFAULT false NOT NULL,
     CONSTRAINT medico_visite_tipo_check CHECK ((tipo = ANY (ARRAY['visita'::text, 'chat'::text, 'guardiano'::text, 'officina'::text])))
 );
-CREATE SEQUENCE medico_visite_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'medico_visite_id_seq' AND relkind = 'S') THEN
+    CREATE SEQUENCE medico_visite_id_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+  END IF;
+END $$;
 ALTER SEQUENCE medico_visite_id_seq OWNED BY medico_visite.id;
 CREATE TABLE IF NOT EXISTS n5_vitali (
     at timestamp with time zone DEFAULT now() NOT NULL,
