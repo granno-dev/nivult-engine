@@ -1587,11 +1587,17 @@ def create_app() -> FastAPI:
                         riga_ats = None
                     if riga_ats:
                         url = riga_ats[0]
+                        # 29/09/2026: brandfetch e' MORTO (CDN 403 su tutto,
+                        # search API 429). 21.206 tenant portano un suo URL
+                        # in logo_url — scaricarli fallisce sempre, e senza
+                        # ripiego il portale diventava un muro di «?»
+                        # (Recordati il primo visto). Il ripiego gratuito
+                        # che funziona: i favicon di Google sul dominio.
+                        if url and "cdn.brandfetch.io" in url:
+                            url = None
                         if not url and riga_ats[1]:
-                            cid = os.environ.get("BRANDFETCH_CLIENT_ID", "")
-                            url = (f"https://cdn.brandfetch.io/{riga_ats[1]}"
-                                   "/w/128/h/128"
-                                   + (f"?c={cid}" if cid else ""))
+                            url = (f"https://www.google.com/s2/favicons"
+                                   f"?domain={riga_ats[1]}&sz=128")
                 mime = dati = None
                 if url:
                     # Lo scarico passa da `_scarica_logo`, che valida l'host
