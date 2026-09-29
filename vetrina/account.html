@@ -3,7 +3,9 @@
      non loggato -> card di accesso (magic link + Google/Microsoft/GitHub);
      loggato -> dashboard (chiavi, consumo, acquisto crediti).
      La sessione vive in sessionStorage (mai nell'URL, mai nei log):
-     muore con la scheda, come dev'essere per una chiave che apre i dati. -->
+     muore con la scheda. La chiave appena creata sta solo in MEMORIA
+     (29/09/2026) e tutto il testo di terzi passa da testoDesc+esc:
+     chi entra via XSS non trova ne' chiavi ne' markup eseguibile. -->
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
@@ -48,12 +50,13 @@ tailwind.config = {
 .cov-scroll::-webkit-scrollbar { width: 8px; }
 .cov-scroll::-webkit-scrollbar-track { background: transparent; }
 .cov-scroll::-webkit-scrollbar-thumb { background: #d5dbe7; border-radius: 99px; }
-/* la rete neurale dietro tutto, come nella landing */
-#neural { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+/* sfondo statico di lavoro: la rete neurale animata (90 nodi a 60 fps
+   mentre si leggono tabelle e JSON) e' rimasta nella landing, qui dentro
+   era rumore (segnalazione del 29/09/2026) — stessa griglia a puntini */
+.dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
 </style>
 </head>
-<body class="bg-paper text-slate-900 font-sans antialiased min-h-screen flex flex-col">
-<canvas id="neural"></canvas>
+<body class="bg-paper dotgrid text-slate-900 font-sans antialiased min-h-screen flex flex-col">
 
 <nav class="relative z-10 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
   <div class="max-w-[1400px] mx-auto px-6 sm:px-8 h-16 flex items-center gap-8">
@@ -236,9 +239,10 @@ tailwind.config = {
       </div>
       <div class="px-5 pt-3 text-[12px] font-semibold text-slate-400" id="cerca-match"></div>
       <div class="p-5">
-        <!-- i filtri non si muovono mai: la lista scorre DENTRO, sotto di
-             loro — niente barra appiccicosa sopra le offerte (28/09) -->
-        <div class="-mx-1 rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 p-3">
+        <!-- i filtri restano appiccicati in cima mentre la pagina scorre
+             INTERA — niente piu' scroll nidificato nella lista, che
+             intrappolava la rotellina (scroll trap, 29/09/2026) -->
+        <div class="-mx-1 rounded-2xl border border-slate-200 bg-white shadow-lg shadow-slate-900/5 p-3 sticky top-3 z-30">
           <div class="grid sm:grid-cols-5 gap-3 items-center">
           <input id="f-q" type="text" placeholder="Job title…"
             class="rounded-xl border border-slate-200 px-4 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
@@ -266,7 +270,7 @@ tailwind.config = {
           <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
           <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
         </div>
-        <div id="cerca-righe" class="mt-4 grid gap-2 max-h-[560px] overflow-auto pr-1 cov-scroll"></div>
+        <div id="cerca-righe" class="mt-4 grid gap-2"></div>
         <div class="mt-3 flex justify-center">
           <button id="cerca-altro" onclick="cercaAncora()" class="hidden rounded-xl border border-slate-200 px-5 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Load more</button>
         </div>
@@ -526,13 +530,16 @@ function disegna() {
   document.getElementById("hero-rivelazioni").textContent =
     rivelazioni ? `${rivelazioni.toLocaleString("en-US")} companies revealed · yours forever, never paid twice` : "";
 }
+/* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
+   esempi del quickstart la portano dentro finche' la pagina e' aperta,
+   ma non si scrive nello storage del browser — niente da pescare per
+   uno script che riuscisse a entrare (29/09/2026) */
+let chiaveFresca = "";
 function mostraChiaveNuova(chiave) {
   const box = document.getElementById("chiave-nuova");
   box.classList.remove("hidden");
   document.getElementById("chiave-nuova-val").textContent = chiave;
-  /* la chiave fresca resta per la sessione: gli esempi del quickstart la
-     portano gia' dentro, pronti da copiare (28/09/2026) */
-  try { sessionStorage.setItem("nv_chiave_fresca", chiave); } catch (e) {}
+  chiaveFresca = chiave;
   box.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 async function creaChiave() {
@@ -552,10 +559,9 @@ function copiaChiave(btn) {
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
 }
 /* la prima chiamata, pronta: con la chiave vera se e' nata in questa
-   sessione, altrimenti col promemoria da completare */
+   pagina (vive solo in memoria), altrimenti col promemoria da completare */
 function curlPrimaChiamata() {
-  let k = "nv_your_key";
-  try { k = sessionStorage.getItem("nv_chiave_fresca") || "nv_your_key"; } catch (e) {}
+  const k = chiaveFresca || "nv_your_key";
   return `curl -H "X-Api-Key: ${k}" "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`;
 }
 function copiaCurl(btn) {
@@ -649,22 +655,22 @@ function chipAts(ats) {
 }
 function rigaJob(o) {
   const tec = (o.technologies || []).slice(0, 4).map(t =>
-    `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${t}</span>`).join("");
+    `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${esc(t)}</span>`).join("");
   const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
   const rif = (o.ats && o.company_slug) ? `${o.ats}:${o.company_slug}` : "";
   const logo = o.company_slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" loading="lazy" class="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shrink-0" onerror="this.outerHTML='<div class=&quot;h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-[13px] font-black shrink-0&quot;>${(o.company || "?")[0].toUpperCase()}</div>'">`
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" loading="lazy" class="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shrink-0" onerror="this.outerHTML='<div class=&quot;h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-[13px] font-black shrink-0&quot;>${esc((o.company || "?")[0].toUpperCase())}</div>'">`
     : "";
   /* l'azienda si vede gratis (modello TheirStack): il click apre il
      PROFILO — gratis se e' gia' dell'utente, un credito altrimenti */
   const az = o.company
-    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob('${rif}', ${o.az_rivelata ? "true" : "false"})">${o.company}</span> · `
+    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob('${rif}', ${o.az_rivelata ? "true" : "false"})">${esc(o.company)}</span> · `
     : "";
-  return `<div class="group flex items-center gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/5 hover:-translate-y-px transition cursor-pointer" id="row-${o.id}" onclick="dettaglioJob('${o.id}')">
+  return `<div class="group flex items-center gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/5 hover:-translate-y-px transition cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob('${o.id}')">
     ${logo}
     <div class="min-w-0 flex-1">
-      <b class="text-[14px] block truncate">${o.title || "—"} ${chiusa}</b>
-      <div class="text-[12px] text-slate-500 mt-0.5 truncate">${az}${[o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · ")}</div>
+      <b class="text-[14px] block truncate">${esc(o.title || "—")} ${chiusa}</b>
+      <div class="text-[12px] text-slate-500 mt-0.5 truncate">${az}${esc([o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · "))}</div>
       <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
     </div>
     <div class="shrink-0">${chipAts(o.ats)}</div>
@@ -675,7 +681,7 @@ function rigaAzienda(a) {
     <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
     <div class="min-w-0 flex-1">
       <b class="text-[14px] blur-[5px] select-none text-slate-400">██████████</b>
-      <div class="text-[12px] text-slate-500 mt-0.5">${[a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · ")}</div>
+      <div class="text-[12px] text-slate-500 mt-0.5">${esc([a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · "))}</div>
     </div>
     <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
       <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
@@ -774,10 +780,32 @@ function aziendaAssente() {
 
 /* il dettaglio: il modale sopra tutto */
 function chiudiDettaglio() { document.getElementById("dettaglio").classList.add("hidden"); }
-/* la descrizione e' testo di terzi: si mostra INTEGRA (la vendiamo cosi'),
-   ma script e compagnia non si eseguono mai (29/09/2026) */
-function pulisciDesc(s) {
-  return String(s || "").replace(/<\s*(script|iframe|object|embed|form|link|meta|style)\b[\s\S]*?(<\s*\/\s*\1\s*>|$)/gi, "");
+/* testo di TERZI (descrizioni, titoli, nomi): si mostra come testo, mai
+   come markup. La regex che toglieva solo script/iframe lasciava passare
+   <img onerror=…> (segnalazione del 29/09/2026): ora si tolgono TUTTI i
+   tag veri (<a>, <div>… — «<5 anni» nel testo sopravvive), i blocchi
+   diventano a-capo, le entita' si sciolgono in una textarea (contenuto
+   testuale, nulla esegue) e all'iniezione si ri-escapa con esc():
+   due serrature, non una. */
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s ?? "");
+  return d.innerHTML;
+}
+function testoDesc(s) {
+  const t = String(s || "")
+    .replace(/<(script|style)[^>]*>.*?<\/\1>/gis, " ")
+    .replace(/<\/(p|div|li|ul|ol|h[1-6]|tr)\s*>|<br[^>]*>/gi, "\n")
+    .replace(/<\/?[a-zA-Z][^<>]*>/g, " ");
+  const d = document.createElement("textarea");
+  d.innerHTML = t;
+  return d.value.replace(/[ \t]+/g, " ").replace(/ ?\n ?/g, "\n")
+                .replace(/\n{3,}/g, "\n\n").trim();
+}
+/* un href che non parte da https:// non si stampa: mai javascript: */
+function urlSicuro(u) {
+  u = String(u || "");
+  return /^https:\/\//i.test(u) ? u : "";
 }
 function apriDettaglio(html) {
   document.getElementById("dettaglio-box").innerHTML = html;
@@ -789,32 +817,33 @@ async function dettaglioJob(id) {
   const d = await r.json();
   const o = d.offerta || {};
   const tec = (o.technologies || []).map(t =>
-    `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${t}</span>`).join("");
+    `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(t)}</span>`).join("");
   const logo = o.company_slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${(o.company || "?")[0]}</div>'">`
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${esc((o.company || "?")[0])}</div>'">`
     : "";
   /* l'azienda si vede gratis (28/09): il click apre il profilo —
      gratis se e' gia' dell'utente, un credito (dichiarato) altrimenti */
+  const linkOfferta = urlSicuro(o.url);
   const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob('${d.azienda_ref || ""}', ${d.azienda_rivelata ? "true" : "false"})">
          ${logo}
          <div class="min-w-0">
-           <b class="text-[15px] truncate block">${o.company || ""}</b>
+           <b class="text-[15px] truncate block">${esc(o.company || "")}</b>
            <p class="text-[12px] font-bold text-mint-600 group-hover:text-mint-500 transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
          </div>
-         ${o.url ? `<a href="${o.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>` : ""}
+         ${linkOfferta ? `<a href="${linkOfferta}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>` : ""}
        </div>`;
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
-      <div><h3 class="text-xl font-black tracking-tight">${o.title || ""}</h3>
-      <p class="mt-1 text-[13.5px] text-slate-500">${[o.city, o.country].filter(Boolean).join(", ")}</p></div>
+      <div><h3 class="text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
+      <p class="mt-1 text-[13.5px] text-slate-500">${esc([o.city, o.country].filter(Boolean).join(", "))}</p></div>
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">${[
       o.category, o.seniority, o.remote, o.employment_type,
       o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
-      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")}</div>
+      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}</div>
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${pulisciDesc(o.description)}</p></div>` : ""}
+    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>` : ""}
     ${azienda}
   </div>`);
 }
@@ -836,7 +865,7 @@ async function mostraAzienda(a, ref) {
      Il titolo cade in piedi: nome, poi ragione sociale, poi il sito */
   const nomeAz = a.company || a.legal_name || a.website || a.domain || slug || "—";
   const logo = slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${nomeAz[0].toUpperCase()}</div>'">`
+    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${esc(nomeAz[0].toUpperCase())}</div>'">`
     : "";
   /* «1 employees» su un'azienda con 85 offerte attive e' rumore del
      fornitore, non un dato: sotto soglia non si mostra (29/09/2026) */
@@ -853,7 +882,7 @@ async function mostraAzienda(a, ref) {
     [a.size_range || null, "company size"],
   ].filter(([v]) => v).map(([v, l]) =>
     `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3 text-center">
-       <p class="text-lg font-black text-slate-900 tabular-nums">${v}</p>
+       <p class="text-lg font-black text-slate-900 tabular-nums">${esc(v)}</p>
        <p class="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p>
      </div>`).join("");
   /* i chip si leggono per colore: blu = anagrafica, menta = lingue,
@@ -861,9 +890,9 @@ async function mostraAzienda(a, ref) {
   const chips = [
     a.founded ? "founded " + String(a.founded).slice(0, 4) : null,
     a.legal_name ? "legal: " + a.legal_name : null,
-  ].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${x}</span>`).join("")
-    + (a.languages || []).map(l => `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${String(l).toUpperCase()}</span>`).join("")
-    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg bg-violet-500/10 text-violet-600 px-2.5 py-1 text-[12px] font-bold">${f}</span>`).join("");
+  ].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")
+    + (a.languages || []).map(l => `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(String(l).toUpperCase())}</span>`).join("")
+    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg bg-violet-500/10 text-violet-600 px-2.5 py-1 text-[12px] font-bold">${esc(f)}</span>`).join("");
   /* lo stack col peso visivo: la barra e' proporzionale ai jobs attivi */
   const techs = (a.technologies || []).slice(0, 40);
   const maxTec = Math.max(1, ...techs.map(t => t.active_jobs || t.jobs || 0));
@@ -871,23 +900,23 @@ async function mostraAzienda(a, ref) {
     const n = t.active_jobs || t.jobs || 0;
     return `<div class="relative overflow-hidden rounded-lg">
       <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-brand-500/15 to-mint-500/15" style="width:${Math.round(n / maxTec * 100)}%"></div>
-      <div class="relative flex items-center justify-between px-2.5 py-1.5"><span class="text-[13px] font-semibold">${t.technology}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${n} jobs</span></div>
+      <div class="relative flex items-center justify-between px-2.5 py-1.5"><span class="text-[13px] font-semibold">${esc(t.technology)}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${n} jobs</span></div>
     </div>`;
   }).join("");
   const sedi = (a.locations || []).slice(0, 8).map(l =>
-    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${[l.city, l.country].filter(Boolean).join(", ")}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${l.offerte || ""} jobs</span></div>`).join("");
+    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${esc([l.city, l.country].filter(Boolean).join(", "))}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${l.offerte || ""} jobs</span></div>`).join("");
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
       <div class="flex items-center gap-4 min-w-0">${logo}
-        <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${nomeAz}</h3>
-        <p class="mt-1 text-[13.5px] text-slate-500">${[a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · ")}</p>
-        ${dominio ? `<a href="https://${dominio}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${dominio} ↗</a>` : ""}</div>
+        <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${esc(nomeAz)}</h3>
+        <p class="mt-1 text-[13.5px] text-slate-500">${esc([a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · "))}</p>
+        ${dominio ? `<a href="https://${encodeURI(dominio).replace(/"/g, "")}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${esc(dominio)} ↗</a>` : ""}</div>
       </div>
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
     ${kpi ? `<div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${kpi}</div>` : ""}
     ${chips ? `<div class="mt-4 flex flex-wrap gap-2">${chips}</div>` : ""}
-    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed">${pulisciDesc(a.description)}</p>` : ""}
+    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap">${esc(testoDesc(a.description))}</p>` : ""}
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll space-y-0.5">${tec}</div>` : ""}
     ${sedi ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Where they hire</p><div class="mt-1">${sedi}</div>` : ""}
     <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
@@ -899,7 +928,7 @@ async function mostraAzienda(a, ref) {
   /* le offerte si aprono nel modale: la scheda azienda diventa un
      punto di partenza, non un vicolo cieco (29/09/2026) */
   el.innerHTML = (d.data || []).map(j =>
-    `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${j.title}</span><span class="text-slate-400 text-[11.5px] shrink-0">${[[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · ")}</span></div>`).join("") || "no active postings today";
+    `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${esc(j.title)}</span><span class="text-slate-400 text-[11.5px] shrink-0">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
   el.querySelectorAll("[data-job]").forEach(n =>
     n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
@@ -977,27 +1006,6 @@ function copiaGuida(btn) {
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); });
 }
 disegnaGuida();
-
-/* ══ la rete neurale sullo sfondo, come nella landing ══ */
-(()=>{
-  const cv=document.getElementById('neural');if(!cv)return;
-  const ctx=cv.getContext('2d');let W,H,nodi=[];
-  function ridimensiona(){W=cv.width=innerWidth;H=cv.height=innerHeight;
-    nodi=Array.from({length:Math.min(90,Math.floor(W*H/22000))},()=>({
-      x:Math.random()*W,y:Math.random()*H,
-      vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3}));}
-  ridimensiona();addEventListener('resize',ridimensiona);
-  (function frame(){ctx.clearRect(0,0,W,H);
-    for(const n of nodi){n.x+=n.vx;n.y+=n.vy;
-      if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;}
-    for(let i=0;i<nodi.length;i++)for(let j=i+1;j<nodi.length;j++){
-      const a=nodi[i],b=nodi[j],d=Math.hypot(a.x-b.x,a.y-b.y);
-      if(d<150){ctx.strokeStyle=`rgba(59,110,246,${(1-d/150)*.18})`;
-        ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
-    for(const n of nodi){ctx.fillStyle='rgba(59,110,246,.30)';
-      ctx.beginPath();ctx.arc(n.x,n.y,1.8,0,7);ctx.fill();}
-    requestAnimationFrame(frame);})();
-})();
 
 
 /* ══ il paese si sceglie da un menu, non si scrive a mano ══ */
