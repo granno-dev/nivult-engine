@@ -65,6 +65,9 @@ while true; do
   "$PY" -m nivult.ats.descrizioni --eightfold --limite 1200 2>&1 | tail -1 || true
   # adp: requisitionDescription dal dettaglio pubblico (poche centinaia)
   "$PY" -m nivult.ats.descrizioni --adp --limite 300 2>&1 | tail -1 || true
+  # successfactors: l'elenco CSB non porta mai il testo; la pagina ha il
+  # blocco server-rendered (29/09/2026: 80k attive senza descrizione)
+  "$PY" -m nivult.ats.descrizioni --successfactors --limite 2500 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.

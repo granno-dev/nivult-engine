@@ -215,6 +215,19 @@ def _paragrafi(html: str) -> str | None:
     return "\n\n".join(buoni)[:30000] or None
 
 
+def _testo_da_finestra(html: str) -> str:
+    """HTML → testo conservando i capoversi: i tag di blocco diventano
+    a-capo (i punti elenco non si perdono, come invece farebbe la sola
+    caccia ai nodi densi), il resto sparisce. Niente dipendenze nuove."""
+    import html as _h
+    t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
+    t = re.sub(r"(?i)</(p|div|li|ul|ol|h[1-6]|tr)\s*>|<br[^>]*>", "\n", t)
+    t = re.sub(r"<[^>]+>", " ", t)
+    righe = (re.sub(r"[ \t]+", " ", r).strip()
+             for r in _h.unescape(t).splitlines())
+    return "\n".join(r for r in righe if r).strip()
+
+
 def _estrai_testo(pid: str, html: str) -> str:
     jp = _jobposting(html)
     if jp and jp.get("description"):
@@ -602,6 +615,90 @@ def adp(dsn: str, limite: int = 1000, thread: int = 4) -> dict:
     return stats
 
 
+def _finestra_sf(html: str) -> str:
+    """Il testo di una pagina Career Site Builder, in entrambi i template
+    server-rendered (misurati dal vivo il 29/09/2026):
+
+    - variante NUOVA (careers.recordati.com): un blocco solo col
+      marcatore data-careersite-propertyid="description";
+    - variante VECCHIA (bertrandt.jobs.hr.cloud.sap): tante sezioni
+      itemprop="description" una dopo l'altra — la finestra parte dalla
+      prima e il bottone apply che la PRECEDE va ignorato (si cerca il
+      marcatori di fine solo dopo l'inizio).
+
+    La finestra finisce al primo fra aside «similar jobs», footer e
+    bottone apply: oltre c'e' chrome di pagina, non annuncio. Il guscio
+    solo-JS (canaldeempleo.es, meta tag e basta) qui non ha testo:
+    pagina 200 senza marcatore = esito definitivo, come in da_pagina."""
+    m = re.search(r'data-careersite-propertyid="description"', html)
+    if not m:
+        m = re.search(r'itemprop="description"', html)
+    if not m:
+        return ""
+    inizio = html.find(">", m.end()) + 1   # si parte DOPO il tag del marcatore
+    if inizio <= 0:
+        return ""
+    fini = [f for f in (html.find('<aside id="similar-jobs"', inizio),
+                        html.find('id="footer"', inizio)) if f > inizio]
+    ma = re.search(r'<a[^>]*class="[^"]*\bapply\b', html[inizio:], re.I)
+    if ma:
+        fini.append(inizio + ma.start())
+    fine = min(fini) if fini else min(inizio + 80000, len(html))
+    return _testo_da_finestra(html[inizio:fine])[:30000]
+
+
+def successfactors(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
+    """SuccessFactors: l'elenco CSB non porta mai il testo e fin qui il
+    dettaglio non lo leggeva NESSUNO (29/09/2026: 129.717 attive, 80.706
+    senza descrizione — Recordati compresa). La pagina pubblica ha il
+    blocco server-rendered: una chiamata per offerta, ogni tenant sul suo
+    host e il carico si spalma da solo. Attenzione: il NUOVO CSB (Unified
+    Data Model, jobs.sap.com) e' dietro Cloudflare e risponde 403 —
+    trasporto, resta in coda; e' il prezzo della regola del 21/09."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, url FROM ats_jobs
+             WHERE platform_id = 'successfactors' AND expired_at IS NULL
+               AND NOT (raw ? 'description') AND url IS NOT NULL
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, url = riga
+            try:
+                with httpx.Client(timeout=15, follow_redirects=True,
+                                  headers={"User-Agent": _UA}) as cli:
+                    r = cli.get(url)
+                if r.status_code == 200:
+                    return jid, _finestra_sf(r.text)
+                if r.status_code in (404, 410):
+                    return jid, ""          # sparita: esito definitivo
+                return jid, None            # 403 Cloudflare e simili: trasporto
+            except httpx.HTTPError:
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1     # trasporto: resta in coda
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … successfactors %s", stats)
+    log.info("descrizioni successfactors: %s", stats)
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -616,6 +713,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="position_details pcsx di Eightfold (dettaglio per offerta)")
     ap.add_argument("--adp", action="store_true",
                     help="requisitionDescription di ADP Workforce Now (dettaglio per offerta)")
+    ap.add_argument("--successfactors", action="store_true",
+                    help="blocco description server-rendered delle pagine CSB")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
     ap.add_argument("--limite", type=int, default=3000)
@@ -633,6 +732,8 @@ def main(argv: list[str] | None = None) -> int:
         print(eightfold(dsn, args.limite))
     if args.adp:
         print(adp(dsn, args.limite))
+    if args.successfactors:
+        print(successfactors(dsn, args.limite))
     if args.bundesanstellung:
         print(da_pagina(dsn, args.limite, thread=2,
                         piattaforme=("bundesanstellung",)))
@@ -643,7 +744,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
                                     or args.rippling or args.bundesanstellung
-                                    or args.eightfold or args.adp):
+                                    or args.eightfold or args.adp
+                                    or args.successfactors):
         print(smartrecruiters(dsn, args.limite))
     return 0
 
