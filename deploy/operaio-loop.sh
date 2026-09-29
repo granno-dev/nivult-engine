@@ -121,8 +121,11 @@ while true; do
   # sentinella allarmava «operaio muto» col ciclo vivo che lavorava.
   battito "dettaglio"
   nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
+  battito "estrai extra"
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
+  battito "lingue richieste"
   nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
+  battito "lingua dei testi"
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
   # La SCOPERTA sta qui, non sul server: crawling a molti thread verso
   # migliaia di siti diversi, che sul server a 4 vCPU portava il carico a 33
