@@ -103,10 +103,13 @@ def smartrecruiters(dsn: str, limite: int = 3000) -> dict:
 # pagina offerta emette JobPosting (sonda dal vivo: hirehive 48 KB di
 # JSON incorporato, join, niceboard, paylocity, jobscore, jobsoid,
 # digitalrecruiters).
+# 29/09/2026: eploy e radancy — sonda dal vivo sulle pagine senza testo
+# (apply.weightmans.com, jobs.veolia.com): JobPosting presente in
+# entrambe. Insieme coprono ~5.700 attive rimaste senza.
 _DA_PAGINA = ("jazzhr", "breezy", "teamtailor", "applicantstack",
               "freshteam", "vincere", "digitalrecruiters", "hirehive",
               "jobscore", "jobsoid", "join", "niceboard", "paylocity",
-              "homerun", "taleez")
+              "homerun", "taleez", "eploy", "radancy")
 
 _LD = re.compile(r"<script[^>]*ld\+json[^>]*>(.*?)</script>", re.S | re.I)
 
@@ -194,6 +197,10 @@ def da_pagina(dsn: str, limite: int = 3000, thread: int = 10,
 # catsone) o in un JSON incorporato negli script (werecruit, zoho;
 # comeet: «description»: «\u003Cp\u003E…» nella pagina, 22/09/2026).
 # Cornerstone resta fuori: guscio JS puro con API a token, cantiere a parte.
+# Personio resta fuori per un motivo opposto (29/09/2026): la descrizione
+# e' GIA' nel feed XML dell'adapter — la chiave esiste sempre, corta o
+# vuota che sia, e la coda guarda la chiave; rileggere 16k pagine per
+# forse 2k testi non vale il ferro.
 _TESTO_PIATTAFORME = ("icims", "catsone", "werecruit", "zohorecruit",
                       "comeet")
 

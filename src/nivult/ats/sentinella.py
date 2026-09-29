@@ -184,6 +184,26 @@ def _controlli() -> list[Condizione]:
                 c.append(Condizione("magazzino senza testo", "avviso", "offerte attive senza descrizione",
                                     f"~{senza}% delle attive non ha testo: senza testo non c'e' sintesi, "
                                     f"tecnologie, salario ne' lingua. Guardare nivult-testi e arricchisci --dettaglio"))
+            # …e PER PIATTAFORMA, non solo in media: il 29/09/2026 SuccessFactors
+            # aveva il 62% delle attive senza testo da settimane e la media del
+            # magazzino non lo vedeva (SF pesa il 4% del totale). Stessa passata
+            # campionata, raggruppata: salta chi crolla sotto il 10% con almeno
+            # 300 offerte nel campione (sotto, il rumore statistico spara nel
+            # mucchio). Le chiavi sono TUTTE quelle dell'export (_DESCR), non
+            # solo 'description': Oracle porta ShortDescriptionStr e con la
+            # lista corta suonerebbe il falso allarme.
+            for pid, pn, pcon in db.execute("""SELECT platform_id, count(*),
+                    count(*) FILTER (WHERE raw ?| array[
+                        'description','content','descriptionHtml','descriptionPlain','externalDescription',
+                        'jobDescription','job_description','Job_Description','body','content_html',
+                        'description_html','descriptionBody','text','ShortDescriptionStr'])
+                    FROM ats_jobs TABLESAMPLE SYSTEM (1) WHERE expired_at IS NULL
+                    GROUP BY 1 HAVING count(*) >= 300""").fetchall():
+                if pcon * 100 < pn * 10:
+                    c.append(Condizione(f"piattaforma senza testo {pid}", "avviso",
+                                        f"{pid}: le attive sono quasi tutte senza descrizione",
+                                        f"~{100 - 100*pcon//pn}% senza (campione 1%, {pn} offerte): "
+                                        "l'adapter non porta piu' il testo o manca il fetcher di dettaglio"))
             if tot and tot >= 2000 and con_p * 100 < tot * 70:
                 c.append(Condizione("nuove senza paese", "info", "nuove offerte quasi senza paese",
                                     f"{100*con_p//tot}% su {tot} nelle 24h"))
@@ -213,6 +233,36 @@ def _controlli() -> list[Condizione]:
                                         f"{n} offerte in coda; ultima riga: {coda.strip().splitlines()[-1][:100] if coda.strip() else '-'}"))
     except Exception as exc:                          # noqa: BLE001
         c.append(Condizione("database ATS", "critica", "database delle offerte irraggiungibile", repr(exc)[:160]))
+
+    # il DuckDB dei clienti: stamattina (29/09/2026) e' nato con la tabella
+    # aziende VUOTA (l'export aveva sforato l'orario del builder) e i reveal
+    # dei clienti hanno pagato il vuoto per ore. Il builder ora aspetta e
+    # conserva — questo controllo e' la terza guardia: se il prodotto che
+    # vendiamo e' vuoto, e' una critica, non un avviso.
+    try:
+        import duckdb
+        _dbk = _env().get("API_CLIENTI_DB") or \
+            "/mnt/HC_Volume_106941692/api-clienti.duckdb"
+        con = duckdb.connect(_dbk, read_only=True)
+        try:
+            meta = dict(con.execute("SELECT chiave, valore FROM meta").fetchall())
+        finally:
+            con.close()
+        if not meta.get("offerte") or int(meta.get("offerte") or 0) == 0 \
+                or int(meta.get("aziende") or 0) == 0:
+            c.append(Condizione("api-clienti vuoto", "critica",
+                                "il db dei clienti e' vuoto",
+                                f"offerte={meta.get('offerte')}, aziende={meta.get('aziende')}, "
+                                f"stato={meta.get('stato')!r}: i clienti stanno vedendo il nulla"))
+        elif str(meta.get("stato", "")).startswith("export mancanti"):
+            c.append(Condizione("api-clienti stale", "avviso",
+                                "il db dei clienti e' vecchio di un giorno",
+                                f"stato={meta.get('stato')!r}: l'export di oggi manca, "
+                                "il builder tiene su quello di ieri"))
+    except Exception:                                   # noqa: BLE001
+        # volume smontato o duckdb assente: non e' un incidente della
+        # sentinella — il volume controlla il builder, qui si tace
+        pass
 
     # il ponte
     try:
