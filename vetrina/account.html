@@ -54,6 +54,11 @@ tailwind.config = {
    mentre si leggono tabelle e JSON) e' rimasta nella landing, qui dentro
    era rumore (segnalazione del 29/09/2026) — stessa griglia a puntini */
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
+/* lo scheletro della scheda mascherata respira piano: e' un'anteprima
+   viva, non una lapide */
+@keyframes skel-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+.skel { animation: skel-pulse 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
 </style>
 </head>
 <body class="bg-paper dotgrid text-slate-900 font-sans antialiased min-h-screen flex flex-col">
@@ -617,6 +622,9 @@ async function compra() {
 
 /* ══ l'esploratore: due tab (jobs / companies), mascherato fino al reveal ══ */
 let cursore = null, cercaTimer = null, tab = "jobs";
+/* ref -> dati pubblici della riga azienda: la scheda mascherata li
+   mostra leggibili, sfoca solo cio' che si compra */
+const azInfo = {};
 function filtri() {
   const f = {};
   const q = document.getElementById("f-q").value.trim();
@@ -677,6 +685,9 @@ function rigaJob(o) {
   </div>`;
 }
 function rigaAzienda(a) {
+  /* i dati pubblici della riga seguono il click nel modale: la scheda
+     mascherata li mostra leggibili, sfoca solo cio' che si compra */
+  azInfo[a.ref] = a;
   return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-mint-500/50 transition cursor-pointer" onclick="dettaglioAzienda('${a.ref}')">
     <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
     <div class="min-w-0 flex-1">
@@ -933,13 +944,51 @@ async function mostraAzienda(a, ref) {
     n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
 function dettaglioAzienda(ref) {
-  /* il click apre la scheda MASCHERATA: il credito parte solo dal
-     bottone, mai da un click esplorativo */
-  apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
-    <div class="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
-    <h3 class="mt-4 text-xl font-black tracking-tight blur-[6px] select-none text-slate-400">████████████</h3>
-    <p class="mt-2 text-[13.5px] text-slate-500">Industry, size and technology count are visible above.<br>The name, the domain and the full record unlock with one credit — once, then it's yours.</p>
-    <button onclick="rivelaAzienda('${ref}', this)" class="mt-5 rounded-xl bg-brand-500 px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition">Reveal this company · 1 credit</button>
+  /* il click apre il PROFILO IN TRASPARENZA: la struttura e' quella della
+     scheda vera (KPI, stack, sedi, offerte) coi valori sfocati, e i dati
+     pubblici della riga restano leggibili — si vede COSA si compra. Il
+     credito parte solo dal bottone, mai da un click esplorativo */
+  const a = azInfo[ref] || {};
+  const dip = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
+  const pubblici = [a.industry, a.country, dip,
+                    a.n_tecnologie ? a.n_tecnologie + " technologies" : null]
+                   .filter(Boolean).join(" · ");
+  const barra = (w, h = 3) =>
+    `<span class="skel inline-block rounded-full bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200 blur-[2.5px] select-none" style="width:${w}%;height:${h * 4}px"></span>`;
+  const kpis = ["active postings", "posted in 30 days", "locations", "company size"]
+    .map(l => `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
+       <div class="flex justify-center">${barra(46, 5)}</div>
+       <p class="mt-2 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400 text-center">${l}</p>
+     </div>`).join("");
+  const tecRighe = [88, 62, 41].map(w =>
+    `<div class="relative overflow-hidden rounded-lg">
+       <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-brand-500/15 to-mint-500/15" style="width:${w}%"></div>
+       <div class="relative flex items-center justify-between px-2.5 py-2">${barra(38)}${barra(10)}</div>
+     </div>`).join("");
+  apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
+    <div class="flex items-center gap-4">
+      <div class="skel h-14 w-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black shrink-0">?</div>
+      <div class="min-w-0 flex-1">
+        ${barra(52, 5)}
+        ${pubblici
+          ? `<p class="mt-2 text-[13.5px] text-slate-500">${esc(pubblici)}</p>`
+          : `<div class="mt-2">${barra(34)}</div>`}
+      </div>
+      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0 self-start">×</button>
+    </div>
+    <div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${kpis}</div>
+    <div class="mt-4 flex gap-2">${barra(16, 6)}${barra(22, 6)}${barra(13, 6)}</div>
+    <p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p>
+    <div class="mt-2 space-y-0.5">${tecRighe}</div>
+    <p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p>
+    <div class="mt-2 space-y-2">${barra(78, 3.5)}${barra(64, 3.5)}</div>
+    <div class="mt-7 rounded-2xl border border-brand-500/25 bg-gradient-to-r from-brand-50 via-white to-mint-500/10 px-5 py-4 flex flex-wrap items-center gap-4">
+      <div class="min-w-0 flex-1">
+        <p class="text-[14px] font-black text-slate-900">The full record unlocks with one credit</p>
+        <p class="mt-0.5 text-[12.5px] text-slate-500">name, domain, stack, locations and live postings — once, then it's yours forever.</p>
+      </div>
+      <button onclick="rivelaAzienda('${ref}', this)" class="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/30 hover:shadow-xl hover:shadow-brand-500/40 hover:-translate-y-px transition shrink-0">Reveal this company · 1 credit</button>
+    </div>
   </div>`);
 }
 
