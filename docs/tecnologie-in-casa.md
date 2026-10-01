@@ -260,3 +260,40 @@ Cinque volte meno dati di qualita' migliore pareggiano quasi, ma non
 bastano: il volume serve, come diceva UniversalNER (decine di migliaia,
 non migliaia). La via v4: campagna agenti a volume pieno (~30k), o
 l'equivalente veloce a pagamento. Pod spento a fine esame (~$1).
+
+## v4 (01/10/2026): il volume del maestro vero, e questa volta basta
+
+La campagna-agenti annunciata dalla v4-pilota, portata a termine:
+**33.892 offerte etichettate** dal maestro Kimi (F1 87,0% sulle 104 golden
+indipendenti, contro 74,0% di gpt-oss-120b e ~65% di DeepSeek), importate
+in `etichette_tec` come `kimi-agenti` e costruite con
+`costruisci_tecnologie.py --maestro-tec kimi-agenti` (puro, senza righe
+del 2B): 35.673 righe lette, ancore 94,5% alla lettera + 4,5% varianti,
+1% perso. Training 3.000 passi su RunPod 3090 Ti (1,15 h, ~$2 tutto il
+giro), esame di OGNI checkpoint sui due golden, a finestre come in
+produzione.
+
+| | IT P / R / F1 | 8 famiglie P / R / F1 |
+|---|---|---|---|
+| v2 ck01750 (era in produzione) | 89,9 / 72,6 / 80,4 | 76,3 / 65,2 / 70,3 |
+| **v4 ck-01250, soglia 0,30** | 88,6 / 74,5 / **81,0** | 72,5 / 79,9 / **76,0** |
+
+Alla stessa soglia della v2 (0,40) la v4 vinceva le famiglie (+6,2) e
+perdeva IT (-1,8); alla sua soglia migliore (0,30) vince su entrambe.
+Il prezzo dichiarato: precisione IT -1,3 (88,6 vs 89,9) per richiamo
++1,9 — e sulle famiglie il richiamo sale di 14,7 punti. Giuseppe ha
+scelto la 0,30 il 01/10.
+
+**Rilasciata il 01/10/2026**: `~/nivult/modelli/tec-v4` sul Mac mini,
+launcher `nivult-mini-tec.sh` → `tec-v4-ck01250`, soglia 0,30 (di nuovo
+di serie, com'era prima della v2). I file del tokenizer sono quelli di
+tec-v2 (stesso mmBERT, formato leggibile dal venv del demone: il
+checkpoint salvato da transformers 5.x usava il backend nuovo). Primo
+giorno di marcia regolare. Backup del modello in
+`/opt/nivult/gpu/tecnologie-v4-ck01250/ck-01250` sul server.
+
+Lezioni che restano: la verita' della campagna si misura su Postgres,
+mai sui file in /tmp (la pulizia notturna di macOS li ha mangiati una
+volta; i sorgenti dei lotti ora nascono sul server); e la coppia
+maestro-migliore + volume e' stata la sola mossa che ha spostato i
+numeri — come la v3 aveva gia' dimostrato dal verso opposto.
