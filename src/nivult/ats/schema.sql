@@ -710,21 +710,26 @@ CREATE INDEX IF NOT EXISTS sintesi_mt5_hash_idx ON sintesi_mt5 (testo_hash);
 -- Da dove si legge LA sintesi di un'offerta, adesso che i modelli sono due.
 -- Vince il 2B quando c'e': o perche' l'ha scritta lui, o perche' ha RIPASSATO
 -- quella di mT5 — ed e' proprio il caso in cui mT5 aveva esitato.
+-- 01/10/2026: la vista legge sintesi_pulita (il ripulisci toglie le frasi
+-- boilerplate e tiene traccia in frasi_tolte) — la definizione qui era
+-- rimasta a sintesi e il CREATE OR REPLACE falliva: «cannot drop columns
+-- from view», perche' la live aveva frasi_tolte in piu'.
 CREATE OR REPLACE VIEW sintesi_finali AS
 SELECT j.id AS job_id,
-       coalesce(CASE WHEN m.ripassata_at IS NOT NULL THEN m.sintesi END,
-                e.sintesi, m.sintesi)                  AS sintesi,
-       CASE WHEN m.ripassata_at IS NOT NULL AND m.sintesi IS NOT NULL THEN 'nivult-2b+ripasso'
+       coalesce(CASE WHEN m.ripassata_at IS NOT NULL THEN m.sintesi_pulita END,
+                e.sintesi, m.sintesi_pulita)           AS sintesi,
+       CASE WHEN m.ripassata_at IS NOT NULL AND m.sintesi_pulita IS NOT NULL THEN 'nivult-2b+ripasso'
             WHEN e.sintesi IS NOT NULL                              THEN 'nivult-2b'
-            WHEN m.sintesi IS NOT NULL                              THEN 'nivult-mt5'
+            WHEN m.sintesi_pulita IS NOT NULL                       THEN 'nivult-mt5'
        END                                             AS da,
        m.fiducia                                       AS fiducia_mt5,
        m.ripassata_at                                  AS ripassata_at,
-       m.sintesi_originale                             AS sintesi_mt5_originale
+       m.sintesi_originale                             AS sintesi_mt5_originale,
+       m.frasi_tolte                                   AS frasi_tolte
   FROM ats_jobs j
   LEFT JOIN estrazioni_v2b e ON e.job_id = j.id
   LEFT JOIN sintesi_mt5   m ON m.job_id = j.id
- WHERE coalesce(e.sintesi, m.sintesi) IS NOT NULL;
+ WHERE coalesce(e.sintesi, m.sintesi_pulita) IS NOT NULL;
 
 -- --- QUANTO E' SOLIDO UN DOMINIO -------------------------------------------
 --  1  il sito rimanda al NOSTRO tenant ATS. E' una prova, e prende anche cio'

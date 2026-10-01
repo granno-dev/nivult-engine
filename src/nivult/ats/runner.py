@@ -87,13 +87,138 @@ ATS_DSN = os.environ.get(
     "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
 
 
+def _spezza_sql(testo: str) -> list[str]:
+    """Lo schema in istruzioni singole: il ; separa solo FUORI dalle
+    stringhe ('…' con escape '') e dai blocchi dollar-quoted ($tag$…$tag$,
+    i DO$$ delle guardie ne contengono parecchi). I commenti -- si saltano
+    prima di tutto: sono pieni di apostrofi italiani («l'indice»), e un
+    apostrofo in un commento che aprisse una stringa farebbe ingoiare al
+    parser mezzo file (misurato il 01/10/2026 sul primo giro)."""
+    out: list[str] = []
+    buf: list[str] = []
+    i, n = 0, len(testo)
+    while i < n:
+        ch = testo[i]
+        if ch == "-" and testo[i + 1:i + 2] == "-":   # commento di riga: a capo e via
+            fine = testo.find("\n", i)
+            if fine < 0:
+                fine = n
+            buf.append(testo[i:fine]); i = fine; continue
+        if ch == "'":                       # stringa: fino all'apice di chiusura
+            j = i + 1
+            while j < n:
+                if testo[j] == "'":
+                    if testo[j + 1:j + 2] == "'":
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            buf.append(testo[i:j]); i = j; continue
+        m = re.match(r"\$[A-Za-z_]*\$", testo[i:])   # apertura dollar-quote
+        if m:
+            tag = m.group(0)
+            fine = testo.find(tag, i + len(tag))
+            if fine < 0:                    # mai chiuso: il resto e' un blocco solo
+                buf.append(testo[i:]); i = n; continue
+            buf.append(testo[i:fine + len(tag)]); i = fine + len(tag); continue
+        if ch == ";":
+            pezzo = "".join(buf).strip()
+            if pezzo:
+                out.append(pezzo)
+            buf = []; i += 1; continue
+        buf.append(ch); i += 1
+    coda = "".join(buf).strip()
+    if coda:
+        out.append(coda)
+    return out
+
+
+def _senza_commenti_testa(sql: str) -> str:
+    """Lo statement senza le righe di commento in testa: i pattern di
+    salto (ADD COLUMN, CREATE INDEX, i trigger) riconoscono il DDL, non
+    il commento che lo racconta."""
+    righe = sql.splitlines()
+    i = 0
+    while i < len(righe) and (not righe[i].strip()
+                              or righe[i].strip().startswith("--")):
+        i += 1
+    return "\n".join(righe[i:])
+
+
 def setup(dsn: str) -> None:
-    """Applica lo schema (idempotente) e registra le piattaforme."""
+    """Applica lo schema (idempotente) e registra le piattaforme.
+
+    UN'istruzione alla volta, in autocommit: fino al 30/09/2026 lo schema
+    intero andava in una transazione sola — 600 istruzioni DDL prendono
+    lock su mezzo database per secondi interi, e alle 02:30, coi demoni
+    che scrivono, il deadlock e' arrivato due notti di fila. Istruzione
+    per istruzione il lock vive millisecondi; se trova un ingorgo, riprova
+    quella sola invece di buttare tutto.
+
+    E il 01/10 la misura successiva: ADD COLUMN IF NOT EXISTS, CREATE INDEX
+    IF NOT EXISTS e la coppia DROP/CREATE TRIGGER prendono il lock ANCHE
+    quando non c'e' nulla da cambiare — in pieno giorno ognuna faceva fila
+    dietro i lettori lunghi (misurato: 20s+ a colpo su ats_companies).
+    L'esistente si chiede una volta sola a information_schema e chi c'e'
+    gia' non si esegue proprio: le guardie vere restano per chi manca."""
     import pathlib
     schema = pathlib.Path(__file__).parent / "schema.sql"
-    with psycopg.connect(dsn) as conn:
+    istruzioni = _spezza_sql(schema.read_text())
+    with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
-            cur.execute(schema.read_text())
+            colonne: dict[str, set] = {}
+            for tab, col in cur.execute(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public'").fetchall():
+                colonne.setdefault(tab, set()).add(col)
+            indici = {r[0] for r in cur.execute(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'").fetchall()}
+            triggers = {r[0] for r in cur.execute(
+                "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal").fetchall()}
+            # i lock restanti (i CREATE TABLE di controllo, i SET DEFAULT…)
+            # si prendono con lock_timeout corto e riprova: chi legge a
+            # lungo non viene strangolato, e lo schema entra nella prima
+            # finestra libera invece di morire in fondo alla fila
+            cur.execute("SET lock_timeout = '4s'")
+            salta_create_trigger: str | None = None
+            for sql in istruzioni:
+                testa = _senza_commenti_testa(sql)
+                # \s+ fra i token: nello schema le colonne sono ALLINEATE
+                # («ADD COLUMN     IF NOT EXISTS»), e con lo spazio singolo
+                # il salto non scattava — misurato il 01/10/2026
+                m = re.match(r"ALTER\s+TABLE\s+(?:ONLY\s+)?(\w+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(\w+)",
+                             testa, re.I)
+                if m and m.group(2).lower() in colonne.get(m.group(1).lower(), set()):
+                    continue
+                m = re.match(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)", testa, re.I)
+                if m and m.group(1) in indici:
+                    continue
+                m = re.match(r"DROP\s+TRIGGER\s+IF\s+EXISTS\s+(\w+)", testa, re.I)
+                if m and m.group(1) in triggers:
+                    salta_create_trigger = m.group(1)
+                    continue
+                m = re.match(r"CREATE\s+TRIGGER\s+(\w+)", testa, re.I)
+                if m and m.group(1) == salta_create_trigger:
+                    continue
+                salta_create_trigger = None
+                # una colonna DAVVERO nuova deve entrare anche se davanti
+                # c'e' un lettore da minuti: dieci tentativi coprono ~2,5
+                # minuti di attesa (di notte i lettori sono corti)
+                for tentativo in range(10):
+                    try:
+                        cur.execute(sql)
+                        break
+                    except (psycopg.errors.DeadlockDetected,
+                            psycopg.errors.LockNotAvailable):
+                        # LockNotAvailable = lock_timeout scattato: la
+                        # DDL non e' mai partita, riprovare e' sicuro
+                        if tentativo == 9:
+                            log.error("schema: lock mai preso su: %.90s", testa)
+                            raise
+                        log.info("schema: lock occupato, ritento fra poco: %.60s",
+                                 testa)
+                        time.sleep(1.5 * (tentativo + 1))
             cur.execute("""
             INSERT INTO ats_platforms (id, name, api_type, notes) VALUES
               ('greenhouse',     'Greenhouse',     'json', 'API pubblica, link diretto'),
@@ -103,7 +228,6 @@ def setup(dsn: str) -> None:
               ('ashby',          'Ashby',          'json', 'API pubblica, startup EU')
             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, notes = EXCLUDED.notes
             """)
-        conn.commit()
 
 
 def semina_aziende(dsn: str, dsn_produzione: str) -> int:

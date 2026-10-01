@@ -77,6 +77,16 @@ else
     bisogno=$(( 8 * 1073741824 ))
   fi
   libero=$(df --output=avail -B1 / | tail -1)
+  if [ "$libero" -lt "$bisogno" ]; then
+    # Il 30/09/2026 il dump e' saltato per un GB: il carico cresce e
+    # l'archivia delle 06:20 arriva troppo tardi per le 03:00. Invece di
+    # morire si archivia SUBITO il freddo (export e backup di ieri: lo
+    # script verifica la copia remota prima di cancellare) e si rimisura.
+    log "disco corto ($(( libero / 1073741824 )) GB liberi): archivio il freddo prima del dump"
+    /opt/nivult/archivia-sul-n5.sh || true
+    libero=$(df --output=avail -B1 / | tail -1)
+    log "dopo l'archiviazione: $(( libero / 1073741824 )) GB liberi"
+  fi
   [ "$libero" -ge "$bisogno" ] || die "disco insufficiente per il dump: $(( libero / 1073741824 )) GB liberi, ne servono ~$(( bisogno / 1073741824 )) (ultimo backup + 30%)"
   log "dump in corso -> $OUT"
   docker exec "$CONTAINER" pg_dumpall -U "$DB_SUPERUSER" \
