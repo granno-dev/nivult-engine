@@ -474,6 +474,64 @@ def _sk(cli: httpx.Client, nome: str):
     return None
 
 
+# ── Austria: FinAPU Firmenbuch (01/10/2026) ─────────────────────────────
+# Gratis, senza chiave ne' limiti dichiarati, aggiornato ogni giorno:
+# ricerca per nome (forma giuridica, sede, stato, data) e dettaglio
+# (indirizzo completo, legali rappresentanti). E' terza parte che
+# rielabora il Firmenbuch ufficiale: la fonte si dichiara tale.
+# Provata anche opendata.host: la chiave funziona ma il loro endpoint
+# di ricerca per nome e' guasto (404 a chiunque, misurato oggi).
+_FINAPU = "https://firmenbuch.finapu.com/fb-svc/firmen-service"
+_TIPI_AT = {"AG": "Aktiengesellschaft", "GES": "Gesellschaft mit beschränkter Haftung",
+            "OG": "Offene Gesellschaft", "KG": "Kommanditgesellschaft",
+            "EG": "Einzelunternehmen", "SE": "Societas Europaea",
+            "KGA": "Kommanditaktiengesellschaft"}
+
+
+def _at(cli: httpx.Client, nome: str):
+    r = cli.post(_FINAPU, json={
+        "query": "search-firma",
+        "params": {"firmenname": nome,
+                   "searchOptions": {"withHistory": False, "withAddress": False,
+                                      "withActivity": False, "withPersons": False,
+                                      "withName": True},
+                   "offset": 0}})
+    r.raise_for_status()
+    for ris in r.json().get("results") or []:
+        if not _combacia(nome, [ris.get("name") or ""]):
+            continue
+        d = {}
+        try:
+            time.sleep(0.3)
+            det = cli.post(_FINAPU, json={"query": "details-firma",
+                                          "params": {"fnr": ris.get("fnr")}})
+            if det.status_code == 200:
+                d = det.json() or {}
+        except Exception:                        # noqa: BLE001
+            pass
+        rf = d.get("rechtsform") or {}
+        forma = rf.get("code") or ris.get("rechtsform")
+        adr = d.get("adresse") or {}
+        via = " ".join(str(x) for x in (adr.get("strasse"), adr.get("hausnr"))
+                       if x and x != "Unknown") or None
+        stato = d.get("status") or ris.get("status")
+        scheda = _scheda(
+            legal_name=d.get("bezeichnung") or ris.get("name"),
+            registro_id=ris.get("fnr"),
+            legal_form_code=forma,
+            legal_form=rf.get("text") or _TIPI_AT.get(forma or ""),
+            street=via,
+            postal_code=adr.get("plz") if adr.get("plz") != "Unknown" else None,
+            city=adr.get("ort") if adr.get("ort") != "Unknown" else None,
+            region=d.get("sitz") or ris.get("sitz"),
+            country="AT",
+            founded=d.get("initDate") or ris.get("initDate"),
+            status="active" if stato == "active" else "inactive")
+        # il Firmenbuch non porta ne' settore (NACE) ne' dipendenti
+        return (None, None, None, scheda)
+    return None
+
+
 # ── Belgio: KBO/BCE (22/09/2026) ─────────────────────────────────────
 # Nessuna API: lo zip mensile scaricato da Giuseppe entra in `kbo_imprese`
 # con scripts/kbo_carica.py. Qui si cerca per nome normalizzato nella
@@ -652,11 +710,11 @@ class _Edgar:
 _PAESI = {"FR": (_fr, 0.5), "NO": (_no, 1.0), "FI": (_fi, 1.0),
           "DK": (_dk, 2.0), "GB": (_gb, 1.0), "CZ": (_cz, 0.5),
           "SK": (_sk, 0.5), "BE": (_be, 0.0), "CA": (_ca, 0.0),
-          "AU": (_au, 1.0), "ES": (_es, 1.0)}   # fonte, secondi di pausa
+          "AU": (_au, 1.0), "ES": (_es, 1.0), "AT": (_at, 1.0)}   # fonte, secondi di pausa
 _FONTI = {"FR": "sirene", "NO": "brreg", "FI": "prh", "DK": "cvr",
           "GB": "companies_house", "CZ": "ares", "SK": "rpo", "BE": "kbo",
           "CA": "corporations_canada", "AU": "abn_lookup",
-          "ES": "borme_openmercantil"}
+          "ES": "borme_openmercantil", "AT": "finapu"}
 
 
 DDL_REGISTRO = """
