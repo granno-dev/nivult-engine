@@ -25,6 +25,7 @@ import argparse
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -37,6 +38,18 @@ log = logging.getLogger("nivult.ats.servizi_pubblici")
 ATS_DSN = os.environ.get(
     "ATS_DATABASE_URL",
     "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
+
+
+def _parse_dt(v) -> datetime | None:
+    """ISO 8601 o niente: le date strane restano None, mai un'eccezione
+    che blocca un giro intero."""
+    if not v:
+        return None
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 # ── ARBETSÖRMEDLINGEN (Svezia) ────────────────────────────────────
@@ -612,6 +625,304 @@ def scarica_nav(dsn: str, limite: int = 2000) -> dict:
     return stats
 
 
+# ── MyCareersFuture (Singapore) ────────────────────────────────────
+# Trovata il 02/10/2026 cercando altre Jobbnorge: il portale nazionale
+# di Singapore elenca TUTTE le ~95mila offerte attive in JSON, senza
+# chiave. Ogni offerta porta il datore con UEN (numero di registro
+# delle imprese di Singapore) e codice SSIC di settore: materiale B2B
+# di prima scelta.
+
+_MCF = "https://api.mycareersfuture.gov.sg/v2/jobs"
+_MCF_TIPI = {"full time": "full_time", "part time": "part_time",
+             "contract": "contract", "temporary": "contract",
+             "internship": "internship", "flexi-work": "part_time"}
+
+
+def scarica_mycareersfuture(dsn: str, limite: int = 200000) -> dict:
+    stats = {"pagine": 0, "viste": 0, "nuove": 0,
+             "aggiornate": 0, "scadute": 0, "errori": 0}
+    inizio = datetime.now(timezone.utc)
+    completo = False
+    with httpx.Client(timeout=60, headers={
+            "User-Agent": "nivult-ats/0.1 (+https://nivult.com)"}) as c, \
+            psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("""INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+                        VALUES ('mycareersfuture', 'MyCareersFuture (Singapore)', true, 'json',
+                                'portale nazionale SG; UEN e SSIC del datore in ogni offerta')
+                        ON CONFLICT (id) DO NOTHING""")
+        url: str | None = _MCF + "?limit=100"
+        while url and stats["viste"] < limite:
+            try:
+                r = c.get(url)
+            except httpx.HTTPError as exc:
+                log.warning("MCF: %s", exc)
+                stats["errori"] += 1
+                break
+            if r.status_code != 200:
+                log.warning("MCF HTTP %d", r.status_code)
+                stats["errori"] += 1
+                break
+            d = r.json()
+            risultati = d.get("results") or []
+            if not risultati:
+                completo = True
+                break
+            stats["pagine"] += 1
+            for j in risultati:
+                uuid = j.get("uuid")
+                titolo = (j.get("title") or "").strip()
+                if not uuid or not titolo:
+                    continue
+                stats["viste"] += 1
+                meta = j.get("metadata") or {}
+                datore = j.get("hiringCompany") or j.get("postedCompany") or {}
+                sal = j.get("salary") or {}
+                tipi = j.get("employmentTypes") or []
+                tipo = (_MCF_TIPI.get((tipi[0].get("employmentType") or "")
+                                      .strip().lower())
+                        if tipi and isinstance(tipi[0], dict) else None)
+                via = " ".join(str(x) for x in (
+                    (j.get("address") or {}).get("block"),
+                    (j.get("address") or {}).get("street")) if x) or None
+                raw = {"title": titolo,
+                       "description": j.get("description"),
+                       "createdAt": meta.get("createdAt"),
+                       "jobPostId": meta.get("jobPostId"),
+                       "salary": sal,
+                       "skills": [s.get("skill") for s in
+                                  (j.get("skills") or [])
+                                  if isinstance(s, dict)],
+                       "employmentTypes": [t.get("employmentType")
+                                           for t in tipi
+                                           if isinstance(t, dict)],
+                       "ssocCode": j.get("ssocCode"),
+                       "numberOfVacancies": j.get("numberOfVacancies"),
+                       "company": {"name": datore.get("name"),
+                                   "uen": datore.get("uen"),
+                                   "ssic": datore.get("ssicCode2020"),
+                                   "settore": datore.get(
+                                       "ssicDescription2020")}}
+                r2 = conn.execute("""
+                    INSERT INTO ats_jobs (platform_id, slug, external_id, title,
+                        url, location, country, city, posted_at,
+                        employment_type, salary_min, salary_max,
+                        salary_currency, raw)
+                    VALUES ('mycareersfuture', 'mycareersfuture', %s, %s, %s,
+                            %s, 'SG', %s, %s, %s, %s, %s, 'SGD', %s)
+                    ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
+                      title = EXCLUDED.title, url = EXCLUDED.url,
+                      raw = EXCLUDED.raw, expired_at = NULL,
+                      fetched_at = now()
+                    RETURNING (xmax = 0) AS is_new
+                """, (uuid, titolo[:300],
+                      f"https://www.mycareersfuture.gov.sg/job/{uuid}",
+                      via or "Singapore", via,
+                      _parse_dt(meta.get("createdAt")), tipo,
+                      sal.get("minimum"), sal.get("maximum"),
+                      psycopg.types.json.Json(senza_nulli(raw)))).fetchone()
+                if r2 and r2[0]:
+                    stats["nuove"] += 1
+                else:
+                    stats["aggiornate"] += 1
+            nxt = (d.get("_links") or {}).get("next") or {}
+            url = nxt.get("href") if isinstance(nxt, dict) else None
+            time.sleep(0.3)      # ~950 pagine: passo gentile, fonte unica
+        if completo:
+            n = conn.execute("""
+                UPDATE ats_jobs SET expired_at = now()
+                 WHERE platform_id = 'mycareersfuture'
+                   AND expired_at IS NULL AND fetched_at < %s
+            """, (inizio,)).rowcount
+            stats["scadute"] = n
+    log.info("MyCareersFuture: %s", stats)
+    return stats
+
+
+# ── ePraca / praca.gov.pl (Polonia) ────────────────────────────────
+# La SPA del portale pubblico polacco parla con un backend JSON non
+# autenticato (02/10/2026): POST wyszukiwanie con paginazione Spring.
+# Non e' API ufficiale: stabile finche' resta la SPA, da tenere d'occhio.
+
+_EPRACA = "https://oferty.praca.gov.pl/portal-api/v3/oferta/wyszukiwanie"
+
+
+def _data_pl(v: str | None) -> datetime | None:
+    """Le date polacche arrivano come «02.10.2026»."""
+    if not v:
+        return None
+    m = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{4})", str(v).strip())
+    if not m:
+        return _parse_dt(v)
+    g, mese, anno = m.groups()
+    try:
+        return datetime(int(anno), int(mese), int(g), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def scarica_epraca(dsn: str, limite: int = 100000) -> dict:
+    stats = {"pagine": 0, "viste": 0, "nuove": 0,
+             "aggiornate": 0, "scadute": 0, "errori": 0}
+    inizio = datetime.now(timezone.utc)
+    completo = False
+    with httpx.Client(timeout=60, headers={
+            "User-Agent": "nivult-ats/0.1 (+https://nivult.com)"}) as c, \
+            psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("""INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+                        VALUES ('epraca', 'ePraca praca.gov.pl (Polonia)', true, 'json',
+                                'backend JSON della SPA nazionale; datore reale in pracodawca')
+                        ON CONFLICT (id) DO NOTHING""")
+        pagina, pagine = 0, 1
+        while pagina < pagine and stats["viste"] < limite:
+            # page/size vanno in QUERY STRING: nel body JSON il backend
+            # li ignora e restituisce sempre la prima pagina (misurato
+            # il 02/10/2026: 50 pagine identiche, 980 doppioni)
+            try:
+                r = c.post(_EPRACA, params={"page": pagina, "size": 100},
+                           json={})
+            except httpx.HTTPError as exc:
+                log.warning("ePraca: %s", exc)
+                stats["errori"] += 1
+                break
+            if r.status_code != 200:
+                log.warning("ePraca HTTP %d", r.status_code)
+                stats["errori"] += 1
+                break
+            d = (r.json() or {}).get("payload") or {}
+            pg = d.get("ofertyPracyPage") or {}
+            voci = pg.get("content") or []
+            pagine = pg.get("totalPages") or pagine
+            stats["pagine"] += 1
+            for j in voci:
+                oid = j.get("id")
+                titolo = re.sub(r"\s+", " ",
+                                (j.get("stanowisko") or "")).strip()
+                if not oid or not titolo:
+                    continue
+                stats["viste"] += 1
+                dove = (j.get("miejscePracy") or "").strip()
+                citta = dove.split(",")[0].strip() or None
+                raw = {"stanowisko": titolo,
+                       "pracodawca": j.get("pracodawca"),
+                       "pracodawcaAdres": j.get("pracodawcaAdres"),
+                       "rodzajUmowy": j.get("rodzajUmowy"),
+                       "wynagrodzenie": j.get("wynagrodzenie"),
+                       "wymiarZatrud": j.get("wymiarZatrud"),
+                       "wymagania": j.get("wymagania"),
+                       "zakresObowiazkow": j.get("zakresObowiazkow"),
+                       "dataWaznDo": j.get("dataWaznDo"),
+                       "company": {"name": j.get("pracodawca")}}
+                r2 = conn.execute("""
+                    INSERT INTO ats_jobs (platform_id, slug, external_id, title,
+                        url, location, country, city, posted_at, raw)
+                    VALUES ('epraca', 'epraca', %s, %s, %s, %s, 'PL', %s,
+                            %s, %s)
+                    ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
+                      title = EXCLUDED.title, url = EXCLUDED.url,
+                      raw = EXCLUDED.raw, expired_at = NULL,
+                      fetched_at = now()
+                    RETURNING (xmax = 0) AS is_new
+                """, (str(oid), titolo[:300],
+                      f"https://oferty.praca.gov.pl/portal/oferta/{oid}",
+                      dove or None, citta,
+                      _data_pl(j.get("dataWaznOd")),
+                      psycopg.types.json.Json(senza_nulli(raw)))).fetchone()
+                if r2 and r2[0]:
+                    stats["nuove"] += 1
+                else:
+                    stats["aggiornate"] += 1
+            pagina += 1
+            time.sleep(0.3)
+        if completo or pagina >= pagine:
+            completo = True
+            n = conn.execute("""
+                UPDATE ats_jobs SET expired_at = now()
+                 WHERE platform_id = 'epraca' AND expired_at IS NULL
+                   AND fetched_at < %s
+            """, (inizio,)).rowcount
+            stats["scadute"] = n
+    log.info("ePraca: %s", stats)
+    return stats
+
+
+# ── NVA (Lettonia) ─────────────────────────────────────────────────
+# Dump open-data GIORNALIERO su data.gov.lv (CKAN): un CSV con tutte
+# le vakances attive, col numero di registro del datore incluso.
+
+_NVA_PACCHETTO = ("https://data.gov.lv/dati/api/3/action/package_show"
+                  "?id=vakances")
+
+
+def scarica_nva(dsn: str) -> dict:
+    import csv
+    import io
+    stats = {"viste": 0, "nuove": 0, "aggiornate": 0, "scadute": 0}
+    inizio = datetime.now(timezone.utc)
+    with httpx.Client(timeout=120, follow_redirects=True, headers={
+            "User-Agent": "nivult-ats/0.1 (+https://nivult.com)"}) as c, \
+            psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute("""INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
+                        VALUES ('nva', 'NVA (Lettonia)', true, 'csv',
+                                'dump open-data giornaliero con numero di registro del datore')
+                        ON CONFLICT (id) DO NOTHING""")
+        pkg = c.get(_NVA_PACCHETTO).json().get("result") or {}
+        risorse = [r for r in (pkg.get("resources") or [])
+                   if (r.get("format") or "").upper() == "CSV"]
+        if not risorse:
+            log.warning("NVA: nessuna risorsa CSV nel pacchetto")
+            return stats
+        url = sorted(r.get("url") for r in risorse if r.get("url"))[-1]
+        testo = c.get(url).content.decode("utf-8-sig", "replace")
+        for riga in csv.DictReader(io.StringIO(testo)):
+            vid = (riga.get("Vakances_Nr") or "").strip()
+            titolo = re.sub(r"\s+", " ",
+                            riga.get("Vakances_nosaukums") or "").strip()
+            if not vid or not titolo:
+                continue
+            stats["viste"] += 1
+
+            def _num(x):
+                try:
+                    return float(x)
+                except (TypeError, ValueError):
+                    return None
+
+            raw = {"categoria": riga.get("Vakances_kategorija"),
+                   "registro_imprese": riga.get(
+                       "Iestades_registracijas_numurs"),
+                   "slodze": riga.get("Slodzes_tips"),
+                   "termine": riga.get("Pieteiksanas_termins")}
+            r2 = conn.execute("""
+                INSERT INTO ats_jobs (platform_id, slug, external_id, title,
+                    url, location, country, city, posted_at,
+                    salary_min, salary_max, salary_currency, raw)
+                VALUES ('nva', 'nva', %s, %s, %s, %s, 'LV', %s, %s,
+                        %s, %s, 'EUR', %s)
+                ON CONFLICT (platform_id, slug, external_id) DO UPDATE SET
+                  title = EXCLUDED.title, url = EXCLUDED.url,
+                  raw = EXCLUDED.raw, expired_at = NULL, fetched_at = now()
+                RETURNING (xmax = 0) AS is_new
+            """, (vid, titolo[:300],
+                  (riga.get("Vakances_paplasinats_apraksts") or "")[:1000],
+                  (riga.get("Vieta") or "").strip() or None,
+                  (riga.get("Vieta") or "").split(",")[0].strip() or None,
+                  _parse_dt(riga.get("Aktualizacijas_datums")),
+                  _num(riga.get("Alga_no")), _num(riga.get("Alga_lidz")),
+                  psycopg.types.json.Json(senza_nulli(raw)))).fetchone()
+            if r2 and r2[0]:
+                stats["nuove"] += 1
+            else:
+                stats["aggiornate"] += 1
+        n = conn.execute("""
+            UPDATE ats_jobs SET expired_at = now()
+             WHERE platform_id = 'nva' AND expired_at IS NULL
+               AND fetched_at < %s
+        """, (inizio,)).rowcount
+        stats["scadute"] = n
+    log.info("NVA: %s", stats)
+    return stats
+
+
 def stats(dsn: str) -> None:
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
@@ -760,36 +1071,55 @@ def main(argv: list[str] | None = None) -> int:
                     help="EURES, il portale UE: la fonte che copre l'Italia")
     ap.add_argument("--nav", action="store_true",
                     help="NAV Arbeidsplassen (Norvegia): feed di eventi + dettaglio, scadenze dalla fonte")
+    ap.add_argument("--mycareersfuture", action="store_true",
+                    help="MyCareersFuture (Singapore): ~95k offerte, UEN del datore")
+    ap.add_argument("--epraca", action="store_true",
+                    help="ePraca praca.gov.pl (Polonia): backend JSON della SPA")
+    ap.add_argument("--nva", action="store_true",
+                    help="NVA (Lettonia): dump CSV giornaliero open-data")
     ap.add_argument("--paesi", default="IT",
                     help="paesi per --eures, separati da virgola")
-    ap.add_argument("--limite", type=int, default=1000)
+    ap.add_argument("--limite", type=int, default=None)
     ap.add_argument("--stats", action="store_true")
     args = ap.parse_args(argv)
 
+    # --limite None = ogni fonte col suo default: i portali nazionali
+    # nuovi fanno lo SNAPSHOT COMPLETO (serve per le scadenze oneste)
+    limite = args.limite or 1000
     if args.eures:
-        st = eures(ATS_DSN, args.limite, args.paesi)
+        st = eures(ATS_DSN, args.limite or 2000, args.paesi)
         print(f"EURES: {st}")
 
     if args.arbetsformedlingen:
-        s = scarica_arbetsformedlingen(ATS_DSN, args.limite)
+        s = scarica_arbetsformedlingen(ATS_DSN, limite)
         print(f"\nArbetsförmedlingen: {s}")
     if args.francetravail:
-        s = scarica_francetravail(ATS_DSN, args.limite)
+        s = scarica_francetravail(ATS_DSN, limite)
         print(f"\nFrance Travail: {s}")
     if args.francetravail_rome:
-        s = scarica_francetravail_rome(ATS_DSN, args.limite)
+        s = scarica_francetravail_rome(ATS_DSN, limite)
         print(f"\nFrance Travail ROME: {s}")
     if args.bundesanstellung:
-        s = scarica_bundesagentur(ATS_DSN, args.limite)
+        s = scarica_bundesagentur(ATS_DSN, args.limite or 2000)
         print(f"\nBundesagentur: {s}")
     if args.nav:
-        s = scarica_nav(ATS_DSN, args.limite)
+        s = scarica_nav(ATS_DSN, args.limite or 2000)
         print(f"\nNAV: {s}")
+    if args.mycareersfuture:
+        s = scarica_mycareersfuture(ATS_DSN, args.limite or 200000)
+        print(f"\nMyCareersFuture: {s}")
+    if args.epraca:
+        s = scarica_epraca(ATS_DSN, args.limite or 100000)
+        print(f"\nePraca: {s}")
+    if args.nva:
+        s = scarica_nva(ATS_DSN)
+        print(f"\nNVA: {s}")
     if args.stats:
         stats(ATS_DSN)
     if not (args.arbetsformedlingen or args.francetravail
             or args.bundesanstellung or args.francetravail_rome
-            or args.stats or args.eures or args.nav):
+            or args.stats or args.eures or args.nav
+            or args.mycareersfuture or args.epraca or args.nva):
         ap.print_help()
     return 0
 

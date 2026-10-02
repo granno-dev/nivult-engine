@@ -227,6 +227,22 @@ echo "── bundesanstellung (Germania)"
   >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO"
 
+# ── Portali nazionali zero-auth fuori UE (02/10/2026) ────────────
+echo "── mycareersfuture (Singapore, ~95k, UEN del datore)"
+"$PY" -m nivult.ats.servizi_pubblici --mycareersfuture \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+echo "── epraca (Polonia, backend JSON della SPA nazionale)"
+"$PY" -m nivult.ats.servizi_pubblici --epraca \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
+echo "── nva (Lettonia, dump CSV giornaliero)"
+"$PY" -m nivult.ats.servizi_pubblici --nva \
+  >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+  && echo "   ok" || echo "   FALLITO"
+
 # ── feed globale: le offerte attive di tutti i tenant SmartRecruiters,
 #    dal loro elenco unico. Puntiamo alle offerte, non alle aziende a
 #    caso: zero visite a vuoto, e i tenant nuovi si scoprono col lavoro
