@@ -123,6 +123,106 @@ def da_brandfetch(dsn: str, limite: int = 2000) -> dict:
     return stats
 
 
+# ── strato 3: LinkedIn, la pagina aziendale PUBBLICA (01/10/2026) ────────
+# Via searxng (google/yahoo trattano bene site:linkedin.com/company) e poi
+# la pagina pubblica, senza login e senza proxy: a ritmo gentile l'authwall
+# non parte (misurato). Esce: dominio vero (dal redir del sito), dipendenti
+# esatti e freschi, settore, sede. Dato aziendale, non personale; restano
+# comunque pagine pubbliche chieste piano, e i numeri si marcano 'linkedin'
+# come fonte — sono auto-dichiarati.
+_SEARX = os.environ.get("SEARX_URL", "http://100.119.200.7:8899/search")
+_UA_LI = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+          "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+
+
+def _pagina_linkedin(nome: str, cli: httpx.Client) -> dict | None:
+    """La pagina aziendale LinkedIn per nome, o None."""
+    r = cli.get(_SEARX, params={"q": f'site:linkedin.com/company "{nome}"',
+                                "format": "json", "engines": "google,yahoo"},
+                headers={"User-Agent": "nivult/1.0"})
+    r.raise_for_status()
+    li = next((x for x in r.json().get("results") or []
+               if "linkedin.com/company/" in (x.get("url") or "")), None)
+    if not li:
+        return None
+    time.sleep(5)
+    p = cli.get(li["url"], headers={"User-Agent": _UA_LI},
+                follow_redirects=True)
+    if p.status_code != 200:
+        return None
+    h = p.text
+    out: dict = {"pagina": li["url"]}
+    m = re.search(r'"numberOfEmployees":\{"value":(\d+)', h)
+    if m:
+        out["dipendenti"] = int(m.group(1))
+    m = re.search(r'redir/redirect\?url=([^"&]+)', h)
+    if m:
+        from urllib.parse import unquote
+        host = (urlparse(unquote(m.group(1))).hostname or "").lower()
+        if host and "linkedin" not in host:
+            out["dominio"] = _radice(host)
+    for tid, chiave in (("about-us__industry", "settore"),
+                        ("about-us__headquarters", "sede")):
+        m = re.search(tid + r'[^<]*<dd[^>]*>\s*([^<]+?)\s*</dd>', h, re.S)
+        if m:
+            out[chiave] = m.group(1).strip()[:80]
+    return out
+
+
+def da_linkedin(dsn: str, limite: int = 500) -> dict:
+    """Strato 3: nome -> pagina LinkedIn -> dominio + dipendenti + settore.
+
+    Le colonne li_* tengono la fonte separata dal dato certo: i numeri di
+    LinkedIn sono auto-dichiarati e vanno letti come stime."""
+    stats = {"esaminate": 0, "pagina": 0, "dominio": 0, "dipendenti": 0,
+             "settore": 0}
+    cli = httpx.Client(timeout=30)
+    with psycopg.connect(dsn, autocommit=True) as c:
+        prepara(c)
+        c.execute("ALTER TABLE ats_companies "
+                  "ADD COLUMN IF NOT EXISTS li_employees integer")
+        c.execute("ALTER TABLE ats_companies "
+                  "ADD COLUMN IF NOT EXISTS li_industry text")
+        c.execute("ALTER TABLE ats_companies "
+                  "ADD COLUMN IF NOT EXISTS li_checked_at timestamptz")
+        righe = c.execute("""
+            SELECT platform_id, slug, company_name FROM ats_companies
+             WHERE is_active AND job_count > 1
+               AND company_name IS NOT NULL AND length(company_name) > 4
+               AND logo_domain IS NULL AND site_domain IS NULL
+               AND li_checked_at IS NULL
+             ORDER BY job_count DESC LIMIT %s""", (limite,)).fetchall()
+        for pid, slug, nome in righe:
+            stats["esaminate"] += 1
+            try:
+                esito = _pagina_linkedin(nome, cli)
+            except Exception:                        # noqa: BLE001
+                time.sleep(4)
+                continue
+            if not esito:
+                c.execute("UPDATE ats_companies SET li_checked_at = now() "
+                          "WHERE platform_id = %s AND slug = %s", (pid, slug))
+                continue
+            stats["pagina"] += 1
+            dom = esito.get("dominio")
+            c.execute("""UPDATE ats_companies SET
+                           site_domain = coalesce(site_domain, %s),
+                           site_domain_source = CASE
+                             WHEN site_domain IS NULL THEN 'linkedin'
+                             ELSE site_domain_source END,
+                           li_employees = %s, li_industry = %s,
+                           li_checked_at = now()
+                         WHERE platform_id = %s AND slug = %s""",
+                      (dom, esito.get("dipendenti"), esito.get("settore"),
+                       pid, slug))
+            stats["dominio"] += 1 if dom else 0
+            stats["dipendenti"] += 1 if esito.get("dipendenti") else 0
+            stats["settore"] += 1 if esito.get("settore") else 0
+            time.sleep(1.5)
+    log.info("linkedin: %s", stats)
+    return stats
+
+
 def main() -> int:
     import argparse
     from .runner import ATS_DSN
@@ -130,10 +230,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.domini_datori")
     ap.add_argument("--limite", type=int, default=2000)
     ap.add_argument("--solo-vanity", action="store_true")
+    ap.add_argument("--solo-linkedin", action="store_true")
+    ap.add_argument("--limite-linkedin", type=int, default=500)
     a = ap.parse_args()
     esito = da_vanity(ATS_DSN)
     if not a.solo_vanity:
         esito.update(da_brandfetch(ATS_DSN, a.limite))
+    if a.solo_linkedin:
+        esito = da_linkedin(ATS_DSN, a.limite_linkedin)
     print(json.dumps(esito))
     return 0
 
