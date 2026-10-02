@@ -705,7 +705,7 @@ function rigaAzienda(a) {
     </div>
     <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
       <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
-      <button onclick="rivelaAzienda('${a.ref}', this)" class="rounded-lg bg-brand-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Reveal · 1 credit</button>
+      <button onclick="rivelaAzienda('${a.ref}', this)" class="rounded-lg bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal · 1 credit</button>
     </div>
   </div>`;
 }
@@ -872,8 +872,8 @@ async function dettaglioJob(id) {
   const corpo = o.description
     ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>`
     : `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4">
-         <p class="text-[12.5px] font-bold text-slate-500">The full posting text is still being indexed for this source.</p>
-         <p class="mt-1 text-[12px] text-slate-400">Everything we already know is on this card — the original posting carries the rest.</p>
+         <p class="text-[12.5px] font-bold text-slate-500">Full text still being indexed</p>
+         <p class="mt-1 text-[12px] text-slate-400">The essentials are already on this card — the original posting carries the full description.</p>
        </div>`;
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
@@ -1019,12 +1019,16 @@ function dettaglioAzienda(ref) {
     <div class="mt-2 space-y-0.5">${tecRighe}</div>
     <p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p>
     <div class="mt-2 space-y-2">${barra(78, 3.5)}${barra(64, 3.5)}</div>
-    <div class="mt-7 rounded-2xl border border-brand-500/25 bg-gradient-to-r from-brand-50 via-white to-mint-500/10 px-5 py-4 flex flex-wrap items-center gap-4">
-      <div class="min-w-0 flex-1">
-        <p class="text-[14px] font-black text-slate-900">The full record unlocks with one credit</p>
-        <p class="mt-0.5 text-[12.5px] text-slate-500">name, domain, stack, locations and live postings — once, then it's yours forever.</p>
+    <div class="mt-7 relative overflow-hidden rounded-2xl bg-slate-950 px-5 py-4 flex flex-wrap items-center gap-4 shadow-xl shadow-slate-900/25">
+      <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
+      <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 via-violet-500 to-mint-500 grid place-items-center shadow-lg shadow-violet-500/30 shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>
       </div>
-      <button onclick="rivelaAzienda('${ref}', this)" class="rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/30 hover:shadow-xl hover:shadow-brand-500/40 hover:-translate-y-px transition shrink-0">Reveal this company · 1 credit</button>
+      <div class="min-w-0 flex-1">
+        <p class="text-[14px] font-black text-white">The full record unlocks with one credit</p>
+        <p class="mt-0.5 text-[12.5px] text-slate-400">Name, domain, tech stack, locations and live postings — pay once, it's yours forever.</p>
+      </div>
+      <button onclick="rivelaAzienda('${ref}', this)" class="rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal this company · 1 credit</button>
     </div>
   </div>`);
 }

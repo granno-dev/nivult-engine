@@ -811,6 +811,12 @@ def scarica_epraca(dsn: str, limite: int = 100000) -> dict:
                        "wymagania": j.get("wymagania"),
                        "zakresObowiazkow": j.get("zakresObowiazkow"),
                        "dataWaznDo": j.get("dataWaznDo"),
+                       # la descrizione la compone l'ingestione: mansioni
+                       # + requisiti, cosi' l'export la trova gia' pronta
+                       # in raw.description (02/10/2026)
+                       "description": "\n\n".join(x for x in (
+                           j.get("zakresObowiazkow"),
+                           j.get("wymagania")) if x) or None,
                        "company": {"name": j.get("pracodawca")}}
                 r2 = conn.execute("""
                     INSERT INTO ats_jobs (platform_id, slug, external_id, title,

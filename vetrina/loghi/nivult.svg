@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b6ef6"/>
+      <stop offset="0.5" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#0fbf9a"/>
+    </linearGradient>
+  </defs>
+  <!-- il tile: gli angoli morbidi del sistema -->
+  <rect x="16" y="16" width="480" height="480" rx="118" fill="url(#brand)"/>
+  <!-- la N del marchio: tre tratti, tondi, col passo allargato -->
+  <g stroke="#ffffff" stroke-width="46" stroke-linecap="round" fill="none">
+    <path d="M132 352 V164"/>
+    <path d="M132 168 L340 348"/>
+    <path d="M340 352 V164"/>
+  </g>
+  <!-- il puntino menta: la firma di «Nivult.» — staccato, come nel logo -->
+  <circle cx="398" cy="352" r="30" fill="#2fe0b6"/>
+</svg>
