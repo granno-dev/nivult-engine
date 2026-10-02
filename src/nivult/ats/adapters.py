@@ -849,19 +849,29 @@ class BambooHR(BaseAdapter):
         except ValueError:
             return []
         result = data.get("result") or []
-        return [
-            AtsJob(
+        out = []
+        for j in result:
+            if not j.get("id") or not j.get("jobOpeningName"):
+                continue
+            # atsLocation e' spesso tutto NULL mentre `location`
+            # (city+state) e' compilato (02/10/2026: 53mila offerte
+            # senza paese per colpa di questo). Il paese poi arriva
+            # da geonames leggendo citta'+stato.
+            al = j.get("atsLocation") or {}
+            loc = j.get("location") or {}
+            citta = al.get("city") or loc.get("city")
+            stato = al.get("state") or loc.get("state")
+            out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=str(j.get("id") or ""),
                 title=j.get("jobOpeningName") or "",
                 url=f"https://{slug}.bamboohr.com/careers/{j.get('id')}",
-                location=(j.get("atsLocation") or {}).get("city"),
-                country=_iso((j.get("atsLocation") or {}).get("country")),
-                city=(j.get("atsLocation") or {}).get("city"),
+                location=", ".join(x for x in (citta, stato) if x) or None,
+                country=_iso(al.get("country")),
+                city=citta,
                 department=j.get("departmentLabel"),
-                raw=j)
-            for j in result if j.get("id") and j.get("jobOpeningName")
-        ]
+                raw=j))
+        return out
 
 
 ADAPTERS["bamboohr"] = BambooHR
