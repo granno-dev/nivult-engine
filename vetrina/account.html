@@ -122,18 +122,24 @@ tailwind.config = {
       <button onclick="esci()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
     </div>
 
-    <!-- la striscia utile: crediti, chiave, la prima chiamata pronta da copiare (28/09) -->
-    <div class="mt-6 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 flex flex-wrap items-center gap-x-5 gap-y-3 shadow-xl shadow-slate-900/15">
+    <!-- la striscia che conta: crediti, il polso dell'indice, la prima
+         chiamata pronta. Niente chiave mascherata ne' conteggio delle
+         rivelazioni: erano rumore (02/10/2026) -->
+    <div class="mt-6 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 flex flex-wrap items-center gap-x-6 gap-y-3 shadow-xl shadow-slate-900/15">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">credits available</div>
         <div id="hero-crediti" class="text-2xl font-black tabular-nums text-mint-400">—</div>
       </div>
       <div class="h-9 w-px bg-white/10 hidden sm:block"></div>
-      <div class="min-w-0">
-        <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">your key</div>
-        <code id="hero-chiave" class="font-mono text-[13px] text-slate-300">—</code>
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">the index right now</div>
+        <div class="text-[13.5px] font-bold text-slate-200"><span id="hero-offerte" class="text-white">—</span> active postings · <span id="hero-aziende" class="text-white">—</span> companies</div>
       </div>
-      <span id="hero-rivelazioni" class="text-[12px] text-slate-400"></span>
+      <div class="h-9 w-px bg-white/10 hidden sm:block"></div>
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">new in the last 24h</div>
+        <div id="hero-nuove" class="text-[13.5px] font-bold text-mint-400 tabular-nums">—</div>
+      </div>
       <button onclick="copiaCurl(this)" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-brand-500/25">Copy your first call →</button>
     </div>
 
@@ -188,6 +194,7 @@ tailwind.config = {
           <div class="mt-4 flex items-center gap-2 text-[12px] flex-wrap">
             <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold hidden"></span>
+            <span id="uso-rivelazioni" class="rounded-md bg-brand-50 text-brand-600 px-2 py-1 font-bold hidden"></span>
           </div>
           <p class="mt-3 text-[12px] text-slate-400">The bar is this month's free allowance — it resets on the 1st. Top-ups kick in when the free ones run out and never expire.</p>
         </div>
@@ -528,12 +535,14 @@ function disegna() {
     acc.textContent = "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire";
     acc.classList.remove("hidden");
   } else acc.classList.add("hidden");
-  /* la striscia-eroe: crediti, chiave mascherata, rivelazioni in cassaforte */
+  /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
+     di credito dove il credito si guarda: nella card (02/10/2026) */
   document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
-  const prima = chiavi.find(k => !k.revocata_il);
-  document.getElementById("hero-chiave").textContent = prima ? "nv_···" + prima.id.slice(-6) : "—";
-  document.getElementById("hero-rivelazioni").textContent =
-    rivelazioni ? `${rivelazioni.toLocaleString("en-US")} companies revealed · yours forever, never paid twice` : "";
+  const riv = document.getElementById("uso-rivelazioni");
+  if (rivelazioni) {
+    riv.textContent = rivelazioni.toLocaleString("en-US") + " companies unlocked · never pay twice";
+    riv.classList.remove("hidden");
+  } else riv.classList.add("hidden");
 }
 /* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
    esempi del quickstart la portano dentro finche' la pagina e' aperta,
@@ -828,6 +837,10 @@ async function dettaglioJob(id) {
   if (!r.ok) return;
   const d = await r.json();
   const o = d.offerta || {};
+  /* la citta' non e' mai una parola-tipo: «Onsite» in city e' entrato da
+     iCIMS prima della guardia del 02/10 — difesa anche qui, al volo */
+  const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
+  const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
   const tec = (o.technologies || []).map(t =>
     `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(t)}</span>`).join("");
   const logo = o.company_slug
@@ -844,20 +857,41 @@ async function dettaglioJob(id) {
          </div>
          ${linkOfferta
            ? `<a href="${linkOfferta}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>`
-           : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-[12px] font-bold text-slate-400">🔒 link alla fonte con il profilo</span>`}
+           : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-[12px] font-bold text-slate-400">🔒 source link unlocks with the profile</span>`}
+       </div>`;
+  /* i fatti che valgono qualcosa anche quando la descrizione manca:
+     la fonte, il salario, le lingue, il tipo di settimana (02/10/2026) */
+  const fatti = [
+    o.salary_text ? ["Salary", o.salary_text] : null,
+    o.hours_type ? ["Hours", o.hours_type] : null,
+    o.management_level ? ["Level", o.management_level] : null,
+    (o.languages_required || []).length ? ["Languages", o.languages_required.map(l => String(l).toUpperCase()).join(", ")] : null,
+    o.benefits ? ["Benefits", String(o.benefits).slice(0, 120)] : null,
+  ].filter(Boolean);
+  const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
+  const corpo = o.description
+    ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>`
+    : `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4">
+         <p class="text-[12.5px] font-bold text-slate-500">The full posting text is still being indexed for this source.</p>
+         <p class="mt-1 text-[12px] text-slate-400">Everything we already know is on this card — the original posting carries the rest.</p>
        </div>`;
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
       <div><h3 class="text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
-      <p class="mt-1 text-[13.5px] text-slate-500">${esc([o.city, o.country].filter(Boolean).join(", "))}</p></div>
+      <p class="mt-1 text-[13.5px] text-slate-500">${esc([citta, o.country].filter(Boolean).join(", "))}</p></div>
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
     </div>
     <div class="mt-4 flex flex-wrap gap-2">${[
       o.category, o.seniority, o.remote, o.employment_type,
       o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
-      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}</div>
+      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}${fonte}</div>
+    ${fatti.length ? `<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${fatti.map(([l, v]) =>
+      `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
+         <p class="text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${esc(l)}</p>
+         <p class="mt-0.5 text-[13px] font-bold text-slate-900 truncate" title="${esc(v)}">${esc(v)}</p>
+       </div>`).join("")}</div>` : ""}
     ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-    ${o.description ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>` : ""}
+    ${corpo}
     ${azienda}
   </div>`);
 }
@@ -1032,7 +1066,7 @@ while True:
 `HTTP/1.1 429
 {
   "detail": {
-    "errore": "crediti mensili esauriti",
+    "errore": "monthly credits exhausted",
     "crediti_mensili": 1000,
     "mese_uso": "2026-09-01"
   }
@@ -1188,12 +1222,17 @@ async function scaricaExportFiltrato() {
 
 /* ══ avvio ══ */
 (async () => {
-  // il numero in testa all'esploratore e' il VIVO, lo stesso del cruscotto
+  // il numero in testa all'esploratore e' il VIVO, lo stesso del cruscotto;
+  // la striscia-eroe prende dalla stessa fonte il polso dell'indice
   fetch(API + "/v1/demo/stats", { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(s => {
       const el = document.getElementById("cerca-totale");
       if (s.offerte) el.innerHTML = `<b class="text-mint-600">${s.offerte.toLocaleString("en-US")}</b> active postings right now`;
+      const f = n => (n || 0).toLocaleString("en-US");
+      if (s.offerte) document.getElementById("hero-offerte").textContent = f(s.offerte);
+      if (s.aziende) document.getElementById("hero-aziende").textContent = f(s.aziende);
+      if (s.nuove_24h) document.getElementById("hero-nuove").textContent = "+" + f(s.nuove_24h);
     }).catch(() => {});
   document.getElementById("cerca-freschezza").textContent = "the index refreshes every morning";
   await verificaGettone();

@@ -1039,7 +1039,7 @@ def create_app() -> FastAPI:
     @app.delete("/me/chiavi/{chiave_id}")
     def revoca_mia_chiave(chiave_id: str, uid: str = Depends(utente)):
         if not _chiavi.revoca_per_utente(chiave_id, uid):
-            raise HTTPException(404, "chiave non trovata o non tua")
+            raise HTTPException(404, "key not found")
         return {"revocata": True}
 
     # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
@@ -1128,11 +1128,11 @@ def create_app() -> FastAPI:
             corpo = {}
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
-            raise HTTPException(400, "id mancante")
+            raise HTTPException(400, "missing id")
         _freno_portale(uid)
         riga = _dati.offerta_dettaglio_portale(offerta_id)
         if riga is None:
-            raise HTTPException(404, "offerta non trovata")
+            raise HTTPException(404, "posting not found")
         rif = None
         if riga.get("ats") and riga.get("company_slug"):
             rif = f"{riga['ats']}:{riga['company_slug']}"
@@ -1152,16 +1152,15 @@ def create_app() -> FastAPI:
             corpo = {}
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
-            raise HTTPException(400, "id mancante")
+            raise HTTPException(400, "missing id")
         # Si guarda prima e si paga dopo: un credito speso sul vuoto
         # (offerta sparita dall'export di oggi) non si perdona (29/09/2026).
         riga = _dati.rivela_offerta(offerta_id)
         if riga is None:
-            raise HTTPException(404, "offerta non trovata")
+            raise HTTPException(404, "posting not found")
         esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
         if esito == "senza_crediti":
-            raise HTTPException(429, "crediti del mese finiti: "
-                                "aumenta il volume dalla dashboard")
+            raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
         return {"offerta": riga, "esito": esito}
 
     @app.post("/portale/rivela-azienda")
@@ -1172,17 +1171,16 @@ def create_app() -> FastAPI:
             corpo = {}
         rif = str((corpo or {}).get("ref") or "").strip()
         if not rif:
-            raise HTTPException(400, "ref mancante")
+            raise HTTPException(400, "missing ref")
         # Si guarda prima e si paga dopo: rivelare un'azienda che il
         # DuckDB non ha (export di oggi mancante) non deve costare
         # nulla (29/09/2026).
         riga = _dati.rivela_azienda(rif)
         if riga is None:
-            raise HTTPException(404, "azienda non trovata")
+            raise HTTPException(404, "company not found")
         esito = _chiavi.rivela_per_utente(uid, "azienda", rif)
         if esito == "senza_crediti":
-            raise HTTPException(429, "crediti del mese finiti: "
-                                "aumenta il volume dalla dashboard")
+            raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
         return {"azienda": riga, "esito": esito}
 
     @app.post("/portale/azienda-jobs")
@@ -1194,7 +1192,7 @@ def create_app() -> FastAPI:
             corpo = {}
         rif = str((corpo or {}).get("ref") or "").strip()
         if not _chiavi.e_rivelata(uid, "azienda", rif):
-            raise HTTPException(402, "rivela prima l'azienda")
+            raise HTTPException(402, "reveal the company first")
         _freno_portale(uid)
         return {"data": _dati.azienda_jobs_portale(rif)}
 
@@ -1205,19 +1203,19 @@ def create_app() -> FastAPI:
         download paga un credito dal suo contatore. Sotto i 50K/mese
         l'export bulk non e' nel piano (la soglia della landing)."""
         if nome not in ("offerte", "aziende"):
-            raise HTTPException(404, "export sconosciuto")
+            raise HTTPException(404, "unknown export")
         attive = [k for k in _chiavi.lista_per_utente(uid)
                   if not k["revocata_il"]]
         if not attive:
-            raise HTTPException(402, "crea prima una chiave API")
+            raise HTTPException(402, "create an API key first")
         if max(k["crediti_mensili"] for k in attive) < 50000:
-            raise HTTPException(402, "l'export giornaliero parte da 50K "
-                                "crediti/mese — alza il volume qui sotto")
+            raise HTTPException(402, "the daily export starts at the 50K "
+                                "credits/month tier — raise your volume below")
         if not _chiavi.spendi_per_utente(uid):
-            raise HTTPException(429, "crediti del mese finiti")
+            raise HTTPException(429, "this month's credits are spent")
         percorso = (_dati.stato_export().get("file") or {}).get(nome)
         if not percorso or not os.path.isfile(percorso):
-            raise HTTPException(404, "export di oggi non ancora pronto")
+            raise HTTPException(404, "today's export is not ready yet")
         return FileResponse(percorso, media_type="application/gzip",
                             filename=os.path.basename(percorso))
 
@@ -1283,8 +1281,8 @@ def create_app() -> FastAPI:
             raise
         if not await run_in_threadpool(_chiavi.spendi_n_per_utente, uid, costo):
             os.unlink(percorso)
-            raise HTTPException(429, "crediti insufficienti per questo export: "
-                                f"ne servono {costo}")
+            raise HTTPException(429, "not enough credits for this export: "
+                                f"it costs {costo}")
         sfondo = BackgroundTasks()
         sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
         return FileResponse(percorso, media_type="application/gzip",
@@ -1307,7 +1305,7 @@ def create_app() -> FastAPI:
         # qualunque volume entro la curva e' vendibile: il PREZZO lo
         # calcola billing dalla curva, il client non decide mai gli euro
         if not 100 <= volume <= 5_000_000:
-            raise HTTPException(400, "volume fuori dalla curva di prezzo")
+            raise HTTPException(400, "amount outside the price curve")
         with conn.cursor() as cur:
             cur.execute("SELECT email FROM users WHERE id = %s", (uid,))
             riga = cur.fetchone()
@@ -1319,8 +1317,8 @@ def create_app() -> FastAPI:
                 cancel_url=os.environ.get("SITE_URL", "").rstrip("/")
                 + "/account.html")
         except _billing.BillingNonPronto:
-            raise HTTPException(503, "checkout non ancora attivo: "
-                                "scrivi a hello@nivult.com")
+            raise HTTPException(503, "checkout is not live yet — "
+                                "write to hello@nivult.com")
         return {"checkout_url": url}
 
     @app.post("/webhooks/creem")
@@ -1372,7 +1370,7 @@ def create_app() -> FastAPI:
                 (match_id, uid))
             r = cur.fetchone()
         if not r:
-            raise HTTPException(404, "offerta non trovata")
+            raise HTTPException(404, "posting not found")
         (score, reason, quando, analisi, raw, purgata, titolo, azienda,
          url, link_kind, tipo_datore, citta, stipendio, slug) = r
         raw = raw or {}

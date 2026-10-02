@@ -1141,9 +1141,13 @@ class Icims(BaseAdapter):
                              if "location" in k.lower()), None))
                 # la sede e' spesso «CC-Stato-Citta» (US-KS-Wichita,
                 # IN-Remote): il primo pezzo e' il codice paese, l'ultimo
-                # la citta'
+                # la citta'. MAI parole-tipo come sede: «Onsite» in city
+                # finiva nel modale del portale come se fosse un posto
+                # (02/10/2026, segnalato dal vivo).
+                _NON_SEDI = {"onsite", "on-site", "remote", "hybrid",
+                             "telecommute", "various", "multiple"}
                 citta = paese = None
-                if loc:
+                if loc and loc.strip().lower() not in _NON_SEDI:
                     m3 = re.match(r"^([A-Z]{2})-(.+)$", loc)
                     if m3:
                         paese = _iso(m3.group(1))

@@ -47,14 +47,14 @@ def _cliente(request: Request) -> dict:
     """
     chiave = request.headers.get("X-Api-Key", "").strip()
     if not chiave:
-        raise HTTPException(401, "chiave API mancante: serve l'header X-Api-Key")
+        raise HTTPException(401, "missing API key: send the X-Api-Key header")
     try:
         return chiavi.autentica(chiave)
     except chiavi.ChiaveInvalida:
-        raise HTTPException(401, "chiave API non valida o revocata")
+        raise HTTPException(401, "invalid or revoked API key")
     except chiavi.CreditiEsauriti as e:
         raise HTTPException(429, detail={
-            "errore": "crediti mensili esauriti",
+            "errore": "monthly credits exhausted",
             "crediti_mensili": e.crediti_mensili,
             "mese_uso": str(e.mese_uso)})
 
