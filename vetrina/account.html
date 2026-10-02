@@ -339,17 +339,25 @@ tailwind.config = {
     <!-- ══ gli export filtrati, con stima del costo ══ -->
     <div class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
       <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
-      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-500/10 to-transparent flex-wrap">
-        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-amber-500 to-pink-500 grid place-items-center shadow-md shadow-amber-500/25">
+      <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-500/10 to-transparent flex-wrap">
+        <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-mint-500 grid place-items-center shadow-md shadow-violet-500/25">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
         </div>
         <div>
           <h2 class="text-[15px] font-bold tracking-tight">Exports</h2>
-          <p class="text-[11.5px] font-semibold text-amber-600">filtered JSONL downloads, priced in credits</p>
+          <p class="text-[11.5px] font-semibold text-violet-600">filtered JSONL slices of the index, priced in credits</p>
         </div>
-        <button onclick="apriExport()" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-[12.5px] font-bold text-white shadow-md shadow-brand-500/25">Build a download →</button>
+        <button onclick="apriExport()" class="ml-auto rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-5 py-2.5 text-[12.5px] font-bold text-white shadow-md shadow-violet-500/30 hover:shadow-lg hover:shadow-violet-500/40 hover:-translate-y-px transition flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Build a download</button>
       </div>
-      <p class="px-6 py-4 text-[13.5px] text-slate-600">Choose a slice of the index — a country, a technology, a date — and download it as JSONL. You see the cost in credits before you spend anything.</p>
+      <div class="px-6 py-5">
+        <p class="text-[13.5px] text-slate-600">Pick a slice — a country, a technology, a date window — and download every full record as JSONL. <b class="text-slate-800">1 credit covers 10 rows</b> and you see the exact cost before anything is spent.</p>
+        <div class="mt-3.5 flex flex-wrap gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 self-center mr-1">Try:</span>
+          <button onclick="apriExport({technology:'SAP'})" class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[12px] font-bold text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition">SAP, everywhere</button>
+          <button onclick="apriExport({country:'DE'})" class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[12px] font-bold text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition">Everything in Germany</button>
+          <button onclick="apriExport({dal: trentaGiorniFa()})" class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[12px] font-bold text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition">Posted in the last 30 days</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -357,16 +365,16 @@ tailwind.config = {
   <div id="export-modale" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()"></div>
     <div class="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
-      <div class="h-1.5 bg-gradient-to-r from-amber-500 via-pink-500 to-violet-500"></div>
+      <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
       <button onclick="chiudiExport()" class="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
       <div class="p-8">
         <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-pink-500 grid place-items-center shadow-md shadow-amber-500/25 shrink-0">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-mint-500 grid place-items-center shadow-md shadow-violet-500/25 shrink-0">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           </div>
           <div>
             <h3 class="text-xl font-black tracking-tight">Build a download</h3>
-            <p class="text-[13px] text-slate-500">A filtered slice of today's index, as JSONL. Every row is the full record.</p>
+            <p class="text-[13px] text-slate-500">A filtered slice of today's index, as JSONL — every row is the full record.</p>
           </div>
         </div>
         <div class="mt-6 grid gap-4">
@@ -390,26 +398,26 @@ tailwind.config = {
           </div>
         </div>
 
-        <!-- il conto, prima di spendere -->
-        <div class="mt-6 rounded-xl border border-slate-200 overflow-hidden">
-          <div class="px-4 py-3 bg-slate-50 flex items-center justify-between gap-3">
-            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">your slice</span>
-            <span id="ex-righe" class="text-[15px] font-black tabular-nums text-slate-900">—</span>
+        <!-- il conto, prima di spendere: il registro scuro, in stile -->
+        <div class="mt-6 rounded-2xl bg-slate-950 overflow-hidden shadow-lg shadow-slate-900/20">
+          <div class="px-5 py-3.5 flex items-center justify-between gap-3">
+            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">your slice</span>
+            <span id="ex-righe" class="text-[15px] font-black tabular-nums text-white">—</span>
           </div>
-          <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
-            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">price · 1 credit / 10 rows</span>
-            <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent">—</span>
+          <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
+            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">price · 1 credit / 10 rows</span>
+            <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-violet-400 to-mint-400 bg-clip-text text-transparent">—</span>
           </div>
-          <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-100">
-            <span class="text-[12px] font-bold uppercase tracking-[0.1em] text-slate-400">you have</span>
-            <span id="ex-saldo" class="text-[15px] font-black tabular-nums text-slate-900">—</span>
+          <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
+            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">your balance</span>
+            <span id="ex-saldo" class="text-[15px] font-black tabular-nums text-mint-400">—</span>
           </div>
         </div>
 
         <p id="ex-avviso" class="hidden mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed"></p>
 
-        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3.5 font-bold text-white shadow-lg shadow-brand-500/25 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none" disabled>Download →</button>
-        <button id="ex-ricarica" onclick="vaiAllaRicarica()" class="hidden mt-3 w-full rounded-xl border-2 border-brand-500/60 text-brand-600 hover:bg-brand-50 transition py-3 font-bold">Top up to download this slice →</button>
+        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-px transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0 flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Download</button>
+        <button id="ex-ricarica" onclick="vaiAllaRicarica()" class="hidden mt-3 w-full rounded-xl border-2 border-violet-500/50 text-violet-600 hover:bg-violet-50 transition py-3 font-bold">Top up to download this slice →</button>
         <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
       </div>
     </div>
@@ -1127,10 +1135,20 @@ document.addEventListener("click", e => {
 
 /* ══ l'export filtrato: stima prima, download dopo ══ */
 let exStimaTimer = null, exDati = null;
-function apriExport() {
+function trentaGiorniFa() {
+  const d = new Date(); d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+function apriExport(pre) {
   const sel = document.getElementById("ex-paese");
   if (sel.options.length <= 1)
     PAESI.forEach(([n, c]) => sel.add(new Option(n + " (" + c + ")", c)));
+  /* le scorciatoie del blocco Exports precompilano il modale (03/10) */
+  if (pre) {
+    if (pre.country) sel.value = pre.country;
+    if (pre.technology) document.getElementById("ex-tec").value = pre.technology;
+    if (pre.dal) document.getElementById("ex-dal").value = pre.dal;
+  }
   document.getElementById("export-modale").classList.remove("hidden");
   stimaExport();
 }
@@ -1165,7 +1183,7 @@ async function stimaExport() {
   document.getElementById("ex-costo").textContent = d.crediti.toLocaleString("en-US") + " credits";
   const saldoEl = document.getElementById("ex-saldo");
   saldoEl.textContent = d.saldo.toLocaleString("en-US") + " credits";
-  saldoEl.className = "text-[15px] font-black tabular-nums " + (d.saldo >= d.crediti ? "text-mint-600" : "text-rose-500");
+  saldoEl.className = "text-[15px] font-black tabular-nums " + (d.saldo >= d.crediti ? "text-mint-400" : "text-rose-400");
   if (d.troppo) {
     avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-amber-50 border border-amber-200 text-amber-800";
     avviso.innerHTML = "This slice is <b>" + d.righe.toLocaleString("en-US") + " rows</b> — past the " + d.tetto.toLocaleString("en-US") +
