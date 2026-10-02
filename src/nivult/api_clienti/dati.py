@@ -426,7 +426,17 @@ def cerca_aziende_portale(filtri: dict, cursore: str | None,
 
 
 def rivela_azienda(riferimento: str) -> dict | None:
-    """L'azienda intera, per chi ha pagato: nome, dominio, scheda."""
+    """L'azienda intera, per chi ha pagato: nome, dominio, scheda.
+
+    I portali nazionali hanno slug fittizi (jobboerse, pole-emploi,
+    platsbanken…): la riga in `aziende` non esiste perche' l'azienda non
+    e' il portale. Ma il datore vero, quando l'offerta lo dichiara, sta
+    in `offerte.company`: si cerca la sua scheda VERA per nome (Randstad
+    esiste come azienda, anche se l'offerta e' arrivata via agenzie), e
+    se non c'e' si risponde con una scheda snella onesta — nome, paese,
+    quante offerte attive ha adesso. Solo quando nemmeno il nome esiste
+    (annunci anonimi dei PUP) si torna None: quello e' un 404 vero.
+    """
     try:
         ats, slug = riferimento.split(":", 1)
     except ValueError:
@@ -435,7 +445,29 @@ def rivela_azienda(riferimento: str) -> dict | None:
         r = _conn().execute(
             "SELECT raw FROM aziende WHERE ats = $a AND company_slug = $s "
             "LIMIT 1", {"a": ats, "s": slug}).fetchone()
-    return json.loads(r[0]) if r else None
+        if r:
+            return json.loads(r[0])
+        nome_r = _conn().execute(
+            """SELECT company, count(*) AS n FROM offerte
+                WHERE ats = $a AND company_slug = $s AND company IS NOT NULL
+                GROUP BY 1 ORDER BY n DESC LIMIT 1""",
+            {"a": ats, "s": slug}).fetchone()
+        if not nome_r or not nome_r[0]:
+            return None
+        nome = nome_r[0]
+        r = _conn().execute(
+            "SELECT raw FROM aziende WHERE lower(company) = lower($n) "
+            "LIMIT 1", {"n": nome}).fetchone()
+        if r:
+            return json.loads(r[0])
+        paese = _conn().execute(
+            """SELECT country, count(*) AS n FROM offerte
+                WHERE ats = $a AND company_slug = $s AND country IS NOT NULL
+                GROUP BY 1 ORDER BY n DESC LIMIT 1""",
+            {"a": ats, "s": slug}).fetchone()
+        return {"company": nome, "ats": ats, "company_slug": slug,
+                "country": paese[0] if paese else None,
+                "active_jobs": int(nome_r[1]), "profilo": "snello"}
 
 
 def azienda_jobs_portale(riferimento: str) -> list[dict]:

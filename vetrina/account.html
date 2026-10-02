@@ -778,13 +778,14 @@ async function rivelaAzienda(ref, btn) {
   await carica();
 }
 
-/* l'azienda non e' nell'indice di oggi: si mostra, non si tace —
-   un click che non fa nulla sembra un sito rotto (29/09/2026) */
+/* la fonte non dichiara il datore (molti portali nazionali anonimizzano):
+   non c'e' profilo da sbloccare e il credito non parte — detto chiaro,
+   non «riprova domani» a chi non verra' mai servito (02/10/2026) */
 function aziendaAssente() {
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
     <div class="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
-    <h3 class="mt-4 text-lg font-black tracking-tight text-slate-600">Not in today's index</h3>
-    <p class="mt-2 text-[13.5px] text-slate-500">This company is not in the current snapshot — <b>no credit was charged</b>.<br>New employers enter the index every day: try again tomorrow.</p>
+    <h3 class="mt-4 text-lg font-black tracking-tight text-slate-600">Employer not disclosed</h3>
+    <p class="mt-2 text-[13.5px] text-slate-500">This posting comes through a channel that anonymizes the employer —<br>many national job portals do. There is no company profile to unlock,<br>so <b>no credit was charged</b>.</p>
     <button onclick="chiudiDettaglio()" class="mt-5 rounded-xl border border-slate-200 px-6 py-3 font-bold text-slate-600 hover:border-slate-400 transition">Close</button>
   </div>`);
 }
