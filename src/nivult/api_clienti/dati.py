@@ -326,6 +326,44 @@ def stima_export(filtri: dict) -> int:
 
 
 def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
+    """Le offerte: vedi _scrivi_export."""
+    dove, par = _dove_export(filtri)
+    return _scrivi_export("offerte", dove, par, percorso, tetto,
+                          "posted_at DESC NULLS LAST, id")
+
+
+def _dove_export_aziende(filtri: dict) -> tuple[str, dict]:
+    """I filtri del download aziende: paese e tecnologia, come le offerte
+    (la data non ha senso sullo spine)."""
+    dove = ["company IS NOT NULL"]
+    par: dict = {}
+    if filtri.get("country"):
+        dove.append("country = $country")
+        par["country"] = str(filtri["country"])[:2].upper()
+    if filtri.get("technology"):
+        dove.append(_TEC.format(nome="technology"))
+        par["technology"] = str(filtri["technology"])
+    return " AND ".join(dove), par
+
+
+def stima_export_aziende(filtri: dict) -> int:
+    dove, par = _dove_export_aziende(filtri)
+    with _lock:
+        return _conn().execute(
+            f"SELECT count(*) FROM aziende WHERE {dove}", par).fetchone()[0]
+
+
+def scrivi_export_aziende(filtri: dict, percorso: str,
+                          tetto: int = 0) -> int:
+    """Lo spine aziende filtrato, una riga per datore — il record intero
+    con stack, sedi, dimensione e conteggi (03/10/2026)."""
+    dove, par = _dove_export_aziende(filtri)
+    return _scrivi_export("aziende", dove, par, percorso, tetto,
+                          "employees DESC NULLS LAST, ats, company_slug")
+
+
+def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
+                   tetto: int, ordine: str) -> int:
     """Scrive il JSONL filtrato e torna le righe scritte. Il download
     del portale: la riga intera, gia' pagata in crediti.
 
@@ -339,7 +377,6 @@ def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
     le righe lo superano, alza ValueError: il chiamante ha gia' rifiutato
     la stima, questa e' la cintura."""
     import gzip
-    dove, par = _dove_export(filtri)
     nome = f"ex_{int(time.time() * 1000)}"   # solo cifre: nome sicuro
     tmp = os.path.join(os.path.dirname(_percorso), "duckdb-tmp")
     os.makedirs(tmp, exist_ok=True)
@@ -348,8 +385,8 @@ def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
         con.execute("SET memory_limit = '1500MB'")
         con.execute(f"SET temp_directory = '{tmp}'")
         con.execute(
-            f"CREATE TEMP TABLE {nome} AS SELECT raw FROM offerte "
-            f"WHERE {dove} ORDER BY posted_at DESC NULLS LAST, id", par)
+            f"CREATE TEMP TABLE {nome} AS SELECT raw FROM {tabella} "
+            f"WHERE {dove} ORDER BY {ordine}", par)
         tot = con.execute(f"SELECT count(*) FROM {nome}").fetchone()[0]
         if tetto and tot > tetto:
             raise ValueError(f"export oltre il tetto ({tetto} righe)")

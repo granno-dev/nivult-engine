@@ -1227,12 +1227,17 @@ def create_app() -> FastAPI:
     # a 292 crediti, svenduto), poi 1/100 (il gratis portava via il
     # massimo consentito ogni mese).
     EXPORT_RIGHE_PER_CREDITO = 10
+    # le aziende valgono di piu': 1 credito a record, come il reveal
+    # singolo (03/10/2026)
+    EXPORT_AZIENDE_PER_CREDITO = 1
     # il tetto tiene conto di Cloudflare: oltre i 100 secondi di attesa la
     # risposta cade; misurato il 28/09: 83k righe = ~55s di preparazione.
     EXPORT_TETTO_RIGHE = 100_000
 
-    def _prezzo_export(righe: int) -> int:
-        return max(1, -(-righe // EXPORT_RIGHE_PER_CREDITO))
+    def _prezzo_export(righe: int, tipo: str = "postings") -> int:
+        per = (EXPORT_AZIENDE_PER_CREDITO if tipo == "companies"
+               else EXPORT_RIGHE_PER_CREDITO)
+        return max(1, -(-righe // per))
 
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
@@ -1240,12 +1245,18 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
+        tipo = "companies" if (corpo or {}).get("tipo") == "companies" else "postings"
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "technology", "dal") and v}
-        righe = await run_in_threadpool(_dati.stima_export, filtri)
+        if tipo == "companies":
+            righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
+        else:
+            righe = await run_in_threadpool(_dati.stima_export, filtri)
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
-        return {"righe": righe, "crediti": _prezzo_export(righe),
-                "saldo": saldo,
+        return {"righe": righe, "crediti": _prezzo_export(righe, tipo),
+                "saldo": saldo, "tipo": tipo,
+                "per_credito": (EXPORT_AZIENDE_PER_CREDITO if tipo == "companies"
+                                else EXPORT_RIGHE_PER_CREDITO),
                 "tetto": EXPORT_TETTO_RIGHE,
                 "troppo": righe > EXPORT_TETTO_RIGHE}
 
@@ -1255,18 +1266,22 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
+        tipo = "companies" if (corpo or {}).get("tipo") == "companies" else "postings"
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "technology", "dal") and v}
         # DuckDB e Postgres qui sotto sono chiamate SINCROME e pesanti:
         # sul thread dell'event loop un export lento inchioda TUTTA l'API
         # (misurato il 28/09/2026: API muta 10 minuti per un download da
         # 937 righe). Si girano al pool di thread.
-        righe = await run_in_threadpool(_dati.stima_export, filtri)
+        if tipo == "companies":
+            righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
+        else:
+            righe = await run_in_threadpool(_dati.stima_export, filtri)
         if righe > EXPORT_TETTO_RIGHE:
-            raise HTTPException(413, f"questa fetta ha {righe} righe: oltre il "
-                                f"tetto di {EXPORT_TETTO_RIGHE}. Stringi i "
-                                "filtri o scrivici per l'export completo")
-        costo = _prezzo_export(righe)
+            raise HTTPException(413, f"this slice has {righe} rows — past the "
+                                f"{EXPORT_TETTO_RIGHE}-row ceiling. Narrow the "
+                                "filters or ask us about the full feed")
+        costo = _prezzo_export(righe, tipo)
         # Prima si SCRIVE il file, poi si paga: se la scrittura fallisce
         # nessun credito bruciato; se il saldo non basta, il file si butta.
         import tempfile
@@ -1274,8 +1289,10 @@ def create_app() -> FastAPI:
                                         prefix="export-portale-")
         os.close(fd)
         try:
+            scrivi = (_dati.scrivi_export_aziende if tipo == "companies"
+                      else _dati.scrivi_export)
             scritte = await run_in_threadpool(
-                _dati.scrivi_export, filtri, percorso, EXPORT_TETTO_RIGHE)
+                scrivi, filtri, percorso, EXPORT_TETTO_RIGHE)
         except Exception:                            # noqa: BLE001
             os.unlink(percorso)
             raise
@@ -1286,7 +1303,7 @@ def create_app() -> FastAPI:
         sfondo = BackgroundTasks()
         sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
         return FileResponse(percorso, media_type="application/gzip",
-                            filename=f"nivult-{scritte}-righe.jsonl.gz",
+                            filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
                             background=sfondo)
 
     @app.get("/me/volumi")

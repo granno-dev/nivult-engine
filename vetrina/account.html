@@ -392,6 +392,11 @@ tailwind.config = {
           </div>
         </div>
         <div class="mt-6 grid gap-4">
+          <!-- cosa scarichi: le offerte o lo spine aziende (03/10/2026) -->
+          <div class="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            <button id="ex-tipo-postings" onclick="exScegliTipo('postings')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Postings</button>
+            <button id="ex-tipo-companies" onclick="exScegliTipo('companies')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700">Companies</button>
+          </div>
           <div>
             <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Country</label>
             <select id="ex-paese" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 transition">
@@ -404,12 +409,13 @@ tailwind.config = {
               <input id="ex-tec" type="text" placeholder="e.g. SAP"
                 class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
             </div>
-            <div>
+            <div id="ex-dal-box">
               <label class="block text-[13px] font-bold text-slate-700 mb-1.5">Posted since</label>
               <input id="ex-dal" type="date"
                 class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
             </div>
           </div>
+          <p id="ex-cosa" class="text-[12px] text-slate-400 -mt-1">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
         </div>
 
         <!-- il conto, prima di spendere: il registro scuro, in stile -->
@@ -419,7 +425,7 @@ tailwind.config = {
             <span id="ex-righe" class="text-[15px] font-black tabular-nums text-white">—</span>
           </div>
           <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
-            <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">price · 1 credit = 10 postings</span>
+            <span id="ex-prezzo-label" class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">price · 1 credit = 10 postings</span>
             <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-violet-400 to-mint-400 bg-clip-text text-transparent">—</span>
           </div>
           <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
@@ -1153,6 +1159,24 @@ function trentaGiorniFa() {
   const d = new Date(); d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
 }
+/* cosa si scarica: offerte o spine aziende (03/10/2026). Cambiano i
+   filtri sensati (la data non esiste sullo spine), il prezzo unitario
+   e la descrizione del record */
+let exTipoCorrente = "postings";
+function exScegliTipo(t) {
+  exTipoCorrente = t;
+  const on = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900";
+  const off = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700";
+  document.getElementById("ex-tipo-postings").className = t === "postings" ? on : off;
+  document.getElementById("ex-tipo-companies").className = t === "companies" ? on : off;
+  document.getElementById("ex-dal-box").style.display = t === "companies" ? "none" : "";
+  document.getElementById("ex-cosa").textContent = t === "companies"
+    ? "Each row is one company: name, tech stack, locations, size, active postings and 30-day hiring pace."
+    : "Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.";
+  document.getElementById("ex-prezzo-label").textContent =
+    t === "companies" ? "price · 1 credit = 1 company" : "price · 1 credit = 10 postings";
+  stimaExport();
+}
 function apriExport(pre) {
   const sel = document.getElementById("ex-paese");
   if (sel.options.length <= 1)
@@ -1168,13 +1192,13 @@ function apriExport(pre) {
 }
 function chiudiExport() { document.getElementById("export-modale").classList.add("hidden"); }
 function filtriExport() {
-  const f = {};
+  const f = { tipo: exTipoCorrente };
   const p = document.getElementById("ex-paese").value;
   const t = document.getElementById("ex-tec").value.trim();
   const d = document.getElementById("ex-dal").value;
   if (p) f.country = p;
   if (t) f.technology = t;
-  if (d) f.dal = d;
+  if (d && exTipoCorrente === "postings") f.dal = d;
   return f;
 }
 function euroPer(crediti) {
@@ -1197,7 +1221,8 @@ async function stimaExport() {
   const r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) });
   if (!r.ok) { ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—"); return; }
   const d = await r.json(); exDati = d;
-  document.getElementById("ex-righe").textContent = d.righe.toLocaleString("en-US") + " rows";
+  const unita = d.tipo === "companies" ? " companies" : " rows";
+  document.getElementById("ex-righe").textContent = d.righe.toLocaleString("en-US") + unita;
   document.getElementById("ex-costo").textContent = d.crediti.toLocaleString("en-US") + " credits";
   const saldoEl = document.getElementById("ex-saldo");
   saldoEl.textContent = d.saldo.toLocaleString("en-US") + " credits";
