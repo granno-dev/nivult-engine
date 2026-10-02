@@ -4588,3 +4588,234 @@ class Rippling(BaseAdapter):
 
 
 ADAPTERS["rippling"] = Rippling
+
+
+class Ukg(BaseAdapter):
+    """UKG Pro Recruiting (ex UltiPro) — recruiting.ultipro.com.
+
+    Lo slug e' la coppia codice/GUID della board, com'e' nell'URL della
+    career page: «BUI1004BMDI/JobBoard/6b442184-…». Il GUID non si
+    deriva dal nome azienda: lo trova la scoperta (Wayback/CC), poi
+    resta stabile. La lettura e' un POST pubblico LoadSearchResults
+    con paginazione Top/Skip e totalCount — verificato in produzione
+    il 02/10/2026 su board vere (UNFI, Euler Hermes, RE/MAX).
+    """
+    platform_id = "ukg"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        base = f"https://recruiting.ultipro.com/{slug}"
+        out: list[AtsJob] = []
+        skip = 0
+        while True:
+            r = self.client.post(
+                base + "/JobBoardView/LoadSearchResults",
+                json={"opportunitySearch": {
+                    "Top": 100, "Skip": skip,
+                    "OrderBy": [{"Value": "postedDateDesc"}],
+                    "Filters": [], "ReturnCount": True}})
+            if r.status_code == 404:
+                return out
+            r.raise_for_status()
+            d = r.json()
+            pagina = d.get("opportunities") or []
+            for o in pagina:
+                sedi = o.get("Locations") or []
+                addr = (sedi[0].get("Address") or {}) if sedi else {}
+                citta = addr.get("City")
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=str(o.get("Id", "")),
+                    title=o.get("Title", ""),
+                    url=(f"{base}/OpportunityDetail"
+                         f"?opportunityId={o.get('Id')}"),
+                    location=citta or (sedi[0].get("LocalizedDescription")
+                                       if sedi else None),
+                    country=_iso(((addr.get("Country") or {}).get("Name"))),
+                    city=citta,
+                    posted_at=o.get("PostedDate"),
+                    department=o.get("JobCategoryName"),
+                    raw=o))
+            skip += len(pagina)
+            if not pagina or skip >= (d.get("totalCount") or 0):
+                break
+        return out
+
+
+ADAPTERS["ukg"] = Ukg
+RATE_PER_SECOND["ukg"] = 1.0     # host unico condiviso da migliaia di tenant
+
+
+class Hr4you(BaseAdapter):
+    """HR4YOU — {slug}.hr4you.org, JSON pubblico della bacheca.
+
+    Forte nel pubblico e nelle universita' tedesche. L'endpoint
+    /api/jobs/json/set/Website risponde con HR4YOU_JOBS; a volte il
+    sottodominio redirige al dominio del cliente (il client segue).
+    Le date sono tedesche (gg.mm.aaaa)."""
+    platform_id = "hr4you"
+
+    @staticmethod
+    def _data_de(v: str | None) -> datetime | None:
+        if not v:
+            return None
+        m = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{4})", v.strip())
+        if not m:
+            return _dt(v)
+        g, mese, anno = m.groups()
+        try:
+            return datetime(int(anno), int(mese), int(g),
+                            tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        url = f"https://{slug}.hr4you.org/api/jobs/json/set/Website"
+        r = self.client.get(url)
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        out: list[AtsJob] = []
+        for j in r.json().get("HR4YOU_JOBS") or []:
+            jid = str(j.get("jobId") or "")
+            if not jid or not j.get("jobTitle"):
+                continue
+            dove = j.get("jobWorkplace") or j.get("jobRegion")
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=jid, title=j["jobTitle"],
+                url=f"https://{slug}.hr4you.org/jobview.php?job={jid}",
+                location=dove, city=j.get("jobWorkplace"),
+                country="DE",
+                posted_at=self._data_de(j.get("jobPublishingDateFrom")),
+                department=j.get("jobCategory") or j.get("fieldOfActivity"),
+                raw=j))
+        return out
+
+
+ADAPTERS["hr4you"] = Hr4you
+
+
+class Jobbnorge(BaseAdapter):
+    """Jobbnorge — la bacheca del pubblico norvegese, API pubblica.
+
+    Lo slug e' l'employerID numerico (visibile negli URL
+    jobbnorge.no/ledige-stillinger?employerId=…). La stessa API senza
+    filtro elenca TUTTE le offerte: e' cosi' che il seminatore trova
+    i datori (vedi scripts/semina_jobbnorge.py)."""
+    platform_id = "jobbnorge"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get("https://publicapi.jobbnorge.no/v3/Jobs",
+                            params={"employer": slug},
+                            headers={"Accept": "application/json"})
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        out: list[AtsJob] = []
+        for j in r.json().get("jobs") or []:
+            sedi = j.get("locations") or []
+            citta = None
+            if sedi and isinstance(sedi[0], dict):
+                citta = sedi[0].get("city") or sedi[0].get("name")
+            elif sedi:
+                citta = str(sedi[0])
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(j.get("id", "")),
+                title=j.get("title", ""),
+                url=j.get("link", ""),
+                location=citta, city=citta, country="NO",
+                posted_at=j.get("publicationDate"),
+                department=j.get("department"),
+                raw=j))
+        return out
+
+
+ADAPTERS["jobbnorge"] = Jobbnorge
+RATE_PER_SECOND["jobbnorge"] = 1.0
+
+
+class PyjamaHR(BaseAdapter):
+    """PyjamaHR — ATS indiano, JSON pubblico senza chiave.
+
+    Bacheca pubblica https://jobs.pyjamahr.com/{slug}; l'elenco e'
+    api.pyjamahr.com/api/career/jobs/?company_slug={slug}, paginato
+    in stile DRF (next/count/results)."""
+    platform_id = "pyjamahr"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        url = ("https://api.pyjamahr.com/api/career/jobs/"
+               f"?company_slug={slug}")
+        out: list[AtsJob] = []
+        while url:
+            r = self.client.get(url)
+            if r.status_code == 404:
+                return out
+            r.raise_for_status()
+            d = r.json()
+            for j in d.get("results") or []:
+                jid = j.get("id")
+                if not jid or not j.get("title"):
+                    continue
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=str(jid), title=j["title"],
+                    url=(f"https://jobs.pyjamahr.com/{slug}"
+                         f"?job_uuid={j.get('slug')}-{jid}"),
+                    location=j.get("location"),
+                    city=j.get("location"),
+                    country=_iso(j.get("country")),
+                    department=j.get("department_name"),
+                    raw=j))
+            url = d.get("next")
+        return out
+
+
+ADAPTERS["pyjamahr"] = PyjamaHR
+RATE_PER_SECOND["pyjamahr"] = 1.0
+
+
+class InHire(BaseAdapter):
+    """InHire — ATS brasiliano, JSON pubblico con header X-Tenant.
+
+    Career page https://{slug}.inhire.app/vagas; l'elenco e'
+    api.inhire.app/job-posts/public/pages con X-Tenant: {slug}
+    (un colpo solo, niente paginazione)."""
+    platform_id = "inhire"
+
+    def jobs(self, slug: str) -> list[AtsJob]:
+        r = self.client.get(
+            "https://api.inhire.app/job-posts/public/pages",
+            headers={"X-Tenant": slug, "Accept": "application/json"})
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        d = r.json()
+        if not isinstance(d.get("jobsPage"), list):
+            return []
+        out: list[AtsJob] = []
+        for j in d["jobsPage"]:
+            jid = j.get("jobId")
+            if not jid or not j.get("displayName"):
+                continue
+            loc = (j.get("location") or "").strip()
+            # "Porto Alegre, RS, BR": il paese e' l'ultimo pezzo
+            pezzi = [p.strip() for p in loc.split(",") if p.strip()]
+            paese = _iso(pezzi[-1]) if pezzi else None
+            # il displayName porta sede e tipo attaccati al titolo:
+            # " Executivo(a) Comercial Júnior | Porto Alegre - RS | Híbrido"
+            titolo = j["displayName"].split("|")[0].strip()
+            out.append(AtsJob(
+                platform_id=self.platform_id, slug=slug,
+                external_id=str(jid),
+                title=titolo,
+                url=f"https://{slug}.inhire.app/vagas/{jid}",
+                location=loc or None,
+                city=pezzi[0] if pezzi else None,
+                country=paese,
+                raw=j))
+        return out
+
+
+ADAPTERS["inhire"] = InHire
+RATE_PER_SECOND["inhire"] = 1.0
