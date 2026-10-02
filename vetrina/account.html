@@ -345,13 +345,27 @@ tailwind.config = {
         </div>
         <div>
           <h2 class="text-[15px] font-bold tracking-tight">Exports</h2>
-          <p class="text-[11.5px] font-semibold text-violet-600">filtered JSONL slices of the index, priced in credits</p>
+          <p class="text-[11.5px] font-semibold text-violet-600">a filtered slice of the index, as a JSONL file</p>
         </div>
         <button onclick="apriExport()" class="ml-auto rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-5 py-2.5 text-[12.5px] font-bold text-white shadow-md shadow-violet-500/30 hover:shadow-lg hover:shadow-violet-500/40 hover:-translate-y-px transition flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Build a download</button>
       </div>
       <div class="px-6 py-5">
-        <p class="text-[13.5px] text-slate-600">Pick a slice — a country, a technology, a date window — and download every full record as JSONL. <b class="text-slate-800">1 credit covers 10 rows</b> and you see the exact cost before anything is spent.</p>
-        <div class="mt-3.5 flex flex-wrap gap-2">
+        <!-- come funziona: tre passi, visivi, niente prosa da marketing -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
+            <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-violet-500/25">1</div>
+            <div><p class="text-[12.5px] font-bold text-slate-800">Filter</p><p class="text-[11.5px] text-slate-500 mt-0.5">country, technology, posted-after</p></div>
+          </div>
+          <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
+            <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-mint-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-mint-500/25">2</div>
+            <div><p class="text-[12.5px] font-bold text-slate-800">See the exact cost</p><p class="text-[11.5px] text-slate-500 mt-0.5">1 credit covers 10 rows — shown before you spend</p></div>
+          </div>
+          <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
+            <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-mint-500 to-brand-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-brand-500/25">3</div>
+            <div><p class="text-[12.5px] font-bold text-slate-800">Download</p><p class="text-[11.5px] text-slate-500 mt-0.5">every row is the full record, as JSONL</p></div>
+          </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
           <span class="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 self-center mr-1">Try:</span>
           <button onclick="apriExport({technology:'SAP'})" class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[12px] font-bold text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition">SAP, everywhere</button>
           <button onclick="apriExport({country:'DE'})" class="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[12px] font-bold text-slate-600 hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition">Everything in Germany</button>
@@ -1175,7 +1189,11 @@ async function stimaExport() {
   const ricarica = document.getElementById("ex-ricarica");
   ["ex-righe", "ex-costo", "ex-saldo"].forEach(id =>
     document.getElementById(id).textContent = "…");
-  vai.disabled = true; ricarica.classList.add("hidden"); avviso.classList.add("hidden");
+  /* il Download non si DISABILITA: si NASCONDE. Un bottone spento in
+     vista sembra un sito rotto; quando non si puo' scaricare resta solo
+     l'azione giusta (restringi i filtri / ricarica) (03/10/2026) */
+  vai.disabled = true; vai.classList.add("hidden");
+  ricarica.classList.add("hidden"); avviso.classList.add("hidden");
   const r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) });
   if (!r.ok) { ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—"); return; }
   const d = await r.json(); exDati = d;
@@ -1200,6 +1218,9 @@ async function stimaExport() {
     ricarica.classList.remove("hidden");
     return;
   }
+  /* scaricabile: il bottone torna, acceso; zero righe = resta spento
+     ma visibile, perche' "niente da scaricare" e' una risposta */
+  vai.classList.remove("hidden");
   vai.disabled = d.righe === 0;
 }
 function vaiAllaRicarica() {
