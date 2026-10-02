@@ -100,6 +100,39 @@ piattaforme non raccoglibili (hirevue = assessment, jobteaser = login
 studenti, jobadder/beamery/vidcruiter = spazzatura della scoperta),
 disattivate in `ats_platforms`.
 
+#### Adapter nuovi (02/10/2026)
+
+Cinque ATS con JSON pubblico senza chiave, verificati live uno per uno:
+
+- **ukg** (UKG Pro Recruiting, ex UltiPro) — POST pubblico
+  `LoadSearchResults`; lo slug e' la coppia codice/GUID dalla career
+  page (`BUI1004BMDI/JobBoard/6b442184-…`), il GUID non si deriva.
+- **hr4you** — pubblico e universita' tedesche; date in formato tedesco.
+- **jobbnorge** — la PA norvegese; l'API senza filtri elenca TUTTE le
+  offerte, e' cosi' che si seminano i datori (employerID numerico).
+- **pyjamahr** — India, paginazione DRF.
+- **inhire** — Brasile, header `X-Tenant`.
+
+Piu' tre portali nazionali zero-auth in `servizi_pubblici.py`:
+
+- **mycareersfuture** (Singapore, ~95k) — UEN (numero di registro) e
+  codice SSIC del settore del datore in OGNI offerta: il meglio che
+  esista per il B2B. Snapshot completo: chi sparisce e' scaduto davvero.
+- **epraca** (Polonia, ~17k) — backend JSON della SPA di praca.gov.pl;
+  ATTENZIONE: page/size in query string, nel body JSON li ignora e
+  restituisce sempre la prima pagina.
+- **nva** (Lettonia, ~1.2k) — dump CSV giornaliero da data.gov.lv con
+  numero di registro del datore incluso.
+
+Scartati con prova durante la ricerca (02/10): Dayforce (WAF), Paycom,
+Bullhorn, JobAdder, ClearCompany, Dover, Jobylon, HR-ON, rexx, Umantis,
+OTYS, Visma/Recman, onlyfy, Trakstar (solo RSS), Keka. Portali
+nazionali senza API aperta: DK, NL, BE, AT, ES, PT, IT, IE, UK, CZ, EE,
+LT, EL, RO, SK, HU, CA, AU, IN, JP, BR, MX, CL, AR, CO, PE, ZA, AE, SA
+— per l'Europa il sottoinsieme EURES copre gia' chi espone li'.
+Registrazioni gratuite in attesa: Finlandia (form al KEHA), USAJobs
+(chiave via email), Svizzera Job-Room (credenziali SECO).
+
 ### 4. Raffinazione
 
 - **Classificazione** (`classificatore_veloce.py`): famiglia
