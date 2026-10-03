@@ -86,6 +86,7 @@ in italiano, numeri veri.
 | `tutti i passi della notturna FALLITI` | `log ats-nightly 60`; se dice «the database system is in recovery mode», **la causa è a monte**: `docker logs nivult-db-1 --since <ora>` e cerca «No space left on device» o «terminated by signal» | niente sui passi: si ripetono da soli la notte dopo. Cura la causa (disco) e segnala l'orario del crash |
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
 | `nuove offerte quasi senza descrizione/paese` | `log arricchisci-continua 30` | `riavvia arricchisci` se il loop è fermo; altrimenti segnala |
+| `francetravail` muto / 401 OAuth | la mail di francetravail.io: da ottobre 2026 client ID e secret **ruotano ogni anno**, con preavviso | NON curare: le credenziali nuove vanno in `/opt/nivult/.env` (`FRANCE_TRAVAIL_CLIENT_ID`/`_SECRET`), lo fa Giuseppe. Segnala |
 
 ## Gli adapter si rompono in silenzio, e l'officina li ripara
 
