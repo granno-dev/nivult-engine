@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from nivult.api_clienti import chiavi, dati
+from nivult.api_clienti import vivo
 
 router = APIRouter(prefix="/v1", tags=["clienti"])
 
@@ -86,8 +87,12 @@ def jobs(country: str | None = None, category: str | None = None,
          dal: str | None = None,
          limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
          cursor: str | None = None, _=Depends(_cliente)):
-    """Le offerte, filtrate e paginate a cursore."""
-    return _pagina(dati.offerte,
+    """Le offerte, filtrate e paginate a cursore.
+
+    Dal vivo (Postgres, ruolo di sola lettura): la stessa pagina che
+    sul DuckDB del volume di rete costava 47,8 secondi (03/10/2026).
+    """
+    return _pagina(vivo.offerte,
                    _filtri(country=country, category=category, ats=ats,
                            seniority=seniority, remote=remote,
                            language=language, q=q, technology=technology,

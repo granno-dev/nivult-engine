@@ -1045,6 +1045,7 @@ def create_app() -> FastAPI:
     # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
+    from nivult.api_clienti import vivo as _vivo
 
     # Anti-raccolta (29/09/2026): la lettura del portale e' gratis per gli
     # UMANI; i domini delle aziende sono il prodotto e non si portano via
@@ -1130,7 +1131,7 @@ def create_app() -> FastAPI:
         if not offerta_id:
             raise HTTPException(400, "missing id")
         _freno_portale(uid)
-        riga = _dati.offerta_dettaglio_portale(offerta_id)
+        riga = _vivo.rivela_offerta(offerta_id)
         if riga is None:
             raise HTTPException(404, "posting not found")
         rif = None
@@ -1155,12 +1156,12 @@ def create_app() -> FastAPI:
             raise HTTPException(400, "missing id")
         # Si guarda prima e si paga dopo: un credito speso sul vuoto
         # (offerta sparita dall'export di oggi) non si perdona (29/09/2026).
-        riga = _dati.rivela_offerta(offerta_id)
+        riga = _vivo.rivela_offerta(offerta_id)
         if riga is None:
             raise HTTPException(404, "posting not found")
         esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
         if esito == "senza_crediti":
-            raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
+            raise HTTPException(429, "this month's credits are spent — top up from the dashboard")
         return {"offerta": riga, "esito": esito}
 
     @app.post("/portale/rivela-azienda")

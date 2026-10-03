@@ -1355,6 +1355,50 @@ checksum e si rifiuta di proseguire. Se serve un cambiamento, nuova migrazione.
 
 ## Sicurezza
 
+**La sicurezza è la priorità numero uno del progetto — sempre, davanti a
+features, velocità di consegna e comodità.** Parola di Giuseppe, 03/10/2026.
+In pratica, prima di ogni cambiamento che tocca un perimetro esposto (API,
+portale, webhook, upload, OAuth) ci si ferma e si risponde per iscritto a:
+cosa può fare un attaccante con questa superficie? Ogni risposta deve stare
+nel codice o in questa sezione — mai "ci pensiamo dopo".
+
+Le regole che ne discendono, già pagate:
+
+- **Nessun segreto in chiaro a riposo**: chiavi API e token di sessione
+  vivono come sha256; la chiave in chiaro si mostra una volta e basta.
+- **Ogni valore dall'esterno è un parametro**, mai concatenato in SQL — e i
+  jolly di ILIKE del cliente sono lettere, non metacaratteri.
+- **Il privilegio minimo è misurabile**: ruoli con GRANT espliciti, e chi
+  serve i clienti non può scrivere né vedere gli utenti.
+- **Testo di terzi non si rende mai come markup**: si tolgono tutti i tag,
+  le entità si sciolgono inerti, si ri-escapa. Due serrature, non una.
+- **Un URL può portare solo https://** — `urlSicuro()` nel portale, mai
+  `javascript:` o `data:`.
+- **Prima si guarda, poi si paga**: nessun credito parte per un oggetto
+  che non esiste, e nessun file si scrive prima di sapere che si può
+  addebitare.
+
+### L'API clienti: il perimetro pubblico
+
+Le rotte `/v1/*` e `/portale/*` sono esposte a internet via Cloudflare
+Tunnel. Le difese, tutte misurate in banco (`scripts/banco_api_live.py`
+gira contro la produzione e deve passare 12/12):
+
+- **Autenticazione**: `X-Api-Key` in header, MAI in query string (le URL
+  finiscono nei log). La chiave si autentica per hash; quella revocata
+  muore subito, anche in cache.
+- **Metering = freno**: ogni chiamata costa un credito; chi spinge troppo
+  si esaurisce da solo, e il 429 dice perché in inglese chiaro.
+- **Paginazione a chiave opaca**: il cursore è base64 di JSON ma si
+  decodifica stretto — un cursore malformato è un 400, mai un 500, e non
+  apre OFFSET (leggerebbe e butterebbe centinaia di migliaia di righe a
+  richiesta).
+- **Il vivo legge con `nivult_api_lettura`** (migrazione 0068): SELECT su
+  cinque tabelle e basta, `statement_timeout` 8s, massimo 6 connessioni.
+  Chi rubasse quella password leggerebbe offerte pubbliche — non scrive,
+  non cancella, non tocca utenti né chiavi. Verificato: INSERT e DELETE
+  rispondono falso.
+
 ### Autenticazione: niente password
 
 Magic-link via email, più Google e Microsoft come provider OAuth. **Non esiste
@@ -1517,6 +1561,11 @@ openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
 - `nivult_migrator` — DDL. Lo usa **solo** il runner di migrazioni.
 - `nivult_app` — solo `SELECT/INSERT/UPDATE/DELETE`. Lo usa tutto il resto.
   Niente `TRUNCATE`, niente `REFERENCES`, niente DDL.
+- `nivult_api_lettura` — solo `SELECT` su cinque tabelle di `nivult_ats`
+  (migrazione 0068), `statement_timeout` 8s, connection limit 6. Serve le
+  liste dell'API clienti (il "vivo", `api_clienti/vivo.py`): la password sta
+  in `/opt/nivult/.env` come `API_LETTURA_DSN` e anche rubata non scrive,
+  non cancella e non vede utenti.
 
 I ruoli nascono dalla migrazione 0010 **senza password e senza LOGIN**: in un
 file versionato non entrano segreti. Le credenziali le assegna
