@@ -39,3 +39,15 @@ echo "ruoli configurati. Verifica:"
 docker exec "$CONTAINER" psql -U "$SUPERUSER" -d "$DB" -tAc \
   "SELECT rolname || ': login=' || rolcanlogin || ' super=' || rolsuper
      FROM pg_roles WHERE rolname LIKE 'nivult%' ORDER BY rolname"
+
+# il ruolo di lettura dell'API clienti (migrazione 0068) vive su nivult_ats
+# e ha la password solo se l'ambiente la porta — opzionale perche' serve
+# solo dove gira l'API
+if [ -n "${API_LETTURA_PASSWORD:-}" ]; then
+  docker exec -i -e LETTURA_PW="$API_LETTURA_PASSWORD" \
+    "$CONTAINER" psql -U "$SUPERUSER" -d nivult_ats -v ON_ERROR_STOP=1 <<'SQL'
+\set lettura_pw `echo "$LETTURA_PW"`
+ALTER ROLE nivult_api_lettura LOGIN PASSWORD :'lettura_pw';
+SQL
+  echo "nivult_api_lettura: credenziale assegnata (su nivult_ats)"
+fi
