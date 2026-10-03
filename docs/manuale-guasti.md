@@ -87,6 +87,7 @@ in italiano, numeri veri.
 | `credito GLM a ZERO` | — | niente: segnala (ricarica su z.ai, lo fa Giuseppe) |
 | `nuove offerte quasi senza descrizione/paese` | `log arricchisci-continua 30` | `riavvia arricchisci` se il loop è fermo; altrimenti segnala |
 | `francetravail` muto / 401 OAuth | la mail di francetravail.io: da ottobre 2026 client ID e secret **ruotano ogni anno**, con preavviso | NON curare: le credenziali nuove vanno in `/opt/nivult/.env` (`FRANCE_TRAVAIL_CLIENT_ID`/`_SECRET`), lo fa Giuseppe. Segnala |
+| offerta scaduta da >30 giorni "sparita" da Postgres | non è sparita: è nell'archivio sull'N5 (`/mnt/user/nivult-archivio/storico/*.parquet`, cron delle 04:23) | niente: è il disegno. Per rileggerla: DuckDB sul parquet |
 
 ## Gli adapter si rompono in silenzio, e l'officina li ripara
 
