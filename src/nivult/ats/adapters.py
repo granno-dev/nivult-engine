@@ -2285,7 +2285,11 @@ class JsonLd(BaseAdapter):
     che sa quali pagine ha gia' visto).
     """
     platform_id = "jsonld"
-    MASSIMO_PAGINE = 1000
+    # 03/10/2026: 1.000 -> 2.500. Al tetto dei mille stavano 395 tenant
+    # «letti a meta'» (la voce bianca della sentinella): i loro annunci
+    # vecchi non scadevano mai. Le pagine oltre il mille sono le code
+    # lunghe dei siti comunali/PA italiani — lente ma vere.
+    MASSIMO_PAGINE = 2500
 
     def jobs(self, slug: str, sorgente_url: str | None = None) -> list[AtsJob]:
         from urllib.parse import urlparse

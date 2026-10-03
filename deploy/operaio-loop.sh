@@ -124,7 +124,10 @@ while true; do
   battito "estrai extra"
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   battito "lingue richieste"
-  nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 200000 2>&1 | tail -1 || true
+  # tetto 200000 = fase da 4+ ore senza battito: la sentinella alzava
+  # «operaio muto» col ciclo vivo (03/10/2026). 30.000 bastano per il
+  # residuo reale (~50mila) e la fase chiude in meno di un'ora.
+  nice -n 10 $PY -m nivult.ats.lingue_richieste --tetto 30000 2>&1 | tail -1 || true
   battito "lingua dei testi"
   nice -n 10 $PY -m nivult.ats.lingua --limite 100000 2>&1 | tail -1 || true
   # La SCOPERTA sta qui, non sul server: crawling a molti thread verso
