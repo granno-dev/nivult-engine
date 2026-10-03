@@ -579,21 +579,30 @@ sei verificato. Per questo il consenso esplicito e la gestione automatica
 delle parole di disiscrizione (`STOP`, `UNSUBSCRIBE`) sono **obbligatori,
 non opzionali**: sono ciò che tiene in piedi il canale, non una cortesia.
 
-**Fornitore scelto: Zernio.** API ufficiale via Meta Embedded Signup, zero
-ricarico sulle tariffe Meta, primi 2 account gratuiti, numero dedicato a
-~3–4 $/mese. Ci risparmia Business Manager, revisione dell'app e acquisto
-della SIM.
+**Fornitore scelto: Zernio** — *poi chiuso il 30/09/2026.* Dal 04/10/2026
+il canale è **self-hosted: wuzapi** (whatsmeow, Go) in Docker sul N5, col
+numero WhatsApp Business nostro (+39 352 099 3870). Niente template Meta,
+niente finestre di 24 ore, niente costo a messaggio: il digest è testo
+libero, come Telegram. I messaggi in arrivo arrivano via webhook al
+ricevitore `deploy/wa-webhook.py` (container `wa-webhook` sul N5) che li
+scrive in `nivult_ats.wa_inbox`; il digest la legge in pull.
+Configurazione sul server: `WUZAPI_URL` (http://100.119.200.7:8078),
+`WUZAPI_TOKEN`, `WUZAPI_NUMBER`. **Lezione misurata il 04/10: un messaggio
+a freddo da numero nuovo fa scattare il reachout-timelock di WhatsApp (6h
+di companion bloccati + logout). Si scrive solo a chi ci ha scritto primo
+— che è già il design del collegamento (l'utente manda «NIVULT <gettone>»
+per primo).** Via di mezzo tentata e scartata: Evolution API — la stabile
+v2.3.7 non accoppia più col protocollo attuale (issue 2696) e la 2.4 è a
+licenza.
 
-Stato al 2026-08-27, misurato sul nostro account: numero **+1 646 914 3141**
-connesso, nome visualizzato **Nivult** (`AVAILABLE_WITHOUT_REVIEW`),
-`TIER_250`. **Direct Send** — i messaggi liberi senza modello — è **spento**
-sul nostro WABA (`"Direct Send is not enabled for this WhatsApp account"`),
-quindi i modelli non sono una scorciatoia evitabile: sono l'unica strada. Due
-modelli `UTILITY` in inglese sono in revisione.
+Stato al 2026-08-27 (era Zernio): numero **+1 646 914 3141** connesso, nome
+visualizzato **Nivult**, `TIER_250`, Direct Send spento. Superato: quel
+numero non esiste più.
 
 ⚠ **Nessun lavoro su WhatsApp finché non serve.** È il canale dell'Ultra e
 non abbiamo ancora utenti. Email e Telegram coprono tutto, e Telegram è
-gratis su tutti i piani.
+gratis su tutti i piani. *(04/10/2026: il canale è pronto — il numero si
+ri-accoppia quando serve traffico vero.)*
 
 ### SMS: provato sul campo e scartato
 

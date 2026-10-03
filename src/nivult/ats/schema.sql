@@ -817,3 +817,15 @@ ALTER TABLE ats_companies  ADD COLUMN IF NOT EXISTS logo_url TEXT;
 ALTER TABLE ats_jobs       ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS lei TEXT;
 
+-- L'inbox WhatsApp self-hosted (04/10/2026): i messaggi in arrivo al numero
+-- Nivult, scritti dal ricevitore deploy/wa-webhook.py sul N5 (wuzapi li
+-- spinge via webhook). Il digest la legge in pull: gettoni NIVULT e STOP.
+CREATE TABLE IF NOT EXISTS wa_inbox (
+    id          bigserial PRIMARY KEY,
+    telefono    text NOT NULL,
+    testo       text NOT NULL DEFAULT '',
+    da_noi      boolean NOT NULL DEFAULT false,
+    ricevuto_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS wa_inbox_recenti_idx ON wa_inbox (ricevuto_at DESC);
+CREATE INDEX IF NOT EXISTS wa_inbox_telefono_idx ON wa_inbox (telefono, ricevuto_at DESC);
+
