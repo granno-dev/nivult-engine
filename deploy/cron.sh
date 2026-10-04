@@ -176,6 +176,7 @@ OBSOLETE=$(cat <<'EOF'
 40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
 20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
+46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --campione 2000 >> /var/log/nivult-esporta.log 2>&1
 EOF
 )
 
