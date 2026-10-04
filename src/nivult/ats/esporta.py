@@ -401,9 +401,17 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                        "zipcode": hq_cap, "full_address": hq_indirizzo,
                        "latitude": hq_lat, "longitude": hq_lon,
                        "source": hq_da} if hq_da else None)
+                # il dominio che conta per chi compra: il sito VERO
+                # (site_domain, dalla scheda-sito), poi il dominio del logo.
+                # Prima `domain` era il logo_domain e basta — la copertura
+                # dichiarata in landing leggeva 26,5% mentre la scheda-sito
+                # ne trova il ~70% (misurato il 04/10/2026: il cruscotto
+                # contava il campo giusto, la vetrina quello sbagliato).
+                # E il prefisso "''" del bug searxng si toglie qui.
+                dominio = (sito or "").lstrip("'") or r[4]
                 f.write(_riga(
                     ats=r[0], company_slug=r[1], company=r[2], country=r[3],
-                    domain=r[4], logo=r[5], active_jobs=r[6],
+                    domain=dominio, logo=r[5], active_jobs=r[6],
                     employees=dip_best, employees_scope=dip_scope,
                     employees_source=dip_da, industry=r[8],
                     employees_legal_entity=e_reg,
@@ -430,7 +438,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
                                   for a, tot, t, p, u in tec]))
                 n += 1
                 copertura["country"] = copertura.get("country", 0) + (r[3] is not None)
-                copertura["domain"] = copertura.get("domain", 0) + bool(r[4])
+                copertura["domain"] = copertura.get("domain", 0) + bool(dominio)
                 copertura["website"] = copertura.get("website", 0) + bool(sito)
                 copertura["industry"] = copertura.get("industry", 0) + bool(r[8])
                 copertura["size_range"] = copertura.get("size_range", 0) + bool(size_range)
