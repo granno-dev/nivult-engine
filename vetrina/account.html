@@ -183,7 +183,7 @@ tailwind.config = {
             <p class="text-[11.5px] font-semibold text-violet-600">free monthly allowance · purchased credits never expire</p>
           </div>
         </div>
-        <div class="p-6 flex-1 flex flex-col justify-center">
+        <div class="p-6 flex-1 flex flex-col">
           <div class="flex items-baseline gap-2">
             <b id="uso-val" class="text-4xl font-black tabular-nums bg-gradient-to-r from-violet-500 to-pink-500 bg-clip-text text-transparent">0</b>
             <span class="text-[13px] text-slate-500">credits available</span>
@@ -196,10 +196,12 @@ tailwind.config = {
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold"></span>
           </div>
           <p class="mt-3 text-[12px] text-slate-400">The bar shows this month's free allowance, which renews on the 1st. Purchased credits are spent only once the allowance runs out, and never expire.</p>
-          <button onclick="apriUso()" class="mt-4 w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-2.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
-            <span id="uso-rivelazioni">View credit usage</span> <span class="text-violet-400">→</span>
-          </button>
+          <div class="mt-auto pt-4">
+            <button onclick="apriUso()" class="w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+              <span id="uso-rivelazioni">View credit usage</span> <span class="text-violet-400">→</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -571,8 +573,8 @@ function disegna() {
   /* i comprati si vedono SEMPRE, anche a zero: chi compra deve trovare
      dove sono finiti senza chiedere (04/10/2026) */
   acc.textContent = creditiExtra > 0
-    ? "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire"
-    : "no purchased credits yet";
+    ? "💶 +" + creditiExtra.toLocaleString("en-US") + " purchased · never expire"
+    : "💶 No top-ups yet — purchased credits never expire";
   /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
      di credito dove il credito si guarda: nella card (02/10/2026) */
   document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
@@ -1205,7 +1207,9 @@ async function apriUso() {
     </div>
     <div class="mt-6 grid grid-cols-3 gap-3">${saldi}</div>
     ${perVia ? `<p class="${SEZ}">This month by channel</p><div class="mt-2 space-y-2">${perVia}</div>` : ""}
-    ${acquisti ? `<p class="${SEZ}">Purchases</p><div class="mt-2">${acquisti}</div>` : ""}
+    <p class="${SEZ}">Purchases</p>
+    ${acquisti ? `<div class="mt-2">${acquisti}</div>`
+               : `<p class="mt-2 text-[12.5px] text-slate-400">No purchases yet — when you buy credits, each top-up appears here with its date, amount and credit count.</p>`}
     <p class="${SEZ}">Daily spend</p><div class="mt-2">${grafico}</div>
     ${sbloccate ? `<p class="${SEZ}">Unlocked companies</p>
       <div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
