@@ -205,9 +205,11 @@ _TESTO_PIATTAFORME = ("icims", "catsone", "werecruit", "zohorecruit",
                       "comeet")
 
 # "description":"..." dentro gli script: almeno 200 caratteri, con gli
-# escape JSON gestiti dal decoder vero (niente unescape a mano)
+# escape JSON gestiti dal decoder vero (niente unescape a mano).
+# 04/10/2026: anche la D maiuscola — UKG incorpora «"Description":"…» nel
+# bootstrap della pagina OpportunityDetail.
 _JSON_DESCR = re.compile(
-    r'"(?:job_?[Dd]escription|description)"\s*:\s*'
+    r'"(?:job_?[Dd]escription|[Dd]escription)"\s*:\s*'
     r'("(?:\\.|[^"\\]){200,}?")')
 
 
@@ -265,10 +267,16 @@ def _estrai_testo(pid: str, html: str) -> str:
     return _paragrafi(html) or ""
 
 
-def da_testo(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
+def da_testo(dsn: str, limite: int = 3000, thread: int = 8,
+             piattaforme: tuple | None = None) -> dict:
     """Descrizioni per le piattaforme senza JSON-LD: si legge la pagina
     e si prende il testo dove sta. Errori di rete non marcano; una
-    pagina 200 senza testo si' (niente riesami eterni)."""
+    pagina 200 senza testo si' (niente riesami eterni).
+
+    `piattaforme` restringe l'insieme: UKG (04/10/2026) sta su UN host
+    condiviso (recruiting.ultipro.com, migliaia di tenant) e il JSON col
+    testo e' incorporato nella pagina OpportunityDetail — si legge piano,
+    a due thread, come la Bundesagentur."""
     from concurrent.futures import ThreadPoolExecutor
     stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
@@ -277,7 +285,8 @@ def da_testo(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
              WHERE platform_id = ANY(%s) AND expired_at IS NULL
                AND NOT (raw ? 'description') AND url IS NOT NULL
              ORDER BY posted_at DESC NULLS LAST
-             LIMIT %s""", (list(_TESTO_PIATTAFORME), limite)).fetchall()
+             LIMIT %s""", (list(piattaforme or _TESTO_PIATTAFORME),
+                           limite)).fetchall()
 
         def leggi(riga):
             jid, pid, url = riga
@@ -724,6 +733,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="blocco description server-rendered delle pagine CSB")
     ap.add_argument("--da-pagina", action="store_true")
     ap.add_argument("--da-testo", action="store_true")
+    ap.add_argument("--ukg", action="store_true",
+                    help="UKG: il testo e' nel JSON incorporato della pagina; "
+                         "host unico condiviso, pochi thread per gentilezza")
     ap.add_argument("--limite", type=int, default=3000)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
@@ -748,11 +760,13 @@ def main(argv: list[str] | None = None) -> int:
         print(da_pagina(dsn, args.limite))
     if args.da_testo:
         print(da_testo(dsn, args.limite))
+    if args.ukg:
+        print(da_testo(dsn, args.limite, thread=2, piattaforme=("ukg",)))
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
                                     or args.rippling or args.bundesanstellung
                                     or args.eightfold or args.adp
-                                    or args.successfactors):
+                                    or args.successfactors or args.ukg):
         print(smartrecruiters(dsn, args.limite))
     return 0
 

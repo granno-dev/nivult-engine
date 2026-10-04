@@ -103,7 +103,14 @@ def main() -> int:
           "lingue": 0, "incerte": 0, "device": m.device}
     notte_detta = False
     t0 = time.time()
-    with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry) as c:
+    # Keepalive TCP espliciti (04/10/2026): il link Tailscale N5→Hetzner
+    # muore in silenzio e il processo restava appeso a una lettura su
+    # socket morta per ORE (coda ferma, log che non si muove). Con questi
+    # il kernel dichiara morto il collegamento in ~85 secondi, scrivi()
+    # prende l'eccezione, il processo muore e il loop lo riparte.
+    with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry,
+                         keepalives=1, keepalives_idle=30,
+                         keepalives_interval=10, keepalives_count=5) as c:
         # Il RIPASSO ha una query sua. Con quella del giro normale faceva 9
         # offerte al secondo invece di 27 (misurato il 10/09/2026), e la GPU
         # non c'entrava: l'ORDER BY riordinava 1,65 milioni di righe a ogni

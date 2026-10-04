@@ -68,6 +68,9 @@ while true; do
   # successfactors: l'elenco CSB non porta mai il testo; la pagina ha il
   # blocco server-rendered (29/09/2026: 80k attive senza descrizione)
   "$PY" -m nivult.ats.descrizioni --successfactors --limite 2500 2>&1 | tail -1 || true
+  # ukg: testo nel JSON incorporato della pagina OpportunityDetail; host
+  # unico condiviso (recruiting.ultipro.com): pochi thread (04/10/2026)
+  "$PY" -m nivult.ats.descrizioni --ukg --limite 2000 2>&1 | tail -1 || true
   "$PY" -m nivult.ats.descrizioni --da-testo --limite 2500 2>&1 | tail -1 || true
   # profilo: seniority/remote/skill — dizionari gratis + GLM Flash (gratuito)
   # SOLO sul residuo, tetto 400/ciclo: mai credito pagato.

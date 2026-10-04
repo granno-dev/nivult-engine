@@ -290,30 +290,48 @@ class SmartRecruiters(BaseAdapter):
 
 
 class Lever(BaseAdapter):
-    """api.lever.co — JSON, gratis, link diretto (hostedUrl)."""
+    """api.lever.co — JSON, gratis, link diretto (hostedUrl).
+
+    PAGINATA (04/10/2026): l'API risponde al massimo 100 offerte per pagina
+    e prima si leggeva solo la prima — ogni tenant oltre le 100 perdeva il
+    resto a ogni giro (misurato su jobgether: 1.475 scadute finte in 24h,
+    tutte vive sulla bacheca). Si avanza con `skip` finche' una pagina corta
+    chiude l'elenco; un 404 a meta' dichiara la lettura parziale — la bacheca
+    sparita si dichiara tale solo se manca la PRIMA pagina."""
     platform_id = "lever"
+    PER_PAGINA = 100
 
     def jobs(self, slug: str) -> list[AtsJob]:
-        r = self.client.get(f"https://api.lever.co/v0/postings/{slug}?mode=json")
-        if r.status_code == 404:
-            return []
-        r.raise_for_status()
-        out = []
-        for j in r.json():
-            cat = j.get("categories") or {}
-            country = None
-            city = cat.get("location") or cat.get("workplaceType")
-            # Lever non dà il paese in modo affidabile: si deduce dalla città
-            # o si lascia al classificatore.
-            out.append(AtsJob(
-                platform_id=self.platform_id, slug=slug,
-                external_id=j["id"], title=j.get("text", ""),
-                url=j.get("hostedUrl", ""),
-                location=cat.get("location"),
-                city=city,
-                posted_at=j.get("createdAt"),
-                department=cat.get("team"),
-                raw=j))
+        out: list[AtsJob] = []
+        while True:
+            r = self.client.get(
+                f"https://api.lever.co/v0/postings/{slug}",
+                params={"mode": "json", "limit": self.PER_PAGINA,
+                        "skip": len(out)})
+            if r.status_code == 404:
+                if not out:
+                    return []
+                self.lettura_parziale = True
+                break
+            r.raise_for_status()
+            pagina = r.json()
+            for j in pagina:
+                cat = j.get("categories") or {}
+                country = None
+                city = cat.get("location") or cat.get("workplaceType")
+                # Lever non dà il paese in modo affidabile: si deduce dalla città
+                # o si lascia al classificatore.
+                out.append(AtsJob(
+                    platform_id=self.platform_id, slug=slug,
+                    external_id=j["id"], title=j.get("text", ""),
+                    url=j.get("hostedUrl", ""),
+                    location=cat.get("location"),
+                    city=city,
+                    posted_at=j.get("createdAt"),
+                    department=cat.get("team"),
+                    raw=j))
+            if len(pagina) < self.PER_PAGINA:
+                break
         return out
 
 
