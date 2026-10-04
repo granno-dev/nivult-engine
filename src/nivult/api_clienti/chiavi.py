@@ -107,14 +107,17 @@ def _leggi(key_hash: str) -> dict | None:
     """
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso "
+            "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, "
+            "       user_id::text "
             "FROM api_chiavi WHERE key_hash = %s AND revoked_at IS NULL",
             (key_hash,))
         r = cur.fetchone()
     if not r:
         return None
+    # user_id serve al registro dei consumi (0069): senza, la via «api»
+    # non si scriveva mai — il record non lo portava proprio (04/10/2026).
     return {"id": r[0], "label": r[1], "crediti_mensili": r[2],
-            "usati_mese": r[3], "mese_uso": r[4]}
+            "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5]}
 
 
 def _consuma(chiave_id: str) -> int | None:
@@ -177,6 +180,25 @@ def _consuma(chiave_id: str) -> int | None:
         dopo = cur.fetchone()
         conn.commit()
         return dopo[0] if dopo else 0
+
+
+def registra_uso(user_id: str | None, via: str, azione: str,
+                 dettaglio: str | None = None, crediti: int = 1) -> None:
+    """Una riga nel registro dei consumi (migrazione 0069): chi paga vede
+    DOVE vanno i crediti — la via (api/portale/export), l'azione, il
+    dettaglio. Mai nel percorso critico: un fallimento qui si logga e
+    basta, la risposta al cliente non aspetta la contabilita'."""
+    if not user_id:
+        return
+    try:
+        with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO portale_uso (user_id, via, azione, dettaglio, "
+                "crediti) VALUES (%s, %s, %s, %s, %s)",
+                (user_id, via, azione, (dettaglio or "")[:300], crediti))
+            conn.commit()
+    except Exception as exc:                        # noqa: BLE001
+        log.warning("registro uso non scritto (%s/%s): %s", via, azione, exc)
 
 
 def autentica(chiave: str) -> dict:

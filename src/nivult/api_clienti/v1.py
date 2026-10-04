@@ -50,7 +50,7 @@ def _cliente(request: Request) -> dict:
     if not chiave:
         raise HTTPException(401, "missing API key: send the X-Api-Key header")
     try:
-        return chiavi.autentica(chiave)
+        rec = chiavi.autentica(chiave)
     except chiavi.ChiaveInvalida:
         raise HTTPException(401, "invalid or revoked API key")
     except chiavi.CreditiEsauriti as e:
@@ -58,6 +58,13 @@ def _cliente(request: Request) -> dict:
             "errore": "monthly credits exhausted",
             "crediti_mensili": e.crediti_mensili,
             "mese_uso": str(e.mese_uso)})
+    # nel registro dei consumi: chi paga vede dove vanno i crediti
+    # (04/10/2026) — la via «api», l'endpoint, la query
+    if rec.get("user_id"):
+        chiavi.registra_uso(str(rec["user_id"]), "api",
+                            request.url.path,
+                            str(request.url.query)[:200] or None)
+    return rec
 
 
 def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:

@@ -193,10 +193,12 @@ tailwind.config = {
           </div>
           <div class="mt-4 flex items-center gap-2 text-[12px] flex-wrap">
             <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
-            <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold hidden"></span>
-            <span id="uso-rivelazioni" class="rounded-md bg-brand-50 text-brand-600 px-2 py-1 font-bold hidden"></span>
+            <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold"></span>
           </div>
           <p class="mt-3 text-[12px] text-slate-400">The bar is this month's free allowance — it resets on the 1st. Top-ups kick in when the free ones run out and never expire.</p>
+          <button onclick="apriUso()" class="mt-4 w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-2.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
+            <span id="uso-rivelazioni">Usage &amp; unlocks</span> <span class="text-violet-400">→</span>
+          </button>
         </div>
       </div>
 
@@ -293,6 +295,12 @@ tailwind.config = {
     <div id="dettaglio" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiDettaglio()"></div>
       <div class="relative w-full max-w-2xl max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-2xl" id="dettaglio-box"></div>
+    </div>
+
+    <!-- ══ il registro dei consumi: modale larga, sfondo velato ══ -->
+    <div id="uso" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiUso()"></div>
+      <div class="relative w-full max-w-3xl max-h-[88vh] overflow-auto rounded-2xl bg-white shadow-2xl" id="uso-box"></div>
     </div>
 
     <!-- ══ la guida per chi integra ══ -->
@@ -559,18 +567,18 @@ function disegna() {
   document.getElementById("uso-liberi").textContent =
     liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " free left";
   const acc = document.getElementById("uso-acquistati");
-  if (creditiExtra > 0) {
-    acc.textContent = "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire";
-    acc.classList.remove("hidden");
-  } else acc.classList.add("hidden");
+  /* i comprati si vedono SEMPRE, anche a zero: chi compra deve trovare
+     dove sono finiti senza chiedere (04/10/2026) */
+  acc.textContent = creditiExtra > 0
+    ? "+" + creditiExtra.toLocaleString("en-US") + " purchased · never expire"
+    : "no purchased credits yet";
   /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
      di credito dove il credito si guarda: nella card (02/10/2026) */
   document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
   const riv = document.getElementById("uso-rivelazioni");
-  if (rivelazioni) {
-    riv.textContent = rivelazioni.toLocaleString("en-US") + " companies unlocked · never pay twice";
-    riv.classList.remove("hidden");
-  } else riv.classList.add("hidden");
+  riv.textContent = rivelazioni
+    ? rivelazioni.toLocaleString("en-US") + " companies unlocked — usage & detail"
+    : "Usage & unlocks";
 }
 /* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
    esempi del quickstart la portano dentro finche' la pagina e' aperta,
@@ -1059,6 +1067,80 @@ function dettaglioAzienda(ref) {
       <button onclick="rivelaAzienda('${ref}', this)" class="rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal this company · 1 credit</button>
     </div>
   </div>`);
+}
+
+/* ══ il registro dei consumi: chi paga pretende di vedere dove vanno i
+   crediti — per via, per giorno, evento per evento (04/10/2026) ══ */
+function chiudiUso() { document.getElementById("uso").classList.add("hidden"); }
+function _quando(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+    + " " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+const VIA_STILE = {
+  api:     ["API", "bg-brand-50 text-brand-600"],
+  portale: ["portal", "bg-mint-500/10 text-mint-600"],
+  export:  ["export", "bg-violet-500/10 text-violet-600"],
+};
+async function apriUso() {
+  document.getElementById("uso").classList.remove("hidden");
+  const box = document.getElementById("uso-box");
+  box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">loading the ledger…</div>`;
+  const r = await api("/portale/uso");
+  if (!r.ok) { box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">could not load the ledger — retry in a moment</div>`; return; }
+  const d = await r.json();
+  const s = d.saldo || {};
+  /* i tre saldi in testa: gratis del mese, comprati (non scadono),
+     spesi questo mese */
+  const saldi = [
+    [s.gratis ?? 0, "free left this month", "from-violet-500 to-pink-500"],
+    [s.acquistati ?? 0, "purchased · never expire", "from-mint-500 to-brand-500"],
+    [s.spesi_mese ?? 0, "spent this month", "from-brand-500 to-violet-500"],
+  ].map(([v, l, g]) => `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 text-center">
+      <p class="text-2xl font-black tabular-nums bg-gradient-to-r ${g} bg-clip-text text-transparent">${(+v).toLocaleString("en-US")}</p>
+      <p class="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p></div>`).join("");
+  /* per via: quante chiamate e quanti crediti per canale */
+  const perVia = Object.entries(d.per_via || {}).map(([via, v]) => {
+    const [nome, cls] = VIA_STILE[via] || [via, "bg-slate-100 text-slate-500"];
+    return `<div class="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-2.5">
+      <span class="rounded-md px-2 py-0.5 text-[11px] font-bold ${cls}">${nome}</span>
+      <span class="text-[12.5px] text-slate-500"><b class="text-slate-800 tabular-nums">${(+v.crediti).toLocaleString("en-US")}</b> credits · ${(+v.eventi).toLocaleString("en-US")} calls</span>
+    </div>`; }).join("");
+  /* il mese in barre: i crediti al giorno, css puro */
+  const giorni = d.per_giorno || [];
+  const maxG = Math.max(1, ...giorni.map(g => g.crediti));
+  const barre = giorni.map(g =>
+    `<div class="flex-1 rounded-t bg-gradient-to-t from-brand-500/70 to-mint-400/70 hover:from-brand-500 hover:to-mint-400 transition" style="height:${Math.max(4, Math.round(56 * g.crediti / maxG))}px" title="${g.giorno}: ${g.crediti} credits"></div>`).join("");
+  /* gli eventi: il registro puntuale */
+  const eventi = (d.eventi || []).map(e => {
+    const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
+    return `<div class="flex items-center gap-3 py-2 border-b border-slate-50 text-[12.5px]">
+      <span class="text-slate-400 tabular-nums shrink-0">${_quando(e.at)}</span>
+      <span class="rounded-md px-2 py-0.5 text-[10.5px] font-bold ${cls} shrink-0">${nome}</span>
+      <span class="font-semibold text-slate-700 truncate">${esc(e.azione)}</span>
+      <span class="text-slate-400 truncate hidden sm:block">${esc(e.dettaglio || "")}</span>
+      <span class="ml-auto font-bold text-slate-600 tabular-nums shrink-0">−${e.crediti}</span>
+    </div>`; }).join("");
+  /* le aziende sbloccate: i nomi, non i rif */
+  const sbloccate = (d.rivelazioni || []).map(r =>
+    `<div class="flex items-center gap-3 py-2 border-b border-slate-50 text-[13px]">
+      <span class="h-7 w-7 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-[10px] font-black shrink-0">${esc((r.nome || r.ref.split(":")[1] || "?")[0].toUpperCase())}</span>
+      <span class="font-semibold truncate">${esc(r.nome || r.ref)}</span>
+      <span class="ml-auto text-slate-400 text-[11.5px] shrink-0">${_quando(r.at)}</span>
+    </div>`).join("");
+  box.innerHTML = `<div class="h-1.5 bg-gradient-to-r from-violet-500 via-brand-500 to-mint-500"></div><div class="p-8">
+    <div class="flex items-start justify-between gap-4">
+      <div><h3 class="text-xl font-black tracking-tight">Usage &amp; unlocks</h3>
+      <p class="mt-1 text-[13px] text-slate-500">Where every credit went — live, per call.</p></div>
+      <button onclick="chiudiUso()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
+    </div>
+    <div class="mt-5 grid grid-cols-3 gap-2.5">${saldi}</div>
+    ${perVia ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">This month, per channel</p><div class="mt-2 space-y-1.5">${perVia}</div>` : ""}
+    ${barre ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Credits per day, last 30 days</p><div class="mt-2 flex items-end gap-1 h-16">${barre}</div>` : ""}
+    ${sbloccate ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Companies unlocked — never paid twice</p><div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
+    ${eventi ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">The ledger, latest first</p><div class="mt-1 max-h-64 overflow-auto pr-1 cov-scroll">${eventi}</div>`
+             : `<p class="mt-6 text-[13px] text-slate-400">No consumption recorded yet — the ledger writes itself from the first paid call.</p>`}
+  </div>`;
 }
 
 /* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */

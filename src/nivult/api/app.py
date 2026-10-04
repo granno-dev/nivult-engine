@@ -1162,6 +1162,9 @@ def create_app() -> FastAPI:
         esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
         if esito == "senza_crediti":
             raise HTTPException(429, "this month's credits are spent — top up from the dashboard")
+        if esito == "ok":
+            _chiavi.registra_uso(uid, "portale", "posting unlock",
+                                 offerta_id)
         return {"offerta": riga, "esito": esito}
 
     @app.post("/portale/rivela-azienda")
@@ -1182,6 +1185,8 @@ def create_app() -> FastAPI:
         esito = _chiavi.rivela_per_utente(uid, "azienda", rif)
         if esito == "senza_crediti":
             raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
+        if esito == "ok":
+            _chiavi.registra_uso(uid, "portale", "company unlock", rif)
         return {"azienda": riga, "esito": esito}
 
     @app.post("/portale/azienda-jobs")
@@ -1214,6 +1219,7 @@ def create_app() -> FastAPI:
                                 "credits/month tier — raise your volume below")
         if not _chiavi.spendi_per_utente(uid):
             raise HTTPException(429, "this month's credits are spent")
+        _chiavi.registra_uso(uid, "export", "daily export", nome)
         percorso = (_dati.stato_export().get("file") or {}).get(nome)
         if not percorso or not os.path.isfile(percorso):
             raise HTTPException(404, "today's export is not ready yet")
@@ -1301,11 +1307,68 @@ def create_app() -> FastAPI:
             os.unlink(percorso)
             raise HTTPException(429, "not enough credits for this export: "
                                 f"it costs {costo}")
+        _chiavi.registra_uso(uid, "export",
+                             f"filtered export ({tipo})",
+                             f"{scritte} rows" +
+                             (f" · {filtri}" if filtri else ""),
+                             crediti=costo)
         sfondo = BackgroundTasks()
         sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
         return FileResponse(percorso, media_type="application/gzip",
                             filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
                             background=sfondo)
+
+    @app.get("/portale/uso")
+    def uso_del_portale(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Il registro dei consumi (04/10/2026): chi paga vede DOVE vanno i
+        crediti — per via (api/portale/export), per giorno, evento per
+        evento — e le aziende sbloccate coi nomi. La card Credits mostra
+        il saldo; questo risponde a «dove sono finiti?»."""
+        extra = _chiavi.extra_per_utente(uid)
+        mensile = max(0, _chiavi.saldo_per_utente(uid) - extra)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT via, count(*), sum(crediti) FROM portale_uso "
+                    "WHERE user_id = %s AND at >= date_trunc('month', now()) "
+                    "GROUP BY via", (uid,))
+                per_via = {r[0]: {"eventi": r[1], "crediti": r[2]}
+                           for r in cur.fetchall()}
+                cur.execute(
+                    "SELECT at::date, sum(crediti) FROM portale_uso "
+                    "WHERE user_id = %s AND at > now() - interval '30 days' "
+                    "GROUP BY 1 ORDER BY 1", (uid,))
+                per_giorno = [{"giorno": str(r[0]), "crediti": r[1]}
+                              for r in cur.fetchall()]
+                cur.execute(
+                    "SELECT at, via, azione, dettaglio, crediti "
+                    "FROM portale_uso WHERE user_id = %s "
+                    "ORDER BY at DESC LIMIT 60", (uid,))
+                eventi = [{"at": r[0].isoformat(), "via": r[1],
+                           "azione": r[2], "dettaglio": r[3],
+                           "crediti": r[4]} for r in cur.fetchall()]
+                cur.execute(
+                    "SELECT riferimento, revealed_at FROM portale_rivelazioni "
+                    "WHERE user_id = %s AND tipo = 'azienda' "
+                    "ORDER BY revealed_at DESC LIMIT 60", (uid,))
+                rivelazioni = [{"ref": r[0], "at": r[1].isoformat()}
+                               for r in cur.fetchall()]
+        except Exception:                                # noqa: BLE001
+            # la tabella arriva con la migrazione 0069: prima di allora la
+            # pagina mostra i saldi e basta, mai un 500
+            per_via, per_giorno, eventi, rivelazioni = {}, [], [], []
+        for r in rivelazioni:
+            try:
+                a = _dati.rivela_azienda(r["ref"])
+                if a:
+                    r["nome"] = a.get("company") or a.get("legal_name")
+            except Exception:                            # noqa: BLE001
+                pass
+        speso_mese = sum(v["crediti"] or 0 for v in per_via.values())
+        return {"saldo": {"gratis": mensile, "acquistati": extra,
+                          "spesi_mese": speso_mese},
+                "per_via": per_via, "per_giorno": per_giorno,
+                "eventi": eventi, "rivelazioni": rivelazioni}
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):
