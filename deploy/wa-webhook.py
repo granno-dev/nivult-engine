@@ -40,14 +40,28 @@ def _testo(msg: dict) -> str:
 
 
 def _tratta(body: dict) -> None:
-    if TOKEN and body.get("token") != TOKEN:
+    # La forma vera sul filo (misurata il 04/10/2026): wuzapi spedisce un
+    # involucro {instanceName, jsonData: "<stringa>", userID} — l'evento e'
+    # DENTRO jsonData. Il token, se arriva, deve combaciare; il receiver non
+    # e' pubblicato fuori dalla rete docker, quindi l'assenza non apre nulla.
+    if isinstance(body.get("jsonData"), str):
+        try:
+            body = json.loads(body["jsonData"])
+        except ValueError:
+            return
+    if TOKEN and body.get("token") and body.get("token") != TOKEN:
         return
     if body.get("type") != "Message":
         return
     ev = body.get("event") or {}
     info = ev.get("Info") or {}
-    jid = info.get("Chat") or info.get("Sender") or ""
-    telefono = _telefono(jid)
+    # Da quando WhatsApp passa ai LID, Chat puo' essere «…@lid»: il numero
+    # vero sta in SenderAlt. Mai fidarsi di un solo campo.
+    telefono = None
+    for jid in (info.get("Chat"), info.get("SenderAlt"), info.get("Sender")):
+        telefono = _telefono(jid or "")
+        if telefono:
+            break
     testo = _testo(ev.get("Message") or {})
     if not telefono:
         return  # gruppi, broadcast, status: non sono l'inbox dei digest
