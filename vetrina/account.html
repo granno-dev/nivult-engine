@@ -197,7 +197,7 @@ tailwind.config = {
           </div>
           <p class="mt-3 text-[12px] text-slate-400">The bar shows this month's free allowance, which renews on the 1st. Purchased credits are spent only once the allowance runs out, and never expire.</p>
           <div class="mt-auto pt-4">
-            <button onclick="apriUso()" class="w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
+            <button onclick="apriUso()" class="w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
               <span id="uso-rivelazioni">View credit usage</span> <span class="text-violet-400">→</span>
             </button>
@@ -227,9 +227,10 @@ tailwind.config = {
           </div>
           <input id="buy-slider" type="range" min="25" max="2990" value="229" class="pz-slider mt-4 w-full" aria-label="Amount in euros">
           <div class="mt-2 flex justify-between text-[11px] text-slate-400 font-semibold"><span>€25</span><span id="buy-unit">€2.29 per 1,000 calls</span><span>€2,990</span></div>
+          <p class="mt-5 text-[12px] leading-5 text-slate-400">A one-time purchase — no subscription, nothing renews. The credits land on your balance as soon as the payment clears and <b class="text-slate-500">never expire</b>: they are spent only after your free monthly allowance runs out, and every single one is itemized under <b class="text-slate-500">View credit usage</b>.</p>
           <div class="mt-auto pt-5">
             <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-mint-500/35 hover:-translate-y-px transition flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>Continue to secure checkout →</button>
-            <p id="buy-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
+            <p id="buy-nota" class="hidden mt-3 text-[12px] text-slate-400 text-center"></p>
           </div>
         </div>
       </div>
@@ -287,7 +288,12 @@ tailwind.config = {
           <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
           <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
         </div>
-        <div id="cerca-righe" class="mt-4 grid gap-2"></div>
+        <!-- i risultati scorrono DENTRO un'area alta mezza finestra
+             (04/10/2026): la pagina non si allunga piu' a ogni pagina
+             caricata. I filtri restano fuori e appiccicati, cosi' la
+             rotellina intrappolata del 29/09 non torna: lo scroll interno
+             e' solo sulla lista, piccola e dichiarata -->
+        <div id="cerca-righe" class="mt-4 grid gap-2 max-h-[46vh] overflow-auto pr-1 cov-scroll content-start"></div>
         <div class="mt-3 flex justify-center">
           <button id="cerca-altro" onclick="cercaAncora()" class="hidden rounded-xl border border-slate-200 px-5 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-500 hover:text-brand-600 transition">Load more</button>
         </div>
@@ -658,8 +664,10 @@ async function compra() {
   const c = creditiPerEuro(e);
   const r = await api("/me/checkout", { method: "POST", body: JSON.stringify({ volume: c }) });
   if (r.status === 503) {
-    document.getElementById("buy-nota").innerHTML =
+    const nota = document.getElementById("buy-nota");
+    nota.innerHTML =
       'Checkout opens soon. Meanwhile <a class="text-brand-600 font-bold" href="mailto:hello@nivult.com?subject=Credits%20' + c + '">write us</a> and we set it up by hand.';
+    nota.classList.remove("hidden");
     return;
   }
   if (!r.ok) { alert("Something went wrong. Retry in a moment."); return; }
