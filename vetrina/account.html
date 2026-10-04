@@ -195,9 +195,9 @@ tailwind.config = {
             <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold"></span>
           </div>
-          <p class="mt-3 text-[12px] text-slate-400">The bar is this month's free allowance — it resets on the 1st. Top-ups kick in when the free ones run out and never expire.</p>
+          <p class="mt-3 text-[12px] text-slate-400">The bar shows this month's free allowance, which renews on the 1st. Purchased credits are spent only once the allowance runs out, and never expire.</p>
           <button onclick="apriUso()" class="mt-4 w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-2.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
-            <span id="uso-rivelazioni">Usage &amp; unlocks</span> <span class="text-violet-400">→</span>
+            <span id="uso-rivelazioni">Usage &amp; activity</span> <span class="text-violet-400">→</span>
           </button>
         </div>
       </div>
@@ -577,8 +577,8 @@ function disegna() {
   document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
   const riv = document.getElementById("uso-rivelazioni");
   riv.textContent = rivelazioni
-    ? rivelazioni.toLocaleString("en-US") + " companies unlocked — usage & detail"
-    : "Usage & unlocks";
+    ? rivelazioni.toLocaleString("en-US") + " companies unlocked · account activity"
+    : "Usage & activity";
 }
 /* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
    esempi del quickstart la portano dentro finche' la pagina e' aperta,
@@ -1085,32 +1085,34 @@ const VIA_STILE = {
 async function apriUso() {
   document.getElementById("uso").classList.remove("hidden");
   const box = document.getElementById("uso-box");
-  box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">loading the ledger…</div>`;
+  box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">Loading activity…</div>`;
   const r = await api("/portale/uso");
-  if (!r.ok) { box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">could not load the ledger — retry in a moment</div>`; return; }
+  if (!r.ok) { box.innerHTML = `<div class="p-10 text-center text-slate-400 text-sm">Activity could not be loaded — please try again in a moment.</div>`; return; }
   const d = await r.json();
   const s = d.saldo || {};
+  const plur = (n, sing, plu) => `${(+n).toLocaleString("en-US")} ${+n === 1 ? sing : (plu || sing + "s")}`;
   /* i tre saldi in testa: gratis del mese, comprati (non scadono),
-     spesi questo mese */
+     spesi questo mese — quest'ultimo dal contatore che decide i 429,
+     cosi' il totale quadra anche per i consumi precedenti al registro */
   const saldi = [
-    [s.gratis ?? 0, "free left this month", "from-violet-500 to-pink-500"],
-    [s.acquistati ?? 0, "purchased · never expire", "from-mint-500 to-brand-500"],
-    [s.spesi_mese ?? 0, "spent this month", "from-brand-500 to-violet-500"],
-  ].map(([v, l, g]) => `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 text-center">
-      <p class="text-2xl font-black tabular-nums bg-gradient-to-r ${g} bg-clip-text text-transparent">${(+v).toLocaleString("en-US")}</p>
-      <p class="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p></div>`).join("");
+    [s.gratis ?? 0, "Free allowance remaining", "from-violet-500 to-pink-500"],
+    [s.acquistati ?? 0, "Purchased · no expiry", "from-mint-500 to-brand-500"],
+    [s.spesi_mese ?? 0, "Spent this month", "from-brand-500 to-violet-500"],
+  ].map(([v, l, g]) => `<div class="rounded-2xl border border-slate-100 bg-white px-4 py-4 text-center shadow-sm shadow-slate-100">
+      <p class="text-[26px] leading-8 font-black tabular-nums bg-gradient-to-r ${g} bg-clip-text text-transparent">${(+v).toLocaleString("en-US")}</p>
+      <p class="mt-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p></div>`).join("");
   /* per via: quante chiamate e quanti crediti per canale */
   const perVia = Object.entries(d.per_via || {}).map(([via, v]) => {
     const [nome, cls] = VIA_STILE[via] || [via, "bg-slate-100 text-slate-500"];
     return `<div class="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-2.5">
       <span class="rounded-md px-2 py-0.5 text-[11px] font-bold ${cls}">${nome}</span>
-      <span class="text-[12.5px] text-slate-500"><b class="text-slate-800 tabular-nums">${(+v.crediti).toLocaleString("en-US")}</b> credits · ${(+v.eventi).toLocaleString("en-US")} calls</span>
+      <span class="text-[12.5px] text-slate-500"><b class="text-slate-800 tabular-nums">${(+v.crediti).toLocaleString("en-US")}</b> ${+v.crediti === 1 ? "credit" : "credits"} · ${plur(v.eventi, "call")}</span>
     </div>`; }).join("");
   /* il mese in barre: i crediti al giorno, css puro */
   const giorni = d.per_giorno || [];
   const maxG = Math.max(1, ...giorni.map(g => g.crediti));
   const barre = giorni.map(g =>
-    `<div class="flex-1 rounded-t bg-gradient-to-t from-brand-500/70 to-mint-400/70 hover:from-brand-500 hover:to-mint-400 transition" style="height:${Math.max(4, Math.round(56 * g.crediti / maxG))}px" title="${g.giorno}: ${g.crediti} credits"></div>`).join("");
+    `<div class="flex-1 rounded-t bg-gradient-to-t from-brand-500/70 to-mint-400/70 hover:from-brand-500 hover:to-mint-400 transition" style="height:${Math.max(4, Math.round(56 * g.crediti / maxG))}px" title="${g.giorno}: ${plur(g.crediti, "credit")}"></div>`).join("");
   /* gli eventi: il registro puntuale */
   const eventi = (d.eventi || []).map(e => {
     const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
@@ -1121,6 +1123,11 @@ async function apriUso() {
       <span class="text-slate-400 truncate hidden sm:block">${esc(e.dettaglio || "")}</span>
       <span class="ml-auto font-bold text-slate-600 tabular-nums shrink-0">−${e.crediti}</span>
     </div>`; }).join("");
+  /* consumi contati ma non dettagliati: API ed export precedenti alla
+     nascita del registro — la nota si mostra solo se la differenza esiste */
+  const nonDet = d.non_dettagliati > 0
+    ? `<p class="mt-3 text-[11.5px] leading-5 text-slate-400 border-t border-slate-50 pt-3">A further <b class="text-slate-600">${plur(d.non_dettagliati, "credit")}</b> ${+d.non_dettagliati === 1 ? "was" : "were"} spent on API calls and exports before ${new Date(d.registro_dal + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} — included in the totals above; per-call itemization began on that date.</p>`
+    : "";
   /* le aziende sbloccate: i nomi, non i rif */
   const sbloccate = (d.rivelazioni || []).map(r =>
     `<div class="flex items-center gap-3 py-2 border-b border-slate-50 text-[13px]">
@@ -1130,16 +1137,18 @@ async function apriUso() {
     </div>`).join("");
   box.innerHTML = `<div class="h-1.5 bg-gradient-to-r from-violet-500 via-brand-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-start justify-between gap-4">
-      <div><h3 class="text-xl font-black tracking-tight">Usage &amp; unlocks</h3>
-      <p class="mt-1 text-[13px] text-slate-500">Where every credit went — live, per call.</p></div>
+      <div><h3 class="text-xl font-black tracking-tight">Account activity</h3>
+      <p class="mt-1 text-[13px] text-slate-500">Every API call, unlock and export, itemized as it happens.</p></div>
       <button onclick="chiudiUso()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
     <div class="mt-5 grid grid-cols-3 gap-2.5">${saldi}</div>
-    ${perVia ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">This month, per channel</p><div class="mt-2 space-y-1.5">${perVia}</div>` : ""}
-    ${barre ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Credits per day, last 30 days</p><div class="mt-2 flex items-end gap-1 h-16">${barre}</div>` : ""}
-    ${sbloccate ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Companies unlocked — never paid twice</p><div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
-    ${eventi ? `<p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">The ledger, latest first</p><div class="mt-1 max-h-64 overflow-auto pr-1 cov-scroll">${eventi}</div>`
-             : `<p class="mt-6 text-[13px] text-slate-400">No consumption recorded yet — the ledger writes itself from the first paid call.</p>`}
+    ${perVia ? `<p class="mt-7 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">This month by channel</p><div class="mt-2 space-y-1.5">${perVia}</div>` : ""}
+    ${barre ? `<p class="mt-7 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Daily spend · last 30 days</p><div class="mt-2 flex items-end gap-1 h-16">${barre}</div>` : ""}
+    ${sbloccate ? `<p class="mt-7 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Unlocked companies</p>
+      <p class="mt-1 text-[12px] text-slate-400">Unlocked records remain yours — viewing them again costs nothing.</p>
+      <div class="mt-1 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
+    ${eventi ? `<p class="mt-7 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Itemized activity</p><div class="mt-1 max-h-64 overflow-auto pr-1 cov-scroll">${eventi}</div>${nonDet}`
+             : `<p class="mt-7 text-[13px] text-slate-400">No activity yet. Every API call, unlock and export will appear here as it happens.</p>${nonDet}`}
   </div>`;
 }
 

@@ -1326,6 +1326,18 @@ def create_app() -> FastAPI:
         il saldo; questo risponde a «dove sono finiti?»."""
         extra = _chiavi.extra_per_utente(uid)
         mensile = max(0, _chiavi.saldo_per_utente(uid) - extra)
+        # Lo speso del mese lo dice il contatore che fa scattare i 429,
+        # non il registro: portale_uso nasce il 04/10/2026 e le chiamate
+        # API e gli export di prima non sono dettagliati da nessuna parte.
+        # La differenza si DICHIARA («contati, non dettagliati»): i totali
+        # devono quadrare, e un buco silenzioso e' peggio di una nota.
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
+                "                     THEN 0 ELSE usati_mese END), 0) "
+                "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
+                (uid,))
+            speso_reale = int(cur.fetchone()[0])
         try:
             with conn.cursor() as cur:
                 cur.execute(
@@ -1364,11 +1376,16 @@ def create_app() -> FastAPI:
                     r["nome"] = a.get("company") or a.get("legal_name")
             except Exception:                            # noqa: BLE001
                 pass
-        speso_mese = sum(v["crediti"] or 0 for v in per_via.values())
+        speso_dettagliato = sum(v["crediti"] or 0 for v in per_via.values())
+        non_dettagliati = max(0, speso_reale - speso_dettagliato)
         return {"saldo": {"gratis": mensile, "acquistati": extra,
-                          "spesi_mese": speso_mese},
+                          "spesi_mese": speso_reale},
                 "per_via": per_via, "per_giorno": per_giorno,
-                "eventi": eventi, "rivelazioni": rivelazioni}
+                "eventi": eventi, "rivelazioni": rivelazioni,
+                # crediti spesi prima che il registro esistesse: nel totale
+                # ci sono, riga per riga no — la pagina lo dice esplicitamente
+                "non_dettagliati": non_dettagliati,
+                "registro_dal": "2026-10-04"}
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):
