@@ -341,9 +341,10 @@ def main() -> int:
             # numero, chiunque potrebbe inserire quello di un altro e
             # fargli piovere addosso digest. Il numero entra SOLO dal
             # messaggio che l'utente ci manda, mai dal PUT.
-            os.environ["ZERNIO_API_KEY"] = "sk_prova"
-            os.environ["ZERNIO_WHATSAPP_ACCOUNT_ID"] = "acc_prova"
-            os.environ["ZERNIO_WHATSAPP_NUMBER"] = "16469143141"
+            # 04/10/2026: il trasporto e' wuzapi self-hosted (morto Zernio) —
+            # i nomi delle variabili cambiano, il contratto no.
+            os.environ["WUZAPI_TOKEN"] = "tok_prova"
+            os.environ["WUZAPI_NUMBER"] = "16469143141"
             wa_mod = app_module.whatsapp_mod
             vero_cerca = wa_mod.cerca_collegamenti
             vero_wa_testo = wa_mod.invia_testo
