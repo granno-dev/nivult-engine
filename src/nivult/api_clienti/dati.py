@@ -680,6 +680,8 @@ def demo_stats() -> dict:
                 nuove = _conn().execute(
                     "SELECT count(*) FROM flusso WHERE event = 'new' "
                     "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+                piattaforme = _conn().execute(
+                    "SELECT count(DISTINCT ats) FROM offerte").fetchone()[0]
                 righe_cop = _conn().execute(
                     "SELECT chiave, valore FROM copertura").fetchall()
             cop = {k: v for k, v in righe_cop if not k.startswith("az:")}
@@ -687,6 +689,7 @@ def demo_stats() -> dict:
             return {"offerte": sal["offerte_attive"],
                     "aziende": sal.get("aziende_con_offerte"),
                     "paesi": sal.get("paesi"),
+                    "piattaforme": piattaforme,
                     "nuove_24h": nuove, "copertura": cop,
                     "copertura_aziende": cop_az}
     except Exception:                                # noqa: BLE001
@@ -696,6 +699,8 @@ def demo_stats() -> dict:
         aziende = _conn().execute("SELECT count(*) FROM aziende").fetchone()[0]
         paesi = _conn().execute(
             "SELECT count(DISTINCT country) FROM offerte").fetchone()[0]
+        piattaforme = _conn().execute(
+            "SELECT count(DISTINCT ats) FROM offerte").fetchone()[0]
         nuove = _conn().execute(
             "SELECT count(*) FROM flusso WHERE event = 'new' "
             "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
@@ -704,7 +709,8 @@ def demo_stats() -> dict:
     cop = {k: v for k, v in righe_cop if not k.startswith("az:")}
     cop_az = {k[3:]: v for k, v in righe_cop if k.startswith("az:")}
     return {"offerte": offerte, "aziende": aziende,
-            "paesi": paesi, "nuove_24h": nuove, "copertura": cop,
+            "paesi": paesi, "piattaforme": piattaforme,
+            "nuove_24h": nuove, "copertura": cop,
             "copertura_aziende": cop_az}
 
 
