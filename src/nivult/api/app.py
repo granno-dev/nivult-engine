@@ -1318,12 +1318,32 @@ def create_app() -> FastAPI:
                             filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
                             background=sfondo)
 
+    def _bel_nome(rif: str) -> str:
+        """Dal rif tecnico a un nome presentabile, quando il record non si
+        risolve piu' (l'azienda non e' nell'export di oggi): «workday:stryker»
+        diventa «Stryker», «jsonld:careers-jrmc» diventa «Careers Jrmc».
+        Mai il rif grezzo in pagina (04/10/2026)."""
+        slug = rif.split(":", 1)[-1]
+        # «careers.recordati.com» -> «recordati»; «dm-jobs.it» -> «dm-jobs»
+        parti = slug.split(".")
+        if len(parti) > 1:
+            nucleo = parti[1] if parti[0] in (
+                "careers", "jobs", "job", "talent", "workats", "career",
+                "recruiting", "join") and len(parti) > 2 else parti[0]
+        else:
+            nucleo = slug
+        return re.sub(r"[-_]+", " ", nucleo).strip().title() or rif
+
     @app.get("/portale/uso")
     def uso_del_portale(uid: str = Depends(utente), conn=Depends(connessione)):
         """Il registro dei consumi (04/10/2026): chi paga vede DOVE vanno i
         crediti — per via (api/portale/export), per giorno, evento per
         evento — e le aziende sbloccate coi nomi. La card Credits mostra
-        il saldo; questo risponde a «dove sono finiti?»."""
+        il saldo; questo risponde a «dove sono finiti?».
+
+        Ogni evento porta un TITOLO leggibile (il nome dell'azienda, il
+        titolo dell'offerta): gli identificativi tecnici restano come
+        dettaglio secondario, mai come testo principale."""
         extra = _chiavi.extra_per_utente(uid)
         mensile = max(0, _chiavi.saldo_per_utente(uid) - extra)
         # Lo speso del mese lo dice il contatore che fa scattare i 429,
@@ -1369,6 +1389,7 @@ def create_app() -> FastAPI:
             # la tabella arriva con la migrazione 0069: prima di allora la
             # pagina mostra i saldi e basta, mai un 500
             per_via, per_giorno, eventi, rivelazioni = {}, [], [], []
+        nomi = {}
         for r in rivelazioni:
             try:
                 a = _dati.rivela_azienda(r["ref"])
@@ -1376,6 +1397,27 @@ def create_app() -> FastAPI:
                     r["nome"] = a.get("company") or a.get("legal_name")
             except Exception:                            # noqa: BLE001
                 pass
+            if not r.get("nome"):
+                # l'azienda non e' nell'export di oggi: il nome si ricava
+                # dal rif, presentabile — mai il rif grezzo in pagina
+                r["nome"] = _bel_nome(r["ref"])
+            nomi[r["ref"]] = r["nome"]
+        for e in eventi:
+            # il titolo leggibile dell'evento: il nome dell'azienda per gli
+            # sblocchi, «titolo · azienda» per le offerte, il file per gli
+            # export. L'identificativo tecnico resta in `dettaglio`.
+            if e["azione"] == "company unlock" and e["dettaglio"] in nomi:
+                e["titolo"] = nomi[e["dettaglio"]]
+            elif e["azione"] == "company unlock" and e["dettaglio"]:
+                e["titolo"] = _bel_nome(e["dettaglio"])
+            elif e["azione"] == "posting unlock" and e["dettaglio"]:
+                try:
+                    o = _vivo.rivela_offerta(e["dettaglio"])
+                    if o:
+                        e["titolo"] = " · ".join(x for x in (
+                            o.get("title"), o.get("organization")) if x)
+                except Exception:                        # noqa: BLE001
+                    pass
         speso_dettagliato = sum(v["crediti"] or 0 for v in per_via.values())
         non_dettagliati = max(0, speso_reale - speso_dettagliato)
         return {"saldo": {"gratis": mensile, "acquistati": extra,
