@@ -1334,6 +1334,14 @@ def create_app() -> FastAPI:
             nucleo = slug
         return re.sub(r"[-_]+", " ", nucleo).strip().title() or rif
 
+    def _favicon(dominio: str | None) -> str | None:
+        """Il logo d'azienda dal dominio, via favicon di Google: gratis,
+        sempre vivo (brandfetch e' morto il 29/09/2026), senza scarichi
+        nostri. In pagina c'e' il monogramma sotto, se l'immagine manca."""
+        if not dominio:
+            return None
+        return (f"https://www.google.com/s2/favicons?domain={dominio}&sz=128")
+
     @app.get("/portale/uso")
     def uso_del_portale(uid: str = Depends(utente), conn=Depends(connessione)):
         """Il registro dei consumi (04/10/2026): chi paga vede DOVE vanno i
@@ -1342,8 +1350,9 @@ def create_app() -> FastAPI:
         il saldo; questo risponde a «dove sono finiti?».
 
         Ogni evento porta un TITOLO leggibile (il nome dell'azienda, il
-        titolo dell'offerta): gli identificativi tecnici restano come
-        dettaglio secondario, mai come testo principale."""
+        titolo dell'offerta) e, quando c'e', il LOGO dal dominio: gli
+        identificativi tecnici restano come dettaglio secondario, mai
+        come testo principale."""
         extra = _chiavi.extra_per_utente(uid)
         mensile = max(0, _chiavi.saldo_per_utente(uid) - extra)
         # Lo speso del mese lo dice il contatore che fa scattare i 429,
@@ -1390,11 +1399,13 @@ def create_app() -> FastAPI:
             # pagina mostra i saldi e basta, mai un 500
             per_via, per_giorno, eventi, rivelazioni = {}, [], [], []
         nomi = {}
+        loghi = {}
         for r in rivelazioni:
             try:
                 a = _dati.rivela_azienda(r["ref"])
                 if a:
                     r["nome"] = a.get("company") or a.get("legal_name")
+                    r["logo"] = _favicon(a.get("domain"))
             except Exception:                            # noqa: BLE001
                 pass
             if not r.get("nome"):
@@ -1402,20 +1413,35 @@ def create_app() -> FastAPI:
                 # dal rif, presentabile — mai il rif grezzo in pagina
                 r["nome"] = _bel_nome(r["ref"])
             nomi[r["ref"]] = r["nome"]
+            if r.get("logo"):
+                loghi[r["ref"]] = r["logo"]
         for e in eventi:
             # il titolo leggibile dell'evento: il nome dell'azienda per gli
             # sblocchi, «titolo · azienda» per le offerte, il file per gli
             # export. L'identificativo tecnico resta in `dettaglio`.
-            if e["azione"] == "company unlock" and e["dettaglio"] in nomi:
-                e["titolo"] = nomi[e["dettaglio"]]
-            elif e["azione"] == "company unlock" and e["dettaglio"]:
-                e["titolo"] = _bel_nome(e["dettaglio"])
+            if e["azione"] == "company unlock" and e["dettaglio"]:
+                e["titolo"] = nomi.get(e["dettaglio"]) or _bel_nome(e["dettaglio"])
+                if e["dettaglio"] in loghi:
+                    e["logo"] = loghi[e["dettaglio"]]
             elif e["azione"] == "posting unlock" and e["dettaglio"]:
                 try:
                     o = _vivo.rivela_offerta(e["dettaglio"])
                     if o:
                         e["titolo"] = " · ".join(x for x in (
                             o.get("title"), o.get("organization")) if x)
+                        # il logo dell'azienda dell'offerta, dalla sua
+                        # scheda: una lettura in piu', solo per gli sblocchi
+                        rif_o = (f"{o['ats']}:{o['company_slug']}"
+                                 if o.get("ats") and o.get("company_slug")
+                                 else None)
+                        if rif_o:
+                            if rif_o in loghi:
+                                e["logo"] = loghi[rif_o]
+                            else:
+                                az = _dati.rivela_azienda(rif_o)
+                                if az and az.get("domain"):
+                                    e["logo"] = _favicon(az["domain"])
+                                    loghi[rif_o] = e["logo"]
                 except Exception:                        # noqa: BLE001
                     pass
         speso_dettagliato = sum(v["crediti"] or 0 for v in per_via.values())
