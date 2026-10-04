@@ -680,6 +680,9 @@ def demo_stats() -> dict:
                 nuove = _conn().execute(
                     "SELECT count(*) FROM flusso WHERE event = 'new' "
                     "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+                cambiamenti = _conn().execute(
+                    "SELECT count(*) FROM flusso "
+                    "WHERE t >= now() - INTERVAL '1 day'").fetchone()[0]
                 piattaforme = _conn().execute(
                     "SELECT count(DISTINCT ats) FROM offerte").fetchone()[0]
                 righe_cop = _conn().execute(
@@ -690,7 +693,13 @@ def demo_stats() -> dict:
                     "aziende": sal.get("aziende_con_offerte"),
                     "paesi": sal.get("paesi"),
                     "piattaforme": piattaforme,
-                    "nuove_24h": nuove, "copertura": cop,
+                    "nuove_24h": nuove,
+                    # 04/10/2026: TUTTI i numeri della landing vengono da
+                    # qui — sezioni diverse, stessa fonte, mai mele e pere
+                    "cambiamenti_24h": cambiamenti,
+                    "chiuse_storico": (d.get("v", {}).get("magazzino", {})
+                                       .get("storico_chiuse")),
+                    "copertura": cop,
                     "copertura_aziende": cop_az}
     except Exception:                                # noqa: BLE001
         pass                                         # ripiego sotto
@@ -704,13 +713,18 @@ def demo_stats() -> dict:
         nuove = _conn().execute(
             "SELECT count(*) FROM flusso WHERE event = 'new' "
             "AND t >= now() - INTERVAL '1 day'").fetchone()[0]
+        cambiamenti = _conn().execute(
+            "SELECT count(*) FROM flusso "
+            "WHERE t >= now() - INTERVAL '1 day'").fetchone()[0]
         righe_cop = _conn().execute(
             "SELECT chiave, valore FROM copertura").fetchall()
     cop = {k: v for k, v in righe_cop if not k.startswith("az:")}
     cop_az = {k[3:]: v for k, v in righe_cop if k.startswith("az:")}
     return {"offerte": offerte, "aziende": aziende,
             "paesi": paesi, "piattaforme": piattaforme,
-            "nuove_24h": nuove, "copertura": cop,
+            "nuove_24h": nuove, "cambiamenti_24h": cambiamenti,
+            "chiuse_storico": None,
+            "copertura": cop,
             "copertura_aziende": cop_az}
 
 

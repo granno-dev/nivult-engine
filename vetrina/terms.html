@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nivult | Terms of service</title>
+<meta name="description" content="The terms for the Nivult data platform: API, exports, credits.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script>
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+  colors: { brand: {50:'#eef4ff',500:'#3b6ef6',600:'#2f5de0'},
+            mint: {500:'#0fbf9a'}, paper: '#f5f4ef' } } } }
+</script>
+</head>
+<body class="bg-paper text-slate-900 font-sans antialiased min-h-screen flex flex-col">
+<nav class="border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
+  <div class="max-w-4xl mx-auto px-6 h-16 flex items-center">
+    <a href="index.html" class="inline-flex items-center"><img src="brand/nivult.svg" alt="Nivult" class="h-6 w-auto"></a>
+  </div>
+</nav>
+
+<main class="flex-1">
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">Legal</p>
+    <h1 class="mt-3 text-4xl font-black tracking-tight">Terms of service</h1>
+    <p class="mt-3 text-sm text-slate-500">Nivult data platform — API, exports and delta feed · last updated 4 October 2026</p>
+
+    <div class="mt-10 space-y-10 text-[15px] leading-relaxed text-slate-700">
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">1. The service</h2>
+        <p class="mt-3">Nivult («we», «the platform») operates an index of job postings and employer records collected directly from employers' public career systems, and provides access to it through an API, daily bulk exports, a delta feed of changes, and the web portal at this site. These terms govern your account and your use of the platform. By creating an account or using an API key, you accept them.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">2. Accounts and keys</h2>
+        <p class="mt-3">Accounts are created with a work email or an OAuth identity (Google, Microsoft, GitHub). API keys are issued to your account, shown once, and revocable by you at any time. You are responsible for what happens under your keys: keep them out of client-side code and public repositories. We may suspend keys used in breach of these terms.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">3. Credits and billing</h2>
+        <p class="mt-3">Usage is metered in credits: one credit per API call; portal reveals and filtered exports consume credits as shown before you spend them. Every account receives a free monthly allowance; purchased credits never expire and are charged at the volume price shown at checkout. Payments are processed by our billing provider; prices are in euro, excluding applicable taxes. If the platform fails materially, unused purchased credits are refundable on request.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">4. Acceptable use</h2>
+        <p class="mt-3">You may use the data in your products, analyses and internal tools, and you may show derived results to your customers. You may not: resell or republish the raw index as a competing dataset; circumvent the rate limits or the portal's metering; use the data for unlawful outreach, discrimination, or surveillance of individuals; or misrepresent the provenance of the data. Postings remain the content of their employers: your use of them must comply with applicable law.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">5. The data</h2>
+        <p class="mt-3">The index reflects what employers publish on their own career pages. We measure and publish the per-field coverage of the index instead of promising perfection: figures on the site are computed from the same index you receive. Records are enriched by our own models, whose outputs are estimates by construction. We do not warrant that any posting is available, accurate or current at the moment you read it — a posting marked closed is verified gone from the employer's page; everything else is as reported at the source.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">6. Personal data inside postings</h2>
+        <p class="mt-3">A minority of postings carries business contact details (a recruiter's name or email) as published by the employer. You process that personal data under your own responsibility and legal basis; on request we sign a data processing agreement (write to <a class="text-brand-600 font-semibold" href="mailto:hello@nivult.com?subject=Data%20processing%20agreement">hello@nivult.com</a>).</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">7. Availability and changes</h2>
+        <p class="mt-3">The platform is provided as-is and as-available. We may add fields over time; we never rename or remove a field without notice through the changelog. Planned maintenance is announced in the portal. These terms may evolve: material changes are announced by email before they apply.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">8. Liability</h2>
+        <p class="mt-3">To the extent the law allows, our aggregate liability is capped at the amount you paid in the twelve months before the claim, and we are not liable for indirect or consequential losses (lost revenue, lost opportunities, decisions taken on the data).</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">9. Termination</h2>
+        <p class="mt-3">You may close your account at any time; purchased credits already spent are not refundable, unused purchased credits are. We may close accounts that breach these terms, with notice when the breach is curable. On closure your data is deleted as described in the privacy policy.</p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold text-slate-900">10. Law and contact</h2>
+        <p class="mt-3">These terms are governed by the laws of Italy. Questions, notices and DPA requests: <a class="text-brand-600 font-semibold" href="mailto:hello@nivult.com">hello@nivult.com</a>.</p>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<footer class="border-t border-slate-900/5 py-10">
+  <div class="max-w-4xl mx-auto px-6 flex flex-wrap justify-between gap-4 text-sm text-slate-500">
+    <span>© 2026 Nivult</span>
+    <span><a href="index.html" class="hover:text-brand-600 transition">Back to the site</a> · <a href="privacy.html" class="hover:text-brand-600 transition">Privacy policy</a></span>
+  </div>
+</footer>
+</body>
+</html>

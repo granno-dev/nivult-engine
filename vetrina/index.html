@@ -301,7 +301,7 @@ tailwind.config = {
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-mint-500/25">◎</div>
         <h3 class="mt-5 text-lg font-bold">Direct from employers</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page — never because it grew old. 654,113 verified closures are preserved in history.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page — never because it grew old. <b id="chiuse-storico-2">654,113</b> verified closures are preserved in history.</p>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-violet-500/25">◈</div>
@@ -340,9 +340,9 @@ tailwind.config = {
       <h2 class="text-4xl font-black tracking-tight">Snapshots are free. <span class="bg-gradient-to-r from-mint-400 to-brand-400 bg-clip-text text-transparent">The film is the product.</span></h2>
       <p class="mt-5 text-lg text-slate-400 leading-relaxed">Anyone can sell you a list of postings. The value is in what changed: which company just opened a new market, which role closed in nine days, which technology appeared for the first time. <code class="text-mint-400 font-semibold">GET /v1/changes?since=</code> delivers new, updated and closed postings from your last sync, every day.</p>
       <div class="mt-8 grid grid-cols-3 gap-4">
-        <div><b class="block text-2xl font-black text-mint-400 tabular-nums">145,000</b><span class="text-[12.5px] text-slate-500">new postings daily</span></div>
-        <div><b class="block text-2xl font-black text-brand-400 tabular-nums">86,000</b><span class="text-[12.5px] text-slate-500">change events daily</span></div>
-        <div><b class="block text-2xl font-black text-slate-300 tabular-nums">654,113</b><span class="text-[12.5px] text-slate-500">closures in history</span></div>
+        <div><b id="delta-nuove" class="block text-2xl font-black text-mint-400 tabular-nums">145,000</b><span class="text-[12.5px] text-slate-500">new postings daily</span></div>
+        <div><b id="delta-cambiamenti" class="block text-2xl font-black text-brand-400 tabular-nums">86,000</b><span class="text-[12.5px] text-slate-500">change events daily</span></div>
+        <div><b id="delta-chiuse" class="block text-2xl font-black text-slate-300 tabular-nums">654,113</b><span class="text-[12.5px] text-slate-500">closures in history</span></div>
       </div>
     </div>
     <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-2xl">
@@ -795,42 +795,45 @@ tailwind.config = {
   </div>
 </section>
 
-<footer class="border-t border-slate-900/5 bg-white/60">
-  <div class="max-w-7xl mx-auto px-6 py-14">
-    <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+<footer class="relative overflow-hidden bg-slate-950 text-slate-400">
+  <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
+  <div class="pointer-events-none absolute -top-32 -right-24 h-[380px] w-[380px] rounded-full bg-brand-500/10 blur-[100px]"></div>
+  <div class="pointer-events-none absolute -bottom-40 -left-24 h-[380px] w-[380px] rounded-full bg-mint-500/10 blur-[100px]"></div>
+  <div class="relative max-w-7xl mx-auto px-6 py-16">
+    <div class="grid gap-12 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
       <div>
-        <img src="brand/nivult.svg" alt="Nivult" class="h-6 w-auto">
-        <p class="mt-4 text-sm text-slate-500 leading-relaxed">Hiring and company intelligence, read at the source. Every field carries its provenance.</p>
+        <img src="brand/nivult.svg" alt="Nivult" class="h-6 w-auto" style="filter:brightness(0) invert(1)">
+        <p class="mt-5 text-sm leading-relaxed text-slate-400 max-w-xs">Hiring and company intelligence, read at the source. Every field carries its provenance — the index updates every day.</p>
+        <p class="mt-5 flex items-center gap-2 text-[12.5px] text-slate-500"><span class="live-dot h-2 w-2 rounded-full bg-mint-400"></span>Every figure on this page is live from the index</p>
       </div>
       <div>
-        <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Product</p>
-        <ul class="mt-4 space-y-2.5 text-sm">
-          <li><a href="#data" class="text-slate-600 hover:text-brand-600 transition">The data</a></li>
-          <li><a href="#coverage" class="text-slate-600 hover:text-brand-600 transition">Coverage</a></li>
-          <li><a href="#api" class="text-slate-600 hover:text-brand-600 transition">API</a></li>
-          <li><a href="#pricing" class="text-slate-600 hover:text-brand-600 transition">Pricing</a></li>
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Product</p>
+        <ul class="mt-5 space-y-3 text-sm">
+          <li><a href="#data" class="hover:text-white transition">The data</a></li>
+          <li><a href="#coverage" class="hover:text-white transition">Coverage</a></li>
+          <li><a href="#api" class="hover:text-white transition">API</a></li>
+          <li><a href="#pricing" class="hover:text-white transition">Pricing</a></li>
         </ul>
       </div>
       <div>
-        <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Legal</p>
-        <ul class="mt-4 space-y-2.5 text-sm">
-          <li><a href="https://nivult.com/privacy" class="text-slate-600 hover:text-brand-600 transition">Privacy policy</a></li>
-          <li><a href="https://nivult.com/terms" class="text-slate-600 hover:text-brand-600 transition">Terms of service</a></li>
-          <li><a href="mailto:hello@nivult.com?subject=Data%20processing%20agreement" class="text-slate-600 hover:text-brand-600 transition">DPA on request</a></li>
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Legal</p>
+        <ul class="mt-5 space-y-3 text-sm">
+          <li><a href="terms.html" class="hover:text-white transition">Terms of service</a></li>
+          <li><a href="privacy.html" class="hover:text-white transition">Privacy policy</a></li>
+          <li><a href="mailto:hello@nivult.com?subject=Data%20processing%20agreement" class="hover:text-white transition">DPA on request</a></li>
         </ul>
       </div>
       <div>
-        <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Company</p>
-        <ul class="mt-4 space-y-2.5 text-sm">
-          <li><a href="mailto:hello@nivult.com" class="text-slate-600 hover:text-brand-600 transition">hello@nivult.com</a></li>
-          <li><a href="account.html" class="text-slate-600 hover:text-brand-600 transition">Your account</a></li>
-          <li><a href="https://nivult.com" class="text-slate-600 hover:text-brand-600 transition">nivult.com</a></li>
+        <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Company</p>
+        <ul class="mt-5 space-y-3 text-sm">
+          <li><a href="mailto:hello@nivult.com" class="hover:text-white transition">hello@nivult.com</a></li>
+          <li><a href="account.html" class="hover:text-white transition">Your account</a></li>
         </ul>
       </div>
     </div>
-    <div class="mt-12 pt-6 border-t border-slate-900/5 flex flex-wrap items-center justify-between gap-3 text-[13px] text-slate-400">
-      <span>© 2026 Nivult · hiring and company intelligence</span>
-      <span class="flex items-center gap-2"><span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>Updated daily · every figure on this page is live from the index</span>
+    <div class="mt-14 pt-7 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-[13px] text-slate-500">
+      <span>© 2026 Nivult — hiring and company intelligence</span>
+      <span class="text-slate-500">Built in the EU · updated daily</span>
     </div>
   </div>
 </footer>
@@ -1178,6 +1181,19 @@ fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000)
    if(s.nuove_24h){
      const c=document.getElementById("cta-live");
      if(c)c.textContent=s.nuove_24h.toLocaleString("en-US");
+     const dn=document.getElementById("delta-nuove");
+     if(dn)dn.textContent=s.nuove_24h.toLocaleString("en-US");
+   }
+   if(s.cambiamenti_24h){
+     const dc=document.getElementById("delta-cambiamenti");
+     if(dc)dc.textContent=s.cambiamenti_24h.toLocaleString("en-US");
+   }
+   if(s.chiuse_storico){
+     /* le chiusure verificate in storico: stesso numero ovunque */
+     for(const id of ["delta-chiuse","chiuse-storico-2"]){
+       const el=document.getElementById(id);
+       if(el)el.textContent=s.chiuse_storico.toLocaleString("en-US");
+     }
    }
    const cards=document.querySelectorAll(".stat-num");
    mappa.forEach(([_,v],i)=>{
