@@ -44,38 +44,49 @@ tailwind.config = { theme: { extend: {
   <!-- etichetta prodotto -->
   <div class="absolute top-[76px] right-16 flex items-center gap-2.5 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 backdrop-blur">
     <span class="live-dot rounded-full bg-mint-400" style="width:9px;height:9px"></span>
-    <span class="text-white/80 font-bold uppercase" style="font-size:15px;letter-spacing:.14em">API Credits</span>
+    <span class="text-white/80 font-bold uppercase" style="font-size:15px;letter-spacing:.14em">Credit Packs</span>
   </div>
 
   <!-- la card dei crediti, centro palco -->
-  <div class="absolute left-1/2" style="top:300px;transform:translateX(-50%);width:920px">
+  <div class="absolute left-1/2" style="top:225px;transform:translateX(-50%);width:920px">
     <div class="rounded-[28px] border border-white/10 shadow-2xl" style="background:linear-gradient(160deg,rgba(255,255,255,.09),rgba(255,255,255,.03));backdrop-filter:blur(14px);box-shadow:0 44px 90px -30px rgba(0,0,0,.7)">
       <div class="h-2 rounded-t-[28px]" style="background:linear-gradient(90deg,#3b6ef6,#8b5cf6 50%,#2fe0b6)"></div>
       <div class="px-14 pt-12 pb-12">
-        <p class="text-white/50 font-bold uppercase" style="font-size:17px;letter-spacing:.16em">Credit balance</p>
-        <div class="mt-3 flex items-end gap-5">
-          <span class="font-black tabular-nums leading-none" style="font-size:148px;background:linear-gradient(90deg,#5e8bff,#a78bfa 55%,#2fe0b6);-webkit-background-clip:text;background-clip:text;color:transparent">100,000</span>
-          <span class="text-white/60 font-semibold pb-7" style="font-size:30px">credits</span>
+        <p class="text-white/50 font-bold uppercase" style="font-size:17px;letter-spacing:.16em">Nivult credits</p>
+        <div class="mt-4">
+          <span class="font-black leading-none" style="font-size:76px;background:linear-gradient(90deg,#5e8bff,#a78bfa 55%,#2fe0b6);-webkit-background-clip:text;background-clip:text;color:transparent">One balance.</span><br>
+          <span class="font-black leading-none text-white/90" style="font-size:64px">Three ways to spend it.</span>
         </div>
 
-        <!-- mini grafico della spesa -->
-        <div class="mt-9 flex items-end gap-[10px]" style="height:120px">
-          <div class="flex-1 rounded-t-md" style="height:18%;background:rgba(255,255,255,.10)"></div>
-          <div class="flex-1 rounded-t-md" style="height:30%;background:rgba(255,255,255,.10)"></div>
-          <div class="flex-1 rounded-t-md" style="height:24%;background:rgba(255,255,255,.10)"></div>
-          <div class="flex-1 rounded-t-md" style="height:42%;background:rgba(94,139,255,.55)"></div>
-          <div class="flex-1 rounded-t-md" style="height:36%;background:rgba(94,139,255,.55)"></div>
-          <div class="flex-1 rounded-t-md" style="height:55%;background:rgba(139,92,246,.6)"></div>
-          <div class="flex-1 rounded-t-md" style="height:48%;background:rgba(139,92,246,.6)"></div>
-          <div class="flex-1 rounded-t-md" style="height:70%;background:rgba(167,139,250,.7)"></div>
-          <div class="flex-1 rounded-t-md" style="height:62%;background:rgba(47,224,182,.65)"></div>
-          <div class="flex-1 rounded-t-md" style="height:86%;background:linear-gradient(180deg,#2fe0b6,#3b6ef6)"></div>
+        <!-- le tre vie: API, sblocchi nel portale, export bulk -->
+        <div class="mt-9 grid grid-cols-3 gap-5">
+          <div class="rounded-2xl border border-white/10 px-6 py-6" style="background:rgba(255,255,255,.05)">
+            <div class="grid place-items-center rounded-xl" style="width:52px;height:52px;background:linear-gradient(135deg,#3b6ef6,#5e8bff);box-shadow:0 10px 26px -8px rgba(59,110,246,.6)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 9-4 3 4 3m8-6 4 3-4 3M13 5l-2 14"/></svg>
+            </div>
+            <p class="mt-4 text-white font-bold" style="font-size:24px">API calls</p>
+            <p class="mt-1.5 text-white/50 font-medium" style="font-size:16.5px">every endpoint, one credit each</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 px-6 py-6" style="background:rgba(255,255,255,.05)">
+            <div class="grid place-items-center rounded-xl" style="width:52px;height:52px;background:linear-gradient(135deg,#8b5cf6,#a78bfa);box-shadow:0 10px 26px -8px rgba(139,92,246,.6)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>
+            </div>
+            <p class="mt-4 text-white font-bold" style="font-size:24px">Company unlocks</p>
+            <p class="mt-1.5 text-white/50 font-medium" style="font-size:16.5px">pay once, the record stays yours</p>
+          </div>
+          <div class="rounded-2xl border border-white/10 px-6 py-6" style="background:rgba(255,255,255,.05)">
+            <div class="grid place-items-center rounded-xl" style="width:52px;height:52px;background:linear-gradient(135deg,#0fbf9a,#2fe0b6);box-shadow:0 10px 26px -8px rgba(15,191,154,.6)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            </div>
+            <p class="mt-4 text-white font-bold" style="font-size:24px">Bulk exports</p>
+            <p class="mt-1.5 text-white/50 font-medium" style="font-size:16.5px">filtered slices, priced per row</p>
+          </div>
         </div>
 
-        <div class="mt-9 flex items-center gap-3">
+        <div class="mt-8 flex items-center gap-3">
           <span class="rounded-lg bg-mint-500/15 text-mint-400 font-bold px-4 py-2" style="font-size:16px">Never expire</span>
-          <span class="rounded-lg bg-brand-500/15 text-brand-400 font-bold px-4 py-2" style="font-size:16px">1 credit = 1 call</span>
-          <span class="rounded-lg bg-white/8 text-white/60 font-bold px-4 py-2" style="font-size:16px;background:rgba(255,255,255,.08)">Every call itemized</span>
+          <span class="rounded-lg bg-brand-500/15 text-brand-400 font-bold px-4 py-2" style="font-size:16px">No subscription</span>
+          <span class="rounded-lg text-white/60 font-bold px-4 py-2" style="font-size:16px;background:rgba(255,255,255,.08)">Every credit itemized</span>
         </div>
       </div>
     </div>
