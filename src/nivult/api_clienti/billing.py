@@ -174,6 +174,28 @@ def applica_pagamento(dsn: str, evento: dict) -> str:
             "UPDATE users SET crediti_extra = crediti_extra + %s "
             "WHERE id = %s",
             (volume, uid)).rowcount
+        # Lo storico dell'acquisto (migrazione 0070): chi paga vede quando
+        # e quanto ha comprato. L'importo arriva da Creem come lo manda —
+        # i nomi di campo sono tentativi a cascata, il pagamento non deve
+        # mai fallire per un campo che non conosciamo.
+        try:
+            importo = None
+            for chiave_campo in ("amount", "total", "amount_total"):
+                v = dati.get(chiave_campo) or (dati.get("order") or {}).get(chiave_campo)
+                if isinstance(v, (int, float)):
+                    importo = int(v)
+                    break
+            valuta = (dati.get("currency")
+                      or (dati.get("order") or {}).get("currency") or None)
+            c.execute(
+                "INSERT INTO portale_acquisti (user_id, crediti, "
+                "importo_cent, valuta, evento_id) VALUES (%s, %s, %s, %s, %s) "
+                "ON CONFLICT (evento_id) DO NOTHING",
+                (uid, volume, importo, valuta, eid))
+        except Exception as exc:                        # noqa: BLE001
+            # i crediti sono gia' accreditati: lo storico si puo'
+            # ricostruire a mano, un accredito mancato no
+            log.warning("storico acquisto non scritto (%s): %s", eid, exc)
         log.info("creem: %s -> user %s +%s crediti di ricarica (%d righe)",
                  tipo, uid, volume, n)
         return f"accreditato ({n} utente)"

@@ -1398,6 +1398,18 @@ def create_app() -> FastAPI:
             # la tabella arriva con la migrazione 0069: prima di allora la
             # pagina mostra i saldi e basta, mai un 500
             per_via, per_giorno, eventi, rivelazioni = {}, [], [], []
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT at, crediti, importo_cent, valuta "
+                    "FROM portale_acquisti WHERE user_id = %s "
+                    "ORDER BY at DESC LIMIT 30", (uid,))
+                acquisti = [{"at": r[0].isoformat(), "crediti": r[1],
+                             "importo_cent": r[2], "valuta": r[3]}
+                            for r in cur.fetchall()]
+        except Exception:                                # noqa: BLE001
+            # migrazione 0070: come sopra, mai un 500 per lo storico
+            acquisti = []
         nomi = {}
         loghi = {}
         for r in rivelazioni:
@@ -1453,7 +1465,8 @@ def create_app() -> FastAPI:
                 # crediti spesi prima che il registro esistesse: nel totale
                 # ci sono, riga per riga no — la pagina lo dice esplicitamente
                 "non_dettagliati": non_dettagliati,
-                "registro_dal": "2026-10-04"}
+                "registro_dal": "2026-10-04",
+                "acquisti": acquisti}
 
     @app.get("/me/volumi")
     def volumi_vendibili(uid: str = Depends(utente)):

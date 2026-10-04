@@ -197,7 +197,8 @@ tailwind.config = {
           </div>
           <p class="mt-3 text-[12px] text-slate-400">The bar shows this month's free allowance, which renews on the 1st. Purchased credits are spent only once the allowance runs out, and never expire.</p>
           <button onclick="apriUso()" class="mt-4 w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-2.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
-            <span id="uso-rivelazioni">Usage &amp; activity</span> <span class="text-violet-400">→</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            <span id="uso-rivelazioni">View credit usage</span> <span class="text-violet-400">→</span>
           </button>
         </div>
       </div>
@@ -225,7 +226,7 @@ tailwind.config = {
           <input id="buy-slider" type="range" min="25" max="2990" value="229" class="pz-slider mt-4 w-full" aria-label="Amount in euros">
           <div class="mt-2 flex justify-between text-[11px] text-slate-400 font-semibold"><span>€25</span><span id="buy-unit">€2.29 per 1,000 calls</span><span>€2,990</span></div>
           <div class="mt-auto pt-5">
-            <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition py-3 font-bold text-white shadow-lg shadow-brand-500/25">Continue to checkout →</button>
+            <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-mint-500/35 hover:-translate-y-px transition flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>Continue to secure checkout →</button>
             <p id="buy-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
           </div>
         </div>
@@ -575,10 +576,9 @@ function disegna() {
   /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
      di credito dove il credito si guarda: nella card (02/10/2026) */
   document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
-  const riv = document.getElementById("uso-rivelazioni");
-  riv.textContent = rivelazioni
-    ? rivelazioni.toLocaleString("en-US") + " companies unlocked · account activity"
-    : "Usage & activity";
+  /* il bottone resta generico («View credit usage»): il conteggio degli
+     sblocchi vive DENTRO il pannello, non sul bottone (04/10/2026) */
+  document.getElementById("uso-rivelazioni").textContent = "View credit usage";
 }
 /* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
    esempi del quickstart la portano dentro finche' la pagina e' aperta,
@@ -1152,6 +1152,16 @@ async function apriUso() {
       <div class="mt-2 flex justify-between text-[10.5px] font-semibold text-slate-400 tabular-nums pl-8">
         <span>${lbl(trenta[0].giorno)}</span><span>${lbl(trenta[15].giorno)}</span><span>${lbl(trenta[29].giorno)}</span>
       </div></div>`;
+  /* gli acquisti: lo storico delle ricariche (migrazione 0070) */
+  const acquisti = (d.acquisti || []).map(a => {
+    const prezzo = a.importo_cent != null
+      ? ` · ${(a.importo_cent / 100).toLocaleString("en-US", { style: "currency", currency: (a.valuta || "EUR") })}`
+      : "";
+    return `<div class="flex items-center gap-3 px-3 py-2.5 -mx-3 rounded-xl hover:bg-slate-50 text-[13px] transition">
+      <span class="h-8 w-8 rounded-xl bg-gradient-to-br from-mint-500 to-brand-600 grid place-items-center text-white shrink-0 shadow-sm"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg></span>
+      <span class="font-semibold">+${(+a.crediti).toLocaleString("en-US")} credits${esc(prezzo)}</span>
+      <span class="ml-auto text-slate-400 text-[11.5px] shrink-0 tabular-nums">${_quando(a.at)}</span>
+    </div>`; }).join("");
   /* gli eventi: il titolo leggibile in evidenza, il riferimento tecnico
      piccolo sotto — mai un UUID come testo principale */
   const eventi = (d.eventi || []).map(e => {
@@ -1195,6 +1205,7 @@ async function apriUso() {
     </div>
     <div class="mt-6 grid grid-cols-3 gap-3">${saldi}</div>
     ${perVia ? `<p class="${SEZ}">This month by channel</p><div class="mt-2 space-y-2">${perVia}</div>` : ""}
+    ${acquisti ? `<p class="${SEZ}">Purchases</p><div class="mt-2">${acquisti}</div>` : ""}
     <p class="${SEZ}">Daily spend</p><div class="mt-2">${grafico}</div>
     ${sbloccate ? `<p class="${SEZ}">Unlocked companies</p>
       <div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
