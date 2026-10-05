@@ -382,6 +382,63 @@ def workday(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     return stats
 
 
+def inhire(dsn: str, limite: int = 3000, thread: int = 4) -> dict:
+    """InHire: l'elenco pubblico non porta il testo, ma il dettaglio e'
+    un JSON pubblico — /job-posts/public/pages/{jobId}/careerPage/default
+    con X-Tenant (trovato nel bundle della SPA, 05/10/2026).
+
+    9.800 offerte aspettavano un testo che nessuno leggeva: inhire non
+    era fra le piattaforme di dettaglio e v1 le differiva a oltranza.
+    L'API e' condivisa fra i tenant: pochi thread, come UKG."""
+    from concurrent.futures import ThreadPoolExecutor
+    stats = {"esaminate": 0, "riempite": 0, "vuote": 0, "errori": 0}
+    with psycopg.connect(dsn, autocommit=True) as c:
+        righe = c.execute("""
+            SELECT id, slug, external_id,
+                   coalesce(raw->>'careerPageId', 'default')
+              FROM ats_jobs
+             WHERE platform_id = 'inhire' AND expired_at IS NULL
+               AND NOT (raw ? 'description')
+             ORDER BY posted_at DESC NULLS LAST
+             LIMIT %s""", (limite,)).fetchall()
+
+        def leggi(riga):
+            jid, slug, ext, pagina = riga
+            url = (f"https://api.inhire.app/job-posts/public/pages/"
+                   f"{ext}/careerPage/{pagina or 'default'}")
+            try:
+                with httpx.Client(timeout=12, headers={
+                        "User-Agent": _UA, "Accept": "application/json",
+                        "X-Tenant": slug}) as cli:
+                    r = cli.get(url)
+                if r.status_code == 200:
+                    return jid, str(r.json().get("description") or "")[:30000]
+                if r.status_code in (404, 410):
+                    return jid, ""
+                return jid, None
+            except (httpx.HTTPError, ValueError):
+                return jid, None
+
+        with ThreadPoolExecutor(max_workers=thread) as pool:
+            for jid, testo in pool.map(leggi, righe):
+                stats["esaminate"] += 1
+                if testo is None:
+                    stats["errori"] += 1
+                    continue
+                c.execute("""UPDATE ats_jobs
+                                SET raw = jsonb_set(raw, '{description}',
+                                                    to_jsonb(%s::text), true)
+                              WHERE id = %s""", (testo, jid))
+                if testo:
+                    stats["riempite"] += 1
+                else:
+                    stats["vuote"] += 1
+                if stats["esaminate"] % 500 == 0:
+                    log.info("  … inhire %s", stats)
+    log.info("descrizioni inhire: %s", stats)
+    return stats
+
+
 def bamboohr(dsn: str, limite: int = 3000, thread: int = 8) -> dict:
     """BambooHR: la lista JSON non porta la descrizione, ma ogni offerta
     risponde in JSON su /careers/{id}/detail (result.jobOpening.description).
@@ -736,6 +793,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ukg", action="store_true",
                     help="UKG: il testo e' nel JSON incorporato della pagina; "
                          "host unico condiviso, pochi thread per gentilezza")
+    ap.add_argument("--inhire", action="store_true",
+                    help="InHire: dettaglio JSON pubblico con X-Tenant")
     ap.add_argument("--limite", type=int, default=3000)
     args = ap.parse_args(argv)
     dsn = os.environ.get(
@@ -762,11 +821,14 @@ def main(argv: list[str] | None = None) -> int:
         print(da_testo(dsn, args.limite))
     if args.ukg:
         print(da_testo(dsn, args.limite, thread=2, piattaforme=("ukg",)))
+    if args.inhire:
+        print(inhire(dsn, args.limite))
     if args.smartrecruiters or not (args.workday or args.da_pagina
                                     or args.da_testo or args.bamboohr
                                     or args.rippling or args.bundesanstellung
                                     or args.eightfold or args.adp
-                                    or args.successfactors or args.ukg):
+                                    or args.successfactors or args.ukg
+                                    or args.inhire):
         print(smartrecruiters(dsn, args.limite))
     return 0
 

@@ -2303,11 +2303,12 @@ class JsonLd(BaseAdapter):
     che sa quali pagine ha gia' visto).
     """
     platform_id = "jsonld"
-    # 03/10/2026: 1.000 -> 2.500. Al tetto dei mille stavano 395 tenant
-    # «letti a meta'» (la voce bianca della sentinella): i loro annunci
-    # vecchi non scadevano mai. Le pagine oltre il mille sono le code
-    # lunghe dei siti comunali/PA italiani — lente ma vere.
-    MASSIMO_PAGINE = 2500
+    # 05/10/2026: 2.500 -> 5.000. Al tetto restavano ~28 tenant «letti a
+    # meta'» (la coda lunga dei portali comunali/PA: misurato, il 90esimo
+    # percentile dei parziali e' 2.499 pagine — gli altri 256 «parziali»
+    # sono errori a meta' giro, non il tetto). Raddoppiare costa solo su
+    # quei ~28 siti lenti, non sul giro intero.
+    MASSIMO_PAGINE = 5000
 
     def jobs(self, slug: str, sorgente_url: str | None = None) -> list[AtsJob]:
         from urllib.parse import urlparse
@@ -4716,6 +4717,18 @@ class Hr4you(BaseAdapter):
             if not jid or not j.get("jobTitle"):
                 continue
             dove = j.get("jobWorkplace") or j.get("jobRegion")
+            # Il testo e' GIA' nell'elenco (05/10/2026): summary,
+            # responsibilities, requirements e profilo azienda arrivano
+            # nel JSON pubblico. Prima li tenevamo in raw senza comporli,
+            # e 22.600 offerte aspettavano un dettaglio che nessuno
+            # leggeva (hr4you non era fra le piattaforme di dettaglio):
+            # v1 le differiva all'infinito, coda ferma.
+            descrizione = "\n\n".join(
+                p for p in (j.get("jobSummary"), j.get("jobResponsibilities"),
+                            j.get("jobRequirements"), j.get("jobCompanyProfile"))
+                if p)
+            if descrizione:
+                j = {**j, "description": descrizione}
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=jid, title=j["jobTitle"],

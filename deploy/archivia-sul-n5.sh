@@ -65,7 +65,7 @@ if [ -f /opt/nivult/backup.env ]; then
   else
     dire "backup $nome NON confermato sul remoto: lo lascio"
   fi
-    done < <(find /opt/nivult/backups -name "nivult-*.sql.gz.enc" -daystart -mtime +$GIORNI_BACKUP -type f | sort)
+    done < <(find -L /opt/nivult/backups -name "nivult-*.sql.gz.enc" -daystart -mtime +$GIORNI_BACKUP -type f | sort)
 else
   dire "backup.env mancante: sezione backup saltata (gli export sono gia' stati spostati)"
 fi

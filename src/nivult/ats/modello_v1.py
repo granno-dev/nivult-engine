@@ -26,6 +26,11 @@ import json
 import os
 import re
 
+# Attenzione memory-efficient sulla GPU AMD (05/10/2026): 4,7x sui testi
+# lunghi e niente OOM. Setdefault: un valore esplicito dall'ambiente
+# vince sempre. Prima di torch, come in classifica_v1.py.
+os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+
 import torch
 import torch.nn as nn
 

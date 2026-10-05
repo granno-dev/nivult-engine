@@ -22,6 +22,14 @@ import os
 import sys
 import time
 
+# Attenzione efficiente sulla GPU AMD del N5 (05/10/2026): senza questo
+# flag SDPA materializza la matrice seq×seq — con testi lunghi (3072
+# token, la coda a testo pieno) la classificazione andava a 0,9 offerte/s
+# e i lotti da 64 scoppiavano in OOM. Col flag (attenzione memory-
+# efficient, sperimentale su ROCm) misurato 4,2/s e niente OOM. Va messo
+# PRIMA del primo uso di torch: per questo sta qui e non nel loop.
+os.environ.setdefault("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "1")
+
 import psycopg
 
 from nivult.ats.dichiarati import PIATTAFORME
@@ -151,8 +159,17 @@ def main() -> int:
                  -- tornava piu'. Il controllo del testo si fa in Python sulle
                  -- 2048 righe prese (un EXISTS su raw qui dentro costava 78 s a
                  -- lotto, misurato: il jsonb va scompattato per ogni candidata);
-                 -- chi non ha testo viene DIFFERITO di due ore, fino a 7 giorni.
-                 AND (j.differito_v1_at IS NULL OR j.differito_v1_at < now() - interval '2 hours')
+                 -- chi non ha testo viene DIFFERITO: sei ore, non due
+                 -- (05/10/2026): la coda era 80.157 gia' differite su
+                 -- 81.089 — ogni lotto le ripescava e le rideferiva,
+                 -- quasi tutto lavoro sprecato (e MAI il segno percento
+                 -- nei commenti SQL: psycopg lo legge come placeholder,
+                 -- due demoni morti oggi per impararlo).
+                 -- Il testo arriva comunque entro il giro di dettaglio,
+                 -- sei ore non cambiano niente per l'indice che si
+                 -- pubblica una volta al giorno. Dopo 7 giorni si prende
+                 -- atto che il testo non arriva.
+                 AND (j.differito_v1_at IS NULL OR j.differito_v1_at < now() - interval '6 hours')
                  -- prima chi NON ha famiglia: la notte dell'08/09 il demone ha
                  -- speso 295k letture per scriverne 22k, perche' rileggeva
                  -- offerte gia' classificate mentre l'arretrato senza famiglia
@@ -218,7 +235,7 @@ def main() -> int:
                 break
             fam_rows, sen_rows, con_rows, rem_rows, lin_rows, marcati = [], [], [], [], [], []
             par_rows = []          # il parere di v1 dove la famiglia c'e' gia'
-            # senza testo e giovane: si DIFFERISCE (due ore), non si classifica
+            # senza testo e giovane: si DIFFERISCE (sei ore), non si classifica
             # dal titolo. Dopo 7 giorni si prende atto che il testo non arriva.
             from datetime import datetime, timedelta, timezone
             soglia_eta = datetime.now(timezone.utc) - timedelta(days=7)

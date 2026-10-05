@@ -121,6 +121,16 @@ while true; do
   # sentinella allarmava «operaio muto» col ciclo vivo che lavorava.
   battito "dettaglio"
   nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
+  # I due cantieri del testo (05/10/2026): ukg e inhire NON stanno fra le
+  # piattaforme di dettaglio — le loro offerte restavano senza testo e
+  # v1 le differiva a oltranza (44mila delle 81mila in coda). ukg sta su
+  # UN host condiviso: due thread, per gentilezza. inhire e' un JSON
+  # pubblico con X-Tenant: quattro. hr4you non serve: il testo arriva
+  # gia' nell'elenco, dall'adapter.
+  battito "dettaglio ukg"
+  nice -n 10 $PY -m nivult.ats.descrizioni --ukg --limite 3000 2>&1 | tail -1 || true
+  battito "dettaglio inhire"
+  nice -n 10 $PY -m nivult.ats.descrizioni --inhire --limite 3000 2>&1 | tail -1 || true
   battito "estrai extra"
   nice -n 10 $PY -m nivult.ats.estrai_extra --limite 100000 2>&1 | tail -1 || true
   battito "lingue richieste"
