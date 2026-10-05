@@ -1,0 +1,16 @@
+{
+  "actorSpecification": 1,
+  "name": "global-job-postings",
+  "title": "Global Job Postings — live ATS index",
+  "description": "Live job postings and enriched employer records, read directly from the career systems of tens of thousands of companies. Filter by country, technology, seniority, workplace. Every field carries its source.",
+  "version": "0.1",
+  "buildTag": "latest",
+  "envVars": [
+    {
+      "name": "NIVULT_API_KEY",
+      "description": "Chiave interna dell'indice (segreto, mai nel repo)",
+      "isSecret": true
+    }
+  ],
+  "dockerfile": "../Dockerfile"
+}

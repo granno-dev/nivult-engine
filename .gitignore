@@ -28,3 +28,4 @@ venv/
 # Tooling locale, non è del progetto.
 .zcode/
 .campagna/
+apify/storage/
