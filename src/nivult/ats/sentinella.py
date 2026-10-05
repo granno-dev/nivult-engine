@@ -277,6 +277,44 @@ def _controlli() -> list[Condizione]:
     except OSError:
         pass
 
+    # export del giorno (05/10/2026): e' il PRODOTTO B2B — per due giorni
+    # e' fallito per DiskFull e nessuno lo sapeva (il builder DuckDB si
+    # difendeva da solo). Il cron parte alle 05:45 e dura ~1h: alle 08:00
+    # il file deve esserci.
+    try:
+        from datetime import datetime as _dt
+        oggi = _dt.now().strftime("%Y-%m-%d")
+        if _dt.now().hour >= 8 and not os.path.exists(
+                f"/opt/nivult/exports/offerte-attive-{oggi}.jsonl.gz"):
+            c.append(Condizione(
+                "export mancante", "critica", "l'export del giorno non c'e'",
+                f"offerte-attive-{oggi}.jsonl.gz assente dopo le 08:00: "
+                "l'indice che vendiamo e' vecchio — guardare /var/log/nivult-esporta.log"))
+    except OSError:
+        pass
+
+    # digest B2C falliti (05/10/2026): un mese di «Insufficient balance»
+    # senza un bip — scoperto a mano. L'ultima corsa deve avere zero
+    # errori, e una corsa ci deve essere stata.
+    try:
+        ld = open("/var/log/nivult-digests.log", errors="replace").read()[-30000:]
+        blocchi = ld.rsplit("=== digest ===", 1)
+        if len(blocchi) < 2 or time.time() - os.path.getmtime(
+                "/var/log/nivult-digests.log") > 26 * 3600:
+            c.append(Condizione("digest fermo", "avviso",
+                                "il giro dei digest non parte", "da oltre 26h"))
+        else:
+            corpo = blocchi[1]
+            falliti = len(re.findall(r"digest di .* fallito", corpo))
+            if falliti:
+                perche = re.findall(r"fallito: ([^\n]{0,80})", corpo)
+                c.append(Condizione(
+                    "digest falliti", "critica",
+                    f"{falliti} digest falliti nell'ultima corsa",
+                    (perche[0] if perche else "")[:120]))
+    except OSError:
+        pass
+
     # manutenzione notturna: passi falliti (info: si sistema di giorno)
     try:
         lc = open("/opt/nivult/engine/logs/ats-cron.log", errors="replace").read()[-40000:]
