@@ -109,6 +109,12 @@ while true; do
     nohup nice -n 5 $PY -m nivult.ats.classifica_v1 --continuo >> /opt/nivult/engine/logs/classifica-v1.log 2>&1 &
     echo "-- nivult-v1 avviato come demone"
   fi
+  # Il gocciolatoio dei tenant (05/10/2026): scoperta via motori, demone
+  # a parte per lo stesso motivo — il giro non deve aspettarlo.
+  if ! pgrep -f "nivult.ats.gocciolatoio" >/dev/null; then
+    nohup nice -n 10 $PY -m nivult.ats.gocciolatoio >> /opt/nivult/engine/logs/gocciolatoio.log 2>&1 &
+    echo "-- gocciolatoio avviato come demone"
+  fi
   # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
   # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
   battito "dichiarati"
