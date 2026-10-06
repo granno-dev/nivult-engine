@@ -57,6 +57,7 @@ A real row, read the same day from a live Workday board (verbatim):
   "language": "en",
   "technologies": ["Microsoft Office"],
   "salary_estimate_median": 68650,
+  "salary_estimate_currency": "USD",
   "salary_is_estimate": true,
   "posted_at": "2026-10-06",
   "url": "https://clearesult.wd1.myworkdayjobs.com/clearesult_external_careers/job/Remote---Colorado/Energy-Advisor_R0018257"
