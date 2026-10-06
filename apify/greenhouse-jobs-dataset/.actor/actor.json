@@ -21,8 +21,8 @@
   "pricingInfos": [
     {
       "pricingModel": "PRICE_PER_DATASET_ITEM",
-      "pricePerItemUsd": 0.006,
-      "reasonForChange": "Prezzo di lancio: si paga per riga ricevuta (sopra il costo dei crediti sul sito diretto — il marketplace non sottocosta mai il canale diretto)"
+      "pricePerItemUsd": 0.003,
+      "reasonForChange": "Lancio a $3/1.000: nel campo dei seri (2,70-5$), mai il piu' caro senza recensioni"
     }
   ],
   "dockerfile": "../Dockerfile"

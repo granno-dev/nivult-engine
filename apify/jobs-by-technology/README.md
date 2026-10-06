@@ -38,7 +38,7 @@ filters** — the reading already happened today, whether you run us or not.
 
 ## How much does it cost?
 
-**$6 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
+**$3 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
 
 Why a row here costs more than a raw scrape: a raw row is a title and a link that may be dead by tonight. Ours is an **enriched, verified record** — classified, provenance-stamped, and closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
 

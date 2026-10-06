@@ -31,13 +31,13 @@ BADGE = {"NEW": ("rgba(47,224,182,.18)", "#2fe0b6"),
 
 def card(num, icona, titolo, corpo, extra=""):
     return f"""
-    <div style="width:400px;border-radius:22px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02));padding:28px 30px;position:relative;overflow:hidden">
+    <div style="width:400px;border-radius:22px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02));padding:28px 30px;position:relative;overflow:hidden;display:flex;flex-direction:column;height:344px">
       <span style="position:absolute;top:-14px;right:8px;font-size:86px;font-weight:900;color:rgba(255,255,255,.05);font-family:Inter">{num}</span>
       <div style="display:flex;align-items:center;gap:10px">
         <span style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#3b6ef6,#8b5cf6 55%,#0fbf9a);display:grid;place-items:center;box-shadow:0 8px 20px -6px rgba(139,92,246,.5)">{ICONA[icona]}</span>
         <p style="margin:0;color:rgba(255,255,255,.5);font-size:13px;font-weight:700;letter-spacing:.14em;font-family:Inter">{titolo}</p>
       </div>
-      <div style="margin-top:16px">{corpo}</div>{extra}
+      <div style="margin-top:16px;flex:1;display:flex;flex-direction:column">{corpo}</div>{extra}
     </div>"""
 
 

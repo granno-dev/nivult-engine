@@ -37,7 +37,7 @@ Every result set is a slice of the same index we sell as a full daily feed.
 
 ## How much does it cost — and why is a row worth more here?
 
-**$6 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows.
+**$3 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows.
 
 A fair question: raw-scrape actors charge cents per thousand. A raw row is a title and a link that may be dead by tonight. Our row is an **enriched, verified record**: classified seniority and workplace, measured skills and language, salary signal, a link to the company's spine record, and the source of every field — closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
 
