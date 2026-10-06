@@ -246,6 +246,7 @@ def _controlli() -> list[Condizione]:
         con = duckdb.connect(_dbk, read_only=True)
         try:
             meta = dict(con.execute("SELECT chiave, valore FROM meta").fetchall())
+            n_cop = con.execute("SELECT count(*) FROM copertura").fetchone()[0]
         finally:
             con.close()
         if not meta.get("offerte") or int(meta.get("offerte") or 0) == 0 \
@@ -254,6 +255,14 @@ def _controlli() -> list[Condizione]:
                                 "il db dei clienti e' vuoto",
                                 f"offerte={meta.get('offerte')}, aziende={meta.get('aziende')}, "
                                 f"stato={meta.get('stato')!r}: i clienti stanno vedendo il nulla"))
+        elif n_cop == 0:
+            # la copertura vuota non si vede nel db ma sul sito (il
+            # fallback vecchio prende il suo posto, in silenzio): successo
+            # il 07/10/2026 dopo la build eccezionale sull'N5
+            c.append(Condizione("copertura vuota", "critica",
+                                "il db dei clienti non ha i fill-rate",
+                                "la landing mostra il fallback vecchio: "
+                                "il manifest dell'export mancava alla build"))
         elif str(meta.get("stato", "")).startswith("export mancanti"):
             c.append(Condizione("api-clienti stale", "avviso",
                                 "il db dei clienti e' vecchio di un giorno",

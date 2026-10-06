@@ -340,6 +340,14 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     # prodotto rotto (reveal dei clienti a vuoto, 29/09/2026).
     svuotate = [t for t, n in (("offerte", n_offerte), ("aziende", n_aziende))
                 if n == 0 and _tabella_non_vuota(destinazione, t)]
+    # la copertura entra nella stessa guardia (07/10/2026): la build
+    # eccezionale sull'N5 non aveva il manifest e il db nuovo e' uscito
+    # senza fill-rate — la landing ha mostrato il fallback vecchio per
+    # ore, e se n'e' accorto Giuseppe. Mai piu' senza un allarme.
+    n_cop = len(manifest.get("coverage") or {}) + \
+        len(manifest.get("coverage_aziende") or {})
+    if n_cop == 0 and _tabella_non_vuota(destinazione, "copertura"):
+        svuotate.append("copertura")
     if svuotate:
         os.remove(tmp)
         log.error("tabelle che diventerebbero vuote: %s — il db live "
