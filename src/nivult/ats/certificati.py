@@ -186,6 +186,10 @@ def demone(dsn: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     import argparse
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    # httpx logga OGNI richiesta a INFO: dentro syslog diventavano 300 MB
+    # al giorno di «HTTP Request: GET https://ct...» (06/10/2026). Il
+    # demone vive di richieste — il loro rumore non e' un evento.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     ap = argparse.ArgumentParser(prog="nivult.ats.certificati")
     ap.add_argument("--demone", action="store_true")
     ap.add_argument("--giro", action="store_true",
