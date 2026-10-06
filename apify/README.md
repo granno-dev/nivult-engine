@@ -1,18 +1,29 @@
 ![Nivult — live job postings, read at the source](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina.png)
 
+## Not another scraper. A maintained index.
+
+Most job actors ask you for career-site URLs, then spend minutes scraping them, then hand you raw rows. **This Actor asks for nothing but filters** — and answers in seconds, because the work is already done: we read the career systems of tens of thousands of employers **every day**, whether you run us or not.
+
+| | Scrape-on-demand actors | **Nivult Job Index** |
+|---|---|---|
+| You supply | career-site URLs you must know | nothing — just filters |
+| Answer in | minutes of scraping | **seconds** |
+| Closed postings | stay in your data forever | **verified closed**, daily |
+| Enrichment | raw title + link | seniority, workplace, language, skills, salary signal |
+| Company layer | a name string | **spine record: industry, size, legal identity, tech stack** |
+| Provenance | none | **field-level, on every row** |
+
 ## What does the Nivult Job Index do?
 
-The Nivult Job Index reads job postings **directly from the career systems of tens of thousands of employers** — Workday, Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more platforms — across 240+ countries and territories. Not scraped from aggregators: read at the source, refreshed daily, and closed when the posting leaves the employer's own page.
+Read job postings **directly from the career systems of tens of thousands of employers** — Workday, Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more — across 240+ countries and territories. Refreshed daily; closed when the posting leaves the employer's own page.
 
-Use it to extract **job postings** or **enriched company records** with the filters that matter:
+Filter by what matters:
 
-- 🌍 **Country** — 240+ countries and territories, ISO-2 filtered
+- 🌍 **Country** — 240+ countries and territories, ISO-2
 - 🧩 **Technology** — postings that mention SAP, Snowflake, Kubernetes… in the text
 - 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
 - 🗓️ **Posted-after date** — only what is fresh
 - 🏢 **Company mode** — industry, size band, legal identity from public registries, measured technology stack
-
-Every field carries **field-level provenance**: the record says where each value came from, so you can audit what you buy.
 
 ## How to use it
 
@@ -22,9 +33,11 @@ Every field carries **field-level provenance**: the record says where each value
 
 Every result set is a slice of the same index we sell as a full daily feed.
 
-## How much does it cost to extract job postings data?
+## How much does it cost — and why is a row worth more here?
 
-**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows, so you can evaluate the data before paying anything.
+**$6 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows.
+
+A fair question: raw-scrape actors charge cents per thousand. A raw row is a title and a link that may be dead by tonight. Our row is an **enriched, verified record**: classified seniority and workplace, measured skills and language, salary signal, a link to the company's spine record, and the source of every field — closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
 
 For the full daily export or a custom feed (millions of rows, JSONL, daily deltas), write to us — the Actor page links to the contact.
 

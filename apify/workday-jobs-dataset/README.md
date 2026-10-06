@@ -13,6 +13,20 @@ Filter **Workday job postings** by what matters:
 
 Every field carries **field-level provenance**: the row says where each value came from, so you can audit what you buy.
 
+### Not a scraper — a maintained index
+
+Scrape-on-demand actors ask you for career-site URLs and minutes of your
+patience, then hand you raw rows. **This dataset asks for nothing but
+filters** — the reading already happened today, whether you run us or not.
+
+| | Scrape-on-demand | **This dataset** |
+|---|---|---|
+| You supply | URLs you must know | nothing — just filters |
+| Answer in | minutes | **seconds** |
+| Closed postings | stay forever | **verified closed**, daily |
+| Enrichment | raw title + link | seniority, workplace, language, skills |
+| Provenance | none | **field-level, on every row** |
+
 ## How to use it
 
 1. Open the Actor and set your filters — or none, for the full Workday slice.
@@ -21,7 +35,9 @@ Every field carries **field-level provenance**: the row says where each value ca
 
 ## How much does a Workday jobs dataset cost?
 
-**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows, so you can judge the data before paying anything.
+**$6 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
+
+Why a row here costs more than a raw scrape: a raw row is a title and a link that may be dead by tonight. Ours is an **enriched, verified record** — classified, provenance-stamped, and closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
 
 ## What does the output look like?
 
