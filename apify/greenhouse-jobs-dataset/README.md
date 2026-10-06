@@ -43,18 +43,32 @@ Why a row here costs more than a raw scrape: a raw row is a title and a link tha
 
 ## What does the output look like?
 
-A real row, read the same morning from a live Greenhouse board:
+A real row, read the same day from a live Greenhouse board:
 
 ```json
 {
-  "title": "Analytics Engineer - Campaign Intelligence",
-  "company": "VTEX",
+  "title": "Summer Internship 2027",
+  "company": "Hankooktireamericacorp",
   "ats": "greenhouse",
-  "country": "BR",
+  "country": "US",
+  "remote": "onsite",
+  "seniority": "intern",
   "language": "en",
-  "posted_at": "2026-10-06"
+  "technologies": ["MS-Office"],
+  "salary_estimate_median": 52300,
+  "salary_estimate_currency": "USD",
+  "salary_is_estimate": true,
+  "posted_at": "2026-10-06",
+  "url": "https://job-boards.greenhouse.io/hankooktireamericacorp/jobs/5445258008"
 }
 ```
+
+## Explore the Nivult family
+
+- **[Job Postings Dataset — the full index](https://apify.com/nivult_developers/global-job-postings)** — every ATS, every filter, company mode
+- **[Workday Jobs Dataset](https://apify.com/nivult_developers/workday-jobs-dataset)** — every Workday career site, daily
+- **[Greenhouse Jobs Dataset](https://apify.com/nivult_developers/greenhouse-jobs-dataset)** — every Greenhouse board, daily
+- **[Jobs by Technology](https://apify.com/nivult_developers/jobs-by-technology)** — postings matched by the stack in the text
 
 ## FAQ
 

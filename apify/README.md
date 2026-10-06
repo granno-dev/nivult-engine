@@ -45,24 +45,52 @@ For the full daily export or a custom feed (millions of rows, JSONL, daily delta
 
 ## What does the output look like?
 
-A real row from the index (read today, verbatim — fields with no source stay empty; we never invent):
+A real row from the index, verbatim (the posting went live the same day):
 
 ```json
 {
-  "id": "945ba2d5-2250-4c76-bac6-e7ae2040dcfc",
-  "title": "Junior Internal Auditor",
-  "company": "Leonardo",
-  "ats": "workday",
-  "country": "IT",
-  "city": "IT - Roma - Via Tiburtina KM12",
+  "title": "Logistics Deduction Management Analyst",
+  "company": "Hisenseusacorporation",
+  "ats": "bamboohr",
+  "country": "US",
+  "city": "Alpharetta",
+  "remote": "onsite",
   "seniority": "junior",
-  "language": "it",
-  "posted_at": "2026-10-06T11:00:02Z",
-  "url": "https://leonardocompany.wd3.myworkdayjobs.com/leonardocareersite/job/IT---Roma---Via-Tiburtina--KM12400/Junior-Internal-Auditor_R0028587"
+  "technologies": ["Excel", "Microsoft Office", "PowerPoint", "SAP", "Word"],
+  "salary_estimate_median": 41600,
+  "salary_estimate_currency": "USD",
+  "salary_is_estimate": true,
+  "posted_at": "2026-10-06",
+  "url": "https://hisenseusacorporation.bamboohr.com/careers/349"
+}
+```
+
+And **company mode** is a different league — one record per employer, with every enrichment carrying its own source:
+
+```json
+{
+  "company": "Italgas",
+  "domain": "italgas.it",
+  "active_jobs": 92,
+  "industry": "Distribution of gaseous fuels",
+  "industry_source": "wikidata",
+  "legal_name": "ITALGAS S.P.A.",
+  "legal_form": "Società Per Azioni",
+  "registration_id": "815600F25FF44EF1FA76",
+  "founded": "2016-05-31",
+  "size_range": "1001-5000",
+  "size_range_source": "pdl (free dataset)"
 }
 ```
 
 Company mode returns one record per employer: name, domain, industry, size band, legal form from public registries, technology stack, and the count of live postings.
+
+## Explore the Nivult family
+
+- **[Job Postings Dataset — the full index](https://apify.com/nivult_developers/global-job-postings)** — every ATS, every filter, company mode
+- **[Workday Jobs Dataset](https://apify.com/nivult_developers/workday-jobs-dataset)** — every Workday career site, daily
+- **[Greenhouse Jobs Dataset](https://apify.com/nivult_developers/greenhouse-jobs-dataset)** — every Greenhouse board, daily
+- **[Jobs by Technology](https://apify.com/nivult_developers/jobs-by-technology)** — postings matched by the stack in the text
 
 ## FAQ
 
