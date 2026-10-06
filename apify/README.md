@@ -4,7 +4,7 @@
 
 Most job actors ask you for career-site URLs, then spend minutes scraping them, then hand you raw rows. **This Actor asks for nothing but filters** — and answers in seconds, because the work is already done: we read the career systems of tens of thousands of employers **every day**, whether you run us or not.
 
-| | Scrape-on-demand actors | **Nivult Job Index** |
+| | Scrape-on-demand actors | **Nivult Dataset API** |
 |---|---|---|
 | You supply | career-site URLs you must know | nothing — just filters |
 | Answer in | minutes of scraping | **seconds** |

@@ -20,7 +20,7 @@ Scrape-on-demand actors ask you for career-site URLs and minutes of your
 patience, then hand you raw rows. **This dataset asks for nothing but
 filters** — the reading already happened today, whether you run us or not.
 
-| | Scrape-on-demand | **This dataset** |
+| | Scrape-on-demand | **Nivult Dataset API** |
 |---|---|---|
 | You supply | URLs you must know | nothing — just filters |
 | Answer in | minutes | **seconds** |
@@ -28,7 +28,7 @@ filters** — the reading already happened today, whether you run us or not.
 | Enrichment | raw title + link | seniority, workplace, language, skills |
 | Provenance | none | **field-level, on every row** |
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/come-funziona.png)
+![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/come-tecnologie.png)
 
 ## How to use it
 
