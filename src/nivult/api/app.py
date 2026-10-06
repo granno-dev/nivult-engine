@@ -1031,7 +1031,7 @@ def create_app() -> FastAPI:
         except Exception:                            # noqa: BLE001
             corpo = {}
         etichetta = str((corpo or {}).get("etichetta") or "").strip()[:80] \
-            or "chiave del portale"
+            or "Portal key"
         chiave, chiave_id = _chiavi.nuova(etichetta, 1000, user_id=uid)
         return {"chiave": chiave, "id": chiave_id,
                 "nota": "la chiave si vede solo ora: conservala tu"}

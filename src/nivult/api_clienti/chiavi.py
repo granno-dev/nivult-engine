@@ -282,7 +282,7 @@ def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
         cur.execute(
             "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id) "
             "VALUES (%s, %s, %s, %s)",
-            (_hash(chiave), "principale (trial)", 1000, user_id))
+            (_hash(chiave), "Main key (trial)", 1000, user_id))
         conn.commit()
         return ([], chiave)
 

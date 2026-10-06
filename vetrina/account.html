@@ -227,6 +227,7 @@ tailwind.config = {
           </div>
           <input id="buy-slider" type="range" min="25" max="2990" value="229" class="pz-slider mt-4 w-full" aria-label="Amount in euros">
           <div class="mt-2 flex justify-between text-[11px] text-slate-400 font-semibold"><span>€25</span><span id="buy-unit">€2.29 per 1,000 calls</span><span>€2,990</span></div>
+          <p class="mt-1 text-[10.5px] text-slate-400 text-right">All prices exclude VAT.</p>
           <p class="mt-5 text-[12px] leading-5 text-slate-400">A one-time purchase — no subscription, nothing renews. The credits land on your balance as soon as the payment clears and <b class="text-slate-500">never expire</b>: they are spent only after your free monthly allowance runs out, and every single one is itemized under <b class="text-slate-500">View credit usage</b>.</p>
           <div class="mt-auto pt-5">
             <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-mint-500/35 hover:-translate-y-px transition flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>Continue to secure checkout →</button>
@@ -1187,7 +1188,7 @@ async function apriUso() {
       ? `<span class="relative h-6 w-6 rounded-md bg-white border border-slate-100 grid place-items-center shrink-0 overflow-hidden"><img src="${esc(e.logo)}" alt="" class="h-4 w-4 object-contain" onerror="this.remove()"></span>`
       : "";
     return `<div class="flex items-center gap-3 px-3 py-2.5 -mx-3 rounded-xl hover:bg-slate-50 text-[12.5px] transition">
-      <span class="text-slate-400 tabular-nums shrink-0 text-[11.5px] w-[190px]">${_quando(e.at)}</span>
+      <span class="text-slate-400 tabular-nums shrink-0 text-[11.5px] w-[190px] whitespace-nowrap">${_quando(e.at)}</span>
       <span class="rounded-md px-2 py-0.5 text-[10.5px] font-bold ${cls} shrink-0">${nome}</span>
       ${logoEv}
       <span class="min-w-0 flex flex-col">${principale}${secondario ? `<span class="text-[11px] text-slate-400 truncate">${esc(secondario)}</span>` : ""}</span>
