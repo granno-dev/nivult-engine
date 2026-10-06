@@ -27,7 +27,7 @@ filters** — the reading already happened today, whether you run us or not.
 | Enrichment | raw title + link | seniority, workplace, language, skills |
 | Provenance | none | **field-level, on every row** |
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/come-workday.png)
+![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-workday.png)
 
 ## How to use it
 
@@ -43,18 +43,23 @@ Why a row here costs more than a raw scrape: a raw row is a title and a link tha
 
 ## What does the output look like?
 
-A real row, read the same day from a live Workday board:
+A real row, read the same day from a live Workday board (verbatim):
 
 ```json
 {
-  "title": "Associate Director - Sovereign & International Public Finance Ratings, Madrid",
-  "company_slug": "spgi",
+  "title": "Energy Advisor",
+  "company": "Clearesult",
+  "company_slug": "clearesult",
   "ats": "workday",
-  "country": "ES",
-  "city": "Madrid",
-  "seniority": "head",
+  "country": "US",
+  "city": "Remote - Colorado",
+  "remote": "remote",
+  "language": "en",
+  "technologies": ["Microsoft Office"],
+  "salary_estimate_median": 68650,
+  "salary_is_estimate": true,
   "posted_at": "2026-10-06",
-  "url": "https://spgi.wd5.myworkdayjobs.com/spgi_careers/job/Madrid-ES/Associate-Director---Sovereign---International-Public-Finance-Ratings--Madrid_331892-1"
+  "url": "https://clearesult.wd1.myworkdayjobs.com/clearesult_external_careers/job/Remote---Colorado/Energy-Advisor_R0018257"
 }
 ```
 

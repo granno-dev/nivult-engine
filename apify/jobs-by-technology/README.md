@@ -28,7 +28,7 @@ filters** — the reading already happened today, whether you run us or not.
 | Enrichment | raw title + link | seniority, workplace, language, skills |
 | Provenance | none | **field-level, on every row** |
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/come-tecnologie.png)
+![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-tecnologie.png)
 
 ## How to use it
 

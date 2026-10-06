@@ -25,7 +25,7 @@ Filter by what matters:
 - 🗓️ **Posted-after date** — only what is fresh
 - 🏢 **Company mode** — industry, size band, legal identity from public registries, measured technology stack
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/come-funziona.png)
+![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-v2.png)
 
 ## How to use it
 
