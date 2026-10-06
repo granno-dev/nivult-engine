@@ -6,9 +6,16 @@
     "tipo": {
       "title": "What do you need?",
       "type": "string",
-      "enum": ["jobs", "companies"],
-      "enumTitles": ["Job postings", "Companies (enriched employer records)"],
-      "default": "jobs"
+      "enum": [
+        "jobs",
+        "companies"
+      ],
+      "enumTitles": [
+        "Job postings",
+        "Companies (enriched employer records)"
+      ],
+      "default": "jobs",
+      "description": "Job postings or enriched company records"
     },
     "country": {
       "title": "Country (ISO-2)",
@@ -31,16 +38,44 @@
     "seniority": {
       "title": "Seniority",
       "type": "string",
-      "enum": ["", "intern", "junior", "mid", "senior", "lead", "head"],
-      "enumTitles": ["any", "intern", "junior", "mid", "senior", "lead", "head"],
-      "default": ""
+      "enum": [
+        "",
+        "intern",
+        "junior",
+        "mid",
+        "senior",
+        "lead",
+        "head"
+      ],
+      "enumTitles": [
+        "any",
+        "intern",
+        "junior",
+        "mid",
+        "senior",
+        "lead",
+        "head"
+      ],
+      "default": "",
+      "description": "Filter by seniority level (optional)"
     },
     "remote": {
       "title": "Workplace",
       "type": "string",
-      "enum": ["", "remote", "hybrid", "onsite"],
-      "enumTitles": ["any", "remote", "hybrid", "on site"],
-      "default": ""
+      "enum": [
+        "",
+        "remote",
+        "hybrid",
+        "onsite"
+      ],
+      "enumTitles": [
+        "any",
+        "remote",
+        "hybrid",
+        "on site"
+      ],
+      "default": "",
+      "description": "Filter by workplace type (optional)"
     },
     "dal": {
       "title": "Posted after",
