@@ -15,7 +15,7 @@ Most job actors ask you for career-site URLs, then spend minutes scraping them, 
 
 ## What does the Nivult Job Index do?
 
-Read job postings **directly from the career systems of tens of thousands of employers** — Workday, Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more — across 240+ countries and territories. Refreshed daily; closed when the posting leaves the employer's own page.
+We read job postings **directly from the career systems of tens of thousands of employers** — Workday, Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more — across 240+ countries and territories. Refreshed daily; closed when the posting leaves the employer's own page.
 
 Filter by what matters:
 
@@ -43,21 +43,20 @@ For the full daily export or a custom feed (millions of rows, JSONL, daily delta
 
 ## What does the output look like?
 
-A real row from the index (posting published the same morning):
+A real row from the index (read today, verbatim — fields with no source stay empty; we never invent):
 
 ```json
 {
-  "id": "a19ff499-a360-4d87-a37d-5332a5a28804",
-  "title": "SAP EAM Consultant",
-  "company": "NTT DATA",
+  "id": "945ba2d5-2250-4c76-bac6-e7ae2040dcfc",
+  "title": "Junior Internal Auditor",
+  "company": "Leonardo",
+  "ats": "workday",
   "country": "IT",
-  "city": "Milano",
-  "remote": "hybrid",
-  "seniority": "mid",
+  "city": "IT - Roma - Via Tiburtina KM12",
+  "seniority": "junior",
   "language": "it",
-  "skills": ["sap", "eam", "asset management"],
-  "posted_at": "2026-10-06T09:53:33Z",
-  "url": "https://careers.example.com/jobs/12345"
+  "posted_at": "2026-10-06T11:00:02Z",
+  "url": "https://leonardocompany.wd3.myworkdayjobs.com/leonardocareersite/job/IT---Roma---Via-Tiburtina--KM12400/Junior-Internal-Auditor_R0028587"
 }
 ```
 

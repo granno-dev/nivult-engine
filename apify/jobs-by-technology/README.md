@@ -42,16 +42,16 @@ Why a row here costs more than a raw scrape: a raw row is a title and a link tha
 
 ## What does the output look like?
 
-A real row from a Snowflake-mentioning posting, read the same morning:
+A real row from a Snowflake-mentioning posting, read the same morning (verbatim — the skills list is long because it is measured from the whole text):
 
 ```json
 {
-  "title": "Business Analyst – Data Engineering",
-  "ats": "zohorecruit",
-  "country": "IN",
-  "city": "Pune",
+  "title": "Delivery Manager - Data Analytics Spread & Commissions",
+  "ats": "icims",
+  "country": "US",
+  "city": "Hanover",
   "posted_at": "2026-10-06",
-  "skills": ["snowflake", "sql", "dbt"]
+  "skills": ["python", "sql", "aws", "azure", "gcp", "etl", "scrum", "agile", "project management", "warehouse", "snowflake", "unstructured data", "use logical reasoning"]
 }
 ```
 
