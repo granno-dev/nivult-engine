@@ -1,68 +1,53 @@
-![Nivult — live job postings, read at the source](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina.png)
+![Every Workday career site, read live — Nivult](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-workday.png)
 
-## What does this dataset do?
+## What does this Workday jobs dataset do?
 
-This Actor reads every public Workday career site — the world's largest enterprise ATS — directly from the source, refreshed daily. Not scraped from aggregators: when a posting leaves the employer's Workday page, it closes here too.
+Thousands of the world's largest employers run their hiring on **Workday** — this Actor reads every public Workday career site directly, every day, and hands you the postings as clean, structured rows. When a posting leaves the employer's Workday page, it closes here too: the dataset never lies about what is open.
 
-Use it to extract **job postings** or **enriched company records** with the filters that matter:
+Filter **Workday job postings** by what matters:
 
-- 🌍 **Country** — 240+ countries and territories, ISO-2 filtered
-- 🧩 **Technology** — postings that mention SAP, Snowflake, Kubernetes… in the text
+- 🌍 **Country** — 240+ countries and territories
 - 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
+- 🔎 **Keyword** — free text in title and description
 - 🗓️ **Posted-after date** — only what is fresh
-- 🏢 **Company mode** — industry, size band, legal identity from public registries, measured technology stack
 
-Every field carries **field-level provenance**: the record says where each value came from, so you can audit what you buy.
+Every field carries **field-level provenance**: the row says where each value came from, so you can audit what you buy.
 
 ## How to use it
 
-1. Choose **Job postings** or **Companies**.
-2. Set your filters — country, technology, keyword, seniority, workplace, posted-after.
-3. Run, and download the dataset as JSON, CSV, or Excel — or read it through the Apify API.
+1. Open the Actor and set your filters — or none, for the full Workday slice.
+2. Run it, then download JSON, CSV or Excel — or read the dataset through the Apify API.
+3. For the whole Workday universe every morning, ask about the daily feed (link on this page).
 
-Every result set is a slice of the same index we sell as a full daily feed.
+## How much does a Workday jobs dataset cost?
 
-## How much does it cost to extract job postings data?
-
-**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows, so you can evaluate the data before paying anything.
-
-For the full daily export or a custom feed (millions of rows, JSONL, daily deltas), write to us — the Actor page links to the contact.
+**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows, so you can judge the data before paying anything.
 
 ## What does the output look like?
 
-A real row from the index (posting published the same morning):
+A real row, read the same morning from a live Workday board:
 
 ```json
 {
-  "id": "a19ff499-a360-4d87-a37d-5332a5a28804",
-  "title": "SAP EAM Consultant",
-  "company": "NTT DATA",
-  "country": "IT",
-  "city": "Milano",
-  "remote": "hybrid",
-  "seniority": "mid",
-  "language": "it",
-  "skills": ["sap", "eam", "asset management"],
-  "posted_at": "2026-10-06T09:53:33Z",
-  "url": "https://careers.example.com/jobs/12345"
+  "title": "Manager - Finance & Strategy",
+  "company": "Flextronics",
+  "ats": "workday",
+  "city": "Chennai, IN",
+  "posted_at": "2026-10-06",
+  "url": "https://flextronics.wd1.myworkdayjobs.com/careers/job/..."
 }
 ```
 
-Company mode returns one record per employer: name, domain, industry, size band, legal form from public registries, technology stack, and the count of live postings.
-
 ## FAQ
 
-**Where does the data come from?**
-From the employers' own career systems — the page where the company itself publishes the opening. A closure is verified: the posting left the source.
+**Is this the official Workday API?**
+No — and it doesn't need your Workday credentials. We read the public career pages that employers publish for candidates, politely and within their terms.
 
-**How fresh is it?**
-The index refreshes every day; new postings land within 24 hours of appearing at the source.
+**How fresh is the data?**
+The Workday slice refreshes every day; new postings land within 24 hours of appearing on the board.
+
+**Do you cover other ATS platforms?**
+Yes — Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more. The full index (all platforms, all filters) has its own Actor; niche datasets like this one exist for the platforms people ask for most.
 
 **Is this legal?**
-We read public pages that employers publish for candidates, respect robots directives and rate limits, and honor removal requests. The company records enrich public postings with public registries.
-
-**Can I get the data through an API instead of the UI?**
-Yes — the dataset of every run is readable through the Apify API, and the full index has its own REST API with daily JSONL exports. Ask us through the store page.
-
-**Something looks off — who do I tell?**
-Write to us from the store page. We read everything, and we fix fast.
+We read public postings on the employer's own site, respect robots directives and rate limits, and honor removal requests.

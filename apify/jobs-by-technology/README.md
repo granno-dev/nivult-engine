@@ -1,68 +1,54 @@
-![Nivult — live job postings, read at the source](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina.png)
+![Who is hiring for Snowflake today — Nivult](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-tecnologie.png)
 
-## What does this dataset do?
+## What does "Jobs by Technology" do?
 
-This Actor finds job postings by the technology stack they actually mention in the text — not just the title. SAP, Snowflake, Kubernetes, Salesforce: if the employer's posting says it, we index it. Refreshed daily from the career systems of tens of thousands of employers.
+Type a technology — **SAP, Snowflake, Kubernetes, Salesforce, anything** — and get every live job posting that mentions it **in the text of the ad**, not just in the title. Read daily from the career systems of tens of thousands of employers, worldwide.
 
-Use it to extract **job postings** or **enriched company records** with the filters that matter:
+For sales teams it is a lead list ("who is implementing Snowflake right now?"), for recruiters a talent map, for analysts a demand signal — measured from what employers actually write.
 
-- 🌍 **Country** — 240+ countries and territories, ISO-2 filtered
-- 🧩 **Technology** — postings that mention SAP, Snowflake, Kubernetes… in the text
+- 🧩 **Technology matching in the full text** — the stack the posting really asks for
+- 🌍 **Country** — 240+ countries and territories
 - 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
 - 🗓️ **Posted-after date** — only what is fresh
-- 🏢 **Company mode** — industry, size band, legal identity from public registries, measured technology stack
+- 🏢 **Company mode** — the employers behind the postings, with industry and size
 
-Every field carries **field-level provenance**: the record says where each value came from, so you can audit what you buy.
+Every field carries **field-level provenance**: the row says where each value came from, so you can audit what you buy.
 
 ## How to use it
 
-1. Choose **Job postings** or **Companies**.
-2. Set your filters — country, technology, keyword, seniority, workplace, posted-after.
-3. Run, and download the dataset as JSON, CSV, or Excel — or read it through the Apify API.
+1. Type the technology (e.g. `Snowflake`) and set filters if you want.
+2. Run it, then download JSON, CSV or Excel — or read the dataset through the Apify API.
+3. For a standing feed of a technology every morning, ask about the daily feed (link on this page).
 
-Every result set is a slice of the same index we sell as a full daily feed.
+## How much does it cost?
 
-## How much does it cost to extract job postings data?
-
-**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows, so you can evaluate the data before paying anything.
-
-For the full daily export or a custom feed (millions of rows, JSONL, daily deltas), write to us — the Actor page links to the contact.
+**You pay per result: $6 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
 
 ## What does the output look like?
 
-A real row from the index (posting published the same morning):
+A real row from a Snowflake-mentioning posting, read the same morning:
 
 ```json
 {
-  "id": "a19ff499-a360-4d87-a37d-5332a5a28804",
-  "title": "SAP EAM Consultant",
-  "company": "NTT DATA",
-  "country": "IT",
-  "city": "Milano",
-  "remote": "hybrid",
-  "seniority": "mid",
-  "language": "it",
-  "skills": ["sap", "eam", "asset management"],
-  "posted_at": "2026-10-06T09:53:33Z",
-  "url": "https://careers.example.com/jobs/12345"
+  "title": "Business Analyst – Data Engineering",
+  "ats": "zohorecruit",
+  "country": "IN",
+  "city": "Pune",
+  "posted_at": "2026-10-06",
+  "skills": ["snowflake", "sql", "dbt"]
 }
 ```
 
-Company mode returns one record per employer: name, domain, industry, size band, legal form from public registries, technology stack, and the count of live postings.
-
 ## FAQ
 
-**Where does the data come from?**
-From the employers' own career systems — the page where the company itself publishes the opening. A closure is verified: the posting left the source.
+**How do you know which technologies a posting asks for?**
+We read the full text of the ad at the source and measure the stack it mentions — a posting that says "SAP" in the body counts even if the title doesn't say it.
 
-**How fresh is it?**
-The index refreshes every day; new postings land within 24 hours of appearing at the source.
+**How fresh is the data?**
+Daily. New postings land within 24 hours of appearing on the employer's career system.
+
+**Which technologies are covered?**
+Anything employers write — mainstream clouds and databases, ERP, CRM, data tools, languages. If it appears in postings, it is filterable.
 
 **Is this legal?**
-We read public pages that employers publish for candidates, respect robots directives and rate limits, and honor removal requests. The company records enrich public postings with public registries.
-
-**Can I get the data through an API instead of the UI?**
-Yes — the dataset of every run is readable through the Apify API, and the full index has its own REST API with daily JSONL exports. Ask us through the store page.
-
-**Something looks off — who do I tell?**
-Write to us from the store page. We read everything, and we fix fast.
+We read public postings on the employer's own site, respect robots directives and rate limits, and honor removal requests.
