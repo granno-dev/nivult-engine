@@ -29,7 +29,10 @@ DB_SUPERUSER=nivult
 # (sotto), e il N5 che tira i file ogni mattina alle 06:00
 # (deploy/copia-backup-n5.sh). Il ritardo massimo del N5 e' quindi tre ore:
 # tre giorni locali coprono qualunque finestra di guasto.
-LOCAL_KEEP_DAYS=3
+# 07/10/2026: 3 -> 1. Il volume HC (49 GB) tiene duckdb + backup: tre
+# giorni locali non ci stavano piu' (il backup del 07/10 e' fallito per
+# spazio). Le copie vere sono Storage Box + N5; in locale basta oggi.
+LOCAL_KEEP_DAYS=1
 REMOTE_KEEP_DAYS=90
 MIN_BYTES=500
 
@@ -76,7 +79,7 @@ else
   else
     bisogno=$(( 8 * 1073741824 ))
   fi
-  libero=$(df --output=avail -B1 / | tail -1)
+  libero=$(df --output=avail -B1 "$LOCAL_DIR" | tail -1)
   if [ "$libero" -lt "$bisogno" ]; then
     # Il 30/09/2026 il dump e' saltato per un GB: il carico cresce e
     # l'archivia delle 06:20 arriva troppo tardi per le 03:00. Invece di
@@ -84,7 +87,7 @@ else
     # script verifica la copia remota prima di cancellare) e si rimisura.
     log "disco corto ($(( libero / 1073741824 )) GB liberi): archivio il freddo prima del dump"
     /opt/nivult/archivia-sul-n5.sh || true
-    libero=$(df --output=avail -B1 / | tail -1)
+    libero=$(df --output=avail -B1 "$LOCAL_DIR" | tail -1)
     log "dopo l'archiviazione: $(( libero / 1073741824 )) GB liberi"
   fi
   [ "$libero" -ge "$bisogno" ] || die "disco insufficiente per il dump: $(( libero / 1073741824 )) GB liberi, ne servono ~$(( bisogno / 1073741824 )) (ultimo backup + 30%)"
