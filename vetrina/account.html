@@ -58,11 +58,24 @@ tailwind.config = {
    viva, non una lapide */
 @keyframes skel-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 .skel { animation: skel-pulse 2.6s ease-in-out infinite; }
-/* il divisore filtri→risultati: un raggio di luce che scorre sul
-   gradiente — dati in movimento, non una riga statica (07/10/2026) */
-@keyframes flusso { from { transform: translateX(-120%); } to { transform: translateX(420%); } }
-.flusso { animation: flusso 2.6s cubic-bezier(.4,0,.4,1) infinite; }
-@media (prefers-reduced-motion: reduce) { .skel { animation: none; } .flusso { animation: none; } }
+/* il razzo del caricamento (07/10/2026): la corsia e' larga quanto il
+   contenitore, cosi' translateX(100%) lo porta fuori a destra; dentro,
+   il razzo beccheggia piano e la fiamma tremola */
+@keyframes razzo-corsia { from { transform: translateX(-90px); } to { transform: translateX(100%); } }
+.razzo-corsia { animation: razzo-corsia 2.4s cubic-bezier(.45,.05,.55,.95) infinite; }
+@keyframes razzo-becco { 0%,100% { transform: translateY(2px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(2deg); } }
+.razzo-becco { animation: razzo-becco .7s ease-in-out infinite; }
+@keyframes fiamma { 0%,100% { transform: scaleX(1); } 40% { transform: scaleX(1.6); } 70% { transform: scaleX(.75); } }
+.fiamma { transform-origin: right center; animation: fiamma .18s linear infinite; }
+@keyframes scia { 0% { opacity: .9; transform: translate(0,0) scale(1); } 100% { opacity: 0; transform: translate(-46px,14px) scale(.3); } }
+.scia { animation: scia .9s ease-out infinite; }
+/* il separatore filtri→risultati non e' una riga: e' telemetria, le
+   barre del segno Nivult che pulsano in onda (07/10/2026) */
+@keyframes tele { 0%,100% { transform: scaleY(.35); opacity: .4; } 50% { transform: scaleY(1); opacity: 1; } }
+.tele-barra { display: inline-block; width: 3px; border-radius: 99px; transform-origin: bottom; animation: tele 1.9s ease-in-out infinite; }
+@keyframes frase-giu { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+.frase-nuova { animation: frase-giu .3s ease-out; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } .razzo-corsia, .razzo-becco, .fiamma, .scia, .tele-barra { animation: none; } }
 </style>
 </head>
 <body class="bg-paper dotgrid text-slate-900 font-sans antialiased min-h-screen flex flex-col">
@@ -299,7 +312,7 @@ tailwind.config = {
             </select>
           </div>
         </div>
-        <div class="mt-1.5 relative h-[3px] rounded-full bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500 opacity-80 overflow-hidden"><div class="absolute inset-y-0 w-1/4 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent flusso"></div></div>
+        <div id="telemetria" class="mt-2 flex items-end justify-center gap-[3px] h-4" aria-hidden="true"></div>
         <div class="mt-3 flex items-center justify-between">
           <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
           <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
@@ -782,24 +795,42 @@ function cambiaTab(t) {
   cursore = null;
   cerca(false);
 }
-/* l'attesa della prima pagina: scheletri che respirano + una frase che
-   gira (07/10/2026 — prima l'area restava vuota e sembrava rotta) */
+/* l'attesa della prima pagina: il razzo che va a prendere i dati +
+   una frase che gira (07/10/2026 — prima l'area restava vuota e
+   sembrava rotta; poi una scritta sola, troppo vecchia scuola) */
 const CARICA_MSG = [
-  "Waking up 3.9 million postings…",
+  "Launching the query rocket…",
   "Reading career pages so you don't have to…",
+  "Teaching 3.9M postings to line up…",
   "Asking 66 ATS platforms, politely…",
-  "Stamping provenance on every field…",
+  "Stamping provenance. Every. Single. Field.",
   "Herding 70,000 employers into neat rows…",
-  "Teaching the index to sit. Good index.",
 ];
 let caricaTimer = null;
 function mostraCaricamento() {
   const el = document.getElementById("cerca-righe");
+  const particelle = Array.from({ length: 5 }, (_, i) =>
+    `<span class="scia absolute rounded-full" style="left:${-6 - i * 7}px;top:${9 + (i % 3) * 4}px;width:${5 - (i % 2)}px;height:${5 - (i % 2)}px;background:${["#0fbf9a", "#3b6ef6", "#7c5cfc"][i % 3]};animation-delay:${i * 0.16}s"></span>`).join("");
   el.innerHTML = `
-    <div class="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-brand-500/15 bg-gradient-to-r from-brand-500/5 via-white to-mint-500/5">
-      <svg class="spinner shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b6ef6" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
-      <span id="carica-msg" class="text-[13px] font-semibold text-slate-500"></span>
-    </div>` + Array.from({ length: 6 }, () => `
+    <div class="relative h-[60px] overflow-hidden rounded-xl border border-brand-500/15 bg-gradient-to-r from-brand-500/5 via-white to-mint-500/5">
+      <div class="razzo-corsia absolute inset-y-0 left-0 w-full">
+        <div class="razzo-becco absolute top-1/2 -translate-y-1/2" style="left:0">
+          <div class="relative">
+            <svg width="48" height="28" viewBox="0 0 48 28">
+              <path d="M11 8 L2 2 L6 12 Z" fill="#7c5cfc"/>
+              <path d="M11 20 L2 26 L6 16 Z" fill="#7c5cfc"/>
+              <path d="M9 14 C9 7.5 17 3.5 27 3.5 C37 3.5 46 8.5 46 14 C46 19.5 37 24.5 27 24.5 C17 24.5 9 20.5 9 14 Z" fill="#0f172a"/>
+              <circle cx="31" cy="14" r="4.2" fill="#fff"/><circle cx="31" cy="14" r="2.5" fill="#3b6ef6"/>
+              <path class="fiamma" d="M9 14 L-2 9.5 L1 14 L-2 18.5 Z" fill="#0fbf9a"/>
+            </svg>
+            ${particelle}
+          </div>
+        </div>
+      </div>
+      <div class="absolute inset-0 flex items-center justify-center">
+        <span id="carica-msg" class="text-[12.5px] font-bold text-slate-400 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1"></span>
+      </div>
+    </div>` + Array.from({ length: 5 }, () => `
     <div class="skel rounded-xl border border-slate-100 bg-white px-4 py-4 flex items-center gap-3">
       <div class="w-9 h-9 rounded-lg bg-slate-100 shrink-0"></div>
       <div class="flex-1 min-w-0"><div class="h-3 w-2/5 rounded bg-slate-100"></div><div class="mt-2 h-2.5 w-1/4 rounded bg-slate-100"></div></div>
@@ -814,8 +845,23 @@ function mostraCaricamento() {
     const m = document.getElementById("carica-msg");
     if (!m) { clearInterval(caricaTimer); return; }  // risultati arrivati: il nodo non c'e' piu'
     m.textContent = CARICA_MSG[i];
-  }, 1500);
+    m.classList.remove("frase-nuova"); void m.offsetWidth; m.classList.add("frase-nuova");
+  }, 1600);
 }
+/* la telemetria fra filtri e risultati: 26 barre del segno Nivult,
+   menta→blu→viola, che pulsano in onda da sinistra a destra */
+(function () {
+  const t = document.getElementById("telemetria");
+  if (!t) return;
+  const altezze = [6, 9, 12, 8, 13, 10, 14, 9, 7, 12, 14, 11, 8, 13, 9, 14, 10, 7, 12, 13, 8, 11, 14, 9, 12, 6];
+  const mix = (a, b, p) => a.map((c, i) => Math.round(c + (b[i] - c) * p));
+  const MENTA = [15, 191, 154], BLU = [59, 110, 246], VIOLA = [124, 92, 252];
+  t.innerHTML = altezze.map((h, i) => {
+    const p = i / (altezze.length - 1);
+    const [r, g, b] = p < .5 ? mix(MENTA, BLU, p * 2) : mix(BLU, VIOLA, (p - .5) * 2);
+    return `<span class="tele-barra" style="height:${h}px;background:rgb(${r},${g},${b});animation-delay:${i * 70}ms"></span>`;
+  }).join("");
+})();
 async function cerca(append = false) {
   const via = tab === "jobs" ? "/portale/cerca" : "/portale/cerca-aziende";
   const body = { ...filtri(), cursor: append ? cursore : null };
