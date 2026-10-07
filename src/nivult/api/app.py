@@ -1335,12 +1335,15 @@ def create_app() -> FastAPI:
         return re.sub(r"[-_]+", " ", nucleo).strip().title() or rif
 
     def _favicon(dominio: str | None) -> str | None:
-        """Il logo d'azienda dal dominio, via favicon di Google: gratis,
-        sempre vivo (brandfetch e' morto il 29/09/2026), senza scarichi
-        nostri. In pagina c'e' il monogramma sotto, se l'immagine manca."""
+        """Il logo d'azienda dal dominio: il favicon di Google SCARICATO da
+        noi e servito dal nostro endpoint /favicon (07/10/2026). Prima era
+        il link diretto a google.com in pagina: su nivult.com la CSP della
+        zona (img-src 'self' + api.nivult.com) lo bloccava e i loghi
+        sparivano dalla finestra dei consumi — e il link diretto avrebbe
+        comunque detto a Google chi apre il pannello e quando."""
         if not dominio:
             return None
-        return (f"https://www.google.com/s2/favicons?domain={dominio}&sz=128")
+        return f"{oauth.api_url()}/favicon/{dominio}"
 
     @app.get("/portale/uso")
     def uso_del_portale(uid: str = Depends(utente), conn=Depends(connessione)):
@@ -1857,6 +1860,50 @@ def create_app() -> FastAPI:
             intestazioni["Content-Security-Policy"] = "sandbox"
         return Response(content=bytes(dati), media_type=mime or "image/png",
                         headers=intestazioni)
+
+    @app.get("/favicon/{dominio}")
+    def favicon_dominio(dominio: str, conn=Depends(connessione)):
+        """Il favicon di un dominio, scaricato una volta da Google e servito
+        dal nostro archivio (07/10/2026).
+
+        Nato per la finestra dei consumi del portale: i loghi arrivano da
+        `_favicon`, e servirli da 'self' e' l'unico modo di passare la CSP
+        della vetrina senza allargarla a google.com. La chiave in
+        company_logos e' il dominio stesso: contiene sempre un punto, gli
+        slug aziendali mai — niente collisioni con /logo/{chiave}.
+        Stessa politica dei loghi: un fallimento si ricorda una settimana,
+        poi si riprova."""
+        dominio = dominio.strip().lower()[:200]
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*\.[a-z]{2,}", dominio or ""):
+            raise HTTPException(404, "dominio non valido")
+        with conn.cursor() as cur:
+            cur.execute("SELECT mime, bytes FROM company_logos "
+                        "WHERE chiave = %s AND (bytes IS NOT NULL "
+                        "   OR fetched_at > now() - interval '7 days')",
+                        (dominio,))
+            r = cur.fetchone()
+            if r is None:
+                contenuto = _scarica_logo(
+                    f"https://www.google.com/s2/favicons"
+                    f"?domain={dominio}&sz=128")
+                mime = _tipo_immagine(contenuto) if contenuto else None
+                cur.execute(
+                    "INSERT INTO company_logos (chiave, mime, bytes, origine) "
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT (chiave) DO UPDATE "
+                    "SET mime = EXCLUDED.mime, bytes = EXCLUDED.bytes, "
+                    "    origine = EXCLUDED.origine, fetched_at = now()",
+                    (dominio, mime,
+                     Binary(contenuto) if mime else None, "google-favicon"))
+                conn.commit()
+                r = (mime, contenuto if mime else None)
+        mime, dati = r
+        if not dati:
+            raise HTTPException(404, "favicon assente")
+        return Response(content=bytes(dati),
+                        media_type=mime or "image/png",
+                        headers={"Cache-Control":
+                                 "public, max-age=604800, immutable",
+                                 "X-Content-Type-Options": "nosniff"})
 
     @app.get("/ricerca/famiglia")
     def famiglia_per_ruolo(ruolo: str, uid: str = Depends(utente),
