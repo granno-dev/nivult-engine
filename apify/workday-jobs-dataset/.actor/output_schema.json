@@ -1,0 +1,13 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Output: the filtered slice of the Nivult index",
+  "description": "Every result is one full record (job posting or company) from the Nivult index, written to the default dataset of the run.",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "Results",
+      "description": "The records matching your filters, in the default dataset — view them as a table or download as JSON, CSV, Excel.",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    }
+  }
+}

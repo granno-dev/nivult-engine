@@ -25,5 +25,6 @@
       "reasonForChange": "Lancio a $3/1.000: nel campo dei seri (2,70-5$), mai il piu' caro senza recensioni"
     }
   ],
-  "dockerfile": "../Dockerfile"
+  "dockerfile": "../Dockerfile",
+  "output": "./output_schema.json"
 }
