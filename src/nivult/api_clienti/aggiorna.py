@@ -303,12 +303,13 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
         log.warning("export mancanti: %s — costruisco comunque il db, "
                     "con le tabelle vuote e lo stato dichiarato", mancanti)
     con = duckdb.connect(tmp)
-    # il builder gira su Hetzner (7,6 GB in tutto, con Postgres accanto):
-    # DuckDB per default si prende l'80% della RAM e il 23/09/2026 il
-    # kernel ha ucciso il giro a 4,1 GB di RSS. Tetto dichiarato a 2 GB
-    # (oltre si riversa su disco, come deve essere) e niente ordine di
-    # inserzione da preservare: l'ordine lo da' l'export, non il db.
-    con.execute("SET memory_limit = '2GB'")
+    # Il tetto di RAM del builder, da ambiente: 2 GB sul server (il 23/09
+    # il kernel uccise il giro a 4,1 GB di RSS), 12 GB sull'N5 che ha la
+    # RAM. Oltre il tetto DuckDB riversa su disco, come deve essere.
+    # (07/10/2026: il blocco era DUPLICATO da un edit mio di stamattina —
+    # due SET a valori diversi, vinceva il secondo. Ora uno solo.)
+    con.execute("SET memory_limit = '" +
+                os.environ.get("AGG_MEMORIA", "2GB") + "'")
     con.execute("SET preserve_insertion_order = false")
     _crea_tabelle(con)
     n_offerte = _carica_nativa(con, f_offerte, "offerte",

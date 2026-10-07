@@ -23,7 +23,7 @@ import time
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from nivult.api_clienti import chiavi, dati
 from nivult.api_clienti import vivo
@@ -248,9 +248,13 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
 @router.get("/demo/stats")
 def demo_stats(request: Request):
     """I quattro contatori della vetrina. Nessun parametro, niente input:
-    la superficie d'attacco e' il nulla, e' il punto (26/09/2026)."""
+    la superficie d'attacco e' il nulla, e' il punto (26/09/2026).
+    no-store esplicito (07/10/2026): il numero fresco e' il prodotto —
+    funzionava per fortuna (CF non cacha), ora funziona per regola."""
     _demo_gate(request)
-    return dati.demo_stats()
+    risp = JSONResponse(dati.demo_stats())
+    risp.headers["Cache-Control"] = "no-store"
+    return risp
 
 
 CAMPIONI_EXPORT = {
