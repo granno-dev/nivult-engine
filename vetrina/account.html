@@ -58,7 +58,11 @@ tailwind.config = {
    viva, non una lapide */
 @keyframes skel-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 .skel { animation: skel-pulse 2.6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+/* il divisore filtri→risultati: un raggio di luce che scorre sul
+   gradiente — dati in movimento, non una riga statica (07/10/2026) */
+@keyframes flusso { from { transform: translateX(-120%); } to { transform: translateX(420%); } }
+.flusso { animation: flusso 2.6s cubic-bezier(.4,0,.4,1) infinite; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } .flusso { animation: none; } }
 </style>
 </head>
 <body class="bg-paper dotgrid text-slate-900 font-sans antialiased min-h-screen flex flex-col">
@@ -295,7 +299,7 @@ tailwind.config = {
             </select>
           </div>
         </div>
-        <div class="mt-1.5 h-[3px] rounded-full bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500 opacity-80"></div>
+        <div class="mt-1.5 relative h-[3px] rounded-full bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500 opacity-80 overflow-hidden"><div class="absolute inset-y-0 w-1/4 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent flusso"></div></div>
         <div class="mt-3 flex items-center justify-between">
           <button id="pulisci" onclick="pulisciFiltri()" class="hidden rounded-lg border border-slate-200 px-3.5 py-1.5 text-[12px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">✕ Clear filters</button>
           <span class="text-[11.5px] text-slate-400 ml-auto" id="cerca-freschezza"></span>
@@ -778,11 +782,60 @@ function cambiaTab(t) {
   cursore = null;
   cerca(false);
 }
+/* l'attesa della prima pagina: scheletri che respirano + una frase che
+   gira (07/10/2026 — prima l'area restava vuota e sembrava rotta) */
+const CARICA_MSG = [
+  "Waking up 3.9 million postings…",
+  "Reading career pages so you don't have to…",
+  "Asking 66 ATS platforms, politely…",
+  "Stamping provenance on every field…",
+  "Herding 70,000 employers into neat rows…",
+  "Teaching the index to sit. Good index.",
+];
+let caricaTimer = null;
+function mostraCaricamento() {
+  const el = document.getElementById("cerca-righe");
+  el.innerHTML = `
+    <div class="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-brand-500/15 bg-gradient-to-r from-brand-500/5 via-white to-mint-500/5">
+      <svg class="spinner shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b6ef6" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+      <span id="carica-msg" class="text-[13px] font-semibold text-slate-500"></span>
+    </div>` + Array.from({ length: 6 }, () => `
+    <div class="skel rounded-xl border border-slate-100 bg-white px-4 py-4 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-slate-100 shrink-0"></div>
+      <div class="flex-1 min-w-0"><div class="h-3 w-2/5 rounded bg-slate-100"></div><div class="mt-2 h-2.5 w-1/4 rounded bg-slate-100"></div></div>
+      <div class="h-5 w-16 rounded-md bg-slate-100 shrink-0"></div>
+    </div>`).join("");
+  let i = 0;
+  const msg = document.getElementById("carica-msg");
+  if (msg) msg.textContent = CARICA_MSG[0];
+  clearInterval(caricaTimer);
+  caricaTimer = setInterval(() => {
+    i = (i + 1) % CARICA_MSG.length;
+    const m = document.getElementById("carica-msg");
+    if (!m) { clearInterval(caricaTimer); return; }  // risultati arrivati: il nodo non c'e' piu'
+    m.textContent = CARICA_MSG[i];
+  }, 1500);
+}
 async function cerca(append = false) {
   const via = tab === "jobs" ? "/portale/cerca" : "/portale/cerca-aziende";
   const body = { ...filtri(), cursor: append ? cursore : null };
+  const btnAltro = document.getElementById("cerca-altro");
+  if (append) {
+    /* il click su Load more si vede subito: spinner dentro il bottone,
+       disabilitato finche' la pagina nuova non e' arrivata (07/10/2026) */
+    btnAltro.disabled = true;
+    btnAltro.innerHTML = `<svg class="spinner inline-block align-[-2px] mr-1.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>Loading…`;
+  } else {
+    mostraCaricamento();
+    btnAltro.classList.add("hidden");
+  }
   const r = await api(via, { method: "POST", body: JSON.stringify(body) });
-  if (!r.ok) return;
+  if (append) { btnAltro.disabled = false; btnAltro.textContent = "Load more"; }
+  if (!r.ok) {
+    if (!append) document.getElementById("cerca-righe").innerHTML =
+      `<div class="px-4 py-6 text-center text-[13px] font-semibold text-slate-400">The index hiccuped — try again in a moment.</div>`;
+    return;
+  }
   const d = await r.json();
   cursore = d.next_cursor;
   /* il totale in testa e' il VIVO (lo stesso del cruscotto); la riga
