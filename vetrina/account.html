@@ -143,14 +143,25 @@ tailwind.config = {
       <button onclick="copiaCurl(this)" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-brand-500/25">Copy your first call →</button>
     </div>
 
-    <!-- la chiave appena creata: si vede UNA volta -->
-    <div id="chiave-nuova" class="hidden mt-8 rounded-2xl border border-mint-500/40 bg-mint-500/5 p-6">
-      <p class="text-[13px] font-black uppercase tracking-[0.12em] text-mint-600">Your new API key — shown once</p>
-      <div class="mt-3 flex items-center gap-3">
-        <code id="chiave-nuova-val" class="flex-1 rounded-xl bg-slate-950 text-mint-400 font-mono text-[13px] px-4 py-3 overflow-x-auto whitespace-nowrap"></code>
-        <button onclick="copiaChiave(this)" class="rounded-xl bg-slate-950 px-4 py-3 text-[12.5px] font-bold text-white hover:bg-slate-800 transition shrink-0">Copy</button>
+    <!-- la chiave appena creata: si vede UNA volta. Il testo la lega
+         alla riga "Main key (trial)" della lista sotto — il 07/10/2026
+         l'accostamento muto faceva sembrare due chiavi diverse. -->
+    <div id="chiave-nuova" class="hidden mt-8 relative overflow-hidden rounded-2xl border border-mint-500/40 bg-gradient-to-br from-mint-500/10 via-white to-brand-500/10 shadow-xl shadow-mint-500/10">
+      <div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
+      <div class="p-6 sm:p-7 flex items-start gap-4">
+        <div class="shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br from-mint-500 to-brand-500 grid place-items-center shadow-lg shadow-mint-500/30">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.9 10.9 21 3m-4 1 3 3-3.5 3.5"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-black uppercase tracking-[0.12em] text-mint-600">Your API key is ready</p>
+          <p class="mt-1 text-[14px] font-semibold text-slate-900 leading-snug">This is your <span class="text-brand-600">Main key (trial)</span> — the one listed below. It is shown <span class="text-mint-600">only now</span>: we keep just its hash.</p>
+          <div class="mt-4 flex items-center gap-3">
+            <code id="chiave-nuova-val" class="flex-1 rounded-xl bg-slate-950 text-mint-400 font-mono text-[13px] px-4 py-3 overflow-x-auto whitespace-nowrap shadow-inner"></code>
+            <button onclick="copiaChiave(this)" class="rounded-xl bg-slate-950 px-5 py-3 text-[12.5px] font-bold text-white hover:bg-slate-800 transition shrink-0 shadow-lg">Copy</button>
+          </div>
+          <p class="mt-3 text-[12.5px] text-slate-500">Store it somewhere safe now. If you lose it, revoke it below and create a new one — it takes ten seconds.</p>
+        </div>
       </div>
-      <p class="mt-3 text-[12.5px] text-slate-500">Store it now. We keep only its hash: if you lose it, create a new one and revoke this.</p>
     </div>
 
     <div class="mt-8 grid lg:grid-cols-3 gap-5 items-stretch">
@@ -553,7 +564,7 @@ function disegna() {
       <div class="flex items-center gap-3 flex-wrap">
         <b class="text-[14.5px]">${k.etichetta}</b>
         <span class="rounded-md px-2 py-0.5 text-[10.5px] font-black ${viva ? "bg-mint-500/10 text-mint-600" : "bg-slate-100 text-slate-400"}">${viva ? "ACTIVE" : "REVOKED"}</span>
-        <span class="text-[12px] text-slate-400 font-mono ml-auto">•••${k.id.slice(-6)}</span>
+        <span class="text-[12px] text-slate-400 font-mono ml-auto">${k.coda ? "•••" + k.coda : ""}</span>
         ${viva ? `<button onclick="revoca('${k.id}')" class="rounded-lg border border-slate-200 px-3 py-1 text-[11.5px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Revoke</button>` : ""}
       </div>
       <div class="mt-2.5 flex items-center gap-3">

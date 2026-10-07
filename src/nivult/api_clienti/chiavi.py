@@ -268,7 +268,7 @@ def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
                     (f"trial-chiave:{user_id}",))
         cur.execute(
             "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
-            "       usati_mese, mese_uso FROM api_chiavi "
+            "       usati_mese, mese_uso, key_tail FROM api_chiavi "
             "WHERE user_id = %s ORDER BY created_at", (user_id,))
         righe = cur.fetchall()
         if righe:
@@ -277,12 +277,13 @@ def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
                       "creata_il": r[2].isoformat(),
                       "revocata_il": r[3].isoformat() if r[3] else None,
                       "crediti_mensili": r[4], "usati_mese": r[5],
-                      "mese_uso": r[6].isoformat()} for r in righe], None)
+                      "mese_uso": r[6].isoformat(),
+                      "coda": r[7]} for r in righe], None)
         chiave = "nv_" + secrets.token_urlsafe(32)
         cur.execute(
-            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id) "
-            "VALUES (%s, %s, %s, %s)",
-            (_hash(chiave), "Main key (trial)", 1000, user_id))
+            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id, "
+            "  key_tail) VALUES (%s, %s, %s, %s, %s)",
+            (_hash(chiave), "Main key (trial)", 1000, user_id, chiave[-6:]))
         conn.commit()
         return ([], chiave)
 
@@ -301,9 +302,9 @@ def nuova(etichetta: str, crediti: int, user_id: str | None = None) -> tuple[str
     chiave = "nv_" + secrets.token_urlsafe(32)
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id) "
-            "VALUES (%s, %s, %s, %s) RETURNING id::text",
-            (_hash(chiave), etichetta, crediti, user_id))
+            "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id, "
+            "  key_tail) VALUES (%s, %s, %s, %s, %s) RETURNING id::text",
+            (_hash(chiave), etichetta, crediti, user_id, chiave[-6:]))
         chiave_id = cur.fetchone()[0]
         conn.commit()
     return chiave, chiave_id
@@ -314,13 +315,14 @@ def lista_per_utente(user_id: str) -> list[dict]:
     with psycopg.connect(_url()) as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
-            "       usati_mese, mese_uso FROM api_chiavi "
+            "       usati_mese, mese_uso, key_tail FROM api_chiavi "
             "WHERE user_id = %s ORDER BY created_at", (user_id,))
         return [{"id": r[0], "etichetta": r[1],
                  "creata_il": r[2].isoformat(),
                  "revocata_il": r[3].isoformat() if r[3] else None,
                  "crediti_mensili": r[4], "usati_mese": r[5],
-                 "mese_uso": r[6].isoformat()} for r in cur.fetchall()]
+                 "mese_uso": r[6].isoformat(),
+                 "coda": r[7]} for r in cur.fetchall()]
 
 
 def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
