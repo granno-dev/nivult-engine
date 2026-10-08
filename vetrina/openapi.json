@@ -1,0 +1,134 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Nivult Job Postings & Company Intelligence",
+    "description": "Live job postings collected directly from employer ATS systems (Greenhouse, Workday, Lever, SmartRecruiters and 60+ more) plus national employment portals — enriched with technology stack, seniority, remote policy, salary and language requirements. One record per employer in /v1/companies, with industry and size. Updated continuously; closures are verified against the source. Browse is cheap, freshness is the product.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Nivult",
+      "url": "https://nivult.com",
+      "email": "hello@nivult.com"
+    }
+  },
+  "servers": [
+    { "url": "https://api.nivult.com" }
+  ],
+  "paths": {
+    "/v1/jobs": {
+      "get": {
+        "summary": "Search live job postings",
+        "description": "Active job postings from employer ATS sources. Keyset pagination: follow next_cursor until null. Filters: country (ISO-2), technology, ats platform, category, seniority, remote, language, free-text q, posted-after dal.",
+        "operationId": "jobs",
+        "parameters": [
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "ISO 3166-1 alpha-2 country code" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP" }, "description": "Technology mentioned in the posting (case-insensitive)" },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "greenhouse" }, "description": "Source ATS platform (greenhouse, workday, lever, smartrecruiters, ...)" },
+          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology" }, "description": "Job family" },
+          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "senior" } },
+          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote" } },
+          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Free text on the title" },
+          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from the previous page" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of postings",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/JobPage" }
+              }
+            }
+          },
+          "401": { "description": "Missing or revoked API key" },
+          "429": { "description": "Monthly credits exhausted" }
+        }
+      }
+    },
+    "/v1/companies": {
+      "get": {
+        "summary": "The company spine: one record per employer",
+        "description": "Employers with live postings: name, domain, industry, size band, technology stack, locations, active postings count and 30-day hiring pace.",
+        "operationId": "companies",
+        "parameters": [
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
+          { "name": "industry", "in": "query", "schema": { "type": "string" } },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" } },
+          { "name": "employees_min", "in": "query", "schema": { "type": "integer", "example": 500 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of companies",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CompanyPage" }
+              }
+            }
+          },
+          "401": { "description": "Missing or revoked API key" },
+          "429": { "description": "Monthly credits exhausted" }
+        }
+      }
+    },
+    "/v1/changes": {
+      "get": {
+        "summary": "The delta feed: new, updated, closed",
+        "description": "What changed since a timestamp: new postings, refreshed ones, and verified closures (the posting left the employer's own page). The closure signal is the product.",
+        "operationId": "changes",
+        "parameters": [
+          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "example": "2026-10-01T00:00:00Z" }, "description": "ISO 8601 timestamp" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "cursor", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "A page of change events" },
+          "400": { "description": "Missing or malformed since" },
+          "401": { "description": "Missing or revoked API key" }
+        }
+      }
+    },
+    "/v1/coverage": {
+      "get": {
+        "summary": "Field fill-rates across the dataset",
+        "description": "How complete each field is today (description 95%, country 86%, salary observed vs estimated...). Declared, not hidden: a data buyer should never have to measure this alone.",
+        "operationId": "coverage",
+        "responses": {
+          "200": { "description": "Coverage percentages per field" }
+        }
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "summary": "Your credit balance",
+        "description": "Monthly allowance, used, remaining. Free tier: 1,000 calls/month, resets on the 1st.",
+        "operationId": "usage",
+        "responses": {
+          "200": { "description": "Credit usage for the current month" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "JobPage": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "type": "object" } },
+          "next_cursor": { "type": ["string", "null"] },
+          "count_page": { "type": "integer" }
+        }
+      },
+      "CompanyPage": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "type": "object" } },
+          "next_cursor": { "type": ["string", "null"] },
+          "count_page": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
