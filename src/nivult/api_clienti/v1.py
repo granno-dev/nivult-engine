@@ -181,6 +181,12 @@ def export_latest(_=Depends(_cliente)):
 @router.get("/exports/latest/{nome}")
 def export_file(nome: str, _=Depends(_cliente)):
     """Il file .jsonl.gz del giorno. Il nome e' chiuso: niente path dal client."""
+    if isinstance(_, dict) and _.get("via") == "rapidapi":
+        # 08/10/2026: sul canale RapidAPI il file intero non si vende a
+        # chiamata — un piano da $49 non puo' portarsi via l'export
+        # giornaliero completo, li' il prezzo e' un discorso a parte.
+        raise HTTPException(403, "the daily bulk export is not part of the "
+                                 "RapidAPI plans — write to hello@nivult.com")
     if nome not in NOMI_EXPORT:
         raise HTTPException(404, "export sconosciuto: valori ammessi "
                             + ", ".join(NOMI_EXPORT))
@@ -208,6 +214,11 @@ def usage(cliente=Depends(_cliente)):
 
     Questa chiamata stessa costa un credito, quindi `usati` la include.
     """
+    if cliente.get("via") == "rapidapi":
+        # la quota del canale RapidAPI la conta e la mostra RapidAPI: qui
+        # non c'e' un saldo crediti da leggere (08/10/2026)
+        return {"via": "rapidapi",
+                "nota": "usage quotas are managed by the RapidAPI plan"}
     mensili = cliente["crediti_mensili"]
     usati = cliente["usati_mese"]
     return {"crediti_mensili": mensili, "usati": usati,
