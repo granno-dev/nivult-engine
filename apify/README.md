@@ -87,10 +87,10 @@ Company mode returns one record per employer: name, domain, industry, size band,
 
 ## Explore the Nivult family
 
-- **[Job Postings Dataset — the full index](https://apify.com/nivult_developers/global-job-postings)** — every ATS, every filter, company mode
-- **[Workday Jobs Dataset](https://apify.com/nivult_developers/workday-jobs-dataset)** — every Workday career site, daily
-- **[Greenhouse Jobs Dataset](https://apify.com/nivult_developers/greenhouse-jobs-dataset)** — every Greenhouse board, daily
-- **[Jobs by Technology](https://apify.com/nivult_developers/jobs-by-technology)** — postings matched by the stack in the text
+- **[Job Postings Dataset — the full index](https://apify.com/nivult/global-job-postings)** — every ATS, every filter, company mode
+- **[Workday Jobs Dataset](https://apify.com/nivult/workday-jobs-dataset)** — every Workday career site, daily
+- **[Greenhouse Jobs Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)** — every Greenhouse board, daily
+- **[Jobs by Technology](https://apify.com/nivult/jobs-by-technology)** — postings matched by the stack in the text
 
 ## FAQ
 
