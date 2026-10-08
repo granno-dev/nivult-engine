@@ -140,7 +140,7 @@ def company(piattaforma: str, slug: str, _=Depends(_cliente)):
     """La singola azienda, technologies comprese."""
     azienda = dati.azienda(piattaforma, slug)
     if azienda is None:
-        raise HTTPException(404, "azienda non trovata")
+        raise HTTPException(404, "company not found")
     return azienda
 
 
@@ -155,8 +155,8 @@ def changes(since: str | None = None, cursor: str | None = None,
     """
     if not since or not since.strip():
         raise HTTPException(
-            400, "parametro 'since' obbligatorio: una data ISO 8601, "
-                 "es. 2026-09-01T00:00:00Z")
+            400, "the 'since' parameter is required: an ISO 8601 date, "
+                 "e.g. 2026-09-01T00:00:00Z")
     try:
         # fromisoformat non accetta la «Z» prima di Python 3.11: si traduce.
         datetime.fromisoformat(
@@ -164,7 +164,7 @@ def changes(since: str | None = None, cursor: str | None = None,
             else since.strip())
     except ValueError:
         raise HTTPException(
-            400, f"'since' non e' una data ISO 8601 valida: {since!r}")
+            400, f"'since' is not a valid ISO 8601 date: {since!r}")
     try:
         righe, prossimo = dati.cambiamenti(since.strip(), cursor, limit)
     except ValueError as e:
@@ -188,12 +188,12 @@ def export_file(nome: str, _=Depends(_cliente)):
         raise HTTPException(403, "the daily bulk export is not part of the "
                                  "RapidAPI plans — write to hello@nivult.com")
     if nome not in NOMI_EXPORT:
-        raise HTTPException(404, "export sconosciuto: valori ammessi "
+        raise HTTPException(404, "unknown export: allowed values are "
                             + ", ".join(NOMI_EXPORT))
     stato = dati.stato_export()
     percorso = (stato.get("file") or {}).get(nome)
     if not percorso or not os.path.isfile(percorso):
-        raise HTTPException(404, f"export '{nome}' non disponibile oggi")
+        raise HTTPException(404, f"export '{nome}' is not available today")
     return FileResponse(percorso, media_type="application/gzip",
                         filename=os.path.basename(percorso))
 
@@ -243,7 +243,7 @@ def _demo_gate(request: Request) -> None:
     ip = request.client.host if request.client else "?"
     finestra = [t for t in _demo_finestra.get(ip, []) if ora - t < 60]
     if len(finestra) >= 30:
-        raise HTTPException(429, "troppo veloce: riprova tra un minuto")
+        raise HTTPException(429, "too fast: try again in a minute")
     finestra.append(ora)
     _demo_finestra[ip] = finestra
     if len(_demo_finestra) > 5000:

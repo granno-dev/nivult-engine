@@ -130,9 +130,9 @@ def _leggi_cursore(cursore: str) -> list:
     try:
         chiave = json.loads(base64.urlsafe_b64decode(cursore.encode()))
     except (binascii.Error, ValueError) as e:
-        raise ValueError(f"cursore illeggibile: {cursore!r}") from e
+        raise ValueError(f"unreadable cursor: {cursore!r}") from e
     if not isinstance(chiave, list):
-        raise ValueError(f"cursore illeggibile: {cursore!r}")
+        raise ValueError(f"unreadable cursor: {cursore!r}")
     return chiave
 
 
