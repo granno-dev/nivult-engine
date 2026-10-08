@@ -9,13 +9,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nivult | Hiring and company data you can audit</title>
-<meta name="description" content="2.9M+ active job postings and 67K companies captured directly from employer ATS platforms, with per-field provenance.">
+<meta name="description" content="Millions of active job postings read directly from employer career systems, refreshed daily, every field with its source.">
 <meta property="og:title" content="Nivult | Hiring and company data you can audit">
-<meta property="og:description" content="2.9M+ active job postings and 67K companies read directly from employer career systems. Every field carries its source.">
+<meta property="og:description" content="Active job postings and the companies behind them, read directly from employer career systems. Every field carries its source.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Nivult | Hiring and company data you can audit">
-<meta name="twitter:description" content="2.9M+ active job postings, 67K companies, 58 ATS platforms. Every field carries its source.">
+<meta name="twitter:description" content="The hiring market measured at the source: active postings and companies, refreshed daily. Every field carries its source.">
 <script src="/vendor/tailwind.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1151,6 +1151,11 @@ new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&!covVista)anima
 fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000),cache:"no-store"})
  .then(r=>r.ok?r.json():Promise.reject())
  .then(s=>{
+   /* 08/10/2026: o tutto o niente — se manca anche UN solo contatore
+      (payload di ripiego, rete zoppa) restano i numeri embedded, che sono
+      un insieme coerente. Mai meta' pagina viva e meta' di ieri. */
+   const completi=s.offerte&&s.aziende&&s.paesi&&s.piattaforme&&s.nuove_24h&&s.cambiamenti_24h&&s.chiuse_storico;
+   if(completi){
    const mappa=[["offerte",s.offerte],["aziende",s.aziende],["paesi",s.paesi],["nuove",s.nuove_24h]];
    if(s.offerte){
      const h=document.getElementById("stat-hero");
@@ -1193,6 +1198,7 @@ fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000)
      cards[i].dataset.n=v;
      if(cards[i].dataset.done)cards[i].textContent=(+v).toLocaleString("en-US");
    });
+   }
    /* la copertura viva: il manifest del giorno, ordinato per valore */
    let toc=false;
    if(s.copertura&&typeof s.copertura==="object"){

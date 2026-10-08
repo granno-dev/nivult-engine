@@ -94,12 +94,46 @@ def _riga(**kv) -> str:
                       ensure_ascii=False, default=str) + "\n"
 
 
+def _vetrina_merge(campi: dict) -> None:
+    """Il blocco `vetrina` del manifest: i contatori del sito pubblico.
+
+    08/10/2026 — prima i numeri della landing nascevano da DUE fonti di
+    freschezza diversa (la cache del cruscotto, ogni 4 minuti, e l'export
+    del giorno): dentro la stessa pagina il titolo e le scatole potevano
+    raccontare indici diversi, e fra un'apertura e l'altra i numeri
+    ballavano. Ora ogni fase dell'export scrive qui i suoi conteggi, dal
+    suo stesso passaggio sul database: una fonte sola, tutta dello stesso
+    mattino, che si muove tutta insieme una volta al giorno. Il merge
+    per-giorno evita che un giro parziale (solo --aziende, per dire)
+    mescoli ieri e oggi."""
+    nome = f"{CARTELLA}/manifest-ultimo.json"
+    try:
+        with open(nome) as f:
+            manifest = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        manifest = {"date": dt.date.today().isoformat()}
+    vet = manifest.get("vetrina") or {}
+    if vet.get("date") != manifest.get("date"):
+        vet = {"date": manifest["date"]}
+    vet.update(campi)
+    manifest["vetrina"] = vet
+    with open(nome + ".tmp", "w") as f:
+        json.dump(manifest, f, indent=1)
+    os.replace(nome + ".tmp", nome)
+
+
 def attive(dsn: str, campione: int | None = None) -> int:
     # --campione N: le prime N righe in un file a parte (collaudo di una
     # modifica, o un assaggio da mandare a un compratore) senza toccare il
     # file del giorno ne' il manifest
     percorso, f = _apri("offerte-attive" + ("-campione" if campione else ""))
     n = 0
+    # i contatori della vetrina si accumulano nel passaggio che c'e' gia':
+    # paesi e piattaforme come insiemi, le nuove dal first_seen di riga
+    vet_paesi: set = set()
+    vet_piattaforme: set = set()
+    vet_nuove = 0
+    soglia_24h = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
                                 "country", "skills", "employment_type",
@@ -184,6 +218,19 @@ def attive(dsn: str, campione: int | None = None) -> int:
                         + (" LIMIT %s" if campione else ""),
                         (campione,) if campione else None)
             for r in cur:
+                if r[6]:
+                    vet_paesi.add(r[6])
+                if r[2]:
+                    vet_piattaforme.add(r[2])
+                fs = r[17]
+                if fs:
+                    if not isinstance(fs, dt.datetime):
+                        fs = dt.datetime.combine(fs, dt.time.min,
+                                                 tzinfo=dt.timezone.utc)
+                    elif fs.tzinfo is None:
+                        fs = fs.replace(tzinfo=dt.timezone.utc)
+                    if fs >= soglia_24h:
+                        vet_nuove += 1
                 stima = {}
                 if r[13] is None and r[6] and r[20]:
                     cella = bench.get((r[6], r[20], r[10] or ""))
@@ -279,6 +326,10 @@ def attive(dsn: str, campione: int | None = None) -> int:
     os.replace(f"{CARTELLA}/{nome_manifest}.json.tmp",
                f"{CARTELLA}/{nome_manifest}.json")
     log.info("manifest: %s", manifest["coverage"])
+    if not campione:
+        _vetrina_merge({"offerte": n, "paesi": len(vet_paesi),
+                        "piattaforme": len(vet_piattaforme),
+                        "nuove_24h": vet_nuove})
     return n
 
 
@@ -471,6 +522,7 @@ def aziende(dsn: str, campione: int | None = None) -> int:
             json.dump(manifest, mf, indent=1)
         os.replace(nome_manifest + ".tmp", nome_manifest)
         log.info("manifest aziende: %s", manifest["coverage_aziende"])
+        _vetrina_merge({"aziende": n})
     return n
 
 
@@ -479,6 +531,8 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
     filtro = ("AND expired_at > now() - make_interval(days => %s)"
               if giorni else "")
     n = 0
+    chiuse_24h = 0
+    soglia_24h = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
     with psycopg.connect(dsn) as conn:
         with conn.cursor(name="esp_scadute") as cur:
             cur.itersize = 2000
@@ -496,7 +550,11 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
                     seniority=r[8], posted_at=r[9], closed_at=r[10],
                     first_seen=r[11]))
                 n += 1
+                if r[10] and r[10] >= soglia_24h:
+                    chiuse_24h += 1
     _chiudi(percorso, f, n)
+    if not giorni:
+        _vetrina_merge({"chiuse_storico": n, "chiuse_24h": chiuse_24h})
     return n
 
 

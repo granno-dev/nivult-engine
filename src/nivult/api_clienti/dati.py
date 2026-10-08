@@ -664,12 +664,36 @@ def demo_tecnologie(q: str) -> dict:
 
 
 def demo_stats() -> dict:
-    """I quattro contatori della vetrina, freschi come il cruscotto.
+    """I contatori della vetrina, da UNA fonte sola: il manifest dell'export.
 
-    Endpoint pubblico senza parametri: niente input, niente superficie.
-    Prima la cache del cruscotto (ricalcolata ogni 4 minuti: gli stessi
-    numeri che vede Giuseppe), poi l'export del giorno come ripiego.
-    """
+    08/10/2026 — prima il payload mescolava la cache del cruscotto
+    (ogni 4 minuti: offerte, aziende, paesi) con l'export del giorno
+    (piattaforme, nuove, copertura), e i campi mancanti lasciavano in
+    pagina i numeri embedded: stesso sito, due indici. Ora tutti i
+    contatori vengono dal blocco `vetrina` del manifest, scritto dalle
+    fasi dell'export nello stesso mattino: la pagina racconta sempre
+    un solo indice, e si muove tutta insieme una volta al giorno.
+    Il vecchio giro (cruscotto, poi DuckDB) resta come ripiego."""
+    try:
+        import json as _json
+        with open("/opt/nivult/exports/manifest-ultimo.json") as f:
+            m = _json.load(f)
+        v = m.get("vetrina") or {}
+        if v.get("offerte") and v.get("aziende") and v.get("paesi"):
+            nuove = v.get("nuove_24h")
+            chiuse_oggi = v.get("chiuse_24h")
+            cambiamenti = (None if nuove is None or chiuse_oggi is None
+                           else nuove + chiuse_oggi)
+            return {"offerte": v["offerte"], "aziende": v["aziende"],
+                    "paesi": v["paesi"],
+                    "piattaforme": v.get("piattaforme"),
+                    "nuove_24h": nuove,
+                    "cambiamenti_24h": cambiamenti,
+                    "chiuse_storico": v.get("chiuse_storico"),
+                    "copertura": m.get("coverage") or {},
+                    "copertura_aziende": m.get("coverage_aziende") or {}}
+    except Exception:                                # noqa: BLE001
+        pass                                         # ripiego sotto
     try:
         import json as _json
         d = _json.load(open("/opt/nivult/cruscotto-cache.json"))
