@@ -120,19 +120,19 @@ stays correct while the index moves underneath you.
 
 One record per opening, up to 100 per call.
 
-| Parameter | Type | Notes |
-|---|---|---|
-| `q` | string | free text over title and description |
-| `country` | string | ISO 3166-1 alpha-2, e.g. `DE`, `US`, `IT` |
-| `technology` | string | technology mentioned in the text: `SAP`, `Snowflake`, `Kubernetes`… |
-| `category` | string | job family from our measured classifier |
-| `ats` | string | source platform: `workday`, `greenhouse`, `successfactors`… |
-| `seniority` | string | `intern`, `junior`, `mid`, `senior`, `lead`, `head` |
-| `remote` | string | `remote`, `hybrid`, `onsite` |
-| `language` | string | posting language, e.g. `en`, `de`, `fr` |
-| `dal` | string | posted on/after this date (YYYY-MM-DD) |
-| `limit` | int | page size, 1–100 (default 100) |
-| `cursor` | string | from the previous page's `next_cursor` |
+Parameters (all optional except where noted):
+
+- `q` (string) — free text over title and description
+- `country` (string) — ISO 3166-1 alpha-2, e.g. `DE`, `US`, `IT`
+- `technology` (string) — technology mentioned in the text: `SAP`, `Snowflake`, `Kubernetes`…
+- `category` (string) — job family from our measured classifier
+- `ats` (string) — source platform: `workday`, `greenhouse`, `successfactors`…
+- `seniority` (string) — `intern`, `junior`, `mid`, `senior`, `lead`, `head`
+- `remote` (string) — `remote`, `hybrid`, `onsite`
+- `language` (string) — posting language, e.g. `en`, `de`, `fr`
+- `dal` (string) — posted on/after this date (YYYY-MM-DD)
+- `limit` (int) — page size, 1–100 (default 100)
+- `cursor` (string) — from the previous page's `next_cursor`
 
 Every record includes, where present at the source: title, company,
 company_slug, ats, url, country, city, location, posted_at, seniority,
@@ -145,14 +145,14 @@ enriched fields.
 
 One record per employer. Join it to postings via `company_slug`.
 
-| Parameter | Type | Notes |
-|---|---|---|
-| `q` | string | company name search |
-| `country` | string | ISO code |
-| `industry` | string | e.g. `financial services` |
-| `technology` | string | stack currently used |
-| `employees_min` / `employees_max` | int | headcount band |
-| `limit`, `cursor` | — | as above |
+Parameters (all optional):
+
+- `q` (string) — company name search
+- `country` (string) — ISO code
+- `industry` (string) — e.g. `financial services`
+- `technology` (string) — stack currently used
+- `employees_min`, `employees_max` (int) — headcount band
+- `limit`, `cursor` — as above
 
 Records include: company, domain, country, industry (+ its registry
 source), size band, locations, technologies, top_skills, active_jobs
@@ -163,10 +163,10 @@ and jobs_posted_30d — the 30-day hiring pace.
 What changed since your last sync: events of type `new`, `updated`,
 `closed`.
 
-| Parameter | Type | Notes |
-|---|---|---|
-| `since` | string | **required** — ISO 8601, e.g. `2026-09-01T00:00:00Z` |
-| `limit`, `cursor` | — | as above |
+Parameters:
+
+- `since` (string, **required**) — ISO 8601, e.g. `2026-09-01T00:00:00Z`
+- `limit`, `cursor` — as above
 
 The standard pattern: store the timestamp of your last successful sync,
 call `/v1/changes?since=<timestamp>` once a day, apply the events to
@@ -180,13 +180,11 @@ fields your pipeline can rely on before you build on them.
 
 ## Errors
 
-| Code | Meaning |
-|---|---|
-| 400 | bad parameter (e.g. missing `since`, unreadable cursor) |
-| 401 | missing or invalid key |
-| 403 | resource not included in this channel (e.g. the daily bulk export) |
-| 404 | not found |
-| 429 | plan quota or rate limit reached |
+- **400** — bad parameter (e.g. missing `since`, unreadable cursor)
+- **401** — missing or invalid key
+- **403** — resource not included in this channel (e.g. the daily bulk export)
+- **404** — not found
+- **429** — plan quota or rate limit reached
 
 Error bodies are `{"detail": "..."}` in English.
 
