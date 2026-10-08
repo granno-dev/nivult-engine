@@ -45,7 +45,19 @@ def _cliente(request: Request) -> dict:
     La chiave viaggia SOLO in un header: mai in query string, perche' le
     URL finiscono nei log — la stessa regola dei token di sessione.
     Ogni chiamata che supera questo cancello costa un credito.
+
+    Il canale RapidAPI (08/10/2026): loro fanno da proxy e autenticano il
+    cliente per conto loro (piani e quote li applicano loro). A noi
+    arriva X-RapidAPI-Proxy-Secret, che solo RapidAPI conosce: se torna
+    col segreto in ambiente, la chiamata e' gia' autenticata e NON scala
+    crediti dal nostro contatore (il cliente paga RapidAPI, non noi due
+    volte). Il segreto sbagliato o assente cade nel percorso normale.
     """
+    segreto = os.environ.get("RAPIDAPI_PROXY_SECRET")
+    if segreto and request.headers.get("X-RapidAPI-Proxy-Secret") == segreto:
+        return {"id": "rapidapi", "user_id": None,
+                "via": "rapidapi",
+                "utente_rapidapi": request.headers.get("X-RapidAPI-User", "")}
     chiave = request.headers.get("X-Api-Key", "").strip()
     if not chiave:
         raise HTTPException(401, "missing API key: send the X-Api-Key header")

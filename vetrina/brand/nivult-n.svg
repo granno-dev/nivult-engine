@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 110 500 410">
+  <!-- Segno Nivult: solo la "n" e il punto, dagli stessi glifi del wordmark
+       (vetrina/brand/nivult.svg). Colore: slate-900 #0f172a. -->
+  <g transform="scale(0.512,-0.512) translate(0,-820)" fill="#0f172a"><path d="M72.5 0V547.5H199.5V312.5H190.5Q190.5 396.75 212.375 452.75Q234.25 508.75 277.875 536.875Q321.5 565 384.75 565H391.75Q487.5 565 538.25 502.375Q589 439.75 589 313.25V0H428.5V322Q428.5 366 402.875 393.75Q377.25 421.5 332.75 421.5Q287.75 421.5 260.375 393.375Q233 365.25 233 319V0Z"/></g>
+  <circle cx="400.6" cy="419" r="69" fill="#0f172a"/>
+</svg>
