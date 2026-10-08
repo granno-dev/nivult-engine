@@ -103,19 +103,22 @@ def jobs(country: str | None = None, category: str | None = None,
          ats: str | None = None, seniority: str | None = None,
          remote: str | None = None, language: str | None = None,
          q: str | None = None, technology: str | None = None,
-         dal: str | None = None,
+         posted_after: str | None = None, dal: str | None = None,
          limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
          cursor: str | None = None, _=Depends(_cliente)):
     """Le offerte, filtrate e paginate a cursore.
 
     Dal vivo (Postgres, ruolo di sola lettura): la stessa pagina che
     sul DuckDB del volume di rete costava 47,8 secondi (03/10/2026).
+    `posted_after` e' il nome pubblico (09/10/2026): `dal` resta accettato
+    in silenzio per chi ci chiamava gia' — ma in documentazione e sui
+    marketplace esiste solo l'inglese.
     """
     return _pagina(vivo.offerte,
                    _filtri(country=country, category=category, ats=ats,
                            seniority=seniority, remote=remote,
                            language=language, q=q, technology=technology,
-                           dal=dal),
+                           dal=posted_after or dal),
                    cursor, limit)
 
 

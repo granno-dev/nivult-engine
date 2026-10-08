@@ -130,7 +130,7 @@ Parameters (all optional except where noted):
 - `seniority` (string) — `intern`, `junior`, `mid`, `senior`, `lead`, `head`
 - `remote` (string) — `remote`, `hybrid`, `onsite`
 - `language` (string) — posting language, e.g. `en`, `de`, `fr`
-- `dal` (string) — posted on/after this date (YYYY-MM-DD)
+- `posted_after` (string) — posted on/after this date (YYYY-MM-DD)
 - `limit` (int) — page size, 1–100 (default 100)
 - `cursor` (string) — from the previous page's `next_cursor`
 
