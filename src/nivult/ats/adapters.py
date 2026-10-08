@@ -2337,22 +2337,21 @@ class JsonLd(BaseAdapter):
         # o la scadenza per presenza uccide offerte vive.
         if len(urls) > self.MASSIMO_PAGINE:
             self.lettura_parziale = True
-        fallite = 0
-        for u in urls[:self.MASSIMO_PAGINE]:
+
+        def _pagina(u: str) -> bool:
+            """Una pagina -> riga in `out`. False se il sito non risponde."""
             try:
                 p = self.client.get(u)
             except httpx.HTTPError:
-                fallite += 1
-                continue
+                return False
             if p.status_code != 200:
-                fallite += 1
-                continue
+                return False
             jp = _estrai_ld(p.text)
             if not jp:
-                continue
+                return True    # letta, solo senza annuncio dentro
             titolo = re.sub(r"\s+", " ", str(jp.get("title") or "")).strip()
             if not titolo:
-                continue
+                return True
             citta, paese = _luogo(jp)
             org = jp.get("hiringOrganization") or {}
             raw = dict(jp)
@@ -2368,9 +2367,20 @@ class JsonLd(BaseAdapter):
                 title=titolo[:300], url=str(p.url),
                 location=citta, city=citta, country=paese, posted_at=_data(jp),
                 raw=raw))
+            return True
+
+        fallite = [u for u in urls[:self.MASSIMO_PAGINE] if not _pagina(u)]
+        # 08/10/2026: un secondo giro sulle fallite prima di dichiarare la
+        # lettura parziale. Il cruscotto contava ~280 tenant jsonld «al
+        # tetto», ma il tetto lo toccano in pochissimi (misura del 05/10):
+        # il resto erano errori di rete a meta' giro — siti comunali lenti
+        # che al secondo tentativo rispondono. Il retry svuota il falso
+        # allarme E salva le offerte che il transitorio aveva perso.
+        if fallite:
+            fallite = [u for u in fallite if not _pagina(u)]
         # un sito che muore a meta' enumerazione non e' una bacheca letta:
         # oltre un decimo di pagine fallite la lettura si dichiara parziale
-        if fallite and fallite * 10 > min(len(urls), self.MASSIMO_PAGINE):
+        if fallite and len(fallite) * 10 > min(len(urls), self.MASSIMO_PAGINE):
             self.lettura_parziale = True
         return out
 
