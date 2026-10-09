@@ -126,8 +126,14 @@ def _crea_tabelle(con: duckdb.DuckDBPyConnection) -> None:
 # file, unite per numero di riga): la ri-serializzazione con
 # to_json(struct_pack) la gonfiava quasi doppia (\uXXXX per l'unicode)
 # e la cambiava di forma (23/09/2026).
+# 09/10/2026: un record-flusso con un testo gigante (33 MB: oltre il
+# tetto di default di read_json, 16 MB) ha ucciso la build a valle, dopo
+# offerte e aziende caricate. Il tetto si alza QUI, argomento della
+# funzione — non esiste come parametro di sessione (provato, Catalog
+# Error). E' un tetto di sicurezza, non un budget.
 _READ = ("SELECT row_number() OVER () AS rn, * "
-         "FROM read_json(?, format='newline_delimited', compression='gzip')")
+         "FROM read_json(?, format='newline_delimited', compression='gzip', "
+         "maximum_object_size=536870912)")
 # la riga com'e': read_csv con un delimitatore che il JSONL non puo'
 # contenere e quoting spento. Il gzip si legge solo in sequenza, quindi
 # l'ordine delle due passate e' identico e il join per rn e' esatto.
@@ -136,8 +142,10 @@ _READT = ("SELECT row_number() OVER () AS rn, linea FROM read_csv(?, "
           "quote='', escape='', "
           # il JSONL reale ha righe da 3 MB (immagini base64 dentro le
           # descrizioni): il tetto di linea di default (2 MB) tagliava
-          # il flusso a meta' (23/09/2026)
-          "max_line_size=20000000)")
+          # il flusso a meta' (23/09/2026). Alzato a 256 MB il 09/10/2026:
+          # e' arrivata una riga da 33 MB e il passaggio raw-verbatim
+          # e' morto subito dopo quello JSON.
+          "max_line_size=268435456)")
 
 # I timestamp dell'export (Postgres «2026-09-23 07:00:00+00:00» o ISO col
 # fuso): TIMESTAMPTZ converte davvero («+02:00» diventa l'istante UTC,
