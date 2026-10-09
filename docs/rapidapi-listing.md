@@ -200,3 +200,59 @@ Error bodies are `{"detail": "..."}` in English.
 - Terms of use: lawful business use, no resale of API access outside
   your organization, no profiling of individuals. Full text on the
   listing page.
+
+---
+
+## 4. TUTORIAL (Tutorials → Add Tutorials — Title + Content)
+
+**Title:** Your first sync in five minutes
+
+**Image URL:** https://nivult.com/spotlight/come-funziona.png
+
+**Content (markdown):**
+
+# Your first sync in five minutes
+
+This tutorial takes you from zero to a working daily mirror of the Nivult index using nothing but curl.
+
+**Step 1 — Make your first call.**
+
+    curl -H "X-RapidAPI-Key: $KEY" \
+         -H "X-RapidAPI-Host: nivult-job-postings-company-data.p.rapidapi.com" \
+         "https://nivult-job-postings-company-data.p.rapidapi.com/v1/jobs?technology=Snowflake&limit=100"
+
+The answer has three keys: `data` (up to 100 records), `next_cursor`, `count_page`.
+
+**Step 2 — Page until the cursor is null.**
+
+When `next_cursor` is not null, pass it back:
+
+    "https://nivult-job-postings-company-data.p.rapidapi.com/v1/jobs?technology=Snowflake&cursor=eyJvZmZzZXQiOi..."
+
+Repeat until `next_cursor` comes back null. That is a full slice: every live posting that mentions Snowflake today. Never invent offsets — the cursor is the only contract that stays correct while the index moves.
+
+**Step 3 — Enrich with companies.**
+
+Each posting carries `company_slug`. Pull the employer profile:
+
+    "https://nivult-job-postings-company-data.p.rapidapi.com/v1/companies?q=snowflake&limit=10"
+
+You get domain, industry with its registry source, size band, tech stack, locations and the 30-day hiring pace — one record per employer, joined on `company_slug`.
+
+**Step 4 — Go incremental.**
+
+Tomorrow, do not pull everything again. Store the timestamp of your last sync and ask only for what changed:
+
+    "https://nivult-job-postings-company-data.p.rapidapi.com/v1/changes?since=2026-10-09T06:00:00Z"
+
+Every event is `new`, `updated` or `closed`. Apply them to your copy and it never goes stale — this is exactly how our biggest mirrors stay alive for a fraction of the cost of full re-downloads.
+
+**Step 5 — Trust, but verify.**
+
+Before you build on a field, check its fill rate on the latest export:
+
+    "https://nivult-job-postings-company-data.p.rapidapi.com/v1/coverage"
+
+Every field, measured and published — the gaps included.
+
+That is it: one slice, one join, one daily delta. The full parameter reference lives in the Documentation section of this listing.
