@@ -123,9 +123,22 @@ def _vetrina_merge(campi: dict) -> None:
 
 
 def attive(dsn: str, campione: int | None = None) -> int:
-    # --campione N: le prime N righe in un file a parte (collaudo di una
-    # modifica, o un assaggio da mandare a un compratore) senza toccare il
-    # file del giorno ne' il manifest
+    # 09/10/2026: l'export e' morto a META' per DiskFull — la query
+    # principale riversa diversi GB di temporanei in pgdata (volume) e il
+    # file da ~6 GB finisce in exports (root). Il preflight misura i due
+    # dischi PRIMA: se non c'e' spazio si fallisce subito e in chiaro,
+    # non dopo due ore a meta' file. La sentinella allarma per l'export
+    # mancante: il messaggio nel log dice il perche'.
+    import shutil as _sh
+    if not campione:
+        vol = _sh.disk_usage("/mnt/HC_Volume_106941692").free / 2**30
+        rad = _sh.disk_usage("/").free / 2**30
+        if vol < 10 or rad < 9:
+            raise SystemExit(
+                f"esporta: spazio insufficiente — volume {vol:.0f} GB, "
+                f"root {rad:.0f} GB (servono ~10 GB di temporanei Postgres "
+                f"sul volume e ~9 GB di file su root). Liberare spazio e "
+                f"rilanciare: l'export NON parte a meta'.")
     percorso, f = _apri("offerte-attive" + ("-campione" if campione else ""))
     n = 0
     # i contatori della vetrina si accumulano nel passaggio che c'e' gia':

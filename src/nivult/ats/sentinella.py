@@ -497,9 +497,18 @@ def _controlli() -> list[Condizione]:
         pass
 
     # disco, memoria adesso, uccisioni recenti
-    d = shutil.disk_usage("/")
-    if d.free / d.total < 0.10:
-        c.append(Condizione("disco", "avviso", "disco quasi pieno", f"{d.free // 2**30} GB liberi"))
+    # 09/10/2026: il disastro dell'export e' nato sul VOLUME (99% pieno,
+    # pgdata + duckdb + backup), ma la guardia misurava solo "/" — l'allarme
+    # parlava del disco sbagliato. Ora li guarda tutti e due e dice quale.
+    for percorso, nome in (("/", "disco root"),
+                           ("/mnt/HC_Volume_106941692", "volume dati")):
+        try:
+            d = shutil.disk_usage(percorso)
+        except OSError:
+            continue
+        if d.free / d.total < 0.10:
+            c.append(Condizione("disco", "avviso", f"{nome} quasi pieno",
+                                f"{d.free // 2**30} GB liberi su {nome}"))
     try:
         m = {}
         for riga in open("/proc/meminfo"):

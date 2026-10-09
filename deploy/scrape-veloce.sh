@@ -13,8 +13,23 @@ PY="$BASE/.venv/bin/python"
 POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' /opt/nivult/.env | head -1 | cut -d= -f2-)
 export ATS_DATABASE_URL="postgresql://nivult:${POSTGRES_PASSWORD}@127.0.0.1:5432/nivult_ats"
 cd "$BASE"
+# 09/10/2026: stessa auto-guarigione dello scrape principale (motivo la'):
+# db che sparisce = runner appeso su connessioni morte mentre il servizio
+# sembra vivo. pg_isready tre volte -> esci e systemd riavvia; timeout sul
+# lotto -> nessun incaglio dura oltre 60 minuti.
+fallimenti_db=0
 while true; do
-  "$PY" -m nivult.ats.runner --solo-attivi --limite 2000 --thread 30 2>&1 \
-    | grep "scrape:" || true
+  if ! pg_isready -h 127.0.0.1 -U nivult -d nivult_ats -q; then
+    fallimenti_db=$((fallimenti_db + 1))
+    if [ "$fallimenti_db" -ge 3 ]; then
+      echo "scrape-veloce: db irraggiungibile per 3 giri, esco" >&2
+      exit 1
+    fi
+    sleep 30
+    continue
+  fi
+  fallimenti_db=0
+  timeout -k 30 60m "$PY" -m nivult.ats.runner --solo-attivi --limite 2000 --thread 30 2>&1 \
+    | grep -E "scrape:|Traceback|Error|error" || true
   sleep 5
 done
