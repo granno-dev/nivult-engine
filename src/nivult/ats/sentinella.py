@@ -293,12 +293,20 @@ def _controlli() -> list[Condizione]:
     try:
         from datetime import datetime as _dt
         oggi = _dt.now().strftime("%Y-%m-%d")
-        if _dt.now().hour >= 8 and not os.path.exists(
+        # 10/10/2026: l'export ormai dura ~4 ore (parte 05:45, finisce
+        # ~09:50) — l'allarme delle 08:00 suonava OGNI mattina su un giro
+        # sano. La domanda giusta non e' «e' tardi?» ma «e' morto?»:
+        # manca il file E nessun processo esporta sta lavorando.
+        esporta_vivo = bool(subprocess.run(
+            ["pgrep", "-f", "nivult.ats.esporta"], capture_output=True
+        ).stdout.strip())
+        if _dt.now().hour >= 8 and not esporta_vivo and not os.path.exists(
                 f"/opt/nivult/exports/offerte-attive-{oggi}.jsonl.gz"):
             c.append(Condizione(
                 "export mancante", "critica", "l'export del giorno non c'e'",
-                f"offerte-attive-{oggi}.jsonl.gz assente dopo le 08:00: "
-                "l'indice che vendiamo e' vecchio — guardare /var/log/nivult-esporta.log"))
+                f"offerte-attive-{oggi}.jsonl.gz assente dopo le 08:00 e "
+                "nessun processo esporta in corso: "
+                "guardare /var/log/nivult-esporta.log"))
     except OSError:
         pass
 
