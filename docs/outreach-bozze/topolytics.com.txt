@@ -4,7 +4,7 @@ Subject: your own hiring footprint, measured daily
 Hi Ben,
 
 We read topolytics.com every morning as part of the Nivult index — right now
-there are 1 open roles on your own career system.
+there are 1 open role on your own career system.
 
 I built Nivult because I kept needing this data myself: live job postings
 read directly from employer career systems (never job boards), enriched

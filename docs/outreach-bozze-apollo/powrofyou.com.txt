@@ -1,0 +1,20 @@
+To: shruti@powrofyou.com
+Subject: the hiring market, measured daily
+
+Hi Shruti,
+
+I built Nivult, a live index of the hiring market: more than 4 million
+active job postings read daily from 70,000+ employer career systems
+(never job boards), enriched with measured models, every field stamped
+with its source.
+
+Teams use it for competitive intel, sales signals, and market
+analytics — with a delta feed so your copy never goes stale.
+
+There's a free sample dataset on GitHub (no signup):
+github.com/Nivult/ats-job-data-sample
+
+If it's not for you, just reply "no thanks" and I won't write again.
+
+Giuseppe
+Nivult — nivult.com

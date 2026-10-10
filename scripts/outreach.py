@@ -32,12 +32,17 @@ LISTA = REPO / "docs" / "lead-personalizzati.csv"
 BOZZE = REPO / "docs" / "outreach-bozze"
 STATO = REPO / "docs" / "outreach-stato.json"
 
-OGGETTO = "your own hiring footprint, measured daily"
+# Corpi per segmento (colonna "segmento" del CSV; assente = A_nell_indice).
+# Le liste nuove da Apollo: docs/lead-apollo-2026-10-10.csv con
+#   --lista docs/lead-apollo-2026-10-10.csv --bozze-dir docs/outreach-bozze-apollo
+# Il segmento D_altro non riceve bozze: priorita' troppo bassa.
 
-CORPO = """Hi {nome},
+OGGETTO_A = "your own hiring footprint, measured daily"
+
+CORPO_A = """Hi {nome},
 
 We read {dominio} every morning as part of the Nivult index — right now
-there are {offerte} open roles on your own career system.
+there are {offerte} on your own career system.
 
 I built Nivult because I kept needing this data myself: live job postings
 read directly from employer career systems (never job boards), enriched
@@ -55,6 +60,55 @@ Giuseppe
 Nivult — nivult.com
 """
 
+OGGETTO_B = "who's hiring in your market, measured daily"
+
+CORPO_B = """Hi {nome},
+
+Quick question: when you advise clients on hiring, where do you get
+live market data?
+
+I built Nivult: we read job postings directly from employer career
+systems (never job boards) — more than 4 million active postings from
+70,000+ employers, refreshed daily, every field stamped with its
+source. Recruiters use it to see which companies are hiring, for which
+roles, and where — before it shows up on any job board.
+
+Happy to send a free sample cut on your market (no signup, no call
+needed): github.com/Nivult/ats-job-data-sample
+
+And if it's not for you, just reply "no thanks" and I won't write again.
+
+Giuseppe
+Nivult — nivult.com
+"""
+
+OGGETTO_C = "the hiring market, measured daily"
+
+CORPO_C = """Hi {nome},
+
+I built Nivult, a live index of the hiring market: more than 4 million
+active job postings read daily from 70,000+ employer career systems
+(never job boards), enriched with measured models, every field stamped
+with its source.
+
+Teams use it for competitive intel, sales signals, and market
+analytics — with a delta feed so your copy never goes stale.
+
+There's a free sample dataset on GitHub (no signup):
+github.com/Nivult/ats-job-data-sample
+
+If it's not for you, just reply "no thanks" and I won't write again.
+
+Giuseppe
+Nivult — nivult.com
+"""
+
+TEMPLATE = {
+    "A_nell_indice": (OGGETTO_A, CORPO_A),
+    "B_hr_staffing": (OGGETTO_B, CORPO_B),
+    "C_finanziati": (OGGETTO_C, CORPO_C),
+}
+
 
 def carica_stato() -> dict:
     if STATO.exists():
@@ -66,11 +120,16 @@ def salva_stato(s: dict) -> None:
     STATO.write_text(json.dumps(s, indent=1, ensure_ascii=False))
 
 
-def componi(riga: dict) -> tuple[str, str]:
+def componi(riga: dict) -> tuple[str, str] | None:
+    oggetto, corpo_t = TEMPLATE.get(riga.get("segmento") or "A_nell_indice",
+                                    (None, None))
+    if corpo_t is None:
+        return None
     nome = riga["nome"].split()[0]
-    corpo = CORPO.format(nome=nome, dominio=riga["dominio"],
-                         offerte=riga["offerte_attive_nell_indice"])
-    return OGGETTO, corpo
+    n = int(riga["offerte_attive_nell_indice"] or 0)
+    corpo = corpo_t.format(nome=nome, dominio=riga["dominio"],
+                           offerte=f"{n} open role" + ("s" if n != 1 else ""))
+    return oggetto, corpo
 
 
 def main() -> int:
@@ -78,20 +137,29 @@ def main() -> int:
     ap.add_argument("--invia", action="store_true",
                     help="manda davvero (default: solo bozze)")
     ap.add_argument("--al-giorno", type=int, default=10)
+    ap.add_argument("--lista", type=Path, default=LISTA,
+                    help="CSV dei lead (default: docs/lead-personalizzati.csv)")
+    ap.add_argument("--bozze-dir", type=Path, default=BOZZE,
+                    help="cartella delle bozze (default: docs/outreach-bozze)")
     args = ap.parse_args()
 
     stato = carica_stato()
-    lead = [r for r in csv.DictReader(open(LISTA))
-            if r["email"] and r["email"] not in stato["inviate"]]
+    lead = []
+    for r in csv.DictReader(open(args.lista)):
+        if not r["email"] or r["email"] in stato["inviate"]:
+            continue
+        if componi(r) is None:
+            continue                    # segmento senza template: saltato
+        lead.append(r)
     print(f"da contattare: {len(lead)}")
 
     if not args.invia:
-        BOZZE.mkdir(exist_ok=True)
+        args.bozze_dir.mkdir(exist_ok=True)
         for r in lead:
             oggetto, corpo = componi(r)
-            (BOZZE / f"{r['dominio']}.txt").write_text(
+            (args.bozze_dir / f"{r['dominio']}.txt").write_text(
                 f"To: {r['email']}\nSubject: {oggetto}\n\n{corpo}")
-        print(f"bozze scritte in {BOZZE} — rivedile, poi --invia")
+        print(f"bozze scritte in {args.bozze_dir} — rivedile, poi --invia")
         return 0
 
     host = os.environ.get("OUTREACH_SMTP_HOST", "")

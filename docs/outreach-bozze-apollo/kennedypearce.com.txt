@@ -1,0 +1,21 @@
+To: andrew@kennedypearce.com
+Subject: who's hiring in your market, measured daily
+
+Hi Andrew,
+
+Quick question: when you advise clients on hiring, where do you get
+live market data?
+
+I built Nivult: we read job postings directly from employer career
+systems (never job boards) — more than 4 million active postings from
+70,000+ employers, refreshed daily, every field stamped with its
+source. Recruiters use it to see which companies are hiring, for which
+roles, and where — before it shows up on any job board.
+
+Happy to send a free sample cut on your market (no signup, no call
+needed): github.com/Nivult/ats-job-data-sample
+
+And if it's not for you, just reply "no thanks" and I won't write again.
+
+Giuseppe
+Nivult — nivult.com
