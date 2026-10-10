@@ -133,6 +133,10 @@ RIGHE=$(cat <<'EOF'
 50 6 * * * find /opt/nivult/exports -type f -name "offerte-attive-*.jsonl.gz" -mtime +1 -delete
 5 6 * * * cd /opt/nivult/engine && LOTTO=2000 .venv/bin/python scripts/ripulisci_sintesi.py >> /opt/nivult/engine/logs/ripulisci-sintesi.log 2>&1
 50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
+# reminder delle call prenotate su nivult.com/booking (10/10/2026): ogni
+# 15 minuti, perche' il preavviso (24h e 1h prima) e' misurato dallo slot
+# del lead — un giro orario manderebbe il reminder da 1h in ritardo
+*/15 * * * * cd /opt/nivult/engine && .venv/bin/python scripts/booking_reminder.py >> /var/log/nivult-booking.log 2>&1
 EOF
 )
 

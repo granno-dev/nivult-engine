@@ -42,6 +42,7 @@ tailwind.config = { theme: { extend: {
           <li><b>Account</b>: your work email, and — if you sign in with Google, Microsoft or GitHub — the basic profile those providers hand us (name, email, avatar URL). No passwords: sign-in is by one-time link or OAuth.</li>
           <li><b>Usage</b>: API calls with your key (endpoint, time, credits consumed), portal actions (searches, reveals, exports), and the IP address for rate limiting and abuse prevention.</li>
           <li><b>Billing</b>: handled by our billing provider (Creem). We never see your card; we receive the payment status and the amount.</li>
+          <li><b>Call bookings</b>: if you book a call from the booking page, we store your name, work email, optional phone number (used only for the WhatsApp confirmation and reminders you asked for), company, and the time you picked. This exists to run the call and send reminders; cancelling the call deletes the calendar event and stops all messages.</li>
           <li><b>Cookies</b>: one session cookie for the portal. No tracking, no advertising cookies, no third-party analytics on this site.</li>
         </ul>
       </section>
