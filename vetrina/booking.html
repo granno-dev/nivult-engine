@@ -29,8 +29,13 @@ tailwind.config = { theme: { extend: {
 .live-dot { animation: pulse-dot 2.2s infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
+/* rete neurale dietro il contenuto, mai sopra il testo (come la home) */
+#neural { position: absolute; inset: 0; width: 100%; height: 100%; }
+@keyframes mesh { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,-30px) scale(1.15); } 66% { transform: translate(-40px,25px) scale(.95); } }
+.mesh-a { animation: mesh 18s ease-in-out infinite; }
+.mesh-b { animation: mesh 22s ease-in-out infinite reverse; }
 @media (prefers-reduced-motion: reduce) {
-  .live-dot, .spinner { animation: none !important; }
+  .live-dot, .spinner, .mesh-a, .mesh-b { animation: none !important; }
 }
 </style>
 </head>
@@ -44,8 +49,11 @@ tailwind.config = { theme: { extend: {
   </div>
 </nav>
 
-<main class="flex-1">
-  <div class="max-w-6xl mx-auto px-6 py-14 lg:py-20 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-start">
+<main class="flex-1 relative overflow-hidden">
+  <canvas id="neural" class="pointer-events-none"></canvas>
+  <div class="mesh-a pointer-events-none absolute -top-48 -left-48 h-[520px] w-[520px] rounded-full bg-gradient-to-br from-brand-400/20 to-violet-400/10 blur-[100px]"></div>
+  <div class="mesh-b pointer-events-none absolute top-1/3 right-[-140px] h-[480px] w-[480px] rounded-full bg-gradient-to-bl from-mint-400/20 to-amber-300/10 blur-[100px]"></div>
+  <div class="max-w-6xl mx-auto px-6 py-14 lg:py-20 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-start relative">
 
     <!-- copy a sinistra -->
     <div>
@@ -68,8 +76,8 @@ tailwind.config = { theme: { extend: {
           <span class="text-[13px] text-slate-500 leading-snug">Focused, no fluff. Your agenda leads.</span></span>
         </div>
         <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
-          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background:#5B5FC7">
-            <svg width="16" height="16" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-weight="800" font-size="14" fill="#ffffff">T</text></svg>
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center">
+            <img src="brand/teams.png" alt="Microsoft Teams" class="h-8 w-8">
           </span>
           <span><b class="block text-sm font-bold text-slate-900">Microsoft Teams</b>
           <span class="text-[13px] text-slate-500 leading-snug">The invite and join link arrive by email.</span></span>
@@ -123,51 +131,55 @@ tailwind.config = { theme: { extend: {
 
         <!-- stato: i tuoi dati -->
         <form id="stato-form" class="hidden" novalidate>
-          <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">Almost there</p>
+          <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">Your details</p>
           <div class="mt-3 flex items-center gap-3 rounded-xl bg-brand-50 border border-brand-100 px-4 py-3">
+            <svg class="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f5de0" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
             <div class="flex-1">
               <p class="text-sm font-bold text-slate-900" id="riepilogo"></p>
               <p class="text-[12px] text-slate-500" id="riepilogo-locale"></p>
             </div>
             <button type="button" id="cambia" class="text-[13px] font-semibold text-brand-600 hover:text-brand-700">Change</button>
           </div>
-          <div class="mt-5 space-y-4">
+          <div class="mt-5 grid sm:grid-cols-2 gap-4">
             <div>
-              <label class="text-[13px] font-semibold text-slate-700" for="f-nome">Your name</label>
+              <label class="text-[13px] font-semibold text-slate-700" for="f-nome">Full name</label>
               <input id="f-nome" required maxlength="120" autocomplete="name"
-                class="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
+                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
             </div>
             <div>
               <label class="text-[13px] font-semibold text-slate-700" for="f-email">Work email</label>
               <input id="f-email" type="email" required autocomplete="email"
-                class="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
-              <p class="mt-1.5 text-[12px] text-slate-400">The confirmation link lands here. Nothing is booked until you click it.</p>
+                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
+            </div>
+            <div class="sm:col-span-2 -mt-1">
+              <p class="text-[12px] text-slate-400">The confirmation link lands here. Nothing is booked until you click it.</p>
             </div>
             <div>
               <label class="text-[13px] font-semibold text-slate-700" for="f-tel">Phone <span class="font-normal text-slate-400">(optional)</span></label>
-              <input id="f-tel" type="tel" maxlength="24" autocomplete="tel" placeholder="+39 …"
-                class="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
-              <label class="mt-2 flex items-start gap-2.5 text-[13px] text-slate-500 cursor-pointer">
-                <input type="checkbox" id="f-wa" class="mt-0.5 accent-brand-600">
-                <span>Message me the confirmation and a reminder on WhatsApp</span>
-              </label>
+              <input id="f-tel" type="tel" maxlength="24" autocomplete="tel" placeholder="+44 …"
+                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
             </div>
             <div>
               <label class="text-[13px] font-semibold text-slate-700" for="f-az">Company <span class="font-normal text-slate-400">(optional)</span></label>
               <input id="f-az" maxlength="160" autocomplete="organization"
-                class="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
+                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
             </div>
-            <div>
-              <label class="text-[13px] font-semibold text-slate-700" for="f-note">What should we prepare for? <span class="font-normal text-slate-400">(optional)</span></label>
+            <label class="sm:col-span-2 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 cursor-pointer transition hover:border-brand-300">
+              <input type="checkbox" id="f-wa" class="mt-0.5 accent-brand-600">
+              <span class="text-[13px] text-slate-600">Also send the confirmation and the reminders on <b class="text-slate-800">WhatsApp</b> (needs your number above)</span>
+            </label>
+            <div class="sm:col-span-2">
+              <label class="text-[13px] font-semibold text-slate-700" for="f-note">Notes for the call <span class="font-normal text-slate-400">(optional)</span></label>
               <textarea id="f-note" rows="2" maxlength="2000"
-                class="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500"></textarea>
+                placeholder="Coverage in your markets, a competitor to look at, volumes and pricing…"
+                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 placeholder:text-slate-400"></textarea>
             </div>
             <!-- honeypot: invisibile agli umani, i bot lo riempiono -->
             <input type="text" id="f-sito" tabindex="-1" autocomplete="off"
               class="absolute opacity-0 pointer-events-none h-0 w-0" aria-hidden="true">
           </div>
-          <button id="invia" class="mt-6 w-full rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30 disabled:opacity-60">
-            Request the slot →
+          <button id="invia" class="group relative mt-6 w-full overflow-hidden rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-[length:180%_100%] bg-left hover:bg-right px-7 py-4 font-bold text-white shadow-xl shadow-brand-500/30 transition-all duration-500 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-brand-500/40 disabled:opacity-60 disabled:hover:translate-y-0">
+            Reserve this time <span class="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
           </button>
           <p id="errore-form" class="hidden mt-3 text-sm text-red-600 font-medium"></p>
         </form>
@@ -188,7 +200,7 @@ tailwind.config = { theme: { extend: {
           <div class="mx-auto h-14 w-14 rounded-2xl bg-mint-500/10 border border-mint-500/30 flex items-center justify-center text-2xl">✓</div>
           <h2 class="mt-4 text-2xl font-black tracking-tight">You are booked</h2>
           <p class="mt-3 text-[15px] text-slate-600 leading-relaxed max-w-sm mx-auto" id="conf-dettagli"></p>
-          <a id="conf-join" href="#" class="hidden mt-5 inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3 font-bold text-white shadow-xl shadow-brand-500/30">Join on Teams →</a>
+          <a id="conf-join" href="#" class="hidden mt-5 inline-flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-[length:180%_100%] bg-left hover:bg-right px-7 py-3 font-bold text-white shadow-xl shadow-brand-500/30 transition-all duration-500 hover:-translate-y-0.5"><img src="brand/teams.png" alt="" class="h-5 w-5">Join on Teams →</a>
           <p class="mt-4 text-[13px] text-slate-400">The calendar invite is on its way to your inbox. We send a reminder the day before and one hour before.</p>
         </div>
 
@@ -379,7 +391,7 @@ document.getElementById("stato-form").addEventListener("submit", async (ev) => {
     err.textContent = "Something went wrong on our side. Try again in a moment.";
     err.classList.remove("hidden");
   } finally {
-    btn.disabled = false; btn.textContent = "Request the slot →";
+    btn.disabled = false; btn.innerHTML = 'Reserve this time <span class="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>';
   }
 });
 
@@ -422,6 +434,41 @@ async function statoDaHash() {
 window.addEventListener("hashchange", async () => {
   if (!await statoDaHash()) ricomincia();
 });
+
+/* ══ rete neurale leggera dietro il contenuto (come la home) ══ */
+(() => {
+  const cv = document.getElementById("neural"), ctx = cv.getContext("2d");
+  let W, H, nodi = [];
+  function ridimensiona() {
+    const r = cv.parentElement.getBoundingClientRect();
+    W = cv.width = r.width; H = cv.height = r.height;
+    nodi = Array.from({ length: Math.min(60, Math.floor(W * H / 32000)) }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .3, vy: (Math.random() - .5) * .3 }));
+  }
+  ridimensiona(); addEventListener("resize", ridimensiona);
+  const ferma = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  (function frame() {
+    ctx.clearRect(0, 0, W, H);
+    for (const n of nodi) {
+      if (!ferma) { n.x += n.vx; n.y += n.vy; }
+      if (n.x < 0 || n.x > W) n.vx *= -1;
+      if (n.y < 0 || n.y > H) n.vy *= -1;
+    }
+    for (let i = 0; i < nodi.length; i++) for (let j = i + 1; j < nodi.length; j++) {
+      const a = nodi[i], b = nodi[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < 130) {
+        ctx.strokeStyle = `rgba(59,110,246,${(1 - d / 130) * .13})`;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    for (const n of nodi) {
+      ctx.fillStyle = "rgba(59,110,246,.28)";
+      ctx.beginPath(); ctx.arc(n.x, n.y, 1.6, 0, 7); ctx.fill();
+    }
+    if (!ferma) requestAnimationFrame(frame);
+  })();
+})();
 </script>
 </body>
 </html>
