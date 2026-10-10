@@ -1,0 +1,22 @@
+To: aircall@squirro.com
+Subject: your own hiring footprint, measured daily
+
+Hi Toni,
+
+We read squirro.com every morning as part of the Nivult index — right now
+there are 2 open roles on your own career system.
+
+I built Nivult because I kept needing this data myself: live job postings
+read directly from employer career systems (never job boards), enriched
+with measured models, every field stamped with its source. We track
+more than 4 million active postings from 70,000+ employers, refreshed
+daily, with a delta feed so your copy never goes stale.
+
+If hiring-market data touches anything you do — competitive intel,
+sales signals, analytics — I'd love your take. There's a free sample
+dataset on GitHub (no signup): github.com/Nivult/ats-job-data-sample
+
+And if it's not for you, just reply "no thanks" and I won't write again.
+
+Giuseppe
+Nivult — nivult.com

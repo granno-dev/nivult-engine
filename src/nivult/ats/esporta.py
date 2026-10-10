@@ -547,6 +547,17 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
     chiuse_24h = 0
     soglia_24h = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
     with psycopg.connect(dsn) as conn:
+        # 09/10/2026: i contatori della vetrina NON possono venire dal
+        # conteggio del file — il giro notturno scrive solo le chiuse
+        # degli ultimi 7 giorni (--giorni), e lo storico si misura sul
+        # database intero. Due conteggi SQL a parte: il file resta la
+        # settimana, il manifest dice il totale vero.
+        with conn.cursor() as cur:
+            cur.execute("""SELECT count(*),
+                                  count(*) FILTER (WHERE expired_at >=
+                                     now() - make_interval(days => 1))
+                             FROM ats_jobs WHERE expired_at IS NOT NULL""")
+            storico_tot, chiuse_oggi_db = cur.fetchone()
         with conn.cursor(name="esp_scadute") as cur:
             cur.itersize = 2000
             cur.execute(f"""
@@ -566,8 +577,8 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
                 if r[10] and r[10] >= soglia_24h:
                     chiuse_24h += 1
     _chiudi(percorso, f, n)
-    if not giorni:
-        _vetrina_merge({"chiuse_storico": n, "chiuse_24h": chiuse_24h})
+    _vetrina_merge({"chiuse_storico": storico_tot,
+                    "chiuse_24h": chiuse_oggi_db})
     return n
 
 

@@ -97,7 +97,16 @@ class ChatModel(HttpSource):
             "input": uso.get("prompt_tokens", 0),
             "cached": (uso.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
             "output": uso.get("completion_tokens", 0)}
-        return d["choices"][0]["message"]["content"]
+        msg = d["choices"][0]["message"]
+        contenuto = msg.get("content")
+        if contenuto is None:
+            # i modelli che ragionano a volte rispondono solo in
+            # reasoning_content: meglio quello che un crash (10/10/2026)
+            contenuto = msg.get("reasoning_content")
+        if contenuto is None:
+            raise RuntimeError(f"{self.model}: risposta senza content "
+                               f"(finish={d['choices'][0].get('finish_reason')})")
+        return contenuto
 
 
 class GLM(ChatModel):
@@ -152,6 +161,17 @@ class Nvidia(ChatModel):
     def base_url(self) -> str:
         return os.environ.get("NVIDIA_BASE_URL",
                               "https://integrate.api.nvidia.com/v1")
+
+    def chat(self, messages, *, temperature=0.0, max_tokens=4000,
+             extra=None):
+        # nemotron e' un modello che RAGIONA: col pensiero acceso il
+        # budget di token lo mangia il reasoning e content torna None
+        # (10/10/2026: digest morto su «'NoneType' has no strip»). Per
+        # l'estrazione JSON il pensiero non serve: si spegne.
+        payload_extra = dict(extra or {})
+        payload_extra["chat_template_kwargs"] = {"enable_thinking": False}
+        return super().chat(messages, temperature=temperature,
+                            max_tokens=max_tokens, extra=payload_extra)
 
 
 class PoolModello:

@@ -41,7 +41,8 @@ from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
-from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, motiva_e_analizza,
+from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, Groq, Nvidia,
+                                 motiva_e_analizza,
                                  profilo_come_testo, valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
@@ -93,23 +94,67 @@ class Utente:
 
 
 class ValutatoreGLM:
-    """Il valutatore vero: GLM una-offerta-per-chiamata, con i contatori."""
+    """Il valutatore vero: GLM una-offerta-per-chiamata, con i contatori.
+
+    10/10/2026 — il ripiego libero: se z.ai risponde 1113 («Insufficient
+    balance») il digest non deve morire in silenzio per settimane (i
+    digest di Giuseppe e di sua madre sono morti cosi' dal 05/10). Per
+    il resto del giro si passa a Groq, poi NVIDIA — gratis, puliti. La
+    qualita' resta quella del digest; Giuseppe ricarica z.ai quando
+    vuole e il giorno dopo torna GLM da solo (il ripiego non e'
+    appiccicoso: vive solo nel processo)."""
 
     def __init__(self):
         self.model = GLM(rate_per_second=4.0)
         self.totale = {"input": 0, "cached": 0, "output": 0, "chiamate": 0}
+        self._ripieghi: list = []
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.model.close()
+        for m in self._ripieghi:
+            m.close()
+
+    def _passa_al_ripiego(self, e: Exception) -> bool:
+        """1113 = credito GLM finito, 429 = free tier saturo, «tentativi
+        falliti» = il client ha gia' riprovato e il modello non va: in
+        tutti i casi si passa al prossimo e si torna True. Fuori catena,
+        l'errore si rilancia."""
+        testo = str(e)
+        if not any(s in testo for s in ("1113", "Insufficient balance",
+                                        "429", "Rate limit",
+                                        "tentativi falliti")):
+            return False
+        if not self._ripieghi:
+            from .llm import MistralSmall
+            for cls in (Groq, Nvidia, MistralSmall):
+                try:
+                    self._ripieghi.append(cls(rate_per_second=2.0))
+                except SystemExit:
+                    continue          # chiave assente: si salta
+        if not self._ripieghi:
+            return False
+        self.model.close()
+        self.model = self._ripieghi.pop(0)
+        log.warning("modello precedente inutilizzabile (%s): il giro "
+                    "prosegue su %s", testo[:90], self.model.model)
+        return True
 
     def valuta(self, profilo_testo: str, offerta: dict, lingua: str = "English"):
         # noqa: il desiderio sta dentro l'offerta, messo lì dal funnel.
         """-> (punteggio, micro-motivazione, uso token della chiamata)."""
-        score, reason, uso = valuta_offerta(self.model, profilo_testo, offerta,
-                                            offerta.get("_wants"), lingua)
+        try:
+            score, reason, uso = valuta_offerta(self.model, profilo_testo,
+                                                offerta, offerta.get("_wants"),
+                                                lingua)
+        except RuntimeError as e:
+            if not self._passa_al_ripiego(e):
+                raise
+            score, reason, uso = valuta_offerta(self.model, profilo_testo,
+                                                offerta, offerta.get("_wants"),
+                                                lingua)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
@@ -119,9 +164,18 @@ class ValutatoreGLM:
         # Motivazione E analisi insieme: la chiamata c'era comunque, e
         # l'analisi qui costa solo output — al clic sarebbe costata
         # l'intero prefisso a cache fredda.
-        reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
-                                                 offerta, offerta.get("_wants"),
-                                                 lingua)
+        try:
+            reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
+                                                     offerta,
+                                                     offerta.get("_wants"),
+                                                     lingua)
+        except RuntimeError as e:
+            if not self._passa_al_ripiego(e):
+                raise
+            reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
+                                                     offerta,
+                                                     offerta.get("_wants"),
+                                                     lingua)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
