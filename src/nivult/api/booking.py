@@ -145,10 +145,10 @@ def mail_reminder(nome: str, email: str, starts_at: datetime, join_url: str,
                        if join_url else
                        "The Teams link is in your calendar invite."))
     piede = (f"Can't make it? <a href=\"{cancel}\">Cancel the call</a>, or "
-             f"<a href=\"{SITO}/booking.html\">pick a new time</a>. "
+             f"<a href=\"{SITO}/booking\">pick a new time</a>. "
              "No hard feelings either way.")
     testo = (f"{oggetto}\nJoin: {join_url or '(see the calendar invite)'}\n"
-             f"Cancel: {cancel}\nNew time: {SITO}/booking.html")
+             f"Cancel: {cancel}\nNew time: {SITO}/booking")
     email_mod.invia_generica(email, oggetto, testo,
                              _email_html(apertura, None, piede))
 
@@ -283,10 +283,10 @@ def registra(app) -> None:
                 """select id, nome, email, azienda, note, starts_at, status
                    from booking_calls where token = %s""", (token,)).fetchone()
             if not riga:
-                return RedirectResponse(f"{SITO}/booking.html#errore")
+                return RedirectResponse(f"{SITO}/booking#errore")
             _id, nome, email, azienda, note, inizio, status = riga
             if status == "cancelled":
-                return RedirectResponse(f"{SITO}/booking.html#cancellata")
+                return RedirectResponse(f"{SITO}/booking#cancellata")
             if status == "pending":
                 # solo il primo click procede: gli altri trovano confirmed
                 ok = conn.execute(
@@ -301,7 +301,7 @@ def registra(app) -> None:
                         """update booking_calls set ms_event_id = %s, join_url = %s
                            where token = %s""", (ev, join, token))
                     conn.commit()
-        return RedirectResponse(f"{SITO}/booking.html#confermata/{token}")
+        return RedirectResponse(f"{SITO}/booking#confermata/{token}")
 
     @app.get("/booking/cancella/{token}")
     def booking_cancella(token: str):
@@ -316,7 +316,7 @@ def registra(app) -> None:
                     "update booking_calls set status = 'cancelled' where token = %s",
                     (token,))
                 conn.commit()
-        return RedirectResponse(f"{SITO}/booking.html#cancellata")
+        return RedirectResponse(f"{SITO}/booking#cancellata")
 
     @app.get("/booking/stato/{token}")
     def booking_stato(token: str):
