@@ -50,6 +50,11 @@ tailwind.config = {
 .codebox::-webkit-scrollbar-track { background: transparent; }
 .codebox::-webkit-scrollbar-thumb { background: #33415c; border-radius: 99px; }
 .codebox::-webkit-scrollbar-thumb:hover { background: #4a5b7a; }
+/* 10/10/2026: su mobile le due card JSON allargavano TUTTA la pagina
+   (scrollW 1692px su un telefono da 393): il pre e' figlio flex e di
+   default non si restringe sotto la larghezza del contenuto. min-w-0 lo
+   sblocca: il JSON scorre dentro la card, la pagina resta larga giusta. */
+.codebox { min-width: 0; }
 /* neural canvas sits behind the hero, never above the text */
 #neural { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* spinner for the demo */
@@ -154,13 +159,13 @@ tailwind.config = {
     <div>
       <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
         <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-        Live index: <b id="stat-hero" class="text-mint-600">2,910,245</b>&nbsp;active postings today
+        More than <b class="text-mint-600">4,000,000</b>&nbsp;active job postings
       </span>
       <h1 class="mt-7 text-5xl lg:text-[3.7rem] font-black leading-[1.03] tracking-tight">
         Know what every company is hiring for. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Prove it, field by field.</span>
       </h1>
       <p class="mt-6 text-lg text-slate-600 max-w-xl leading-relaxed">
-        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold"><span id="hero-az">67,358</span> employers — <span id="hero-ats">58</span> ATS platforms, <span id="hero-paesi">243</span> countries and territories</b>, enriches every record with our own measured models, and stamps each field with its source. Every figure on this page comes from the same index you would buy.
+        Nivult reads job postings directly from the career systems of <b class="text-slate-900 font-semibold">more than 70,000 employers — 65+ ATS platforms, 240+ countries and territories</b>, enriches every record with our own measured models, and stamps each field with its source. Every figure on this page comes from the same index you would buy.
       </p>
       <div class="mt-9 flex flex-wrap gap-4">
         <button onclick="apriModale()" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-7 py-3.5 font-bold text-white shadow-xl shadow-brand-500/30">Get a trial key →</button>
@@ -243,7 +248,7 @@ tailwind.config = {
 
 <!-- ══ ATS marquee: real local logos, slow ══ -->
 <section class="border-y border-slate-900/5 bg-white/60 py-9 overflow-hidden">
-  <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-7">Collected directly from <span id="marquee-ats">58</span> employer platforms, including</p>
+  <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-7">Collected directly from 65+ employer platforms, including</p>
   <div class="relative">
     <div class="pointer-events-none absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-paper to-transparent z-10"></div>
     <div class="pointer-events-none absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-paper to-transparent z-10"></div>
@@ -259,25 +264,25 @@ tailwind.config = {
       <div class="group lift relative overflow-hidden rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm transition hover:shadow-xl hover:shadow-brand-500/10">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         <div class="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 text-white text-lg shadow-lg shadow-brand-500/25">◈</div>
-        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="2910245">0</b>
+        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-violet-500 bg-clip-text text-transparent tabular-nums" data-n="4000000" data-suffix="+">0</b>
         <span class="mt-1.5 block text-sm text-slate-500">active job postings</span>
       </div>
       <div class="group lift relative overflow-hidden rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm transition hover:shadow-xl hover:shadow-mint-500/10">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
         <div class="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-mint-500 to-brand-500 text-white text-lg shadow-lg shadow-mint-500/25">⬢</div>
-        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-mint-600 to-brand-500 bg-clip-text text-transparent tabular-nums" data-n="67358">0</b>
+        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-mint-600 to-brand-500 bg-clip-text text-transparent tabular-nums" data-n="70000" data-suffix="+">0</b>
         <span class="mt-1.5 block text-sm text-slate-500">companies hiring now</span>
       </div>
       <div class="group lift relative overflow-hidden rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm transition hover:shadow-xl hover:shadow-violet-500/10">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 via-brand-500 to-mint-500"></div>
         <div class="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-brand-400 text-white text-lg shadow-lg shadow-violet-500/25">◎</div>
-        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-violet-500 to-brand-500 bg-clip-text text-transparent tabular-nums" data-n="243">0</b>
+        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-violet-500 to-brand-500 bg-clip-text text-transparent tabular-nums" data-n="240" data-suffix="+">0</b>
         <span class="mt-1.5 block text-sm text-slate-500">countries covered</span>
       </div>
       <div class="group lift relative overflow-hidden rounded-2xl border border-slate-900/5 bg-white p-7 shadow-sm transition hover:shadow-xl hover:shadow-brand-500/10">
         <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-400 via-mint-500 to-violet-500"></div>
         <div class="mb-4 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-400 to-mint-500 text-white text-lg shadow-lg shadow-brand-400/25">↗</div>
-        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-mint-600 bg-clip-text text-transparent tabular-nums" data-n="145000">0</b>
+        <b class="stat-num block text-4xl font-black tracking-tight bg-gradient-to-r from-brand-500 to-mint-600 bg-clip-text text-transparent tabular-nums" data-n="50000" data-suffix="+">0</b>
         <span class="mt-1.5 block text-sm text-slate-500">new postings / day</span>
       </div>
     </div>
@@ -301,7 +306,7 @@ tailwind.config = {
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-mint-500/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-mint-500 to-mint-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-mint-500/25">◎</div>
         <h3 class="mt-5 text-lg font-bold">Direct from employers</h3>
-        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page — never because it grew old. <b id="chiuse-storico-2">654,113</b> verified closures are preserved in history.</p>
+        <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">No aggregators, no social scraping. A posting is marked closed only when it disappears from the employer's own page — never because it grew old. <b>more than 1.4 million</b> verified closures are preserved in history.</p>
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-violet-400/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-violet-500/25">◈</div>
@@ -340,9 +345,9 @@ tailwind.config = {
       <h2 class="text-4xl font-black tracking-tight">Snapshots are free. <span class="bg-gradient-to-r from-mint-400 to-brand-400 bg-clip-text text-transparent">The film is the product.</span></h2>
       <p class="mt-5 text-lg text-slate-400 leading-relaxed">Anyone can sell you a list of postings. The value is in what changed: which company just opened a new market, which role closed in nine days, which technology appeared for the first time. <code class="text-mint-400 font-semibold">GET /v1/changes?since=</code> delivers new, updated and closed postings from your last sync, every day.</p>
       <div class="mt-8 grid grid-cols-3 gap-4">
-        <div><b id="delta-nuove" class="block text-2xl font-black text-mint-400 tabular-nums">145,000</b><span class="text-[12.5px] text-slate-500">new postings daily</span></div>
-        <div><b id="delta-cambiamenti" class="block text-2xl font-black text-brand-400 tabular-nums">86,000</b><span class="text-[12.5px] text-slate-500">change events daily</span></div>
-        <div><b id="delta-chiuse" class="block text-2xl font-black text-slate-300 tabular-nums">654,113</b><span class="text-[12.5px] text-slate-500">closures in history</span></div>
+        <div><b class="block text-2xl font-black text-mint-400 tabular-nums">50,000+</b><span class="text-[12.5px] text-slate-500">new postings daily</span></div>
+        <div><b class="block text-2xl font-black text-brand-400 tabular-nums">150,000+</b><span class="text-[12.5px] text-slate-500">change events daily</span></div>
+        <div><b class="block text-2xl font-black text-slate-300 tabular-nums">1,400,000+</b><span class="text-[12.5px] text-slate-500">closures in history</span></div>
       </div>
     </div>
     <div class="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 shadow-2xl">
@@ -366,7 +371,7 @@ tailwind.config = {
     <p class="mt-4 text-lg text-slate-600">A job posting tells you the role. Its employer key tells you the company. Both records ship with the evidence trail attached. These are real record shapes from today's export.</p>
     </div>
     <div class="mt-12 grid md:grid-cols-2 gap-5 items-stretch">
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col">
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col min-w-0">
         <div class="flex items-center gap-4">
           <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-lg shadow-brand-500/25">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 9h.01M9 13h.01M15 9h.01M15 13h.01"/></svg>
@@ -377,7 +382,7 @@ tailwind.config = {
           </div>
         </div>
         <p class="mt-3 text-[15px] text-slate-600 leading-relaxed">Industry with its registry source, size band, headquarters, legal identity, and the technology stack as it evolves month over month.</p>
-        <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10">
+        <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
             <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
             <span class="ml-2 font-mono text-[11.5px] text-slate-500">companies.jsonl · daily</span>
@@ -397,7 +402,7 @@ tailwind.config = {
         </a>
         </div>
       </div>
-      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col">
+      <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-7 flex flex-col min-w-0">
         <div class="flex items-center gap-4">
           <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-lg shadow-mint-500/25">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -408,7 +413,7 @@ tailwind.config = {
           </div>
         </div>
         <p class="mt-3 text-[15px] text-slate-600 leading-relaxed">Role, location, seniority, remote policy, technologies and the full text. Salary stays honest: observed and estimated never mix.</p>
-        <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10">
+        <div class="relative mt-5 flex-1 flex flex-col rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
           <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
             <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
             <span class="ml-2 font-mono text-[11.5px] text-slate-500">jobs.jsonl · daily</span>
@@ -672,7 +677,7 @@ tailwind.config = {
           <span class="rounded-lg bg-violet-500/10 text-violet-600 px-2 py-1 text-[10.5px] font-black">FROM 1M CREDITS</span>
         </div>
         <b class="mt-4 block text-[15px] font-bold tracking-tight">Historical backfill</b>
-        <p class="mt-1.5 text-[13px] text-slate-500 leading-relaxed">The full archive on delivery, including 654K+ verified closures for trend analysis.</p>
+        <p class="mt-1.5 text-[13px] text-slate-500 leading-relaxed">The full archive on delivery, including 1.4M+ verified closures for trend analysis.</p>
       </div>
     </div>
     <p class="reveal mt-8 text-center text-[13px] text-slate-400 max-w-xl mx-auto">Fields are added over time and never renamed. Your integration never breaks because we shipped an improvement.</p>
@@ -777,7 +782,7 @@ tailwind.config = {
       <div class="relative">
         <span class="inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-300">
           <span class="live-dot h-2 w-2 rounded-full bg-mint-400"></span>
-          Right now: <b id="cta-live" class="text-mint-400 tabular-nums">46,363</b>&nbsp;new postings in the last 24 hours
+          More than <b class="text-mint-400 tabular-nums">50,000</b>&nbsp;new postings in the last 24 hours
         </span>
         <h2 class="mt-6 text-4xl sm:text-5xl font-black tracking-tight text-white">See your market <span class="bg-gradient-to-r from-brand-400 via-violet-400 to-mint-400 bg-clip-text text-transparent">before it moves.</span></h2>
         <p class="mt-5 text-lg text-slate-400 max-w-xl mx-auto leading-relaxed">Trial key with real credits, a sample export to inspect, and a human who answers. If the data doesn't survive your audit, you walk away.</p>
@@ -850,9 +855,9 @@ const io=new IntersectionObserver(es=>es.forEach(e=>{
   e.target.classList.add('in');
   if(e.target.classList.contains('stat-num')&&!e.target.dataset.done){
     e.target.dataset.done=1;
-    const target=+e.target.dataset.n,t0=performance.now(),dur=1700;
+    const target=+e.target.dataset.n,suffix=e.target.dataset.suffix||"",t0=performance.now(),dur=1700;
     (function tick(t){const p=Math.min(1,(t-t0)/dur);
-      e.target.textContent=Math.round(target*ease(p)).toLocaleString('en-US');
+      e.target.textContent=Math.round(target*ease(p)).toLocaleString('en-US')+(p===1?suffix:"");
       if(p<1)requestAnimationFrame(tick);})(t0);
   }
 }),{threshold:.15});
@@ -1129,10 +1134,10 @@ function disegnaCopertura(righe, tbody, nomi){
     }
     const tr=document.createElement('tr');
     tr.className="hover:bg-slate-50/70 transition";
-    tr.innerHTML=`<td class="px-6 py-3">
-        <div class="font-semibold text-slate-800 text-[14.5px]">${umano}</div>
-        <div class="font-mono text-[11px] text-slate-400 mt-0.5">${tecnico}</div></td>
-      <td class="px-6 py-3 w-[42%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
+    tr.innerHTML=`<td class="px-3 sm:px-6 py-3 w-[38%]">
+        <div class="font-semibold text-slate-800 text-[12.5px] sm:text-[14.5px] leading-tight">${umano}</div>
+        <div class="font-mono text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">${tecnico}</div></td>
+      <td class="px-2 sm:px-6 py-3 w-[42%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
       <td class="px-6 py-3 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${v}%</span></td>`;
     tbody.appendChild(tr);});
 }
@@ -1144,61 +1149,15 @@ function animaCopertura(){covVista=true;
 new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&!covVista)animaCopertura();}),{threshold:.1})
   .observe(document.querySelector('#coverage'));
 
-/* ══ numeri vivi: l'endpoint pubblico /v1/demo/stats (niente parametri,
-      quattro conteggi dall'export del giorno). Se non risponde restano i
-      numeri embedded, gia' veri. no-store: mai la cache del browser o del
-      proxy — «numeri vecchi all'apertura» veniva da li' (04/10/2026). ══ */
+/* ══ copertura viva, contatori FISSI (10/10/2026) ══
+   Giuseppe: «niente numeri reali con index giornaliero, mettiamo numeri
+   statici tondi con more than». I contatori sono embedded e non si muovono
+   piu'; dall'endpoint pubblico arriva solo la COPERTURA per campo, che
+   non e' un numero da marketing ma la mappa dei fill-rate — quella resta
+   viva perche' i compratori seri la controllano. */
 fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000),cache:"no-store"})
  .then(r=>r.ok?r.json():Promise.reject())
  .then(s=>{
-   /* 08/10/2026: o tutto o niente — se manca anche UN solo contatore
-      (payload di ripiego, rete zoppa) restano i numeri embedded, che sono
-      un insieme coerente. Mai meta' pagina viva e meta' di ieri. */
-   const completi=s.offerte&&s.aziende&&s.paesi&&s.piattaforme&&s.nuove_24h&&s.cambiamenti_24h&&s.chiuse_storico;
-   if(completi){
-   const mappa=[["offerte",s.offerte],["aziende",s.aziende],["paesi",s.paesi],["nuove",s.nuove_24h]];
-   if(s.offerte){
-     const h=document.getElementById("stat-hero");
-     if(h)h.textContent=s.offerte.toLocaleString("en-US");
-   }
-   if(s.aziende){
-     const ha=document.getElementById("hero-az");
-     if(ha)ha.textContent=s.aziende.toLocaleString("en-US");
-   }
-   if(s.piattaforme){
-     for(const id of ["hero-ats","marquee-ats"]){
-       const el=document.getElementById(id);
-       if(el)el.textContent=s.piattaforme.toLocaleString("en-US");
-     }
-   }
-   if(s.paesi){
-     const hp=document.getElementById("hero-paesi");
-     if(hp)hp.textContent=s.paesi.toLocaleString("en-US");
-   }
-   if(s.nuove_24h){
-     const c=document.getElementById("cta-live");
-     if(c)c.textContent=s.nuove_24h.toLocaleString("en-US");
-     const dn=document.getElementById("delta-nuove");
-     if(dn)dn.textContent=s.nuove_24h.toLocaleString("en-US");
-   }
-   if(s.cambiamenti_24h){
-     const dc=document.getElementById("delta-cambiamenti");
-     if(dc)dc.textContent=s.cambiamenti_24h.toLocaleString("en-US");
-   }
-   if(s.chiuse_storico){
-     /* le chiusure verificate in storico: stesso numero ovunque */
-     for(const id of ["delta-chiuse","chiuse-storico-2"]){
-       const el=document.getElementById(id);
-       if(el)el.textContent=s.chiuse_storico.toLocaleString("en-US");
-     }
-   }
-   const cards=document.querySelectorAll(".stat-num");
-   mappa.forEach(([_,v],i)=>{
-     if(!v||!cards[i])return;
-     cards[i].dataset.n=v;
-     if(cards[i].dataset.done)cards[i].textContent=(+v).toLocaleString("en-US");
-   });
-   }
    /* la copertura viva: il manifest del giorno, ordinato per valore */
    let toc=false;
    if(s.copertura&&typeof s.copertura==="object"){
