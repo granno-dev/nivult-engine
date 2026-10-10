@@ -54,16 +54,48 @@ tailwind.config = { theme: { extend: {
         Usually answered within one business day
       </span>
       <h1 class="mt-6 text-4xl lg:text-5xl font-black tracking-tight leading-[1.05]">
-        Talk to a human. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">The one who builds the index.</span>
+        Talk to sales. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Leave with numbers.</span>
       </h1>
       <p class="mt-5 text-lg text-slate-600 leading-relaxed">
-        Thirty minutes with Giuseppe, founder of Nivult. Coverage for your markets, field-level provenance, pricing that fits your volume, or a sample export cut on your competitors. Bring questions, leave with numbers.
+        Thirty minutes with the Nivult team: coverage for your markets, field-level provenance, pricing that fits your volume, or a sample export cut on your competitors. Bring questions, leave with answers.
       </p>
-      <ul class="mt-7 space-y-3 text-[15px] text-slate-600">
-        <li><span class="text-mint-600 font-bold mr-2">✓</span>30 minutes, Microsoft Teams, camera optional</li>
-        <li><span class="text-mint-600 font-bold mr-2">✓</span>You confirm by email first: your calendar stays clean, and so does ours</li>
-        <li><span class="text-mint-600 font-bold mr-2">✓</span>Cancel or move the call anytime, one click, no questions</li>
-      </ul>
+      <div class="mt-8 grid sm:grid-cols-2 gap-3">
+        <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 border border-brand-100">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f5de0" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+          </span>
+          <span><b class="block text-sm font-bold text-slate-900">30 minutes</b>
+          <span class="text-[13px] text-slate-500 leading-snug">Focused, no fluff. Your agenda leads.</span></span>
+        </div>
+        <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style="background:#5B5FC7">
+            <svg width="16" height="16" viewBox="0 0 24 24"><text x="12" y="17.5" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-weight="800" font-size="14" fill="#ffffff">T</text></svg>
+          </span>
+          <span><b class="block text-sm font-bold text-slate-900">Microsoft Teams</b>
+          <span class="text-[13px] text-slate-500 leading-snug">The invite and join link arrive by email.</span></span>
+        </div>
+        <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 border border-brand-100">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f5de0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          </span>
+          <span><b class="block text-sm font-bold text-slate-900">Confirm by email</b>
+          <span class="text-[13px] text-slate-500 leading-snug">Nothing lands on your calendar until you click.</span></span>
+        </div>
+        <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 border border-brand-100">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f5de0" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.7 2.6 4 5.6 4 9s-1.3 6.4-4 9c-2.7-2.6-4-5.6-4-9s1.3-6.4 4-9z"/></svg>
+          </span>
+          <span><b class="block text-sm font-bold text-slate-900">Your time zone</b>
+          <span class="text-[13px] text-slate-500 leading-snug">Slots show in your local time. No math needed.</span></span>
+        </div>
+        <div class="sm:col-span-2 rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
+          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-mint-500/10 border border-mint-500/30">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0aa588" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          </span>
+          <span><b class="block text-sm font-bold text-slate-900">Cancel or move anytime</b>
+          <span class="text-[13px] text-slate-500 leading-snug">One click from any reminder, no questions asked.</span></span>
+        </div>
+      </div>
     </div>
 
     <!-- la scheda di prenotazione -->
@@ -78,7 +110,7 @@ tailwind.config = { theme: { extend: {
           <div id="slot-wrap" class="mt-5 hidden">
             <div class="flex items-baseline justify-between">
               <p class="text-sm font-bold text-slate-900" id="giorno-scelto"></p>
-              <p class="text-[12px] text-slate-400 font-medium">Rome time</p>
+              <p class="text-[12px] text-slate-400 font-medium" id="fuso-label"></p>
             </div>
             <div id="slot" class="mt-3 grid grid-cols-4 sm:grid-cols-6 gap-2"></div>
             <p id="slot-vuoto" class="hidden mt-3 text-sm text-slate-500">No free slots left on this day. Try the next one.</p>
@@ -211,7 +243,13 @@ const fmtGiorno = new Intl.DateTimeFormat("en-GB", { weekday:"short", timeZone:"
 const fmtGiornoMese = new Intl.DateTimeFormat("en-GB", { day:"numeric", month:"short", timeZone:"Europe/Rome" });
 const fmtLungo = new Intl.DateTimeFormat("en-GB", { weekday:"long", day:"numeric", month:"long", timeZone:"Europe/Rome" });
 const fmtOraRoma = new Intl.DateTimeFormat("en-GB", { hour:"2-digit", minute:"2-digit", timeZone:"Europe/Rome" });
+// il fuso del visitatore: gli slot si mostrano nella SUA ora, niente calcoli
+const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const NOME_FUSO = (new Intl.DateTimeFormat("en-GB", { timeZoneName:"long" })
+                   .formatToParts().find(p => p.type === "timeZoneName") || {}).value || FUSO;
 const fmtOraLocale = new Intl.DateTimeFormat("en-GB", { hour:"2-digit", minute:"2-digit" });
+const fmtGiornoMeseLocale = new Intl.DateTimeFormat("en-GB", { day:"numeric", month:"short" });
+const fmtLungoLocale = new Intl.DateTimeFormat("en-GB", { weekday:"long", day:"numeric", month:"long" });
 
 function giorniDisponibili() {
   // i prossimi 30 giorni di calendario, solo lun-ven, visti da Roma
@@ -266,8 +304,15 @@ async function caricaSlot(d) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] font-semibold text-slate-700 transition hover:border-brand-400 hover:bg-brand-50";
-      b.textContent = fmtOraRoma.format(s);
-      b.title = fmtOraLocale.format(s) + " on your device";
+      // ora del visitatore in grande; se il suo fuso sposta il giorno,
+      // il bottone lo dice sotto, e Roma resta nel tooltip
+      const giornoLocale = fmtGiornoMeseLocale.format(s);
+      if (giornoLocale !== fmtGiornoMese.format(s))
+        b.innerHTML = fmtOraLocale.format(s) +
+          '<span class="block text-[9px] font-bold text-slate-400">' + giornoLocale + "</span>";
+      else
+        b.textContent = fmtOraLocale.format(s);
+      b.title = "Rome time: " + fmtOraRoma.format(s);
       b.onclick = () => scegliSlot(s);
       grid.appendChild(b);
     }
@@ -283,9 +328,9 @@ async function caricaSlot(d) {
 function scegliSlot(s) {
   slotSel = s;
   document.getElementById("riepilogo").textContent =
-    fmtLungo.format(s) + ", " + fmtOraRoma.format(s) + " (Rome)";
+    fmtLungoLocale.format(s) + ", " + fmtOraLocale.format(s);
   document.getElementById("riepilogo-locale").textContent =
-    "For you: " + fmtOraLocale.format(s) + " on your device";
+    "Rome time: " + fmtOraRoma.format(s) + " · we host from Italy";
   mostra("form");
 }
 
@@ -327,7 +372,8 @@ document.getElementById("stato-form").addEventListener("submit", async (ev) => {
     }
     if (!r.ok) throw new Error("HTTP " + r.status);
     document.getElementById("inbox-quando").textContent =
-      fmtLungo.format(slotSel) + ", " + fmtOraRoma.format(slotSel) + " Rome time";
+      fmtLungoLocale.format(slotSel) + ", " + fmtOraLocale.format(slotSel) +
+      " (" + NOME_FUSO + ")";
     mostra("inbox");
   } catch (e) {
     err.textContent = "Something went wrong on our side. Try again in a moment.";
@@ -347,9 +393,9 @@ async function statoDaHash() {
       const d = await r.json();
       const quando = new Date(d.starts_at);
       document.getElementById("conf-dettagli").innerHTML =
-        "<b class='text-slate-900'>" + fmtLungo.format(quando) + ", " +
-        fmtOraRoma.format(quando) + " Rome time</b> (" + fmtOraLocale.format(quando) +
-        " for you). ";
+        "<b class='text-slate-900'>" + fmtLungoLocale.format(quando) + ", " +
+        fmtOraLocale.format(quando) + "</b> (" + NOME_FUSO + "). Rome time: " +
+        fmtOraRoma.format(quando) + ". ";
       if (d.join_url) {
         const a = document.getElementById("conf-join");
         a.href = d.join_url;
@@ -365,6 +411,7 @@ async function statoDaHash() {
 }
 
 (async function init() {
+  document.getElementById("fuso-label").textContent = "Your time · " + NOME_FUSO;
   if (await statoDaHash()) return;
   mostra("scelta");
   disegnaGiorni();
