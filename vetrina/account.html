@@ -338,7 +338,7 @@ tailwind.config = {
     <!-- ══ il registro dei consumi: modale larga, sfondo velato ══ -->
     <div id="uso" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiUso()"></div>
-      <div class="relative w-full max-w-3xl max-h-[88vh] overflow-auto rounded-2xl bg-white shadow-2xl" id="uso-box"></div>
+      <div class="relative w-full max-w-5xl max-h-[88vh] overflow-auto rounded-2xl bg-white shadow-2xl" id="uso-box"></div>
     </div>
 
     <!-- ══ la guida per chi integra ══ -->
@@ -434,7 +434,7 @@ tailwind.config = {
           </div>
           <div>
             <h3 class="text-xl font-black tracking-tight">Build a download</h3>
-            <p class="text-[13px] text-slate-500">A filtered slice of today's index, as JSONL — every row is the full record.</p>
+            <p class="text-[13px] text-slate-500">A filtered slice of the full archive, as JSONL: every row is the complete record.</p>
           </div>
         </div>
         <div class="mt-6 grid gap-4">
@@ -1317,22 +1317,25 @@ async function apriUso() {
       <span class="font-semibold truncate">${esc(r.nome || "")}</span>
       <span class="ml-auto text-slate-400 text-[11.5px] shrink-0 tabular-nums">${_quando(r.at)}</span>
     </div>`).join("");
-  const SEZ = "mt-7 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400";
-  box.innerHTML = `<div class="h-1.5 bg-gradient-to-r from-violet-500 via-brand-500 to-mint-500"></div><div class="p-8">
+  const SEZ = "mt-8 mb-1 flex items-center gap-2.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500";
+  const sez = t => `<p class="${SEZ}"><span class="h-3.5 w-1 rounded-full bg-gradient-to-b from-brand-500 via-violet-500 to-mint-500 shrink-0"></span>${t}</p>`;
+  box.innerHTML = `<div class="h-1.5 bg-gradient-to-r from-violet-500 via-brand-500 to-mint-500"></div><div class="p-8 lg:p-10">
     <div class="flex items-start justify-between gap-4">
       <div><h3 class="text-[22px] font-black tracking-tight">Account activity</h3>
       <p class="mt-1 text-[13px] text-slate-500">Every API call, unlock and export, itemized as it happens.</p></div>
       <button onclick="chiudiUso()" class="h-8 w-8 grid place-items-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-lg leading-none shrink-0 transition">×</button>
     </div>
     <div class="mt-6 grid grid-cols-3 gap-3">${saldi}</div>
-    ${perVia ? `<p class="${SEZ}">This month by channel</p><div class="mt-2 space-y-2">${perVia}</div>` : ""}
-    <p class="${SEZ}">Purchases</p>
-    ${acquisti ? `<div class="mt-2">${acquisti}</div>`
-               : `<p class="mt-2 text-[12.5px] text-slate-400">No purchases yet — when you buy credits, each top-up appears here with its date, amount and credit count.</p>`}
-    <p class="${SEZ}">Daily spend</p><div class="mt-2">${grafico}</div>
-    ${sbloccate ? `<p class="${SEZ}">Unlocked companies</p>
-      <div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll">${sbloccate}</div>` : ""}
-    ${eventi ? `<p class="${SEZ}">Activity log</p><div class="mt-2 max-h-64 overflow-auto pr-1 cov-scroll">${eventi}</div>${nonDet}`
+    ${perVia ? `${sez("This month by channel")}<div class="mt-2 grid sm:grid-cols-3 gap-2">${perVia}</div>` : ""}
+    <div class="grid lg:grid-cols-2 gap-x-8">
+      <div>${sez("Purchases")}
+      ${acquisti ? `<div class="mt-2">${acquisti}</div>`
+                 : `<p class="mt-2 text-[12.5px] text-slate-400">No purchases yet — when you buy credits, each top-up appears here with its date, amount and credit count.</p>`}</div>
+      <div>${sez("Daily spend")}<div class="mt-2">${grafico}</div></div>
+    </div>
+    ${sbloccate ? `${sez("Unlocked companies")}
+      <div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll grid sm:grid-cols-2 gap-x-6">${sbloccate}</div>` : ""}
+    ${eventi ? `${sez("Activity log")}<div class="mt-2 max-h-72 overflow-auto pr-1 cov-scroll">${eventi}</div>${nonDet}`
              : `<p class="mt-7 text-[13px] text-slate-400">No activity yet. Every API call, unlock and export will appear here as it happens.</p>${nonDet}`}
   </div>`;
 }

@@ -1346,6 +1346,16 @@ def create_app() -> FastAPI:
             return None
         return f"{oauth.api_url()}/favicon/{dominio}"
 
+    def _logo_rif(riferimento: str | None) -> str | None:
+        """Il logo come nella lista delle offerte: /logo/<slug>, l'endpoint
+        che pesca dall'archivio dei jobs (11/10/2026). Prima qui si usava
+        solo il favicon del dominio: piu' povero, e per aziende senza
+        dominio risolto il logo mancava mentre nelle offerte c'era.
+        Il frontend ha gia' il ripiego a lettera se il 404 arriva."""
+        if not riferimento or ":" not in riferimento:
+            return None
+        return f"{oauth.api_url()}/logo/{riferimento.split(':', 1)[1]}"
+
     @app.get("/portale/uso")
     def uso_del_portale(uid: str = Depends(utente), conn=Depends(connessione)):
         """Il registro dei consumi (04/10/2026): chi paga vede DOVE vanno i
@@ -1421,13 +1431,15 @@ def create_app() -> FastAPI:
                 a = _dati.rivela_azienda(r["ref"])
                 if a:
                     r["nome"] = a.get("company") or a.get("legal_name")
-                    r["logo"] = _favicon(a.get("domain"))
+                    r["logo"] = _logo_rif(r["ref"]) or _favicon(a.get("domain"))
             except Exception:                            # noqa: BLE001
                 pass
             if not r.get("nome"):
                 # l'azienda non e' nell'export di oggi: il nome si ricava
                 # dal rif, presentabile — mai il rif grezzo in pagina
                 r["nome"] = _bel_nome(r["ref"])
+            if not r.get("logo"):
+                r["logo"] = _logo_rif(r["ref"])
             nomi[r["ref"]] = r["nome"]
             if r.get("logo"):
                 loghi[r["ref"]] = r["logo"]
@@ -1437,8 +1449,7 @@ def create_app() -> FastAPI:
             # export. L'identificativo tecnico resta in `dettaglio`.
             if e["azione"] == "company unlock" and e["dettaglio"]:
                 e["titolo"] = nomi.get(e["dettaglio"]) or _bel_nome(e["dettaglio"])
-                if e["dettaglio"] in loghi:
-                    e["logo"] = loghi[e["dettaglio"]]
+                e["logo"] = loghi.get(e["dettaglio"]) or _logo_rif(e["dettaglio"])
             elif e["azione"] == "posting unlock" and e["dettaglio"]:
                 try:
                     o = _vivo.rivela_offerta(e["dettaglio"])
