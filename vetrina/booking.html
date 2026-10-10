@@ -136,6 +136,7 @@ tailwind.config = { theme: { extend: {
             <svg class="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2f5de0" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
             <div class="flex-1">
               <p class="text-sm font-bold text-slate-900" id="riepilogo"></p>
+              <p class="text-[12px] font-normal text-slate-500" id="riepilogo-fuso"></p>
             </div>
             <button type="button" id="cambia" class="text-[13px] font-semibold text-brand-600 hover:text-brand-700">Change</button>
           </div>
@@ -334,6 +335,7 @@ function scegliSlot(s) {
   slotSel = s;
   document.getElementById("riepilogo").textContent =
     fmtLungoLocale.format(s) + ", " + fmtOraLocale.format(s);
+  document.getElementById("riepilogo-fuso").textContent = NOME_FUSO;
   mostra("form");
 }
 
