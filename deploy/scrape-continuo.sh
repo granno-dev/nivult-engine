@@ -20,7 +20,7 @@ cd "$BASE"
 #     succede, e' un incaglio — si uccide e il giro ricomincia pulito.
 fallimenti_db=0
 while true; do
-  if ! pg_isready -h 127.0.0.1 -U nivult -d nivult_ats -q; then
+  if ! docker exec nivult-db-1 pg_isready -U nivult -d nivult_ats -q; then
     fallimenti_db=$((fallimenti_db + 1))
     if [ "$fallimenti_db" -ge 3 ]; then
       echo "scrape: db irraggiungibile per 3 giri, esco — systemd riavvia" >&2

@@ -19,7 +19,7 @@ cd "$BASE"
 # lotto -> nessun incaglio dura oltre 60 minuti.
 fallimenti_db=0
 while true; do
-  if ! pg_isready -h 127.0.0.1 -U nivult -d nivult_ats -q; then
+  if ! docker exec nivult-db-1 pg_isready -U nivult -d nivult_ats -q; then
     fallimenti_db=$((fallimenti_db + 1))
     if [ "$fallimenti_db" -ge 3 ]; then
       echo "scrape-veloce: db irraggiungibile per 3 giri, esco" >&2
