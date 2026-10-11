@@ -1040,8 +1040,22 @@ def main() -> int:
                 voci_index.append((f"{SITO}/sitemap-main.xml", oggi))
                 log.info("sitemap.xml era un urlset: spostato in "
                          "sitemap-main.xml e referenziato nell'indice")
+        # le pagine principali del sito (11/10/2026, dopo la segnalazione di
+        # Giuseppe): home, booking, legali, account — il lastmod e' il mtime
+        # vero del file, mai la data di build
+        urls_sito = []
+        for pagina, url in (("index.html", "/"), ("booking.html", "/booking"),
+                            ("privacy.html", "/privacy"), ("terms.html", "/terms"),
+                            ("account.html", "/account")):
+            f = args.vetrina / pagina
+            lm = (datetime.fromtimestamp(f.stat().st_mtime).date().isoformat()
+                  if f.exists() else oggi)
+            urls_sito.append((f"{SITO}{url}", lm))
+        _scrivi(args.vetrina / "sitemap-sito.xml",
+                sitemap_urlset(urls_sito), args.dry_run)
         lastmod_ats = max((lm for _, lm in urls_ats if lm), default=oggi)
-        voci_index += [(f"{SITO}/sitemap-ats.xml", lastmod_ats),
+        voci_index += [(f"{SITO}/sitemap-sito.xml", oggi),
+                       (f"{SITO}/sitemap-ats.xml", lastmod_ats),
                        (f"{SITO}/sitemap-jobboard.xml", oggi)]
         _scrivi(principale, sitemap_index(voci_index), args.dry_run)
 
