@@ -1,0 +1,103 @@
+{
+  "_come_si_usa": "Una voce per software di job board. Contenuto editoriale scritto a mano e conservativo: native_backfill descrive il backfill nativo in modo onesto (con prezzo solo se pubblico), feed_formats elenca XML/JSON/API solo se documentati. Niente em dash nel copy.",
+  "voci": [
+    {
+      "slug": "niceboard",
+      "name": "Niceboard",
+      "native_backfill": "Native job backfill is built in and included from the Advanced plan (list price $599/month at the time of writing; the entry Core plan does not include it). The Advanced plan also adds a web scraper and XML import with monthly run limits.",
+      "feed_formats": ["XML import", "Web scraper", "Backfill network"],
+      "angle": "The polished favourite of associations and communities, where backfill lives behind the upper plan."
+    },
+    {
+      "slug": "smartjobboard",
+      "name": "SmartJobBoard",
+      "native_backfill": "Built-in backfill through aggregator plugins (ZipRecruiter, Jobs2Careers): network jobs render below your native listings, are not stored in your database, redirect to the source on click, and pay you a revenue share. Only one backfill plugin can be active at a time. XML feed importers and an API are available on the platform.",
+      "feed_formats": ["XML import", "API (customer)", "Aggregator plugins"],
+      "angle": "A 2008 veteran where backfill is a revenue-share plugin, not your own dataset."
+    },
+    {
+      "slug": "jboardio",
+      "name": "JBoard",
+      "native_backfill": "Built-in backfill via Adzuna and Indeed integrations is available on paid plans, alongside a web page scraper that reads employer pages with Google Jobs structured data. XML/JSON import and API access sit on higher tiers.",
+      "feed_formats": ["XML import", "JSON import", "API (upper tiers)", "Adzuna/Indeed backfill", "Web scraper"],
+      "angle": "The no-code board builder with aggregator backfill on tap from the entry plans."
+    },
+    {
+      "slug": "jobboardio",
+      "name": "JobBoard.io",
+      "native_backfill": "No native backfill is documented publicly. The platform targets media companies and enterprises, and data imports are handled case by case through its professional services rather than a self-serve backfill switch.",
+      "feed_formats": ["XML import (via services)"],
+      "angle": "The enterprise publisher's board: strong on sales workflow, quiet on self-serve backfill."
+    },
+    {
+      "slug": "jobiqo",
+      "name": "Jobiqo",
+      "native_backfill": "No public documentation of a native backfill feature. Jobiqo builds boards on a Drupal-based platform with XML feed imports as the standard intake route; anything richer is a project conversation.",
+      "feed_formats": ["XML import"],
+      "angle": "The Austrian Drupal shop behind several European public and niche boards."
+    },
+    {
+      "slug": "wp-job-manager",
+      "name": "WP Job Manager",
+      "native_backfill": "No built-in backfill: the official Indeed backfill plugin was retired in 2023. The practical route is WP All Import, which loads XML or JSON feeds into listings, or community add-ons. Your board is WordPress, so anything importable can become a listing.",
+      "feed_formats": ["XML/JSON via WP All Import", "WordPress REST API"],
+      "angle": "The WordPress standard: no native backfill, but the whole plugin ecosystem is your import layer."
+    },
+    {
+      "slug": "jobboardly",
+      "name": "Job Boardly",
+      "native_backfill": "A native Job Backfiller with a pool of over 7 million jobs is built in, billed as usage-based backfill credits (public comparisons quote about $9 per 1,000 credits) on top of the subscription.",
+      "feed_formats": ["Built-in backfiller", "CSV import", "API credits"],
+      "angle": "The budget board builder whose backfill is a metered add-on, not a data plan."
+    },
+    {
+      "slug": "ejobsitesoftware",
+      "name": "eJobSiteSoftware",
+      "native_backfill": "No native backfill network is documented. The platform documents XML feed imports as its intake route, with guides for mapping external feeds into its schema.",
+      "feed_formats": ["XML import"],
+      "angle": "A long-running hosted board platform where XML feeds do the heavy lifting."
+    },
+    {
+      "slug": "jobboardcom",
+      "name": "JobBoard.com",
+      "native_backfill": "No public documentation of a native backfill feature that we could verify. Treat imports as a conversation with the vendor.",
+      "feed_formats": [],
+      "angle": "A legacy hosted board brand; verify the import story before you sign."
+    },
+    {
+      "slug": "jobboardhqcom",
+      "name": "JobBoardHQ",
+      "native_backfill": "No public documentation of a native backfill feature that we could verify. As with most association-oriented platforms, XML feed import is the route to ask about.",
+      "feed_formats": ["XML import (to verify)"],
+      "angle": "Association career centers, conservative on public technical docs."
+    },
+    {
+      "slug": "jobmount",
+      "name": "JobMount",
+      "native_backfill": "No public documentation of a native backfill feature that we could verify. The platform is aimed at publishers and associations; expect XML feed imports rather than a built-in job pool.",
+      "feed_formats": ["XML import (to verify)"],
+      "angle": "Publisher-grade board software with an enterprise sales motion."
+    },
+    {
+      "slug": "talenetic",
+      "name": "Talenetic",
+      "native_backfill": "No public documentation of a native backfill feature that we could verify. Talenetic builds boards for publishers and recruitment groups; imports are handled as part of the setup.",
+      "feed_formats": [],
+      "angle": "UK board platform for media groups, low public technical detail."
+    },
+    {
+      "slug": "jobthread",
+      "name": "JobThread",
+      "native_backfill": "JobThread Publisher is itself a network: your board shows network jobs next to your own and you earn a revenue share on them, on a free plan that takes a share of employer fees. Backfill is the business model, not a feature tier.",
+      "feed_formats": ["Network backfill (revenue share)"],
+      "angle": "The network-as-backfill model: free software, shared jobs, shared revenue."
+    },
+    {
+      "slug": "artha",
+      "name": "Artha Job Board",
+      "native_backfill": "No public documentation of a native backfill feature that we could verify. A newer AI-positioned board builder; confirm the import and backfill story in the demo.",
+      "feed_formats": [],
+      "angle": "A newer AI-flavoured entrant in the board software market."
+    }
+  ]
+}

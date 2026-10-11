@@ -97,6 +97,12 @@ RIGHE=$(cat <<'EOF'
 # --campione SOSTITUISCE il file — nella riga dell'export intero lo ridurrebbe
 # a 2.000 righe. Il retention di notte lo cancella: questa riga lo rifa'.
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --aziende --campione 500 >> /var/log/nivult-esporta.log 2>&1
+# le pagine SEO della vetrina (11/10/2026): numeri vivi dal DB ATS, letti
+# DOPO che l'ATS delle 02:30 ha scaricato; non dipendono dai file di
+# export. Il lastmod delle sitemap e' il max(fetched_at) reale, non la
+# data di build: Google lo confronta col contenuto, e una freschezza
+# finta si paga. Query leggere (4 SELECT per piattaforma).
+50 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.pagine_seo >> /var/log/nivult-pagine-seo.log 2>&1
 # il DuckDB dei clienti, DAGLI EXPORT appena scritti: /v1 legge da qui,
 # mai dal Postgres di produzione. Sul volume dedicato (23/09/2026: il
 # disco di root non regge il file da 15 GB + il ciclo notturno).

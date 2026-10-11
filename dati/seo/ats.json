@@ -1,0 +1,505 @@
+{
+  "_come_si_usa": "Una voce per ATS. Parte editoriale scritta a mano, MAI generata: e' cio' che rende ogni pagina unica per Google. api_status: public-json | public-feed | official-partner | none-public | unknown. code_example: snippet reale o null. Niente em dash nel copy.",
+  "voci": [
+    {
+      "slug": "greenhouse",
+      "api_status": "public-json",
+      "api_docs_url": "https://developers.greenhouse.io/job-board.html",
+      "headline_angle": "The best documented board API in hiring, and the source the rest of the industry learned from.",
+      "official_api_explainer": "Greenhouse publishes a free, unauthenticated Job Board API for every customer board: one GET returns every published posting, and a parameter adds the full text. No key, no approval, stable for years. The limit is scope, not access: the API answers for one board token at a time, so you must already know every company board you care about, fetch them one by one, and notice yourself when a posting disappears.",
+      "code_example": "# {token} is the board token in the company's careers URL\ncurl \"https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true\"",
+      "faq_extra": [
+        {
+          "q": "Where do I find a company's Greenhouse board token?",
+          "a": "In the careers URL itself: boards.greenhouse.io/{token} or job-boards.greenhouse.io/{token}. There is no public registry of all tokens, which is exactly the discovery problem our index solves."
+        }
+      ]
+    },
+    {
+      "slug": "workday",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "The largest enterprise career system, with no public API and twenty results per page: the hardest source we maintain.",
+      "official_api_explainer": "Workday exposes no public job board API. Every customer career site is rendered by a front end that calls an internal endpoint, /wday/cxs/{tenant}/{site}/jobs, with a POST. It requires no key, but it is not documented, not supported, capped at 20 results per page, and different for every tenant: each company has its own host, tenant and site identifiers that you must discover first. Reading all of Workday reliably is a maintained integration, not an afternoon of scripting.",
+      "code_example": "# internal, undocumented: no key, no support, 20 results per page\ncurl -X POST \"https://{tenant}.{wd}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"limit\": 20, \"offset\": 0, \"searchText\": \"\"}'",
+      "faq_extra": [
+        {
+          "q": "Why is Workday harder to read than Greenhouse or Lever?",
+          "a": "Because there is no public API and no registry of tenants. Every Workday site has its own host and internal identifiers, the listing endpoint is undocumented and paginated at 20 results, and the payload format changes between tenants. The endpoint works, and we read it daily, but nobody at Workday will help you when it changes."
+        },
+        {
+          "q": "Is there a dedicated Workday dataset?",
+          "a": "Yes: the Workday Jobs Dataset on Apify reads every Workday career site in our index, daily. Link in the Nivult route section above."
+        }
+      ]
+    },
+    {
+      "slug": "smartrecruiters",
+      "api_status": "public-json",
+      "api_docs_url": "https://developers.smartrecruiters.com/reference",
+      "headline_angle": "A public Posting API and one of the cleanest job schemas in the market.",
+      "official_api_explainer": "SmartRecruiters documents a public Posting API: one GET per company returns the active postings as JSON, paginated at 100 per page, with location, department and employment type already structured. No key is needed for the public postings of a company. You still need the list of company identifiers, and the API never tells you a posting closed: it just stops returning it.",
+      "code_example": "# {companyId} from the company's careers page URL\ncurl \"https://api.smartrecruiters.com/v1/companies/{companyId}/postings?limit=100\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "lever",
+      "api_status": "public-json",
+      "api_docs_url": "https://github.com/lever/postings-api",
+      "headline_angle": "One public JSON endpoint per company: the format half the industry learned from.",
+      "official_api_explainer": "Every Lever job site answers as JSON: one GET per company returns the current postings with location, team, commitment and full text sections. It is free, unauthenticated and documented on Lever's own GitHub. As with every single-tenant API, coverage is on you: you need to know each company slug, and a closed posting simply vanishes from the list.",
+      "code_example": "# {company} is the slug in jobs.lever.co/{company}\ncurl \"https://api.lever.co/v0/postings/{company}?mode=json\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "workable",
+      "api_status": "public-json",
+      "api_docs_url": null,
+      "headline_angle": "No documented public board API, but a public widget endpoint we read every day.",
+      "official_api_explainer": "Workable documents a management API for its own customers, but no public REST API for reading a company's full job board. What exists is the JSON endpoint behind the careers widget on apply.workable.com: public, functional, and completely undocumented, which means Workable can change it without notice. We read it daily and treat every payload change as an incident, because nobody will announce it.",
+      "code_example": "# the endpoint behind the public careers widget: undocumented\ncurl -X POST \"https://apply.workable.com/api/v3/accounts/{subdomain}/jobs\" \\\n  -H \"Content-Type: application/json\" -d '{}'",
+      "faq_extra": []
+    },
+    {
+      "slug": "ashby",
+      "api_status": "public-json",
+      "api_docs_url": "https://developers.ashbyhq.com",
+      "headline_angle": "The startup ATS with a genuinely public Posting API, compensation ranges included.",
+      "official_api_explainer": "Ashby documents a public Posting API: one GET per board returns every published posting as JSON, and a query parameter adds compensation ranges when the employer publishes them. No authentication, no approval. One board at a time, as always: there is no endpoint that lists all Ashby boards, and no signal when a posting closes other than its absence.",
+      "code_example": "# {board} is the name in jobs.ashbyhq.com/{board}\ncurl \"https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "teamtailor",
+      "api_status": "public-feed",
+      "api_docs_url": null,
+      "headline_angle": "Every Teamtailor career site doubles as a JSON Feed 1.1 document.",
+      "official_api_explainer": "Each Teamtailor career site publishes a public JSON Feed (version 1.1) at /jobs.json: every open position with title, location and a link back to the ad. No key, no registration. It is one of the friendliest sources in this list; the discovery problem remains, since nothing enumerates all Teamtailor companies.",
+      "code_example": "# {company} is the subdomain of the career site\ncurl \"https://{company}.teamtailor.com/jobs.json\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "recruitee",
+      "api_status": "public-json",
+      "api_docs_url": "https://docs.recruitee.com",
+      "headline_angle": "A public offers endpoint behind thousands of European SMB career sites.",
+      "official_api_explainer": "Recruitee serves every customer career site through a public offers endpoint that returns the open positions as JSON: title, location, department, employment type. No key for the public careers data. As everywhere in this list, the endpoint answers for one company at a time, so the index of who uses Recruitee is the actual asset.",
+      "code_example": "# {company} is the subdomain of the career site\ncurl \"https://{company}.recruitee.com/api/offers\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "breezy",
+      "api_status": "public-json",
+      "api_docs_url": null,
+      "headline_angle": "One public JSON document per company, straight from the careers page.",
+      "official_api_explainer": "Every Breezy career page loads its open positions from a public JSON document at /json: title, location, department, and salary when the employer declares it. It is not documented as an API, but it is public and stable enough that we read it daily. No global directory of Breezy companies exists on their side.",
+      "code_example": "# {company} is the subdomain of the careers page\ncurl \"https://{company}.breezy.hr/json\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "personio",
+      "api_status": "public-feed",
+      "api_docs_url": null,
+      "headline_angle": "A public XML feed on every career page: the quiet standard of the DACH market.",
+      "official_api_explainer": "Personio career pages publish a public XML feed of open positions at /xml: one document per company with titles, locations and employment types. No key, no registration. Personio also has a customer API for managing recruiting, but reading public openings does not need it. The feed answers per company; nobody lists all Personio tenants.",
+      "code_example": "# {company} from the career page URL (jobs.personio.de or .com)\ncurl \"https://{company}.jobs.personio.de/xml\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "bamboohr",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "A careers page with partial JSON behind it; the full API belongs to paying customers.",
+      "official_api_explainer": "BambooHR documents a customer API that requires an account's API key and covers that account's data only. The public careers page loads a JSON listing behind the scenes, but it is partial, undocumented and meant for the widget, not for you. We read the public listing; we do not touch authenticated customer data.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "jazzhr",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Plain HTML job boards at applytojob.com, with no public API since the Employ acquisition.",
+      "official_api_explainer": "JazzHR job boards live as HTML pages under applytojob.com. Since JazzHR became part of Employ there is no public API for listing a company's open jobs: the documented integrations target customers managing their own account. The boards themselves are public pages, and we read them as such.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "icims",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Enterprise portals behind heavy JavaScript, with no public listing API.",
+      "official_api_explainer": "iCIMS career portals render through complex JavaScript applications, and the job data does not sit in the initial HTML. iCIMS sells API access to its customers for their own recruiting data; there is no public API that lists postings across iCIMS sites. Reading them means rendering the portals, which is what our collectors do.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "taleo",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "The legacy enterprise standard: portals from another era, no public API.",
+      "official_api_explainer": "Oracle Taleo career sections are among the oldest portals still in production at large enterprises. There is no public job board API: Oracle's documented APIs serve customers on their own data. The public career sections are HTML applications that we read page by page.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "successfactors",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "SAP UI5 career portals that never render server side, and no public board API.",
+      "official_api_explainer": "SAP SuccessFactors career sites are UI5 applications: the server sends a shell and the jobs arrive later through internal calls, which is why naive fetchers see an empty page. SAP's OData APIs are for customers on their own tenant. There is no public API that lists what companies post on SuccessFactors; we render the portals.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "phenom",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Custom career domains with an internal JSON feed per site, and no public API.",
+      "official_api_explainer": "Phenom builds each enterprise career site on its own domain, with job data loaded from internal JSON endpoints that differ per site. There is no documented public API across Phenom customers. Each site is its own small integration; we maintain them in bulk.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "eightfold",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "AI career portals rendered client side, read through internal endpoints.",
+      "official_api_explainer": "Eightfold career sites are JavaScript applications whose listings come from internal endpoints, one layout per customer. Eightfold's documented APIs are for customers and partners, not for reading public postings. No public board API exists; we read the portals directly.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "cornerstone",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Enterprise career sites on csod.com, with no documented public listing API.",
+      "official_api_explainer": "Cornerstone OnDemand career sites are served per customer on csod.com, as server-rendered portals with internal data calls. Cornerstone's public API program covers customers' own data. There is no public endpoint enumerating postings across Cornerstone sites.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "avature",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Highly customized enterprise portals: every Avature site is a different layout.",
+      "official_api_explainer": "Avature career portals are heavily customized per customer, which means no shared endpoint shape and no public job board API. Each portal is read as its own site. There is no documented public listing API.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "beamery",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Talent CRM landing pages on custom domains, with no public job feed.",
+      "official_api_explainer": "Beamery powers talent landing pages on customer domains, where openings are loaded by the page's own code. Beamery's APIs are customer-facing; there is no documented public job board API. We read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "radancy",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Programmatic career sites for the Fortune 500, read page by page.",
+      "official_api_explainer": "Radancy (formerly TMP) builds career sites for very large employers, each with its own data plumbing. There is no public job board API across Radancy customers. The postings are public on the employer's site, and that is where we read them.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "jobvite",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Classic HTML job portals, no public API across customers.",
+      "official_api_explainer": "Jobvite (now part of Employ) serves customer career sites as HTML portals. The documented Jobvite APIs are for customers on their own accounts. No public API lists postings across Jobvite sites; the public pages are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "zohorecruit",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Client side career portals; the Zoho API requires a customer account.",
+      "official_api_explainer": "Zoho Recruit career sites are client side applications, and the documented Zoho Recruit API requires a customer account with OAuth. There is no public API that lists what companies publish on Zoho Recruit portals. We read the public career pages with a renderer.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "join",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "A hiring network more than a classic ATS: company pages read as HTML.",
+      "official_api_explainer": "JOIN hosts company hiring pages under join.com and distributes the ads to partner boards. There is no documented public API for reading a company's postings. The public company pages are the source we read.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "welcometothejungle",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Rich employer branding pages rendered client side, no public job API.",
+      "official_api_explainer": "Welcome to the Jungle builds media-rich employer pages whose job listings render client side. There is no documented public API for the listings. We read the public pages with a renderer.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "jobteaser",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Graduate and internship portals behind a JavaScript front end.",
+      "official_api_explainer": "JobTeaser connects companies with university career centers; its listings sit behind a JavaScript application and there is no documented public job board API. We read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "softgarden",
+      "api_status": "unknown",
+      "api_docs_url": null,
+      "headline_angle": "German enterprise hiring, read through the widget endpoints of the career pages.",
+      "official_api_explainer": "Softgarden career pages load their listings through JSON endpoints used by the embedded job widget. Those endpoints are public in practice but not documented as a public API, so we treat them as unstable and read them with care. There is no official public listing API that we could verify.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "werecruit",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "French SMB career sites: server rendered single page apps, read directly.",
+      "official_api_explainer": "WeRecruit career pages are single page applications served under careers.werecruit.io. There is no documented public job board API. The pages render server side enough to read, and that is what we do.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "varbi",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "The Swedish public sector favourite: plain HTML listing pages.",
+      "official_api_explainer": "Varbi is the recruitment platform of much of the Swedish public sector. Vacancy pages are plain HTML and there is no documented public listing API. The public pages are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "tribepad",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "UK enterprise ATS with portals read page by page.",
+      "official_api_explainer": "Tribepad serves career portals for large UK employers. We found no documented public job board API; the public portal pages are the source we read.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "hireserve",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "UK public and private sector portals, no public listing API.",
+      "official_api_explainer": "Hireserve career portals serve UK employers, many in the public sector. There is no documented public job board API; we read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "homerun",
+      "api_status": "unknown",
+      "api_docs_url": null,
+      "headline_angle": "Dutch design-forward career pages backed by a content API.",
+      "official_api_explainer": "Homerun career pages are built on a content backend that the page queries for openings. We found no documented public job board API; the endpoints the pages use are readable in practice, and that is what our collectors do.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "freshteam",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Freshworks' ATS with simple HTML career pages.",
+      "official_api_explainer": "Freshteam career pages list openings as HTML. The Freshteam API is documented for customers on their own account; there is no public API listing postings across Freshteam sites. We read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "comeet",
+      "api_status": "public-json",
+      "api_docs_url": null,
+      "headline_angle": "One of the few with a public, unauthenticated Positions API.",
+      "official_api_explainer": "Comeet exposes a public Positions API for each customer: one GET returns the company's open positions as JSON, no key needed. It is one of the cleanest small-ATS sources. You need the company UID, which is not listed anywhere public, so discovery remains the real work.",
+      "code_example": "# {uid} is the company identifier, not the page slug\ncurl \"https://www.comeet.co/careers-api/2.0/company/{uid}/positions\"",
+      "faq_extra": []
+    },
+    {
+      "slug": "manatal",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Recruitment CRM career pages, read as HTML.",
+      "official_api_explainer": "Manatal career pages list openings as HTML. Manatal's documented API is for customers on their own account; there is no public listing API across Manatal sites. We read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "pageup",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Enterprise talent portals, no public listing API.",
+      "official_api_explainer": "PageUp career portals serve universities and large employers. There is no documented public job board API; the public portal pages are the source we read.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "paradox",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Conversational hiring assistants; listings behind a chat front end.",
+      "official_api_explainer": "Paradox wraps hiring in a conversational assistant, and job listings sit behind that front end. There is no documented public job board API. We read the public career pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "paylocity",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "US payroll-first HR, with career portals and no public listing API.",
+      "official_api_explainer": "Paylocity career portals serve US SMB and mid-market employers. The documented Paylocity APIs are customer integrations; there is no public job board API. We read the public portals.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "adp",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Enterprise HR suite with customer-only APIs and internal career endpoints.",
+      "official_api_explainer": "ADP's documented APIs serve customers and partners on their own data. Career sites load listings from internal endpoints; there is no public job board API across ADP customers. We read the public career sites.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "applicantpro",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "US SMB applicant tracking, HTML career pages.",
+      "official_api_explainer": "ApplicantPro serves career pages as HTML for US SMBs. There is no documented public job board API; the public pages are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "jobadder",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Recruitment agency software with a customer-key API only.",
+      "official_api_explainer": "JobAdder documents an API for its customers and approved partners, keyed per account. There is no public API that lists postings across JobAdder customers. The public career pages are what we read.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "factorial",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "European SMB HR suite, career pages rendered client side.",
+      "official_api_explainer": "Factorial career pages render client side. Factorial's API is for customers on their own account; there is no public job board API across Factorial sites. We read the public pages with a renderer.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "carerix",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Dutch staffing platform, HTML portals.",
+      "official_api_explainer": "Carerix powers career portals for Dutch staffing agencies and employers. There is no documented public job board API; the public portal pages are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "jobsoid",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "SMB ATS with client side career pages.",
+      "official_api_explainer": "Jobsoid career pages load listings client side. There is no documented public job board API; we read the public pages.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "workbuster",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "Swedish job ad platform, career pages read directly.",
+      "official_api_explainer": "Workbuster publishes job ads for Swedish employers on hosted career pages. There is no documented public job board API; the public pages are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "zvoove",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "German staffing software formed from Landwehr, prosoft and Unique.",
+      "official_api_explainer": "Zvoove serves the German staffing industry with career portals per customer. There is no documented public job board API; we read the public portals.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "oracle",
+      "api_status": "unknown",
+      "api_docs_url": null,
+      "headline_angle": "Oracle Recruiting Cloud career sites on internal candidate-experience endpoints.",
+      "official_api_explainer": "Oracle Recruiting Cloud career sites load listings from internal candidate-experience REST endpoints on the customer's own cloud host. Oracle documents APIs for customers on their own data; there is no documented public listing API across ORC sites. The internal endpoints are public in practice, and we read them.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "pinpoint",
+      "api_status": "unknown",
+      "api_docs_url": null,
+      "headline_angle": "UK mid-market ATS with clean career sites, read directly.",
+      "official_api_explainer": "Pinpoint career sites serve listings to the public page; Pinpoint's documented API is for customers on their own account. We found no documented public job board API; the public career sites are the source we read.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "talentsoft",
+      "api_status": "none-public",
+      "api_docs_url": null,
+      "headline_angle": "French enterprise talent suite (now Cegid), HTML career portals.",
+      "official_api_explainer": "Talentsoft, now part of Cegid, serves career portals for large French and European employers. There is no documented public job board API; the public portals are the source.",
+      "code_example": null,
+      "faq_extra": []
+    },
+    {
+      "slug": "arbetsformedlingen",
+      "api_status": "public-json",
+      "api_docs_url": "https://jobtechdev.se",
+      "headline_angle": "Sweden's public employment service: the source is free, unifying it is the work.",
+      "official_api_explainer": "Arbetsformedlingen publishes the Platsbanken API through JobTech Dev: the full Swedish public vacancy database, free, no key required. You can build on it today, and you should. What the free API does not give you is the other 60+ sources in this index: Nivult's value is one schema, one freshness guarantee and one closure logic across all of them.",
+      "code_example": "# free, no key: the Swedish public vacancy database\ncurl \"https://jobsearch.api.jobtechdev.se/search?q=svetsare&limit=10\"",
+      "faq_extra": [
+        {
+          "q": "If the Platsbanken API is free, why pay for Nivult?",
+          "a": "Because your analysis probably does not stop at Sweden. The free API gives you one country in one schema; Nivult gives you the same postings unified with 60+ private ATS sources, enriched and closure-verified, in one feed."
+        }
+      ],
+      "display_name": "Arbetsförmedlingen (Sweden)"
+    },
+    {
+      "slug": "bundesanstellung",
+      "api_status": "public-json",
+      "api_docs_url": "https://jobsuche.api.bund.dev",
+      "headline_angle": "Germany's federal job database, free with a registered API key.",
+      "official_api_explainer": "The Bundesagentur fur Arbeit publishes the Jobsuche API: the largest German vacancy database, free, with an API key you can register in minutes. It is a genuinely good public source. The catch is the same as every national service: one country, one schema, one closure logic. Nivult unifies it with 60+ private ATS sources so the German market sits next to everyone else.",
+      "code_example": "# free key from the developer portal\ncurl -H \"X-API-Key: <your-key>\" \\\n  \"https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs?was=schwei%C3%9Fer\"",
+      "faq_extra": [
+        {
+          "q": "If the Jobsuche API is free, why pay for Nivult?",
+          "a": "The free API covers Germany, in the agency's schema. Nivult covers the same postings next to 60+ private sources across 240+ countries, with one schema and verified closures. You pay for the unification, not for the German data."
+        }
+      ],
+      "display_name": "Bundesagentur für Arbeit (Germany)"
+    },
+    {
+      "slug": "francetravail",
+      "api_status": "public-json",
+      "api_docs_url": "https://francetravail.io",
+      "headline_angle": "France's public employment service, free after a short OAuth registration.",
+      "official_api_explainer": "France Travail publishes the Offres d'emploi v2 API: the national vacancy database, free, behind a client_credentials registration on francetravail.io. Search answers with HTTP 206 and a Content-Range, 150 results per page, 3,149 per query, so full coverage takes deliberate paging. And it is one country in one schema: Nivult unifies it with 60+ private ATS sources in a single feed.",
+      "code_example": "# 1. token (registration on francetravail.io)\ncurl -X POST \"https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire\" \\\n  -d \"grant_type=client_credentials&client_id=$ID&client_secret=$SECRET&scope=api_offresdemploiv2\"\n# 2. search (answers 206 with Content-Range)\ncurl -H \"Authorization: Bearer $TOKEN\" \\\n  \"https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search?motsCles=soudeur\"",
+      "faq_extra": [
+        {
+          "q": "If the France Travail API is free, why pay for Nivult?",
+          "a": "The free API covers France, in the national schema, with a 3,149-result cap per query that makes full exports an engineering task. Nivult ships the same market already unified with 60+ private sources, one schema, verified closures."
+        }
+      ],
+      "display_name": "France Travail (France)"
+    }
+  ]
+}

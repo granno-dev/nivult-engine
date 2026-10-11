@@ -23,6 +23,7 @@ sudo deploy/cron.sh --check  # verifica e basta, esce 1 se manca qualcosa
 | 02:30 | ATS/Wikidata (`ats-nightly.sh`) | dopo l'ingestione, prima del backup |
 | 03:00 | backup (`backup.sh`) | a valle di tutto, e prima del riavvio automatico delle 04:00 |
 | ogni ora al :10 | digest (`digests.sh`) | l'orario di invio e' quello dell'utente, nel suo fuso: un giro al giorno consegnerebbe in ritardo |
+| 05:50 | pagine SEO (`nivult.ats.pagine_seo`) | dopo l'ATS delle 02:30: rigenera `vetrina/ats/`, `vetrina/job-board/`, le due sitemap e l'indice coi numeri vivi; log in `/var/log/nivult-pagine-seo.log` |
 
 **Perche' esiste questo script.** Il 2026-08-28 alle 17:53 il crontab e'
 stato riscritto a mano per installare `ats-nightly`, e `crontab <file>`
