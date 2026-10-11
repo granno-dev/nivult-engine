@@ -744,7 +744,18 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
             "WHERE fetched_at > now()-interval '24 hours' "
             "GROUP BY 1 ORDER BY 1")]
 
-    d["arricchimento"] = _arricchimento(ats_dsn, attive)
+    # 11/10/2026: sotto carico estremo la copertura arricchimenti (query da
+    # minuti) supera il suo timeout e faceva fallire TUTTO il giro — salute,
+    # raccolta e magazzino erano gia' calcolati e finivano nel cestino,
+    # con la cache del disco ferma all'8/10. Come _forse: la sezione tiene
+    # la versione del giro precedente, il resto esce fresco.
+    try:
+        d["arricchimento"] = _arricchimento(ats_dsn, attive)
+    except Exception as e:                           # noqa: BLE001
+        log.warning("cruscotto: arricchimento non calcolato, tengo il "
+                    "precedente: %s", str(e).splitlines()[0][:120])
+        d["arricchimento"] = (_CACHE_PES["v"] or {}).get("arricchimento") \
+            or _CACHE_ARR["v"] or []
 
     # ── il magazzino da vendere: le grandezze che crescono da sole ──
     def _forse(sql):
