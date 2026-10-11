@@ -25,13 +25,21 @@ DICHIARATO = """coalesce(j.raw #>> '{hiringOrganization,name}',
 # va. La prova e' il numero di nomi DISTINTI dichiarati sotto lo stesso tenant:
 # un'azienda ne dichiara uno, una bacheca centinaia. Misurato il 19/09/2026:
 # 429 tenant con 21+ nomi, che da soli tengono 73.162 offerte attive.
+#
+# 11/10/2026: la forma vecchia (count(DISTINCT jsonb) per azienda sul join
+# pieno) ci metteva 3-4 ORE sotto carico — quattro estrazioni jsonb per riga
+# in un aggregato distinto per gruppo. Ora si deduplica prima la coppia
+# (tenant, nome) in una passata sola e si conta dopo: stesso risultato,
+# una frazione del tempo.
 BACHECHE = f"""
-WITH nomi AS (
-  SELECT a.id, count(DISTINCT {{d}}) AS quanti
+WITH coppie AS (
+  SELECT DISTINCT platform_id, slug, {{d}} AS nome
+    FROM ats_jobs
+   WHERE expired_at IS NULL AND {{d}} IS NOT NULL
+), nomi AS (
+  SELECT a.id, count(*) AS quanti
     FROM ats_companies a
-    JOIN ats_jobs j ON j.platform_id = a.platform_id AND j.slug = a.slug
-                   AND j.expired_at IS NULL
-   WHERE {{d}} IS NOT NULL
+    JOIN coppie j ON j.platform_id = a.platform_id AND j.slug = a.slug
    GROUP BY 1)
 UPDATE aziende_vendibili v
    SET nomi_dichiarati = n.quanti,

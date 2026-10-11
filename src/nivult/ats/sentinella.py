@@ -106,6 +106,20 @@ def _controlli() -> list[Condizione]:
             c.append(Condizione(f"demone {d}", "critica" if d == "nivult-api" else "avviso",
                                 f"demone {d} giu'", f"stato systemd: {st or 'assente'}", grazia=True))
 
+    # il cruscotto che mente e' peggio del cruscotto morto (11/10/2026):
+    # dall'8/10 una query in timeout bloccava il ricalcolo dei pannelli
+    # pesanti e la pagina serviva numeri vecchi di tre giorni senza che
+    # nessun allarme suonasse. La cache ha un timestamp: si guarda quello.
+    try:
+        eta_cache = time.time() - os.path.getmtime("/opt/nivult/cruscotto-cache.json")
+        if eta_cache > 3600:
+            c.append(Condizione("cruscotto stantio", "avviso",
+                                "cruscotto con numeri vecchi",
+                                f"cache ferma a {int(eta_cache // 60)} min fa: "
+                                "il ricalcolo pesante e' in timeout?"))
+    except OSError:
+        pass
+
     # il dato
     try:
         with _db() as db:

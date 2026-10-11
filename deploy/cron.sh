@@ -115,7 +115,10 @@ RIGHE=$(cat <<'EOF'
 30 6 * * * /opt/nivult/engine/deploy/passo-diurno.sh domini nivult.ats.domini_datori --limite 2000
 0 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh dettagli nivult.ats.dettagli --limite 400000
 40 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh aziende-dettagli nivult.ats.aziende_dettagli --limite 20000
-20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
+# 11/10/2026: era 07:20, in piena finestra dell'export (05:45 → ~10:00 e in
+# crescita). Il refresh delle matview sotto l'export satura il DB: spostato
+# a export finito. L'export legge comunque la vista del giorno prima.
+0 11 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
 30 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito nivult.ats.scheda_sito --limite 400
 50 7 * * * /opt/nivult/engine/deploy/passo-diurno.sh scheda-sito-descrizioni nivult.ats.scheda_sito --descrizioni --limite 1500
 35 8 * * * /opt/nivult/engine/deploy/passo-diurno.sh gleif nivult.ats.gleif --limite 300
@@ -132,7 +135,9 @@ RIGHE=$(cat <<'EOF'
 0 9 * * * cd /opt/nivult/engine && ATS_DATABASE_URL="postgresql://nivult:$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-)@127.0.0.1:5432/nivult_ats" .venv/bin/python /opt/nivult/pulisci_domini.py >> /opt/nivult/logs/pulisci_domini.log 2>&1
 50 6 * * * find /opt/nivult/exports -type f -name "offerte-attive-*.jsonl.gz" -mtime +1 -delete
 5 6 * * * cd /opt/nivult/engine && LOTTO=2000 .venv/bin/python scripts/ripulisci_sintesi.py >> /opt/nivult/engine/logs/ripulisci-sintesi.log 2>&1
-50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
+# 11/10/2026: era 06:50, sopra l'export — e la query delle bacheche (3-4 ore
+# sotto carico) gli rubava il DB. Ora a export chiuso, dopo le viste.
+30 11 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
 # reminder delle call prenotate su nivult.com/booking (10/10/2026): ogni
 # 15 minuti, perche' il preavviso (24h e 1h prima) e' misurato dallo slot
 # del lead — un giro orario manderebbe il reminder da 1h in ritardo
@@ -179,9 +184,11 @@ altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" \
 OBSOLETE=$(cat <<'EOF'
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
-20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
+20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --campione 2000 >> /var/log/nivult-esporta.log 2>&1
+20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
+50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
 EOF
 )
 

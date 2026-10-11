@@ -341,7 +341,14 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
     # giorni. Ora ha il suo timeout (300 s) e gira nel thread in sfondo.
     if time.time() - _CACHE_ARR["t"] < 6 * 3600 and _CACHE_ARR["v"]:
         return _CACHE_ARR["v"]
-    r = _righe(ats_dsn, """
+    # 11/10/2026: la scansione piena con filtro jsonb (262 s il 26/09,
+    # oltre i 300 s di timeout sotto il carico dell'11/10) ora arriva dalla
+    # vista della notte. Se manca, il vivo come prima.
+    try:
+        r = _righe(ats_dsn, "SELECT * FROM mv_cruscotto_copertura",
+                   timeout_s=10)[0]
+    except Exception:                                # noqa: BLE001
+        r = _righe(ats_dsn, """
         SELECT count(country), count(salary_min), count(seniority),
                count(remote),
                count(*) FILTER (WHERE skills IS NOT NULL
@@ -530,14 +537,23 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
     senza_paese = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL "
         "AND country IS NULL", timeout_s=60) or 0
-    non_class = _uno(ats_dsn,
-        "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
-        "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL",
-        # 11/10/2026: 76 s misurati sotto carico (il corpus cresce e con
-        # lui il costo dell'anti-join) — col tetto a 60 s la query moriva
-        # dall'8/10 e TRASCINAVA GIU' tutto il pannello pesante: cache
-        # ferma e numeri vecchi di giorni nel cruscotto.
-        timeout_s=240) or 0
+    # 11/10/2026: dalla vista materializzata della notte (migrazione
+    # scripts/migrazioni/2026-10-11). Se manca si misura dal vivo come
+    # prima — il ripiego resta perche' la vista la rinfresca il cron.
+    try:
+        non_class = _uno(ats_dsn, "SELECT n FROM mv_cruscotto_non_class",
+                         timeout_s=10)
+    except Exception:                                # noqa: BLE001
+        non_class = None
+    if non_class is None:
+        non_class = _uno(ats_dsn,
+            "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
+            "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL",
+            # 11/10/2026: 76 s misurati sotto carico (il corpus cresce e con
+            # lui il costo dell'anti-join) — col tetto a 60 s la query moriva
+            # dall'8/10 e TRASCINAVA GIU' tutto il pannello pesante: cache
+            # ferma e numeri vecchi di giorni nel cruscotto.
+            timeout_s=240) or 0
     d["salute"] = {
         "offerte_attive": attive,
         "offerte_viste_24h": _uno(ats_dsn,
