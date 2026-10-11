@@ -107,7 +107,7 @@ RIGHE=$(cat <<'EOF'
 # E se l'export sfora (07:58 il 29/09/2026, cresce coi dati) il builder
 # ASPETTA il file di oggi fino a 60 minuti invece di costruire con le
 # tabelle vuote — e se manca del tutto tiene il db di ieri.
-40 7 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+40 7 * * * cd /opt/nivult/engine && AGG_MEMORIA=4GB API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
 0 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh salari-testo nivult.ats.salari --testo --limite 600000
 45 5 * * * /opt/nivult/engine/deploy/passo-diurno.sh registri nivult.ats.registri_imprese --limite 3000
@@ -137,6 +137,7 @@ RIGHE=$(cat <<'EOF'
 # 15 minuti, perche' il preavviso (24h e 1h prima) e' misurato dallo slot
 # del lead — un giro orario manderebbe il reminder da 1h in ritardo
 */15 * * * * cd /opt/nivult/engine && .venv/bin/python scripts/booking_reminder.py >> /var/log/nivult-booking.log 2>&1
+45 2 * * * /opt/nivult/engine/deploy/spazzino-disco.sh >> /var/log/nivult-spazzino.log 2>&1
 EOF
 )
 

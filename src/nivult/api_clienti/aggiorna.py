@@ -324,6 +324,17 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
                                _COLONNE_OFFERTE) if f_offerte else 0
     n_aziende = _carica_nativa(con, f_aziende, "aziende",
                                _COLONNE_AZIENDE) if f_aziende else 0
+    # La memoria si svuota fra le due fasi (11/10/2026): il 10/10 la build
+    # e' morta con OutOfMemory caricando il flusso mentre 3,7 GB restavano
+    # occupati dalle offerte — il buffer manager era pieno e un blocco da
+    # 4 GiB non trovava posto. CHECKPOINT + riapertura sullo stesso .tmp:
+    # i dati restano (e' un file vero), il buffer riparte da zero.
+    con.execute("CHECKPOINT")
+    con.close()
+    con = duckdb.connect(tmp)
+    con.execute("SET memory_limit = '" +
+                os.environ.get("AGG_MEMORIA", "2GB") + "'")
+    con.execute("SET preserve_insertion_order = false")
     n_flusso = _carica_flusso(con, cartella, flusso_giorni)
     manifest = _carica_copertura(con, cartella)
     meta = {
