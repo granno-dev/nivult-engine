@@ -235,6 +235,13 @@ def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
         try:
             n += _carica_nativa(con, percorso, "flusso", _COLONNE_FLUSSO,
                                 dove="t IS NOT NULL")
+            # 11/10/2026, secondo tempo: sette giorni di flusso con la riga
+            # verbatim riempiono da soli il tetto di 4 GB (misurato: muore
+            # chiedendo un blocco da 4 GiB con 3,7 occupati, anche a db
+            # fresco). Le pagine appena scritte sono "sporche" e non
+            # riversabili finche' non si fa CHECKPOINT: uno per file e il
+            # buffer torna evocabile, il picco diventa un file solo.
+            con.execute("CHECKPOINT")
         except OSError as e:
             log.warning("flusso: %s illeggibile (%s), salto", percorso, e)
     return n
