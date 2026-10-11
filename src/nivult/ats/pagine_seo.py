@@ -624,11 +624,15 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 </section>""")
 
     # ── FAQ
+    # 11/10/2026: con un numero dispari di domande l'ultima card restava
+    # orfana a meta' riga (il "buco" segnalato da Giuseppe sulle pagine ATS).
+    # Se il numero e' dispari, l'ultima occupa tutta la riga.
+    dispari = len(faq) % 2 == 1
     voci_faq = "".join(f"""
-      <div class="rounded-2xl border border-slate-900/5 bg-white p-7">
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-7{' md:col-span-2' if dispari and i == len(faq) - 1 else ''}">
         <h3 class="font-bold text-[16px] tracking-tight">{html.escape(f["q"])}</h3>
         <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">{html.escape(f["a"])}</p>
-      </div>""" for f in faq)
+      </div>""" for i, f in enumerate(faq))
     parti.append(f"""
 <section class="py-14 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
@@ -671,9 +675,11 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 
 # ── hub ATS ────────────────────────────────────────────────────────────────
 
-def pagina_hub_ats(pubblicate: list[dict], fonti: int) -> str:
+def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str:
     canonical = f"{SITO}/ats/"
-    totale = sum(p["misure"].attive for p in pubblicate)
+    # 11/10/2026: il numero in testa e' l'indice INTERO, non la somma delle
+    # pagine pubblicate — 2,5M contro 4,03M reali, segnalato da Giuseppe.
+    # Le piattaforme senza pagina esistono lo stesso, e si dicono.
     title = (f"ATS coverage: {len(pubblicate)} platforms, {_n(totale)} live "
              f"postings | Nivult")
     description = (f"We read {fonti}+ applicant tracking systems directly, "
@@ -703,7 +709,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int) -> str:
       Every ATS we read, <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">measured live</span>
     </h1>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">
-      {_n(totale)} active postings across {len(pubblicate)} platforms, counted from employer career systems this morning. Each page shows the public API status honestly, with real numbers and real sample rows.
+      {_n(totale_reale)} active postings across {fonti}+ platforms, counted from employer career systems this morning. The {len(pubblicate)} biggest have their own page below: each shows the public API status honestly, with real numbers and real sample rows.
     </p>
   </div>
 </header>
@@ -740,13 +746,13 @@ def _faq_jobboard(nome: str, edit: dict) -> list[dict]:
     return faq
 
 
-def pagina_jobboard(edit: dict, altri: list[dict], oggi: str) -> str:
+def pagina_jobboard(edit: dict, altri: list[dict], oggi: str, fonti: int) -> str:
     slug, nome = edit["slug"], edit["name"]
     canonical = f"{SITO}/job-board/{slug}/"
     title = f"{nome} job backfill: real employer postings, daily | Nivult"
     description = (f"Backfill your {nome} board with verified employer job "
                    f"postings: refreshed daily, closures included, one "
-                   f"schema across 66+ ATS sources. Free sample export.")
+                   f"schema across {fonti}+ ATS sources. Free sample export.")
 
     faq = _faq_jobboard(nome, edit)
     ld = [
@@ -767,11 +773,12 @@ def pagina_jobboard(edit: dict, altri: list[dict], oggi: str) -> str:
     link_altri = "".join(
         f'<a href="/job-board/{a["slug"]}/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">{html.escape(a["name"])}</a>'
         for a in altri)
+    dispari = len(faq) % 2 == 1
     faq_html = "".join(f"""
-      <div class="rounded-2xl border border-slate-900/5 bg-white p-7">
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-7{' md:col-span-2' if dispari and i == len(faq) - 1 else ''}">
         <h3 class="font-bold text-[16px] tracking-tight">{html.escape(f["q"])}</h3>
         <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">{html.escape(f["a"])}</p>
-      </div>""" for f in faq)
+      </div>""" for i, f in enumerate(faq))
 
     return (_testa(title, description, canonical, ld) + f"""
 <header class="pt-28 pb-12 relative overflow-hidden">
@@ -947,6 +954,9 @@ def main() -> int:
     try:
         tutte = piattaforme(conn)
         fonti = len(tutte)
+        totale_reale = conn.execute(
+            "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL"
+        ).fetchone()[0]
 
         pubblicate: list[dict] = []
         saltate: list[tuple[str, str]] = []
@@ -992,14 +1002,14 @@ def main() -> int:
 
     if not args.solo:
         _scrivi(args.vetrina / "ats" / "index.html",
-                pagina_hub_ats(pubblicate, fonti), args.dry_run)
+                pagina_hub_ats(pubblicate, fonti, totale_reale), args.dry_run)
 
     # ── pagine job board: contenuto editoriale, lastmod = giorno di build
     voci_jb = list(editoriali_jb.values())
     for v in voci_jb:
         altri = [x for x in voci_jb if x["slug"] != v["slug"]][:8]
         _scrivi(args.vetrina / "job-board" / v["slug"] / "index.html",
-                pagina_jobboard(v, altri, oggi), args.dry_run)
+                pagina_jobboard(v, altri, oggi, fonti), args.dry_run)
     _scrivi(args.vetrina / "job-board" / "index.html",
             pagina_hub_jobboard(voci_jb), args.dry_run)
 

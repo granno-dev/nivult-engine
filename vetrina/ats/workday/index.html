@@ -315,7 +315,7 @@ curl -X POST &quot;https://{tenant}.{wd}.myworkdayjobs.com/wday/cxs/{tenant}/{si
         <h3 class="font-bold text-[16px] tracking-tight">Why is Workday harder to read than Greenhouse or Lever?</h3>
         <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Because there is no public API and no registry of tenants. Every Workday site has its own host and internal identifiers, the listing endpoint is undocumented and paginated at 20 results, and the payload format changes between tenants. The endpoint works, and we read it daily, but nobody at Workday will help you when it changes.</p>
       </div>
-      <div class="rounded-2xl border border-slate-900/5 bg-white p-7">
+      <div class="rounded-2xl border border-slate-900/5 bg-white p-7 md:col-span-2">
         <h3 class="font-bold text-[16px] tracking-tight">Is there a dedicated Workday dataset?</h3>
         <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Yes: the Workday Jobs Dataset on Apify reads every Workday career site in our index, daily. Link in the Nivult route section above.</p>
       </div>
