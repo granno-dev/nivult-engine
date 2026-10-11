@@ -133,7 +133,7 @@ def _crea_tabelle(con: duckdb.DuckDBPyConnection) -> None:
 # Error). E' un tetto di sicurezza, non un budget.
 _READ = ("SELECT row_number() OVER () AS rn, * "
          "FROM read_json(?, format='newline_delimited', compression='gzip', "
-         "maximum_object_size=536870912)")
+         "maximum_object_size=134217728)")
 # la riga com'e': read_csv con un delimitatore che il JSONL non puo'
 # contenere e quoting spento. Il gzip si legge solo in sequenza, quindi
 # l'ordine delle due passate e' identico e il join per rn e' esatto.
@@ -142,10 +142,14 @@ _READT = ("SELECT row_number() OVER () AS rn, linea FROM read_csv(?, "
           "quote='', escape='', "
           # il JSONL reale ha righe da 3 MB (immagini base64 dentro le
           # descrizioni): il tetto di linea di default (2 MB) tagliava
-          # il flusso a meta' (23/09/2026). Alzato a 256 MB il 09/10/2026:
-          # e' arrivata una riga da 33 MB e il passaggio raw-verbatim
-          # e' morto subito dopo quello JSON.
-          "max_line_size=268435456)")
+          # il flusso a meta' (23/09/2026). Alzato a 256 MB il 09/10/2026
+          # per una riga da 33 MB — MA il lettore CSV prealloca
+          # max_line_size PER THREAD: 256 MB x 16 thread = 4 GiB chiesti
+          # a ogni file, e sul box da 7 GB la build e' morta cosi' il 10 e
+          # l'11/10 (misurato: OOM identico su un file da 61 byte).
+          # 64 MB coprono il massimo misurato oggi (46,5 MB) con margine;
+          # chi supera il tetto fa ERRORE rumoroso, mai taglio silenzioso.
+          "max_line_size=67108864)")
 
 # I timestamp dell'export (Postgres «2026-09-23 07:00:00+00:00» o ISO col
 # fuso): TIMESTAMPTZ converte davvero («+02:00» diventa l'istante UTC,
@@ -326,6 +330,9 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     con.execute("SET memory_limit = '" +
                 os.environ.get("AGG_MEMORIA", "2GB") + "'")
     con.execute("SET preserve_insertion_order = false")
+    # i thread di default (uno per core) moltiplicano i buffer dei reader:
+    # sul box da 7 GB il picco deve stare sotto il tetto, non sfiorarlo
+    con.execute("SET threads = " + os.environ.get("AGG_THREADS", "4"))
     _crea_tabelle(con)
     n_offerte = _carica_nativa(con, f_offerte, "offerte",
                                _COLONNE_OFFERTE) if f_offerte else 0
@@ -342,6 +349,9 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     con.execute("SET memory_limit = '" +
                 os.environ.get("AGG_MEMORIA", "2GB") + "'")
     con.execute("SET preserve_insertion_order = false")
+    # i thread di default (uno per core) moltiplicano i buffer dei reader:
+    # sul box da 7 GB il picco deve stare sotto il tetto, non sfiorarlo
+    con.execute("SET threads = " + os.environ.get("AGG_THREADS", "4"))
     n_flusso = _carica_flusso(con, cartella, flusso_giorni)
     manifest = _carica_copertura(con, cartella)
     meta = {
