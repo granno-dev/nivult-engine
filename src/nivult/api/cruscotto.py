@@ -533,7 +533,11 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
     non_class = _uno(ats_dsn,
         "SELECT count(*) FROM ats_jobs j LEFT JOIN job_classifications c "
         "ON c.job_id=j.id WHERE c.job_id IS NULL AND j.expired_at IS NULL",
-        timeout_s=60) or 0
+        # 11/10/2026: 76 s misurati sotto carico (il corpus cresce e con
+        # lui il costo dell'anti-join) — col tetto a 60 s la query moriva
+        # dall'8/10 e TRASCINAVA GIU' tutto il pannello pesante: cache
+        # ferma e numeri vecchi di giorni nel cruscotto.
+        timeout_s=240) or 0
     d["salute"] = {
         "offerte_attive": attive,
         "offerte_viste_24h": _uno(ats_dsn,
