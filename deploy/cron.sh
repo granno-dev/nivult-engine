@@ -189,6 +189,7 @@ OBSOLETE=$(cat <<'EOF'
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --campione 2000 >> /var/log/nivult-esporta.log 2>&1
 20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
 50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
+40 7 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 EOF
 )
 
