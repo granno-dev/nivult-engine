@@ -72,6 +72,9 @@ def main() -> int:
                 "match_id": match_id, "user_id": user_id,
                 "profilo": profilo_come_testo(_profilo(cv)),
                 "offerta": offerta_come_testo(offerta),
+                # il dizionario grezzo: bench_giudice_locale ricostruisce la
+                # prompt di produzione dal dict, non dal testo gia' reso
+                "job": offerta,
                 "score": score, "threshold": soglia, "passed": passed,
                 "at": creato.isoformat(),
             }, ensure_ascii=False) + "\n")
