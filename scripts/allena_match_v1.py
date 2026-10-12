@@ -53,16 +53,22 @@ def raggruppa(lotto, pad):
     ii = torch.full((len(lotto), n), pad, dtype=torch.long)
     am = torch.zeros((len(lotto), n), dtype=torch.long)
     ll = torch.zeros((len(lotto), 1))
-    tt = torch.ones((len(lotto), n), dtype=torch.long)   # token_type: coppia
+    # token_type_ids solo se il tokenizer li produce, e padding a ZERO:
+    # RoBERTa-family ha token_type_vocab_size=1 — un vettore di UNI fa
+    # esplodere l'embedding (IndexError, misurato il 12/10/2026)
+    con_tt = "token_type_ids" in lotto[0]
+    tt = torch.zeros((len(lotto), n), dtype=torch.long) if con_tt else None
     for k, x in enumerate(lotto):
         m = len(x["input_ids"])
         ii[k, :m] = torch.tensor(x["input_ids"])
         am[k, :m] = torch.tensor(x["attention_mask"])
         ll[k] = x["labels"]
-        if "token_type_ids" in x:
+        if con_tt:
             tt[k, :m] = torch.tensor(x["token_type_ids"])
-    return {"input_ids": ii, "attention_mask": am,
-            "token_type_ids": tt, "labels": ll}
+    out = {"input_ids": ii, "attention_mask": am, "labels": ll}
+    if con_tt:
+        out["token_type_ids"] = tt
+    return out
 
 
 def spearman(a, b):
