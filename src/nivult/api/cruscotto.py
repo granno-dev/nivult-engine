@@ -149,12 +149,12 @@ def sessione_valida(cookie: str) -> bool:
 
 def _righe(dsn: str, sql: str, timeout_s: int | None = None) -> list[tuple]:
     with psycopg.connect(dsn, connect_timeout=10) as c:
-        if timeout_s:
-            # una query lenta sotto carico muore e il giro si chiude lo
-            # stesso: la pagina serve la cache, non una pagina bianca
-            # (23/09/2026: conteggi da 5+ minuti tenevano il ricalcolo
-            # in ostaggio e la cache su disco invecchiava fino a morire)
-            c.execute(f"SET statement_timeout = '{int(timeout_s)}s'")
+        # 12/10/2026: il tetto di DEFAULT esiste perche' una query senza
+        # puo' restare appesa ore sull'IO conteso (export + refresh +
+        # autovacuum insieme) e tenere il ricalcolo in ostaggio per
+        # sempre: nessun errore, nessun log, cache ferma. 120 s per le
+        # interrogazioni senza tetto proprio; chi ne serve di piu' lo dice.
+        c.execute(f"SET statement_timeout = '{int(timeout_s or 120)}s'")
         return c.execute(sql).fetchall()
 
 
