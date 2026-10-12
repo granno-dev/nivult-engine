@@ -460,6 +460,12 @@ def _pesanti(ats_dsn: str) -> dict:
 
 
 def _ricalcola_pesanti(ats_dsn: str) -> dict:
+    # 12/10/2026: le letture pesanti vanno sulla REPLICA dell'N5 quando e'
+    # configurata (ATS_REPLICA_URL). Il primario resta per chi scrive e per
+    # chi paga: ieri sera ogni scansione moriva in timeout sotto
+    # export+backup+ingestione insieme, e il cruscotto serviva il giorno
+    # prima. Il ritardo della replica (secondi) non conta per i pannelli.
+    ats_dsn = os.environ.get("ATS_REPLICA_URL") or ats_dsn
     import json as _json
     try:
         d = _calcola_pesanti(ats_dsn)
