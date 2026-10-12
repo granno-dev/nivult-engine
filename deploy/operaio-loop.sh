@@ -14,8 +14,14 @@ set -uo pipefail
 set -a; . /opt/nivult/.env; set +a
 cd /opt/nivult/engine
 PY=.venv/bin/python
+# Il battito di fondo (12/10/2026): le fasi lunghe non battevano per ore —
+# il detector gira un'ora, le lingue due — e la sentinella gridava «N5
+# muto» col loop vivo e i log pieni. Ora il battito parte ogni 10 minuti
+# comunque, con la fase letta dal file: il loop scrive la fase quando
+# cambia, il cuore batte da solo.
 battito() {   # la sentinella sul server avvisa se manca da piu' di 2 ore;
               # il cruscotto mostra la salute del N5 dalla nota (JSON)
+  echo "$1" > /tmp/n5-fase
   $PY - "$1" <<'EOF' 2>/dev/null || true
 import os, sys, json, glob, psycopg
 def _mem():
@@ -69,6 +75,9 @@ notte() {
   [ -f /opt/nivult/engine/logs/.fascia-silenziosa ] || return 1
   local h=$(TZ=Europe/Rome date +%H%M); [ $((10#$h)) -ge 2330 ] || [ $((10#$h)) -lt 700 ]
 }
+
+# il cuore indipendente dal giro: ogni 10 minuti, qualunque cosa accada
+( while true; do battito "$(cat /tmp/n5-fase 2>/dev/null || echo loop)"; sleep 600; done ) &
 
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
