@@ -78,7 +78,6 @@ MARCATORE='# nivult'
 RIGHE=$(cat <<'EOF'
 0 1 * * * /opt/nivult/nightly.sh >> /var/log/nivult-nightly.log 2>&1
 30 2 * * * /opt/nivult/ats-nightly.sh >> /opt/nivult/engine/logs/ats-cron.log 2>&1
-0 3 * * * /opt/nivult/backup.sh >> /var/log/nivult-backup.log 2>&1
 */30 * * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/retention-utenti.sh >> /var/log/nivult-retention.log 2>&1
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
@@ -188,6 +187,7 @@ altrui=$(grep -v '/opt/nivult/' <<<"$attuale" | grep -v "^${MARCATORE}" \
 # cancellare qualcosa e' nominarlo qui, per esteso, dove si vede nel
 # diff. Il ponte a 05:00 e' stato sostituito da quello ogni 30 minuti.
 OBSOLETE=$(cat <<'EOF'
+0 3 * * * /opt/nivult/backup.sh >> /var/log/nivult-backup.log 2>&1
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
 20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
