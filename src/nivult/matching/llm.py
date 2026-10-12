@@ -150,6 +150,32 @@ class Groq(ChatModel):
                               "https://api.groq.com/openai/v1")
 
 
+class MaestroLocale(ChatModel):
+    """Il giudice in casa: llama.cpp sull'N5, via Tailscale (12/10/2026).
+
+    Misurato contro GLM sulle 1.454 coppie vere: rho 0.73, AUC 0.94.
+    Nasce per il digest gratis: GLM costa e il credito puo' stare a zero.
+    Niente chiave da pagare: la base di ChatModel la esige, qui e' finta
+    di proposito — l'autenticazione e' la rete (solo Tailscale)."""
+    source = "maestro-locale"
+    model = "qwen3-4b-locale"
+    env_key = "MAESTRO_DUMMY"           # mai letta davvero: vedi __init__
+
+    def __init__(self, **kw):
+        # la base esige una chiave non vuota: quella locale e' finta di
+        # proposito — l'autenticazione e' la rete (solo Tailscale)
+        os.environ.setdefault("MAESTRO_DUMMY", "locale")
+        super().__init__(**kw)
+
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("MAESTRO_URL", "")
+
+    @classmethod
+    def disponibile(cls) -> bool:
+        return bool(os.environ.get("MAESTRO_URL"))
+
+
 class Nvidia(ChatModel):
     source = "nvidia"
     # solo nemotron-3-super risponde pulito su questo account (gli altri

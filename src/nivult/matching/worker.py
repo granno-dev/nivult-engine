@@ -41,8 +41,8 @@ from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
-from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, Groq, Nvidia,
-                                 motiva_e_analizza,
+from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, Groq, MaestroLocale,
+                                 Nvidia, motiva_e_analizza,
                                  profilo_come_testo, valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
@@ -105,9 +105,17 @@ class ValutatoreGLM:
     appiccicoso: vive solo nel processo)."""
 
     def __init__(self):
-        self.model = GLM(rate_per_second=4.0)
+        # 12/10/2026: se il maestro locale e' configurato (MAESTRO_URL,
+        # llama.cpp sull'N5) e' lui il giudice — gratis, misurato contro
+        # GLM (rho 0.73, AUC 0.94). GLM resta in catena come ripiego se
+        # l'N5 non risponde; la catena esistente copre il resto.
+        if MaestroLocale.disponibile():
+            self.model = MaestroLocale(rate_per_second=4.0)
+            self._ripieghi = [GLM(rate_per_second=4.0)]
+        else:
+            self.model = GLM(rate_per_second=4.0)
+            self._ripieghi = []
         self.totale = {"input": 0, "cached": 0, "output": 0, "chiamate": 0}
-        self._ripieghi: list = []
 
     def __enter__(self):
         return self
