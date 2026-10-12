@@ -2296,19 +2296,19 @@ class JsonLd(BaseAdapter):
     pagina carriere) + JobPosting JSON-LD su ogni annuncio — il canale
     che i siti espongono a Google for Jobs. Lo slug e' il dominio, la
     sorgente la trova `nivult.ats.jsonld` e sta in
-    ats_companies.sorgente_url. Fino a 1.000 pagine per visita (dal
-    28/09/2026: erano 200, e i 696 tenant con piu' pagine restavano «letti
-    a meta'» per sempre, con le offerte morte che non scadevano). E' un
-    lettore per PMI, non per le agenzie (quelle hanno `agenzie.py`,
-    che sa quali pagine ha gia' visto).
+    ats_companies.sorgente_url. Fino a 15.000 pagine per visita (200 al
+    28/09/2026, 5.000 dal 05/10, 15.000 dal 12/10: Giuseppe vuole zero
+    tenant letti a meta' — al tetto restavano ~50 siti, portali comunali
+    con migliaia di pagine). E' un lettore per PMI, non per le agenzie
+    (quelle hanno `agenzie.py`, che sa quali pagine ha gia' visto).
     """
     platform_id = "jsonld"
-    # 05/10/2026: 2.500 -> 5.000. Al tetto restavano ~28 tenant «letti a
-    # meta'» (la coda lunga dei portali comunali/PA: misurato, il 90esimo
-    # percentile dei parziali e' 2.499 pagine — gli altri 256 «parziali»
-    # sono errori a meta' giro, non il tetto). Raddoppiare costa solo su
-    # quei ~28 siti lenti, non sul giro intero.
-    MASSIMO_PAGINE = 5000
+    # 12/10/2026: 5.000 -> 15.000. Giuseppe: «non voglio nessun tenant
+    # letto a meta' se possiamo evitarlo». Restano sotto tetto ~50 siti
+    # grandi (portali comunali/PA con migliaia di pagine): costa solo su
+    # di loro. I ~330 «parziali» con poche offerte non sono il tetto:
+    # sono errori a meta' giro, e si curano con una rilettura pulita.
+    MASSIMO_PAGINE = 15000
 
     def jobs(self, slug: str, sorgente_url: str | None = None) -> list[AtsJob]:
         from urllib.parse import urlparse
