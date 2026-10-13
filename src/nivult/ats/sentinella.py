@@ -137,7 +137,13 @@ def _controlli() -> list[Condizione]:
                   -- scelta, e contarli teneva aperto da giorni un incidente su 99.309
                   -- tenant di cui zero con offerte e zero piu' vecchi di 7 giorni (21/09/2026)
                   AND ac.job_count > 0""").fetchone()[0]
-            if o24 > 20000:
+            # 13/10/2026: soglia da 20.000 a 35.000. La capacita' MISURATA del
+            # giro di rivisita e' ~1.100 tenant/ora — con ~70.000 attivi con
+            # offerte il giro completo dura ~64 ore per costruzione, quindi
+            # ~25.000 oltre le 24h sono la normalita', non un incidente. Il
+            # rumore quotidiano nascondeva i guasti veri; sotto i 35.000 non
+            # si grida piu'.
+            if o24 > 35000:
                 c.append(Condizione("codone affamato", "info", "aziende non riviste da 24h",
                                     f"{o24} tenant oltre 24h"))
             # scadenze anomale: viste di recente E scadute negli ultimi 15 minuti
@@ -160,7 +166,13 @@ def _controlli() -> list[Condizione]:
                 if med is not None and med < 10:
                     c.append(Condizione(f"scadenze precoci {pid}", "avviso", f"scadenze precoci su {pid}",
                                         f"{n} scadute in 6h con vita mediana {med:.0f} giorni: l'adapter legge tutto l'elenco?"))
-            parz = db.execute("""SELECT count(*) FROM ats_companies WHERE lettura_parziale AND job_count > 0""").fetchone()[0]
+            # 13/10/2026: fuori dal conto chi il tetto lo tocca per
+            # COSTRUZIONE (i portali-aggregatori con piu' pagine del tetto,
+            # ~14.000+ offerte: qualitycontracts, mozibox e simili) — sono
+            # undici, non guariranno mai, e tenerli nel numero copriva il
+            # segnale dei parziali veri (errori a meta' giro, curabili).
+            parz = db.execute("""SELECT count(*) FROM ats_companies
+                WHERE lettura_parziale AND job_count > 0 AND job_count < 14000""").fetchone()[0]
             if parz > 300:
                 c.append(Condizione("letture parziali", "info", "tenant letti a meta'",
                                     f"{parz} tenant toccano il tetto di pagine: le loro offerte non scadono, alzare il tetto"))
