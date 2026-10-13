@@ -179,6 +179,44 @@ class MaestroLocale(ChatModel):
         return bool(os.environ.get("MAESTRO_URL"))
 
 
+class Scrittore(ChatModel):
+    """Chi SCRIVE le frasi del digest (14/10/2026).
+
+    Separato dal giudice: il punteggio resta sul 4B misurato (rho 0.73),
+    la prosa va al modello piu' grande di casa (Qwen3.6-35B-A3B, MoE,
+    porta 8091). Il 4B giudicava bene ma scriveva male: 18 ripieghi su 30
+    nel digest vero, e le 12 passate si somigliavano tutte. Giudicare e
+    scrivere sono due mestieri; un modello solo li faceva entrambi male a
+    meta'."""
+    source = "scrittore-locale"
+    model = "qwen3.6-35b-locale"
+    env_key = "SCRITTORE_DUMMY"
+
+    def __init__(self, **kw):
+        os.environ.setdefault("SCRITTORE_DUMMY", "locale")
+        super().__init__(**kw)
+
+    @property
+    def base_url(self) -> str:
+        return os.environ.get("SCRITTORE_URL", "")
+
+    @classmethod
+    def disponibile(cls) -> bool:
+        return bool(os.environ.get("SCRITTORE_URL"))
+
+    def chat(self, messages, *, temperature=0.0, max_tokens=4000,
+             extra=None):
+        # Qwen3.6 PENSA di default: col pensiero acceso il budget di token
+        # lo mangia il ragionamento e content torna vuoto (misurato il
+        # 14/10: il digest intero al ripiego per risposte vuote). Per
+        # scrivere JSON su rubrica il pensiero non serve: si spegne, come
+        # gia' per nemotron.
+        payload_extra = dict(extra or {})
+        payload_extra["chat_template_kwargs"] = {"enable_thinking": False}
+        return super().chat(messages, temperature=temperature,
+                            max_tokens=max_tokens, extra=payload_extra)
+
+
 class Nvidia(ChatModel):
     source = "nvidia"
     # solo nemotron-3-super risponde pulito su questo account (gli altri
@@ -574,7 +612,8 @@ def _campi_analisi(p: dict, lingua: str) -> dict:
 def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
                       desiderio: str | None = None,
                       lingua: str = "English",
-                      evita: list[str] | None = None) -> tuple[str, dict, dict]:
+                      evita: list[str] | None = None,
+                      nota: str | None = None) -> tuple[str, dict, dict]:
     """Seconda passata di consegna: motivazione E analisi in UNA chiamata.
 
     Nasce dal conto della serva: la finestra di dettaglio del pannello
@@ -596,6 +635,10 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
                  "digest:\n" + "\n".join(f"- «{e}»" for e in evita[-8:])
                  + "\nIl lettore le vedra' una dopo l'altra: non riusare "
                    "quelle frasi ne' quegli attacchi.")
+    if nota:
+        # il secondo tentativo porta il perche' del primo: stessa coda,
+        # piu' il rimprovero del verificatore in fondo, dove si legge
+        coda += f"\n\nAL PRIMO GIRO HAI SBAGLIATO: {nota}"
     corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
         "role": "user", "content": coda}]
     risposta = modello.chat(corpo, max_tokens=900)
@@ -647,8 +690,9 @@ def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
 #     molto piu' facile per un modello piccolo. «La frase gli attribuisce
 #     qualcosa che il profilo non ha?» si/no.
 #
-# Chi fallisce non si ritenta (temperatura 0 = stessa frase): si sostituisce
-# con il ripiego deterministico, che puo' dire solo il vero.
+# Chi fallisce riprova UNA volta col rimprovero in coda (l'input cambia,
+# quindi l'output cambia anche a temperatura 0), poi il ripiego
+# deterministico, che puo' dire solo il vero.
 
 VERIFICA = """Controlla questa frase scritta per il candidato:
 
@@ -703,22 +747,38 @@ def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
                       ripiego: str,
                       evita: list[str] | None = None) -> tuple[str, dict, dict]:
     """motiva_e_analizza + la verifica. La reason che esce da qui o e'
-    sostenuta dal profilo o e' il ripiego deterministico: mai un'invenzione."""
-    reason, analisi, uso = motiva_e_analizza(modello, profilo_testo, offerta,
-                                             desiderio, lingua, evita=evita)
-    prova = analisi.pop("_prova", None)
-    n_fatti = len(re.findall(r"^\[\d+\]", profilo_testo, re.M))
-    indici = _indici_prova(prova, n_fatti)
-    if indici is None:
-        # la prova citata non sta nei fatti: la frase non si fida
-        log.info("motivazione con prova fuori scala (%s): ripiego",
-                 offerta.get("id"))
-        return ripiego, analisi, uso
-    if _inventata(modello, reason, profilo_testo):
-        log.info("motivazione bocciata dal verificatore (%s): ripiego",
-                 offerta.get("id"))
-        return ripiego, analisi, uso
-    return reason, analisi, uso
+    sostenuta dal profilo o e' il ripiego deterministico: mai un'invenzione.
+
+    Chi fallisce NON va al ripiego subito: il secondo tentativo porta il
+    perche' del primo (gli indici erano fuori scala / il verificatore ha
+    trovato un'invenzione). La temperatura e' 0 ma l'input cambia, quindi
+    l'output cambia: e' la riflessione, non la ripetizione."""
+    nota = None
+    analisi: dict = {}
+    for _ in range(2):
+        reason, analisi, uso = motiva_e_analizza(modello, profilo_testo,
+                                                 offerta, desiderio, lingua,
+                                                 evita=evita, nota=nota)
+        prova = analisi.pop("_prova", None)
+        n_fatti = len(re.findall(r"^\[\d+\]", profilo_testo, re.M))
+        indici = _indici_prova(prova, n_fatti)
+        if indici is None:
+            log.info("prova fuori scala (%s): seconda possibilita'",
+                     offerta.get("id"))
+            nota = ("La PROVA che hai scritto non sono numeri dei fatti del "
+                    "profilo, o puntano fuori scala. Riscrivi: ogni "
+                    "affermazione sul candidato cita i suoi fatti [n].")
+            continue
+        if _inventata(modello, reason, profilo_testo):
+            log.info("bocciata dal verificatore (%s): seconda possibilita'",
+                     offerta.get("id"))
+            nota = ("La frase attribuiva al candidato qualcosa che il "
+                    "profilo non ha. Riscrivi usando SOLO i fatti numerati: "
+                    "un requisito dell'offerta non e' mai una sua dote.")
+            continue
+        return reason, analisi, uso
+    log.info("motivazione al ripiego dopo il retry (%s)", offerta.get("id"))
+    return ripiego, analisi, uso
 
 
 def valuta(modello: ChatModel, profilo: dict, jobs: list[dict], *,

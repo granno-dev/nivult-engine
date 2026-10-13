@@ -42,7 +42,8 @@ from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
 from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, Groq, MaestroLocale,
-                                 Nvidia, motiva_e_analizza, motiva_verificata,
+                                 Nvidia, Scrittore, motiva_e_analizza,
+                                 motiva_verificata,
                                  profilo_come_testo, valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
@@ -109,12 +110,17 @@ class ValutatoreGLM:
         # llama.cpp sull'N5) e' lui il giudice — gratis, misurato contro
         # GLM (rho 0.73, AUC 0.94). GLM resta in catena come ripiego se
         # l'N5 non risponde; la catena esistente copre il resto.
+        # 14/10/2026: chi SCRIVE e' un altro modello (SCRITTORE_URL, il
+        # 35B di casa): giudicare e scrivere sono due mestieri, e il 4B
+        # scriveva male (18 ripieghi su 30 nel digest vero).
         if MaestroLocale.disponibile():
             self.model = MaestroLocale(rate_per_second=4.0)
             self._ripieghi = [GLM(rate_per_second=4.0)]
         else:
             self.model = GLM(rate_per_second=4.0)
             self._ripieghi = []
+        self.scrittore = (Scrittore(rate_per_second=4.0)
+                          if Scrittore.disponibile() else None)
         self.totale = {"input": 0, "cached": 0, "output": 0, "chiamate": 0}
 
     def __enter__(self):
@@ -179,13 +185,23 @@ class ValutatoreGLM:
         # `evita`: le frasi gia' scritte in questo digest — 18 motivazioni
         # su 30 col medesimo attacco, misurato sul digest vero.
         ripiego = t(locale)["motivo_fallback"]
-        try:
-            reason, analisi, uso = motiva_verificata(
-                self.model, profilo_testo, offerta, offerta.get("_wants"),
-                lingua, ripiego, evita=evita)
-        except RuntimeError as e:
-            if not self._passa_al_ripiego(e):
-                raise
+        # Le penne in ordine: lo scrittore (il 35B di casa), poi il giudice
+        # locale, poi la catena di ripiego di sempre.
+        penne = ([self.scrittore] if self.scrittore else []) + [self.model]
+        ultimo: RuntimeError | None = None
+        reason, analisi, uso = ripiego, {}, {}
+        for penna in penne:
+            try:
+                reason, analisi, uso = motiva_verificata(
+                    penna, profilo_testo, offerta, offerta.get("_wants"),
+                    lingua, ripiego, evita=evita)
+                ultimo = None
+                break
+            except RuntimeError as e:
+                ultimo = e
+        if ultimo is not None:
+            if not self._passa_al_ripiego(ultimo):
+                raise ultimo
             reason, analisi, uso = motiva_verificata(
                 self.model, profilo_testo, offerta, offerta.get("_wants"),
                 lingua, ripiego, evita=evita)
