@@ -46,6 +46,10 @@ from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
 from nivult.delivery import whatsapp as whatsapp_mod
+# Lo stipendio esce FORMATTATO dalla API: il JSONB di schema.org
+# ({'@type', 'value', 'currency'}) e' un dettaglio di archivio — chi lo
+# mostrava grezzo prendeva un oggetto React al posto di una riga di testo.
+from nivult.delivery.email import stipendio as _fmt_stipendio
 from nivult.matching.llm import GLM
 from nivult.matching.worker import calcola_slot
 
@@ -965,7 +969,8 @@ def create_app() -> FastAPI:
 
     @app.get("/me/offerte")
     def mie_offerte(uid: str = Depends(utente), conn=Depends(connessione),
-                    limite: int = Query(40, ge=1, le=100)):
+                    limite: int = Query(40, ge=1, le=100),
+                    lingua: str = Query("en")):
         """Le offerte che hanno superato la soglia per questo utente.
 
         Solo quelle passate: le scartate sono rumore, e mostrarle
@@ -997,7 +1002,8 @@ def create_app() -> FastAPI:
                 # Serve al sito per l'etichetta di trasparenza: "candidatura
                 # diretta" oppure "via <agenzia nazionale>".
                 "link_kind": r[6], "id": r[7], "tipo_datore": r[8],
-                "citta": (r[9] or [None])[0], "stipendio": r[10],
+                "citta": (r[9] or [None])[0],
+                "stipendio": _fmt_stipendio(r[10], lingua) or None,
                 "logo": f"/logo/{r[11]}" if r[11] else None,
                 "archiviata": r[12],
             } for r in righe],
@@ -1634,7 +1640,8 @@ def create_app() -> FastAPI:
             "quando": quando.isoformat() if quando else None,
             "titolo": titolo, "azienda": azienda, "url": url,
             "link_kind": link_kind, "tipo_datore": tipo_datore,
-            "citta": (citta or [None])[0], "stipendio": stipendio,
+            "citta": (citta or [None])[0],
+            "stipendio": _fmt_stipendio(stipendio, lingua or "en") or None,
             "logo": f"/logo/{slug}" if slug else None,
             "archiviata": purgata,
             "annuncio": {
