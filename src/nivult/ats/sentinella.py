@@ -193,7 +193,11 @@ def _controlli() -> list[Condizione]:
                     count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL)
                 FROM ats_jobs WHERE locale_v1_at > now() - interval '1 hour'
                    OR (expired_at IS NULL AND locale_v1_at IS NULL)""").fetchone()
-            if in_coda > 5000 and viste_ora < 3000:
+            # 13/10/2026: soglia da 3000 a 1500. Da oggi l'N5 ospita anche la
+            # corsia di casa e il maestro: in contesa v1 fa ~2.200/h ed e' SANO
+            # (il caso morto lo copre la guardia dell'operaio, che riparte da
+            # sola sotto ~430/h). Il ripiego CPU misurato fa ~1.080/h.
+            if in_coda > 5000 and viste_ora < 1500:
                 c.append(Condizione("v1 lento", "avviso", "nivult-v1 rallentato",
                                     f"{viste_ora} offerte viste in un'ora con {in_coda} in coda: "
                                     f"scheda del N5 bloccata o ripiego sulla CPU? Riavviare il N5"))
