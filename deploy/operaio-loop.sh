@@ -76,8 +76,70 @@ notte() {
   local h=$(TZ=Europe/Rome date +%H%M); [ $((10#$h)) -ge 2330 ] || [ $((10#$h)) -lt 700 ]
 }
 
+# AUTO-CURA v1 (13/10/2026): il demone restava VIVO ma degradato — la GPU
+# si perde e torch ripiega sulla CPU in silenzio, o il link Tailscale muore
+# e il processo non se ne accorge. Ogni giorno la stessa segnalazione, e
+# ogni giorno aspettava un umano che riavviasse. Ora il cuore che batte
+# ogni 10 minuti misura il passo VERO dai marcatori nel DB: sotto i 500
+# visti in 70 minuti con la coda lunga, il demone si uccide e riparte
+# pulito. Al massimo un riavvio l'ora: se non basta, il guasto e' altrove
+# e serve il medico, non un altro giro di giostra.
+guardia_v1() {
+  $PY - <<'EOF' 2>/dev/null || true
+import os, signal, subprocess, time
+import psycopg
+
+MARKER = "/tmp/n5-v1-riavvii"
+with psycopg.connect(os.environ["ATS_DATABASE_URL"]) as c:
+    visti, coda = c.execute("""
+        SELECT count(*) FILTER (WHERE locale_v1_at > now() - interval '70 minutes'),
+               count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL)
+          FROM ats_jobs
+         WHERE locale_v1_at > now() - interval '70 minutes'
+            OR (expired_at IS NULL AND locale_v1_at IS NULL)""").fetchone()
+if coda <= 5000 or visti >= 500:
+    raise SystemExit                       # sano: o lavora o non c'e' lavoro
+ora = time.strftime("%Y%m%d%H")
+try:
+    if open(MARKER).read().strip() == ora:
+        raise SystemExit                   # gia' riavviato in quest'ora
+except OSError:
+    pass
+open(MARKER, "w").write(ora)
+for pid in subprocess.run(["pgrep", "-f", "nivult.ats.classifica_v1 --continuo"],
+                          capture_output=True, text=True).stdout.split():
+    os.kill(int(pid), signal.SIGTERM)
+time.sleep(5)
+log = open("/opt/nivult/engine/logs/classifica-v1.log", "a")
+subprocess.Popen(["nice", "-n", "5", ".venv/bin/python",
+                  "-m", "nivult.ats.classifica_v1", "--continuo"],
+                 cwd="/opt/nivult/engine", stdout=log, stderr=subprocess.STDOUT,
+                 start_new_session=True)
+print(f"guardia-v1: demone riavviato (visti {visti}/70min, coda {coda})",
+      flush=True)
+EOF
+}
+
+# Gli endpoint CONDIVISI (un host API per migliaia di tenant) restano su
+# Hetzner, dove il rate gate del runner e' uno solo per piattaforma. Tutto
+# il resto (host per-tenant, nessun gate) lo copre la corsia di casa.
+GATE="greenhouse,lever,smartrecruiters,ashby,recruitee,workable,ukg"
+
+# IL MAESTRO e' un processo del container come gli altri demoni — e un
+# riavvio del container lo uccide (13/10/2026: il digest e' finito sul
+# ripiego a pagamento per un'ora perche' nessuno lo sapeva). Il cuore lo
+# rialza entro 10 minuti, qualunque cosa stia facendo il giro.
+guardia_maestro() {
+  pgrep -f "llama-server -m /opt/nivult/llama/Qwen3-4B" >/dev/null && return
+  ( cd /opt/nivult/llama/rocm && nohup ./llama-server \
+      -m /opt/nivult/llama/Qwen3-4B-Instruct-2507-Q4_K_M.gguf \
+      --host 100.119.200.7 --port 8090 -ngl 99 -fa on -c 8192 -np 2 \
+      --cache-reuse 256 >> /opt/nivult/engine/logs/maestro-server.log 2>&1 & )
+  echo "-- maestro riavviato dalla guardia (era giu')" >> /opt/nivult/engine/logs/operaio.log
+}
+
 # il cuore indipendente dal giro: ogni 10 minuti, qualunque cosa accada
-( while true; do battito "$(cat /tmp/n5-fase 2>/dev/null || echo loop)"; sleep 600; done ) &
+( while true; do battito "$(cat /tmp/n5-fase 2>/dev/null || echo loop)"; guardia_v1; guardia_maestro; sleep 600; done ) &
 
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
@@ -123,6 +185,18 @@ while true; do
   if ! pgrep -f "nivult.ats.gocciolatoio" >/dev/null; then
     nohup nice -n 10 $PY -m nivult.ats.gocciolatoio >> /opt/nivult/engine/logs/gocciolatoio.log 2>&1 &
     echo "-- gocciolatoio avviato come demone"
+  fi
+  # LA CORSIA DI CASA (13/10/2026, deciso da Giuseppe): lo scrape delle
+  # piattaforme SENZA rate gate gira qui — 24 core che dormivano e l'IP
+  # di casa, che i filtri anti-bot trattano meglio del datacenter. Su
+  # Hetzner restano gli endpoint condivisi (GATE), il database e l'API:
+  # il server era annegato (70% di attesa I/O su 4 vCPU) e il giro di
+  # rivisita durava 64 ore. Demone come v1: il giro non deve aspettarlo.
+  if ! pgrep -f "nivult.ats.runner --continuo" >/dev/null; then
+    nohup nice -n 8 $PY -m nivult.ats.runner --continuo --thread 80 \
+      --limite 2000 \
+      --salta "$GATE" >> /opt/nivult/engine/logs/scrape-casa.log 2>&1 &
+    echo "-- corsia di casa avviata (scrape senza gate, 80 thread)"
   fi
   # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
   # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
