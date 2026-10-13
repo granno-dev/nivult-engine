@@ -2344,6 +2344,14 @@ class JsonLd(BaseAdapter):
                 p = self.client.get(u)
             except httpx.HTTPError:
                 return False
+            # 13/10/2026: un 404 non e' una lettura fallita, e' una risposta
+            # definitiva — l'annuncio e' stato tolto e la sitemap non lo sa
+            # ancora. Contava come fallita, e nei tenant PICCOLI bastava una
+            # pagina morta su tre a superare il decimo: 238 tenant con
+            # poche offerte restavano «parziali» per sempre, rilettura dopo
+            # rilettura.
+            if p.status_code in (404, 410):
+                return True
             if p.status_code != 200:
                 return False
             jp = _estrai_ld(p.text)
@@ -2369,7 +2377,16 @@ class JsonLd(BaseAdapter):
                 raw=raw))
             return True
 
-        fallite = [u for u in urls[:self.MASSIMO_PAGINE] if not _pagina(u)]
+        # 13/10/2026: le pagine del tenant si leggono in PARALLELO (4 per
+        # volta). In serie un portale da migliaia di pagine teneva un thread
+        # del runner per minuti, e la coda lunga dei jsonld era il tappo del
+        # giro di rivisita. httpx.Client e' thread-safe e out.append e'
+        # atomico col GIL: niente serrature.
+        pagine = urls[:self.MASSIMO_PAGINE]
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            fallite = [u for u, ok in zip(pagine, pool.map(_pagina, pagine))
+                       if not ok]
         # 08/10/2026: un secondo giro sulle fallite prima di dichiarare la
         # lettura parziale. Il cruscotto contava ~280 tenant jsonld «al
         # tetto», ma il tetto lo toccano in pochissimi (misura del 05/10):
