@@ -321,7 +321,8 @@ def _lettura_vuota(conn, az: dict, pagina: str | None, campioni_ora: dict) -> tu
 
 def scrape(dsn: str, piattaforma: str | None = None,
            thread: int = 10, limite: int | None = None,
-           solo_attivi: bool = False) -> dict[str, int]:
+           solo_attivi: bool = False,
+           salta: set[str] | None = None) -> dict[str, int]:
     """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
 
     Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
@@ -333,6 +334,12 @@ def scrape(dsn: str, piattaforma: str | None = None,
     Con `limite` scarica solo le prime N aziende per priorita': serve al
     demone che gira in continuo a piccoli lotti invece di un giro unico
     da ore. La priorita' e' l'ordine qui sotto.
+
+    `salta` (13/10/2026): le piattaforme da NON toccare in questa corsia.
+    Lo scrape si divide per macchina — gli endpoint condivisi col rate
+    gate su Hetzner, gli host per-tenant sulla corsia di casa (N5) — e
+    l'esclusione e' cio' che garantisce che le due corsie non leggano
+    mai lo stesso tenant.
     """
     stats = {"aziende": 0, "offerte": 0, "nuove": 0, "aggiornate": 0,
              "fallite": 0}
@@ -345,8 +352,15 @@ def scrape(dsn: str, piattaforma: str | None = None,
                    "WHERE ac.is_active AND ap.is_active")
             params: list = []
             if piattaforma:
-                sql += " AND ac.platform_id = %s"
-                params.append(piattaforma)
+                # 13/10/2026: l'elenco con virgole — la corsia di Hetzner
+                # copre gli endpoint condivisi in un processo solo, cosi'
+                # il rate gate resta unico per piattaforma.
+                lista = [p.strip() for p in piattaforma.split(",") if p.strip()]
+                sql += " AND ac.platform_id = ANY(%s)"
+                params.append(lista)
+            if salta:
+                sql += " AND NOT (ac.platform_id = ANY(%s))"
+                params.append(sorted(salta))
             if solo_attivi:
                 # corsia veloce: solo i tenant che HANNO offerte, rivisitati
                 # di continuo dal piu' stantio — cosi' le posizioni appena
@@ -584,7 +598,10 @@ def stats(dsn: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.runner", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--piattaforma", help="solo questa piattaforma (greenhouse, …)")
+    ap.add_argument("--piattaforma", help="solo queste piattaforme (elenco con virgole: greenhouse,ashby,…)")
+    ap.add_argument("--salta", default=None,
+                    help="MAI queste piattaforme (elenco con virgole): la "
+                         "corsia di casa le lascia a Hetzner e viceversa")
     ap.add_argument("--stats", action="store_true", help="solo statistiche")
     ap.add_argument("--semina", action="store_true",
                     help="estrai aziende dal database di produzione (sola lettura)")
@@ -628,15 +645,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"seminate {n} aziende dal database di produzione")
 
     if not args.stats:
+        salta = set(args.salta.split(",")) if args.salta else None
         if args.continuo:
             import time as _t
             while True:
                 s = scrape(dsn, args.piattaforma, thread=args.thread,
-                           limite=args.limite, solo_attivi=args.solo_attivi)
+                           limite=args.limite, solo_attivi=args.solo_attivi,
+                           salta=salta)
                 print("scrape:", s, flush=True)
                 _t.sleep(5)
         s = scrape(dsn, args.piattaforma, thread=args.thread,
-                   limite=args.limite, solo_attivi=args.solo_attivi)
+                   limite=args.limite, solo_attivi=args.solo_attivi,
+                   salta=salta)
         if s.get("sospette"):
             print(f"\n⚠ {s['sospette']} letture SOSPETTE (adapter a zero su tenant con offerte ancora in pagina)")
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "

@@ -33,7 +33,8 @@ while true; do
   # 26/09/2026: il grep mostrava SOLO le righe «scrape:» — un traceback
   # del runner spariva nella pipe e il loop riprovava cieco per sempre.
   # Ora passano anche errori e traceback.
-  timeout -k 30 45m "$PY" -m nivult.ats.runner --limite 500 --thread 16 2>&1 \
+  timeout -k 30 45m "$PY" -m nivult.ats.runner --limite 500 --thread 16 \
+    --piattaforma "greenhouse,lever,smartrecruiters,ashby,recruitee,workable,ukg" 2>&1 \
     | grep -E "scrape:|Traceback|Error|error" || true
   # una pausa breve tra i lotti: gentilezza verso le piattaforme
   # condivise (greenhouse, lever...) per non farsi limitare

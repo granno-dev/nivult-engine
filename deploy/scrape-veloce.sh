@@ -29,7 +29,8 @@ while true; do
     continue
   fi
   fallimenti_db=0
-  timeout -k 30 60m "$PY" -m nivult.ats.runner --solo-attivi --limite 2000 --thread 30 2>&1 \
+  timeout -k 30 60m "$PY" -m nivult.ats.runner --solo-attivi --limite 2000 --thread 30 \
+    --piattaforma "greenhouse,lever,smartrecruiters,ashby,recruitee,workable,ukg" 2>&1 \
     | grep -E "scrape:|Traceback|Error|error" || true
   sleep 5
 done
