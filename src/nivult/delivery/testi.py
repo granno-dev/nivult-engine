@@ -61,6 +61,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Open the posting",
         "aderenza": "Match",
+        "motivo_fallback": "Over your bar on role and level — the detail is in the posting.",
         "saluto": "Dear",  # aggiunto per il saluto personale del digest
         "saluto_fallback": "candidate",
         "piede": "You receive this digest because you subscribed to Nivult. "
@@ -88,6 +89,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Apri l'offerta",
         "aderenza": "Aderenza",
+        "motivo_fallback": "Sopra la tua soglia per ruolo e livello — il dettaglio è nell'offerta.",
         "saluto": "Gentile",
         "saluto_fallback": "candidato",
         "piede": "Ricevi questo digest perché sei iscritto a Nivult. "
@@ -115,6 +117,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Voir l'offre",
         "aderenza": "Adéquation",
+        "motivo_fallback": "Au-dessus de votre seuil pour le rôle et le niveau — le détail est dans l'offre.",
         "saluto": "Bonjour",
         "saluto_fallback": "candidat",
         "piede": "Vous recevez ce digest car vous êtes inscrit à Nivult. "
@@ -142,6 +145,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Über {fonte}",
         "apri": "Stelle ansehen",
         "aderenza": "Passung",
+        "motivo_fallback": "Über Ihrer Schwelle bei Rolle und Niveau — das Detail steht in der Anzeige.",
         "saluto": "Guten Tag",
         "saluto_fallback": "Bewerber",
         "piede": "Du erhältst diesen Digest, weil du Nivult abonniert hast. "
@@ -171,6 +175,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Vía {fonte}",
         "apri": "Ver la oferta",
         "aderenza": "Afinidad",
+        "motivo_fallback": "Por encima de tu umbral en rol y nivel — el detalle está en la oferta.",
         "piede": "Recibes este digest porque estás suscrito a Nivult. "
                  "Gestiona tus preferencias en nivult.com.",
         "piede_testo": "Recibes este digest porque estás suscrito a Nivult.\n"
@@ -198,6 +203,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Ver a vaga",
         "aderenza": "Adequação",
+        "motivo_fallback": "Acima do seu limiar em função e nível — o detalhe está no anúncio.",
         "piede": "Recebe este digest porque está inscrito na Nivult. "
                  "Gira as suas preferências em nivult.com.",
         "piede_testo": "Recebe este digest porque está inscrito na Nivult.\n"
@@ -225,6 +231,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Bekijk de vacature",
         "aderenza": "Match",
+        "motivo_fallback": "Boven je drempel voor rol en niveau — het detail staat in de vacature.",
         "piede": "Je ontvangt deze digest omdat je bent aangemeld bij Nivult. "
                  "Beheer je voorkeuren op nivult.com.",
         "piede_testo": "Je ontvangt deze digest omdat je bent aangemeld bij Nivult.\n"
@@ -253,6 +260,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Przez {fonte}",
         "apri": "Zobacz ofertę",
         "aderenza": "Dopasowanie",
+        "motivo_fallback": "Powyżej Twojego progu pod względem roli i poziomu — szczegóły w ogłoszeniu.",
         "piede": "Otrzymujesz ten digest, ponieważ masz subskrypcję Nivult. "
                  "Preferencje zmienisz na nivult.com.",
         "piede_testo": "Otrzymujesz ten digest, ponieważ masz subskrypcję Nivult.\n"
@@ -280,6 +288,7 @@ TESTI: dict[str, dict[str, str]] = {
         "via": "Via {fonte}",
         "apri": "Se annonsen",
         "aderenza": "Matchning",
+        "motivo_fallback": "Över din gräns för roll och nivå — detaljen står i annonsen.",
         "piede": "Du får det här digestet eftersom du prenumererar på Nivult. "
                  "Hantera dina inställningar på nivult.com.",
         "piede_testo": "Du får det här digestet eftersom du prenumererar på Nivult.\n"

@@ -13,11 +13,14 @@ dalla documentazione, non da una risposta vista.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
 
 from nivult.ingestion.base import HttpSource
+
+log = logging.getLogger("nivult.matching.llm")
 
 # La versione delle rubriche di punteggio. SI ALZA A MANO, e si alza ogni
 # volta che una modifica sposta i punteggi: soglie, regole di valutazione,
@@ -324,6 +327,12 @@ di payroll resta nel suo mestiere: cambia il taglio, non il campo.
 Non premiare un'offerta perche' prestigiosa o ben scritta: conta solo
 l'aderenza al profilo.
 
+MAI attribuire al candidato un requisito dell'OFFERTA che il profilo non
+ha. Se l'annuncio chiede il cinese e il suo profilo non ce l'ha, il motivo
+e' «chiedono il cinese» — non «parli cinese». Misurato sul digest del
+13/10/2026: il modello aveva regalato al candidato la patente A e il
+cinese perche' l'offerta li nominava.
+
 Rispondi SOLO con questo JSON, niente altro:
 {{"score": <0-100>, "reason": "<one sentence in {lingua}, max 10 words>"}}
 
@@ -364,12 +373,21 @@ Rispondi SOLO con questo JSON, niente altro:
 
 RUBRICA_CONSEGNA = """Sei un selezionatore esperto che consegna un'offerta
 al candidato giusto. Rispondi SOLO con questo JSON:
-{{"reason": "...", "perche": "...", "pros": ["..."], "cons": ["..."],
-  "responsabilita": "...", "requisiti": "...", "benefit": "..."}}
+{{"reason": "...", "prova": "...", "perche": "...", "pros": ["..."],
+  "cons": ["..."], "responsabilita": "...", "requisiti": "...",
+  "benefit": "..."}}
 - reason: la riga che il lettore vede NEL DIGEST. Massimo 25 parole, in
   DUE frasi brevi: la prima dice cosa chiede QUESTA offerta, la seconda
   cosa, nel suo percorso, la soddisfa. Dagli del TU: stai scrivendo a lui,
   non a un selezionatore che valuta una pratica.
+  MAI attribuire al candidato un requisito dell'OFFERTA che il profilo non
+  ha. Se l'annuncio chiede il cinese e il suo profilo non ce l'ha, si
+  scrive «chiedono il cinese» — non «parli cinese». Un'invenzione qui
+  brucia la fiducia in tutto il messaggio.
+- prova: i NUMERI dei fatti del profilo su cui si regge la seconda frase,
+  come lista: [3, 7]. Ogni affermazione sul candidato deve avere il suo
+  numero; se la frase parla solo dell'offerta, []. Se nessun numero regge
+  la frase che vorresti scrivere, quella frase non si puo' scrivere.
   LA FORMA LA SCEGLIE IL CONTENUTO, non il caso. Ogni motivazione nasce
   da una chiamata separata: il modello non sa cosa ha scritto per le altre
   offerte dello stesso digest, quindi «varia» non è un'istruzione che può
@@ -413,14 +431,22 @@ al candidato giusto. Rispondi SOLO con questo JSON:
 
 
 def profilo_come_testo(profilo: dict) -> str:
-    parti = [f"Ruolo cercato: {profilo.get('ruolo','—')}",
-             f"Seniority: {profilo.get('seniority','—')}",
-             f"Competenze: {', '.join(profilo.get('competenze', []))}",
-             f"Lingue: {', '.join(profilo.get('lingue', []))}",
-             f"Sedi accettate: {', '.join(profilo.get('sedi', []))}"]
+    """Il profilo come elenco NUMERATO di fatti (13/10/2026).
+
+    La numerazione e' il contratto anti-invenzione: la rubrica di consegna
+    cita i fatti per numero ([3], [7]) e la verifica li controlla con un
+    confronto fra interi. La copia letterale era troppo difficile per un
+    modello da 4B — parafrasava, e quattordici motivazioni su quattordici
+    cadevano al controllo della sottostringa."""
+    fatti = [f"Ruolo cercato: {profilo.get('ruolo','—')}",
+             f"Seniority: {profilo.get('seniority','—')}"]
+    fatti += [f"Competenza: {c}" for c in profilo.get("competenze", [])]
+    fatti += [f"Lingua: {l}" for l in profilo.get("lingue", [])]
+    if profilo.get("sedi"):
+        fatti.append(f"Sedi accettate: {', '.join(profilo['sedi'])}")
     if profilo.get("note"):
-        parti.append(f"Note: {profilo['note']}")
-    return "\n".join(parti)
+        fatti.append(f"Note: {profilo['note']}")
+    return "\n".join(f"[{i + 1}] {f}" for i, f in enumerate(fatti))
 
 
 def offerta_come_testo(job: dict) -> str:
@@ -538,12 +564,17 @@ def _campi_analisi(p: dict, lingua: str) -> dict:
     return {"perche": testo("perche", 300), "pros": pros, "cons": cons,
             "responsabilita": testo("responsabilita", 700),
             "requisiti": testo("requisiti", 700),
-            "benefit": testo("benefit", 500), "lang": lingua}
+            "benefit": testo("benefit", 500), "lang": lingua,
+            # la prova viaggia GREZZA fino alla verifica (e' una lista di
+            # indici, non testo), poi si stacca: non e' contenuto per il
+            # lettore, e' il sostegno della frase.
+            "_prova": p.get("prova")}
 
 
 def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
                       desiderio: str | None = None,
-                      lingua: str = "English") -> tuple[str, dict, dict]:
+                      lingua: str = "English",
+                      evita: list[str] | None = None) -> tuple[str, dict, dict]:
     """Seconda passata di consegna: motivazione E analisi in UNA chiamata.
 
     Nasce dal conto della serva: la finestra di dettaglio del pannello
@@ -551,9 +582,22 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
     prefisso. Qui il prefisso e' gia' caldo (stesso profilo della
     valutazione appena fatta) e la chiamata esisteva comunque per la
     motivazione: l'analisi costa solo l'output in piu'.
+
+    `evita` (13/10/2026): le frasi gia' scritte in QUESTO digest. Ogni
+    motivazione nasce da una chiamata separata e il modello non sa cosa ha
+    scritto prima — misurato sul digest vero: 18 motivazioni su 30 con lo
+    stesso attacco. Le frasi gia' scritte vanno nella CODA (messaggio
+    utente, diverso a ogni offerta per definizione): la cache del prefisso
+    non si tocca.
     """
+    coda = _coda_analisi(offerta, desiderio, lingua)
+    if evita:
+        coda += ("\n\nHAI GIA' SCRITTO per altre offerte di questo stesso "
+                 "digest:\n" + "\n".join(f"- «{e}»" for e in evita[-8:])
+                 + "\nIl lettore le vedra' una dopo l'altra: non riusare "
+                   "quelle frasi ne' quegli attacchi.")
     corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_analisi(offerta, desiderio, lingua)}]
+        "role": "user", "content": coda}]
     risposta = modello.chat(corpo, max_tokens=900)
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
@@ -584,6 +628,97 @@ def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
     return reason, dict(modello.last_usage)
+
+
+# ── La verifica anti-invenzione (13/10/2026) ─────────────────────────────
+#
+# Misurato sul digest vero: il maestro locale aveva attribuito al candidato
+# la patente A e il cinese perche' l'OFFERTA li nominava. La frase nel
+# digest e' il prodotto: una sola invenzione brucia la fiducia in tutte le
+# altre. Difesa a due cerchi, nessuna delle due e' un modello che si
+# autocorregge a temperatura 0 (riproverebbe lo stesso testo):
+#
+#  1. PROVA MECCANICA: la rubrica di consegna esige il campo `prova` — i
+#     NUMERI dei fatti del profilo che reggono la frase (il profilo e' un
+#     elenco numerato). Gli indici si controllano con un confronto fra
+#     interi: niente modello, niente sottostringhe. (Prima la prova era una
+#     copia letterale: il 4B parafrasava, e tutto cadeva al controllo.)
+#  2. VERIFICATORE: una classificazione, non una generazione — compito
+#     molto piu' facile per un modello piccolo. «La frase gli attribuisce
+#     qualcosa che il profilo non ha?» si/no.
+#
+# Chi fallisce non si ritenta (temperatura 0 = stessa frase): si sostituisce
+# con il ripiego deterministico, che puo' dire solo il vero.
+
+VERIFICA = """Controlla questa frase scritta per il candidato:
+
+«{frase}»
+
+PROFILO DEL CANDIDATO (tutto ciò che sai di lui):
+{profilo}
+
+La frase gli attribuisce una competenza, una lingua, un'esperienza, una
+patente o una certificazione che NON compare nel profilo? O gli attribuisce
+un requisito che appartiene all'offerta? Rispondi SOLO con JSON:
+{{"inventato": true}} oppure {{"inventato": false}}
+"""
+
+
+def _inventata(modello: ChatModel, reason: str, profilo_testo: str) -> bool:
+    """Il verificatore: classificazione si/no, mai generazione. In panne non
+    blocca la consegna — la prova meccanica resta a presidiare."""
+    try:
+        r = modello.chat(
+            [{"role": "user",
+              "content": VERIFICA.format(frase=reason, profilo=profilo_testo)}],
+            max_tokens=60)
+        return bool(_estrai_json(r).get("inventato"))
+    except Exception:
+        return False
+
+
+def _indici_prova(prova, n_fatti: int) -> list[int] | None:
+    """La prova come lista di indici validi, o None se illeggibile/fuori
+    scala. Il modello la scrive come [3, 7], ma accettiamo anche «3» e
+    «[3]» scritti come stringa: conta solo che i numeri esistano."""
+    if prova in (None, "", []):
+        return []
+    if isinstance(prova, int):
+        prova = [prova]
+    if isinstance(prova, str):
+        prova = [int(x) for x in re.findall(r"\d+", prova)]
+    if not isinstance(prova, list):
+        return None
+    try:
+        idx = [int(x) for x in prova]
+    except (TypeError, ValueError):
+        return None
+    if not all(1 <= i <= n_fatti for i in idx):
+        return None
+    return idx
+
+
+def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
+                      desiderio: str | None, lingua: str,
+                      ripiego: str,
+                      evita: list[str] | None = None) -> tuple[str, dict, dict]:
+    """motiva_e_analizza + la verifica. La reason che esce da qui o e'
+    sostenuta dal profilo o e' il ripiego deterministico: mai un'invenzione."""
+    reason, analisi, uso = motiva_e_analizza(modello, profilo_testo, offerta,
+                                             desiderio, lingua, evita=evita)
+    prova = analisi.pop("_prova", None)
+    n_fatti = len(re.findall(r"^\[\d+\]", profilo_testo, re.M))
+    indici = _indici_prova(prova, n_fatti)
+    if indici is None:
+        # la prova citata non sta nei fatti: la frase non si fida
+        log.info("motivazione con prova fuori scala (%s): ripiego",
+                 offerta.get("id"))
+        return ripiego, analisi, uso
+    if _inventata(modello, reason, profilo_testo):
+        log.info("motivazione bocciata dal verificatore (%s): ripiego",
+                 offerta.get("id"))
+        return ripiego, analisi, uso
+    return reason, analisi, uso
 
 
 def valuta(modello: ChatModel, profilo: dict, jobs: list[dict], *,

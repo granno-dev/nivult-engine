@@ -42,7 +42,7 @@ from nivult.delivery import whatsapp as whatsapp_mod
 from nivult.matching import funnel
 from nivult.delivery.testi import LINGUA_PER_GLM, t
 from nivult.matching.llm import (GLM, VERSIONE_RUBRICA, Groq, MaestroLocale,
-                                 Nvidia, motiva_e_analizza,
+                                 Nvidia, motiva_e_analizza, motiva_verificata,
                                  profilo_come_testo, valuta_offerta)
 
 log = logging.getLogger("nivult.matching.worker")
@@ -168,22 +168,27 @@ class ValutatoreGLM:
         self.totale["chiamate"] += 1
         return score, reason, uso
 
-    def motiva(self, profilo_testo: str, offerta: dict, lingua: str = "English"):
+    def motiva(self, profilo_testo: str, offerta: dict, lingua: str = "English",
+               locale: str = "en", evita: list[str] | None = None):
         # Motivazione E analisi insieme: la chiamata c'era comunque, e
         # l'analisi qui costa solo output — al clic sarebbe costata
         # l'intero prefisso a cache fredda.
+        # 13/10/2026: la frase passa la VERIFICA (prova dal profilo +
+        # verificatore); chi la fallisce riceve il ripiego deterministico,
+        # che puo' dire solo il vero. Mai un'invenzione nel digest.
+        # `evita`: le frasi gia' scritte in questo digest — 18 motivazioni
+        # su 30 col medesimo attacco, misurato sul digest vero.
+        ripiego = t(locale)["motivo_fallback"]
         try:
-            reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
-                                                     offerta,
-                                                     offerta.get("_wants"),
-                                                     lingua)
+            reason, analisi, uso = motiva_verificata(
+                self.model, profilo_testo, offerta, offerta.get("_wants"),
+                lingua, ripiego, evita=evita)
         except RuntimeError as e:
             if not self._passa_al_ripiego(e):
                 raise
-            reason, analisi, uso = motiva_e_analizza(self.model, profilo_testo,
-                                                     offerta,
-                                                     offerta.get("_wants"),
-                                                     lingua)
+            reason, analisi, uso = motiva_verificata(
+                self.model, profilo_testo, offerta, offerta.get("_wants"),
+                lingua, ripiego, evita=evita)
         for k in ("input", "cached", "output"):
             self.totale[k] += uso.get(k, 0)
         self.totale["chiamate"] += 1
@@ -599,9 +604,16 @@ def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
         # Seconda passata: la motivazione vera solo per ciò che viene inviato.
         if evaluatore is None:
             evaluatore = ValutatoreGLM()
+        scritte: list[str] = []
         for item in items:
             item["reason"], analisi, _ = evaluatore.motiva(profilo_testo, item,
-                                                           lingua_glm)
+                                                           lingua_glm,
+                                                           u.locale,
+                                                           evita=scritte)
+            # i ripieghi deterministici sono identici per costruzione:
+            # nel conto delle «gia' scritte» non ci vanno
+            if item["reason"] not in scritte:
+                scritte.append(item["reason"])
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE matches SET reason = %s, analysis = %s "

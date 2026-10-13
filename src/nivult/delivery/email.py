@@ -46,7 +46,12 @@ def stipendio(salary: dict | None, locale: str = "en") -> str:
     if not salary:
         return ""
     v = salary.get("value") or {}
-    lo, hi = v.get("minValue"), v.get("maxValue")
+    # 13/10/2026: schema.org ammette value come NUMERO nudo, e uno zero
+    # (dato mancante travestito) stampava «0 USD/anno» nel digest vero.
+    # Zero non e' uno stipendio: e' l'assenza di stipendio.
+    if isinstance(v, (int, float)):
+        v = {"minValue": v} if v else {}
+    lo, hi = v.get("minValue") or None, v.get("maxValue") or None
     _UNITA = {"MONTH": t(locale)["unita_mese"], "YEAR": t(locale)["unita_anno"],
               "HOUR": t(locale)["unita_ora"], "DAY": t(locale)["unita_giorno"],
               "WEEK": t(locale)["unita_settimana"]}
