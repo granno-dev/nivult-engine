@@ -641,7 +641,11 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
         coda += f"\n\nAL PRIMO GIRO HAI SBAGLIATO: {nota}"
     corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
         "role": "user", "content": coda}]
-    risposta = modello.chat(corpo, max_tokens=900)
+    # 14/10/2026: temperatura 0.5, non 0. A zero la scrittura convergeva —
+    # dodici chiusure identiche in un digest — e `evita` da solo non
+    # bastava: stesso input, stessa frase. Il verificatore resta a zero e
+    # controlla la verita'; la varieta' la fa il caso controllato.
+    risposta = modello.chat(corpo, max_tokens=900, temperature=0.5)
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
     return reason, _campi_analisi(p, lingua), dict(modello.last_usage)
@@ -742,6 +746,20 @@ def _indici_prova(prova, n_fatti: int) -> list[int] | None:
     return idx
 
 
+# 14/10/2026: i superlativi la rubrica li vieta, il modello li scrive
+# comunque («perfetta», cinque volte in un digest). Il divieto sta nel
+# prompt da mesi; ora e' un guard meccanico, come la prova.
+_SUPERLATIVI = re.compile(
+    r"\b(perfett\w*|perfect\w*|perfekt\w*|parfait\w*|ideal\w*|eccellent\w*|"
+    r"excellent\w*|exzellent\w*|perfect[oa]s?\b)", re.IGNORECASE)
+
+
+def _vietata(reason: str) -> str | None:
+    """La parola vietata trovata nella frase, o None."""
+    m = _SUPERLATIVI.search(reason)
+    return m.group(0) if m else None
+
+
 def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
                       desiderio: str | None, lingua: str,
                       ripiego: str,
@@ -768,6 +786,14 @@ def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
             nota = ("La PROVA che hai scritto non sono numeri dei fatti del "
                     "profilo, o puntano fuori scala. Riscrivi: ogni "
                     "affermazione sul candidato cita i suoi fatti [n].")
+            continue
+        vietata = _vietata(reason)
+        if vietata:
+            log.info("superlativo vietato «%s» (%s): seconda possibilita'",
+                     vietata, offerta.get("id"))
+            nota = (f"Hai usato «{vietata}», un superlativo vietato dalla "
+                    "rubrica: la soglia e' 80 su 100, non la perfezione. "
+                    "Riscrivi senza superlativi, sobrio.")
             continue
         if _inventata(modello, reason, profilo_testo):
             log.info("bocciata dal verificatore (%s): seconda possibilita'",

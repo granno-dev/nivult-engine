@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
@@ -487,7 +488,22 @@ def _items_del_digest(conn, user_id: str) -> list[dict]:
             "ORDER BY m.score DESC, lk.rank NULLS LAST, ek.rank NULLS LAST, "
             "         j.date_posted DESC, m.job_id "
             "LIMIT %s", (user_id, MAX_ITEMS))
-        return cur.fetchall()
+        items = cur.fetchall()
+
+    # 14/10/2026: il dedup. Lo stesso annuncio entra da piu' fonti (agenzia
+    # + career site, o repubblicato) e il digest delle 07:00 portava
+    # OPENJOBMETIS tre volte con lo stesso titolo. Chiave: titolo + datore
+    # normalizzati — il primo per punteggio resta, i gemelli escono.
+    visti: set[str] = set()
+    unici = []
+    for it in items:
+        chiave = (re.sub(r"\s+", " ", (it["title"] or "").lower()).strip(),
+                  re.sub(r"\s+", " ", (it["organization"] or "").lower()).strip())
+        if chiave in visti:
+            continue
+        visti.add(chiave)
+        unici.append(it)
+    return unici
 
 
 def digest_utente(conn: psycopg.Connection, u: Utente, *, dry_run: bool = False,
