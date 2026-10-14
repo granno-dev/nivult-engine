@@ -242,10 +242,13 @@ class ValutatoreFinto:
         self.totale["output"] += 10
         return self.punteggi.get(sid, 10), f"motivo breve {sid}", {"input": 100, "output": 10}
 
-    def motiva(self, profilo_testo, offerta, lingua="English"):
+    def motiva(self, profilo_testo, offerta, lingua="English",
+               locale: str = "en", evita=None):
         sid = offerta["source_job_id"]
         self.totale["chiamate"] += 1
-        # come il vero ValutatoreGLM.motiva: (motivazione, analisi, uso)
+        # come il vero ValutatoreGLM.motiva: (motivazione, analisi, uso).
+        # `locale` ed `evita` entrano nel contratto il 14/10/2026 (verifica
+        # anti-invenzione + anti-ripetizione): il fake li accetta e basta.
         return (f"motivazione piena {sid}", {},
                 {"input": 80, "output": 20})
 
