@@ -680,7 +680,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
     # 11/10/2026: il numero in testa e' l'indice INTERO, non la somma delle
     # pagine pubblicate — 2,5M contro 4,03M reali, segnalato da Giuseppe.
     # Le piattaforme senza pagina esistono lo stesso, e si dicono.
-    title = (f"ATS coverage: {len(pubblicate)} platforms, {_n(totale)} live "
+    title = (f"ATS coverage: {len(pubblicate)} platforms, {_n(totale_reale)} live "
              f"postings | Nivult")
     description = (f"We read {fonti}+ applicant tracking systems directly, "
                    f"every day. Per platform: live postings, companies, "
