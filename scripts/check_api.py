@@ -215,9 +215,17 @@ def main() -> int:
                 setup.commit()
             client.put("/me", headers={"Authorization": f"Bearer {sessione}"},
                        json={"send_monthday": 15})
+            # Giorno e ora locali, non "oltre un giorno": anche uno slot
+            # mensile corretto può essere a meno di 24 ore da adesso.
             check("gia' servito: si torna allo slot, non ad adesso",
-                  seen_by_other("SELECT next_digest_at - now() > interval '1 day' "
-                                "FROM users WHERE email = 'pref@test.dev'"), True)
+                  seen_by_other(
+                      "SELECT next_digest_at > now() "
+                      "AND EXTRACT(day FROM next_digest_at AT TIME ZONE timezone) "
+                      "  = send_monthday "
+                      "AND next_digest_at AT TIME ZONE timezone = "
+                      "  date_trunc('day', next_digest_at AT TIME ZONE timezone) "
+                      "  + send_hour_local * interval '1 hour' "
+                      "FROM users WHERE email = 'pref@test.dev'"), True)
 
             # Si rimette com'era: le prove che seguono lavorano sullo stesso
             # utente, e un mensile con send_monthday addosso fa rifiutare il
