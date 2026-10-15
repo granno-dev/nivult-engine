@@ -74,6 +74,26 @@ def _n(n: int) -> str:
     return f"{n:,}"
 
 
+_NOMI_AZIENDE = {
+    "cvshealth": "CVS Health",
+    "trinityhealth": "Trinity Health",
+    "globalhr": "Global HR",
+    "nvidia": "NVIDIA",
+    "citi": "Citi",
+    "thermofisher": "Thermo Fisher",
+    "petco": "Petco",
+    "babilou": "Babilou",
+}
+
+
+def _nome_azienda(nome: str | None, slug: str) -> str:
+    """Il nome vero se c'e'; altrimenti uno slug leggibile, con i soli
+    acronimi verificati. Niente title-case automatico su nomi sconosciuti."""
+    if nome:
+        return _NOMI_AZIENDE.get(nome.casefold(), nome)
+    return _NOMI_AZIENDE.get(slug.casefold(), slug.replace("-", " "))
+
+
 # ── misure dal database ATS ────────────────────────────────────────────────
 
 @dataclass(slots=True)
@@ -102,13 +122,14 @@ def misura(conn: psycopg.Connection, platform_id: str) -> Misure:
         m.quota_salario = (100.0 * con_salario / attive) if attive else 0.0
 
         cur.execute(
-            "SELECT COALESCE(c.company_name, j.slug), count(*) "
+            "SELECT c.company_name, j.slug, count(*) "
             "FROM ats_jobs j "
             "LEFT JOIN ats_companies c ON c.platform_id = j.platform_id "
             "                         AND c.slug = j.slug "
             "WHERE j.platform_id = %s AND j.expired_at IS NULL "
-            "GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 15", (platform_id,))
-        m.top_aziende = [(nome, n) for nome, n in cur.fetchall()]
+            "GROUP BY 1, 2 ORDER BY 3 DESC, 2 LIMIT 15", (platform_id,))
+        m.top_aziende = [(_nome_azienda(nome, slug), n)
+                         for nome, slug, n in cur.fetchall()]
 
         # DISTINCT ON slug: tre offerte da tre aziende diverse, altrimenti
         # l'ultima azienda fetciata occupa tutta la vetrina di esempio.
@@ -455,12 +476,18 @@ def _riga_feed(slug: str, e: dict) -> dict:
 def pagina_ats(plat: dict, m: Misure, edit: dict,
                altri: list[dict], fonti: int) -> str:
     slug, nome = plat["slug"], plat["name"]
+    nome_breve = nome.split(" (", 1)[0]
     canonical = f"{SITO}/ats/{slug}/"
-    title = f"{nome} job postings: {_n(m.attive)} live, refreshed daily | Nivult"
-    description = (f"{_n(m.attive)} active {nome} job postings from "
-                   f"{_n(m.aziende)} companies, measured today from employer "
-                   f"career systems. Public API status, real sample rows, "
-                   f"one schema across {fonti}+ ATS sources.")
+    title = f"{nome} jobs dataset: {_n(m.attive)} live, daily | Nivult"
+    if len(title) > 60:
+        title = f"{nome_breve} job postings: {_n(m.attive)} live | Nivult"
+    description = (f"{_n(m.attive)} live {nome} jobs from {_n(m.aziende)} "
+                   f"companies, refreshed daily. Real sample rows, official API "
+                   f"status and one clean dataset with {fonti}+ ATS sources.")
+    if len(description) > 160:
+        description = (f"{_n(m.attive)} live {nome_breve} jobs from {_n(m.aziende)} "
+                       f"companies, refreshed daily. One clean dataset with "
+                       f"{fonti}+ ATS sources.")
 
     faq = _faq_ats(nome, edit, m, fonti)
     ld = [
