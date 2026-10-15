@@ -1040,14 +1040,20 @@ def main() -> int:
                 voci_index.append((f"{SITO}/sitemap-main.xml", oggi))
                 log.info("sitemap.xml era un urlset: spostato in "
                          "sitemap-main.xml e referenziato nell'indice")
-        # le pagine principali del sito (11/10/2026, dopo la segnalazione di
-        # Giuseppe): home, booking, legali, account — il lastmod e' il mtime
-        # vero del file, mai la data di build
+        # le pagine principali INDICIZZABILI: il lastmod e' il mtime vero del
+        # file. Una noindex in sitemap e' un segnale contraddittorio (booking,
+        # segnalato da Search Console il 15/10/2026), quindi resta fuori.
         urls_sito = []
         for pagina, url in (("index.html", "/"), ("booking.html", "/booking"),
                             ("privacy.html", "/privacy"), ("terms.html", "/terms"),
                             ("account.html", "/account")):
             f = args.vetrina / pagina
+            # Sul server i file principali non ci sono: booking resta esclusa
+            # esplicitamente; altrove vale anche il meta letto dal file.
+            if pagina == "booking.html":
+                continue
+            if f.exists() and 'content="noindex"' in f.read_text(encoding="utf-8").lower():
+                continue
             lm = (datetime.fromtimestamp(f.stat().st_mtime).date().isoformat()
                   if f.exists() else oggi)
             urls_sito.append((f"{SITO}{url}", lm))
