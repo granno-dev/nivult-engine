@@ -116,7 +116,8 @@ def main() -> int:
     # socket morta per ORE (coda ferma, log che non si muove). Con questi
     # il kernel dichiara morto il collegamento in ~85 secondi, scrivi()
     # prende l'eccezione, il processo muore e il loop lo riparte.
-    with psycopg.connect(os.environ["ATS_DATABASE_URL"], autocommit=not dry,
+    DSN = os.environ["ATS_DATABASE_URL"]
+    with psycopg.connect(DSN, autocommit=not dry,
                          keepalives=1, keepalives_idle=30,
                          keepalives_interval=10, keepalives_count=5) as c:
         # Il RIPASSO ha una query sua. Con quella del giro normale faceva 9
@@ -187,6 +188,52 @@ def main() -> int:
             "FROM ats_jobs j\n", "FROM ripasso_v1_dal_titolo r JOIN ats_jobs j ON j.id = r.job_id\n"
         ).split("ORDER BY")[0] + " LIMIT 2048"
 
+        def riconnetti(motivo: BaseException) -> None:
+            """Riapre la connessione caduta (17/10/2026: un link morto ha
+            lasciato il demone a STRISCIARE per due ore a 621 offerte/h
+            invece di morire e ripartire: la guardia non scatta perche' il
+            passo resta sopra i 500/70min). Il `with` in testa chiude la
+            connessione ORIGINALE all'uscita — gia' chiusa qui, e la nuova
+            vive quanto il processo: un demone non perde niente cosi'."""
+            nonlocal c
+            try:
+                c.close()
+            except Exception:
+                pass
+            c = psycopg.connect(DSN, autocommit=not dry,
+                                keepalives=1, keepalives_idle=30,
+                                keepalives_interval=10, keepalives_count=5)
+            print(f"connessione riaperta dopo {type(motivo).__name__}", flush=True)
+
+        def esegui(sql, params=None):
+            """OGNI query passa da qui. Deadlock: tre tentativi da un
+            secondo, come sempre. Connessione caduta (OperationalError):
+            si riapre e si riprova con backoff — mai piu' strisciare per
+            ore su un socket morto. Esauriti i tentativi si muore
+            rumorosi: la guardia riparte dai marcatori committati.
+            DeadlockDetected e' una OperationalError: va presa PRIMA."""
+            for tentativo in range(3):
+                try:
+                    return c.execute(sql, params) if params is not None else c.execute(sql)
+                except psycopg.errors.DeadlockDetected:
+                    print(f"deadlock in scrivi, tentativo {tentativo + 1}",
+                          flush=True)
+                    time.sleep(1)
+                except psycopg.OperationalError as e:
+                    print(f"connessione caduta ({type(e).__name__}), "
+                          f"riapro — tentativo {tentativo + 1}", flush=True)
+                    time.sleep(2 * (tentativo + 1))
+                    try:
+                        riconnetti(e)
+                    except Exception as e2:
+                        print(f"riapertura fallita: {e2}", flush=True)
+                        time.sleep(5)
+            # Come dettagli.py: un deadlock persistente fa RUMORE (il
+            # supervisore rilancia, il ripasso riprende dai marcatori
+            # committati). Ingoiarlo marcava il lotto come visto anche
+            # quando la scrittura non era avvenuta: perdita silenziosa.
+            raise RuntimeError("classifica_v1: deadlock persistente o database irraggiungibile")
+
         def scrivi(sql, params):
             """UNA istruzione per tabella, con array unnest: 6 round trip per
             lotto. Con executemany erano migliaia, e sulla Tailscale N5 →
@@ -194,20 +241,10 @@ def main() -> int:
             offerte/s contro le 26 della GPU (misurato il 07/09/2026).
             Definita fuori dal while: la usano anche i differiti (28/09/2026 —
             un deadlock sul loro UPDATE, fuori da scrivi, ha ucciso il demone
-            per 10 ore con 40.000 offerte in coda)."""
-            for tentativo in range(3):
-                try:
-                    c.execute(sql, params)
-                    return
-                except psycopg.errors.DeadlockDetected:
-                    print(f"deadlock in scrivi, tentativo {tentativo + 1}",
-                          flush=True)
-                    time.sleep(1)
-            # Come dettagli.py: un deadlock persistente fa RUMORE (il
-            # supervisore rilancia, il ripasso riprende dai marcatori
-            # committati). Ingoiarlo marcava il lotto come visto anche
-            # quando la scrittura non era avvenuta: perdita silenziosa.
-            raise RuntimeError("classifica_v1: deadlock persistente in scrivi")
+            per 10 ore con 40.000 offerte in coda). Dal 17/10/2026 delega a
+            esegui: stessi retry sul deadlock, piu' la riapertura se il link
+            e' caduto."""
+            esegui(sql, params)
 
         giro = 0
         while st["viste"] < tetto:
@@ -218,15 +255,15 @@ def main() -> int:
             # dimezzava il ritmo (5/s misurati alle 13:40 del 21/09)
             if not pareri and giro % 4:
                 try:
-                    righe = c.execute(SQL_RIPASSO, (list(PIATTAFORME),)).fetchall()
+                    righe = esegui(SQL_RIPASSO, (list(PIATTAFORME),)).fetchall()
                 except psycopg.errors.UndefinedTable:
                     pass                                     # nessun ripasso in corso
             if len(righe) < 2048:
                 visti = {r[0] for r in righe}
                 # SQL_PARERI non ha parametri: le piattaforme del dichiarato
                 # servono solo alla coda normale (e al ripasso, che la eredita)
-                base = c.execute(SQL_PARERI).fetchall() if pareri \
-                    else c.execute(SQL_NORMALE, (list(PIATTAFORME),)).fetchall()
+                base = esegui(SQL_PARERI).fetchall() if pareri \
+                    else esegui(SQL_NORMALE, (list(PIATTAFORME),)).fetchall()
                 righe += [r for r in base if r[0] not in visti]
             if not righe:
                 if continuo:
@@ -345,7 +382,7 @@ def main() -> int:
                 # testo) NON sono in `marcati` e restano in tabella, com'e'
                 # giusto: torneranno.
                 try:
-                    c.execute("DELETE FROM ripasso_v1_dal_titolo WHERE job_id = ANY(%s::uuid[])", (marcati,))
+                    esegui("DELETE FROM ripasso_v1_dal_titolo WHERE job_id = ANY(%s::uuid[])", (marcati,))
                 except psycopg.errors.UndefinedTable:
                     pass                                 # nessun ripasso in corso
             st["famiglie"] += len(fam_rows); st["pareri"] = st.get("pareri", 0) + len(par_rows)

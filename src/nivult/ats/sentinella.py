@@ -39,8 +39,8 @@ ENV = "/opt/nivult/.env"
 DESTINATARIO = "g.ranno@outlook.com"
 ESCALAZIONE_ORE = 6          # un critico ancora aperto dopo 6h: un solo richiamo
 
-DEMONI = ["nivult-scrape", "nivult-scrape-veloce", "nivult-profonda",
-          "nivult-scoperta", "nivult-arricchisci",
+DEMONI = ["nivult-scrape", "nivult-scrape-veloce", "nivult-scrape-cpx52",
+          "nivult-profonda", "nivult-scoperta", "nivult-arricchisci",
           "nivult-volano", "nivult-certificati", "nivult-api",
           "nivult-testi"]
 BOLLINO = {"critica": "🔴", "avviso": "🟠", "info": "⚪"}
@@ -106,17 +106,26 @@ def _controlli() -> list[Condizione]:
             c.append(Condizione(f"demone {d}", "critica" if d == "nivult-api" else "avviso",
                                 f"demone {d} giu'", f"stato systemd: {st or 'assente'}", grazia=True))
 
-    # il cruscotto che mente e' peggio del cruscotto morto (11/10/2026):
-    # dall'8/10 una query in timeout bloccava il ricalcolo dei pannelli
-    # pesanti e la pagina serviva numeri vecchi di tre giorni senza che
-    # nessun allarme suonasse. La cache ha un timestamp: si guarda quello.
+    # Il ricalcolo nasce dai tick HTTP: a cruscotto chiuso la cache invecchia
+    # senza essere rotta. Allarme solo se un tentativo e' FALLITO dopo
+    # l'ultima scrittura riuscita; prima bastava non aprire la pagina per
+    # un'ora per avere un falso incidente (14/10/2026).
     try:
-        eta_cache = time.time() - os.path.getmtime("/opt/nivult/cruscotto-cache.json")
+        cache = "/opt/nivult/cruscotto-cache.json"
+        eta_cache = time.time() - os.path.getmtime(cache)
         if eta_cache > 3600:
-            c.append(Condizione("cruscotto stantio", "avviso",
-                                "cruscotto con numeri vecchi",
-                                f"cache ferma a {int(eta_cache // 60)} min fa: "
-                                "il ricalcolo pesante e' in timeout?"))
+            try:
+                with open("/opt/nivult/cruscotto-ricalcolo-errore.json") as f:
+                    errore = json.load(f)
+            except (OSError, ValueError):
+                errore = None
+            if (isinstance(errore, dict)
+                    and errore.get("at", 0) >= os.path.getmtime(cache)):
+                c.append(Condizione("cruscotto stantio", "avviso",
+                                    "cruscotto con numeri vecchi",
+                                    f"cache ferma a {int(eta_cache // 60)} min fa; "
+                                    "ricalcolo fallito: "
+                                    f"{errore.get('errore', 'causa non registrata')[:160]}"))
     except OSError:
         pass
 
@@ -157,11 +166,15 @@ def _controlli() -> list[Condizione]:
             # leggeva 100 offerte e faceva scadere il resto: mediana 7 giorni di vita).
             # Un'offerta vera vive ~30 giorni: sotto i 10 per una piattaforma con
             # almeno 500 scadenze in 6 ore, qualcosa legge a meta'.
+            # Eccezione misurata il 14/10: jobgether ruota davvero in ~9 giorni.
+            # Su 1.083 scadute insieme, 12 campionate erano tutte 404 e nessuna
+            # era piu' nel feed: la sua vita breve non e' una lettura parziale.
             for pid, n, med in db.execute("""SELECT platform_id, count(*),
                     percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM expired_at-posted_at)/86400)
                   FROM ats_jobs
                  WHERE expired_at > now()-interval '6 hours' AND posted_at IS NOT NULL
                    AND NOT coalesce(posted_at_estimated, false)
+                   AND NOT (platform_id = 'lever' AND slug = 'jobgether')
                  GROUP BY 1 HAVING count(*) >= 500""").fetchall():
                 if med is not None and med < 10:
                     c.append(Condizione(f"scadenze precoci {pid}", "avviso", f"scadenze precoci su {pid}",
@@ -198,9 +211,41 @@ def _controlli() -> list[Condizione]:
             # (il caso morto lo copre la guardia dell'operaio, che riparte da
             # sola sotto ~430/h). Il ripiego CPU misurato fa ~1.080/h.
             if in_coda > 5000 and viste_ora < 1500:
+                # 17/10/2026: il messaggio non punta piu' alla scheda a
+                # priori. Quel giorno l'allarme disse «GPU o CPU, riavviare
+                # il N5» e la causa vera era un lock sul database piu' una
+                # connessione caduta: due ore a cercare nel posto sbagliato.
+                # La sessione di v1 in pg_stat_activity distingue le tre
+                # cause. I pattern colgono le query di LAVORO di v1 (il
+                # marcatore con alias j., gli UPDATE di scrittura, l'INSERT
+                # col modello 'nivult-v1'): la sentinella stessa e la
+                # guardia dell'operaio usano locale_v1_at senza alias e non
+                # si contano da sole.
+                sess = db.execute("""
+                    SELECT state, wait_event_type,
+                           extract(epoch FROM now() - state_change)::int
+                      FROM pg_stat_activity
+                     WHERE pid <> pg_backend_pid()
+                       AND datname = current_database()
+                       AND (query LIKE 'UPDATE ats_jobs SET locale_v1_at%'
+                            OR query LIKE 'UPDATE ats_jobs SET differito_v1_at%'
+                            OR query ILIKE '%nivult-v1%'
+                            OR query LIKE '%j.locale_v1_at IS NULL%')
+                      ORDER BY state_change""").fetchall()
+                lock = [s for s in sess if s[1] == "Lock"]
+                if lock:
+                    causa = (f"v1 e' fermo su un LOCK del database da {lock[0][2] // 60} min: "
+                             "contesa con chi scrive riga per riga, non la scheda. NON riavviare "
+                             "il N5: guardare pg_locks e chi tiene quel lock")
+                elif not sess:
+                    causa = ("il demone non ha una sessione aperta: processo fermo o link "
+                             "Tailscale giu'. La guardia dell'operaio lo riparte da sola; se "
+                             "l'allarme torna, riavviare il container nivult-operaio")
+                else:
+                    causa = ("il demone e' connesso e risponde: la lentezza e' sulla scheda "
+                             "del N5 (GPU persa o ripiego CPU) — riavviare il N5")
                 c.append(Condizione("v1 lento", "avviso", "nivult-v1 rallentato",
-                                    f"{viste_ora} offerte viste in un'ora con {in_coda} in coda: "
-                                    f"scheda del N5 bloccata o ripiego sulla CPU? Riavviare il N5"))
+                                    f"{viste_ora} offerte viste in un'ora con {in_coda} in coda: {causa}"))
             # Il MAGAZZINO senza testo, non solo il flusso. Il 16/09/2026 il 26% delle
             # offerte attive non aveva descrizione e il controllo qui sotto non lo vedeva,
             # perche' guarda solo le ultime 24 ore. Stima su un campione dell'1%: la conta
