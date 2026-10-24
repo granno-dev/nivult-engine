@@ -417,10 +417,15 @@ def main() -> int:
               "motivazione piena ok1")
         check("il costo è quello calcolato: 4 valutazioni + 3 motivazioni",
               finto.totale["chiamate"], 4 + 3)
-        check("rischedulato all'orario locale dell'utente (8 Roma = 6 UTC)",
-              seen_by_other("SELECT (next_digest_at AT TIME ZONE 'UTC')::time = '06:00' "
+        check("rischedulato all'orario locale dell'utente, anche nel cambio DST",
+              seen_by_other("SELECT (next_digest_at AT TIME ZONE 'Europe/Rome')::time = '08:00' "
                             " AND next_digest_at > now() FROM users WHERE id = %s",
                             (dg["a"],)), True)
+        for giorno, ora_utc in ((23, 6), (24, 7)):
+            check(f"8 Roma del {giorno + 1} ottobre = {ora_utc} UTC",
+                  worker.calcola_slot("daily", 8, None, None, "Europe/Rome",
+                                      datetime(2026, 10, giorno, 12, tzinfo=timezone.utc)),
+                  datetime(2026, 10, giorno + 1, ora_utc, tzinfo=timezone.utc))
 
         # Idempotenza dello slot: rilanciare sullo stesso slot non fa nulla.
         di_nuovo = worker.digest_utente(work, per_email["digest-a@example.test"],
