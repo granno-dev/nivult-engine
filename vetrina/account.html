@@ -133,7 +133,8 @@ tailwind.config = {
         <h1 class="text-2xl font-black tracking-tight" id="dash-nome">—</h1>
         <p class="text-[13px] text-slate-500"><span id="dash-email"></span><span id="dash-email-sep"> · </span>API account · <span class="text-mint-600 font-semibold">active</span></p>
       </div>
-      <button onclick="esci()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
+      <button onclick="collegaMicrosoft()" class="ml-auto rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-600 hover:border-brand-300 hover:text-brand-700 transition">Link Microsoft</button>
+      <button onclick="esci()" class="rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Sign out</button>
     </div>
 
     <!-- la striscia che conta: crediti, il polso dell'indice, la prima
@@ -549,6 +550,8 @@ async function magicLink(e) {
 let chiavi = [];
 let creditiExtra = 0;
 let rivelazioni = 0;
+let saldoAccount = { crediti_mensili: 1000, usati: 0, residui_mensili: 0,
+                     crediti_extra: 0, saldo: 0 };
 async function carica() {
   const me = await (await api("/me")).json();
   const nome = (me.nome || "").trim();
@@ -559,7 +562,8 @@ async function carica() {
   document.getElementById("nav-stato").textContent = nome || me.email;
   const r = await (await api("/me/chiavi")).json();
   chiavi = r.chiavi || [];
-  creditiExtra = r.extra || 0;
+  saldoAccount = r.saldo || saldoAccount;
+  creditiExtra = saldoAccount.crediti_extra ?? r.extra ?? 0;
   rivelazioni = r.rivelazioni || 0;
   if (r.chiave_nuova) mostraChiaveNuova(r.chiave_nuova);
   disegna();
@@ -568,35 +572,31 @@ function disegna() {
   const el = document.getElementById("chiavi-lista");
   if (!chiavi.length) {
     el.innerHTML = `<div class="px-6 py-8 text-center text-sm text-slate-400">No keys yet — create your first one.</div>`;
-    return;
-  }
-  el.innerHTML = chiavi.map(k => {
-    const pct = Math.min(100, Math.round(100 * (k.usati_mese || 0) / (k.crediti_mensili || 1)));
-    const viva = !k.revocata_il;
-    return `<div class="px-6 py-4 ${viva ? "" : "opacity-50"}">
-      <div class="flex items-center gap-3 flex-wrap">
-        <b class="text-[14.5px]">${k.etichetta}</b>
-        <span class="rounded-md px-2 py-0.5 text-[10.5px] font-black ${viva ? "bg-mint-500/10 text-mint-600" : "bg-slate-100 text-slate-400"}">${viva ? "ACTIVE" : "REVOKED"}</span>
-        <span class="text-[12px] text-slate-400 font-mono ml-auto">${k.coda ? "•••" + k.coda : ""}</span>
-        ${viva ? `<button onclick="revoca('${k.id}')" class="rounded-lg border border-slate-200 px-3 py-1 text-[11.5px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Revoke</button>` : ""}
-      </div>
-      <div class="mt-2.5 flex items-center gap-3">
-        <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-          <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-mint-400" style="width:${pct}%"></div>
+  } else {
+    el.innerHTML = chiavi.map(k => {
+      const pct = Math.min(100, Math.round(100 * (k.usati_mese || 0) / (k.crediti_mensili || 1)));
+      const viva = !k.revocata_il;
+      return `<div class="px-6 py-4 ${viva ? "" : "opacity-50"}">
+        <div class="flex items-center gap-3 flex-wrap">
+          <b class="text-[14.5px]">${k.etichetta}</b>
+          <span class="rounded-md px-2 py-0.5 text-[10.5px] font-black ${viva ? "bg-mint-500/10 text-mint-600" : "bg-slate-100 text-slate-400"}">${viva ? "ACTIVE" : "REVOKED"}</span>
+          <span class="text-[12px] text-slate-400 font-mono ml-auto">${k.coda ? "•••" + k.coda : ""}</span>
+          ${viva ? `<button onclick="revoca('${k.id}')" class="rounded-lg border border-slate-200 px-3 py-1 text-[11.5px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Revoke</button>` : ""}
         </div>
-        <span class="text-[11.5px] font-bold text-slate-500 tabular-nums">${(k.usati_mese || 0).toLocaleString("en-US")} / ${(k.crediti_mensili || 0).toLocaleString("en-US")}</span>
-      </div>
-    </div>`;
-  }).join("");
-  const tot = chiavi.filter(k => !k.revocata_il);
-  const usati = tot.reduce((s, k) => s + (k.usati_mese || 0), 0);
-  // il volume mensile e' DELL'ACCOUNT: il massimo fra le chiavi, non la
-  // somma. Il numero eroe e' quanto RESTA da spendere (gratis rimasti +
-  // ricarica che non scade): il consumato e' dettaglio, non il titolo.
-  const max = Math.max(0, ...tot.map(k => k.crediti_mensili || 0)) || 1000;
-  const liberi = Math.max(0, max - usati);
-  document.getElementById("uso-val").textContent =
-    (liberi + creditiExtra).toLocaleString("en-US");
+        <div class="mt-2.5 flex items-center gap-3">
+          <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-mint-400" style="width:${pct}%"></div>
+          </div>
+          <span class="text-[11.5px] font-bold text-slate-500 tabular-nums">${(k.usati_mese || 0).toLocaleString("en-US")} / ${(k.crediti_mensili || 0).toLocaleString("en-US")}</span>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  const max = saldoAccount.crediti_mensili || 1000;
+  const usati = saldoAccount.usati || 0;
+  const liberi = saldoAccount.residui_mensili ?? Math.max(0, max - usati);
+  const disponibili = saldoAccount.saldo ?? (liberi + creditiExtra);
+  document.getElementById("uso-val").textContent = disponibili.toLocaleString("en-US");
   document.getElementById("uso-barra").style.width = Math.min(100, Math.round(100 * usati / max)) + "%";
   document.getElementById("uso-liberi").textContent =
     liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " free left";
@@ -608,7 +608,7 @@ function disegna() {
     : "💶 No top-ups yet — purchased credits never expire";
   /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
      di credito dove il credito si guarda: nella card (02/10/2026) */
-  document.getElementById("hero-crediti").textContent = (liberi + creditiExtra).toLocaleString("en-US");
+  document.getElementById("hero-crediti").textContent = disponibili.toLocaleString("en-US");
   /* il bottone resta generico («View credit usage»): il conteggio degli
      sblocchi vive DENTRO il pannello, non sul bottone (04/10/2026) */
   document.getElementById("uso-rivelazioni").textContent = "View credit usage";
@@ -650,6 +650,12 @@ function curlPrimaChiamata() {
 function copiaCurl(btn) {
   navigator.clipboard.writeText(curlPrimaChiamata())
     .then(() => { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy your first call →", 1600); });
+}
+async function collegaMicrosoft() {
+  const r = await api("/me/oauth/microsoft/collega", { method: "POST" });
+  if (!r.ok) { alert("Microsoft linking is not available right now."); return; }
+  const d = await r.json();
+  if (d.url) location.href = d.url;
 }
 function esci() {
   api("/auth/logout", { method: "POST" }).catch(() => {});

@@ -17,7 +17,7 @@
     "/v1/jobs": {
       "get": {
         "summary": "Search live job postings",
-        "description": "Active job postings from employer ATS sources. Keyset pagination: follow next_cursor until null. Filters: country (ISO-2), technology, ats platform, category, seniority, remote, language, free-text q, posted-after dal.",
+        "description": "Active job postings from employer ATS sources. Keyset pagination: follow next_cursor until null. Filters: country (ISO-2), technology, ats platform, category, seniority, remote, language, free-text q on title and description, and posted_after (or its dal alias).",
         "operationId": "jobs",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "ISO 3166-1 alpha-2 country code" },
@@ -27,9 +27,10 @@
           { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "senior" } },
           { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote" } },
           { "name": "language", "in": "query", "schema": { "type": "string", "example": "en" } },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Free text on the title" },
-          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Free text on title and description" },
+          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
+          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Alias of posted_after" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
           { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from the previous page" }
         ],
         "responses": {
@@ -41,8 +42,10 @@
               }
             }
           },
-          "401": { "description": "Missing or revoked API key" },
-          "429": { "description": "Monthly credits exhausted" }
+          "400": { "description": "Invalid filter or unreadable cursor" },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
         }
       }
     },
@@ -56,7 +59,7 @@
           { "name": "industry", "in": "query", "schema": { "type": "string" } },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" } },
           { "name": "employees_min", "in": "query", "schema": { "type": "integer", "example": 500 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
           { "name": "cursor", "in": "query", "schema": { "type": "string" } }
         ],
         "responses": {
@@ -68,25 +71,74 @@
               }
             }
           },
-          "401": { "description": "Missing or revoked API key" },
-          "429": { "description": "Monthly credits exhausted" }
+          "400": { "description": "Invalid filter or unreadable cursor" },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
         }
       }
     },
     "/v1/changes": {
       "get": {
         "summary": "The delta feed: new, updated, closed",
-        "description": "What changed since a timestamp: new postings, refreshed ones, and verified closures (the posting left the employer's own page). The closure signal is the product.",
+        "description": "New postings, full updated snapshots and verified closures since a timestamp. Delta history is retained for 7 days. Direct API keys require an account monthly tier of at least 200,000 credits; purchased top-ups do not raise this entitlement. RapidAPI plans are not subject to the direct-account tier check.",
         "operationId": "changes",
         "parameters": [
-          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "example": "2026-10-01T00:00:00Z" }, "description": "ISO 8601 timestamp" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "example": "2026-10-01T00:00:00Z" }, "description": "ISO 8601 timestamp; must not predate retention_since" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
           { "name": "cursor", "in": "query", "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": { "description": "A page of change events" },
-          "400": { "description": "Missing or malformed since" },
-          "401": { "description": "Missing or revoked API key" }
+          "200": {
+            "description": "A page of new, updated or closed events",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChangePage" }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or malformed since, unreadable cursor, or since older than retained history. A retention error requires a full resync.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/ErrorResponse" },
+                    { "$ref": "#/components/schemas/DeltaRetentionResponse" }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "403": { "description": "Direct account below the 200,000 credits/month delta tier" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+        }
+      }
+    },
+    "/v1/exports/latest/{nome}": {
+      "get": {
+        "summary": "Download today's bulk export",
+        "description": "Download the offerte or aziende JSONL gzip export. Direct API keys require an account monthly tier of at least 50,000 credits; purchased top-ups do not raise this entitlement. The daily bulk export is not included in RapidAPI plans.",
+        "operationId": "exportFile",
+        "parameters": [
+          { "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The gzip export",
+            "content": {
+              "application/gzip": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "403": { "description": "Direct account below the 50,000 credits/month bulk tier, or RapidAPI channel" },
+          "404": { "description": "Unknown export name or export not available today" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
         }
       }
     },
@@ -96,17 +148,30 @@
         "description": "How complete each field is today (description 95%, country 86%, salary observed vs estimated...). Declared, not hidden: a data buyer should never have to measure this alone.",
         "operationId": "coverage",
         "responses": {
-          "200": { "description": "Coverage percentages per field" }
+          "200": { "description": "Coverage percentages per field" },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
         }
       }
     },
     "/v1/usage": {
       "get": {
-        "summary": "Your credit balance",
-        "description": "Monthly allowance, used, remaining. Free tier: 1,000 calls/month, resets on the 1st.",
+        "summary": "Your account credit balance",
+        "description": "For direct portal keys, monthly volume and current-month consumption are account-level across all keys, including revoked ones. The monthly allowance is spent before purchased credits. This endpoint is metered like other direct API calls; RapidAPI quotas are managed by RapidAPI.",
         "operationId": "usage",
         "responses": {
-          "200": { "description": "Credit usage for the current month" }
+          "200": {
+            "description": "Account-level credit usage for the current month",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Usage" }
+              }
+            }
+          },
+          "401": { "description": "Missing, invalid or revoked API key" },
+          "429": { "description": "Monthly and purchased credits exhausted" },
+          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
         }
       }
     }
@@ -127,6 +192,61 @@
           "data": { "type": "array", "items": { "type": "object" } },
           "next_cursor": { "type": ["string", "null"] },
           "count_page": { "type": "integer" }
+        }
+      },
+      "ChangePage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A raw export event: new, updated (full snapshot) or closed"
+            }
+          },
+          "next_cursor": { "type": ["string", "null"] },
+          "count_page": { "type": "integer" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": {
+          "detail": { "type": "string" }
+        }
+      },
+      "DeltaRetentionResponse": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "object",
+            "required": ["code", "error", "message", "since", "retention_since", "action", "resync_required"],
+            "properties": {
+              "code": { "type": "string", "example": "delta_retention_exceeded" },
+              "error": { "type": "string", "example": "delta_retention_exceeded" },
+              "message": { "type": "string", "example": "since predates the retained delta history; perform a full resync" },
+              "since": { "type": "string", "example": "2026-10-01T00:00:00+00:00" },
+              "retention_since": { "type": "string", "example": "2026-10-17T00:00:00+00:00" },
+              "action": { "type": "string", "example": "resync" },
+              "resync_required": { "type": "boolean", "example": true }
+            }
+          }
+        }
+      },
+      "Usage": {
+        "type": "object",
+        "description": "Direct-account response. Quota and current-month usage include every account key, revoked keys included.",
+        "properties": {
+          "crediti_mensili": { "type": "integer", "description": "Account monthly volume, not increased by top-ups" },
+          "usati": { "type": "integer", "description": "Current-month usage summed across all account keys" },
+          "residui": { "type": "integer", "description": "Remaining monthly credits plus purchased credits" },
+          "mese_uso": { "type": "string", "format": "date" },
+          "residui_mensili": { "type": "integer" },
+          "crediti_extra": { "type": "integer", "description": "Unspent purchased credits" },
+          "saldo": { "type": "integer", "description": "Total spendable balance: residui_mensili + crediti_extra" },
+          "usati_chiave": { "type": "integer", "description": "Current-month usage recorded on the presented key" },
+          "volume_account": { "type": "integer", "description": "Account monthly volume used for tier entitlements" }
         }
       }
     }
