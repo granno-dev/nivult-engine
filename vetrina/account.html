@@ -578,10 +578,10 @@ function disegna() {
       const viva = !k.revocata_il;
       return `<div class="px-6 py-4 ${viva ? "" : "opacity-50"}">
         <div class="flex items-center gap-3 flex-wrap">
-          <b class="text-[14.5px]">${k.etichetta}</b>
+          <b class="text-[14.5px]">${esc(k.etichetta)}</b>
           <span class="rounded-md px-2 py-0.5 text-[10.5px] font-black ${viva ? "bg-mint-500/10 text-mint-600" : "bg-slate-100 text-slate-400"}">${viva ? "ACTIVE" : "REVOKED"}</span>
-          <span class="text-[12px] text-slate-400 font-mono ml-auto">${k.coda ? "•••" + k.coda : ""}</span>
-          ${viva ? `<button onclick="revoca('${k.id}')" class="rounded-lg border border-slate-200 px-3 py-1 text-[11.5px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Revoke</button>` : ""}
+          <span class="text-[12px] text-slate-400 font-mono ml-auto">${k.coda ? "•••" + esc(k.coda) : ""}</span>
+          ${viva ? `<button onclick="revoca(${jsArg(k.id)})" class="rounded-lg border border-slate-200 px-3 py-1 text-[11.5px] font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">Revoke</button>` : ""}
         </div>
         <div class="mt-2.5 flex items-center gap-3">
           <div class="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
@@ -743,9 +743,9 @@ const ATS_INFO = {
 function chipAts(ats) {
   if (!ats) return "";
   const [mono, colore] = ATS_INFO[ats] || [ats.slice(0, 2), "#64748b"];
-  return `<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1" title="source: ${ats}">
-    <img src="loghi-ats/${encodeURIComponent(ats)}.png" alt="" class="h-4 w-4 rounded-sm object-contain" onerror="this.outerHTML='<span class=&quot;grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black&quot; style=&quot;background:${colore}&quot;>${mono}</span>'">
-    <span class="text-[11px] font-semibold text-slate-500">${ats}</span></span>`;
+  return `<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1" title="source: ${esc(ats)}">
+    <img src="loghi-ats/${encodeURIComponent(ats)}.png" alt="" class="h-4 w-4 rounded-sm object-contain" onerror="this.outerHTML='<span class=&quot;grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black&quot; style=&quot;background:${esc(colore)}&quot;>${esc(mono)}</span>'">
+    <span class="text-[11px] font-semibold text-slate-500">${esc(ats)}</span></span>`;
 }
 function rigaJob(o) {
   const tec = (o.technologies || []).slice(0, 4).map(t =>
@@ -758,9 +758,9 @@ function rigaJob(o) {
   /* l'azienda si vede gratis (modello TheirStack): il click apre il
      PROFILO — gratis se e' gia' dell'utente, un credito altrimenti */
   const az = o.company
-    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob('${rif}', ${o.az_rivelata ? "true" : "false"})">${esc(o.company)}</span> · `
+    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob(${jsArg(rif)}, ${o.az_rivelata ? "true" : "false"})">${esc(o.company)}</span> · `
     : "";
-  return `<div class="group flex items-center gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/5 hover:-translate-y-px transition cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob('${o.id}')">
+  return `<div class="group flex items-center gap-4 rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-brand-300 hover:shadow-md hover:shadow-brand-500/5 hover:-translate-y-px transition cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob(${jsArg(o.id)})">
     ${logo}
     <div class="min-w-0 flex-1">
       <b class="text-[14px] block truncate">${esc(o.title || "—")} ${chiusa}</b>
@@ -774,7 +774,7 @@ function rigaAzienda(a) {
   /* i dati pubblici della riga seguono il click nel modale: la scheda
      mascherata li mostra leggibili, sfoca solo cio' che si compra */
   azInfo[a.ref] = a;
-  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-mint-500/50 transition cursor-pointer" onclick="dettaglioAzienda('${a.ref}')">
+  return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-mint-500/50 transition cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.ref)})">
     <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
     <div class="min-w-0 flex-1">
       <b class="text-[14px] blur-[5px] select-none text-slate-400">██████████</b>
@@ -782,7 +782,7 @@ function rigaAzienda(a) {
     </div>
     <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
       <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
-      <button onclick="rivelaAzienda('${a.ref}', this)" class="rounded-lg bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal · 1 credit</button>
+      <button onclick="rivelaAzienda(${jsArg(a.ref)}, this)" class="rounded-lg bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal · 1 credit</button>
     </div>
   </div>`;
 }
@@ -958,6 +958,9 @@ function esc(s) {
   d.textContent = String(s ?? "");
   return d.innerHTML;
 }
+function jsArg(s) {
+  return esc(JSON.stringify(String(s ?? "")));
+}
 function testoDesc(s) {
   const t = String(s || "")
     .replace(/<(script|style)[^>]*>.*?<\/\1>/gis, " ")
@@ -994,14 +997,14 @@ async function dettaglioJob(id) {
   /* l'azienda si vede gratis (28/09): il click apre il profilo —
      gratis se e' gia' dell'utente, un credito (dichiarato) altrimenti */
   const linkOfferta = urlSicuro(o.url);
-  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob('${d.azienda_ref || ""}', ${d.azienda_rivelata ? "true" : "false"})">
+  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob(${jsArg(d.azienda_ref || "")}, ${d.azienda_rivelata ? "true" : "false"})">
          ${logo}
          <div class="min-w-0">
            <b class="text-[15px] truncate block">${esc(o.company || "")}</b>
            <p class="text-[12px] font-bold text-mint-600 group-hover:text-mint-500 transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
          </div>
          ${linkOfferta
-           ? `<a href="${linkOfferta}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>`
+           ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>`
            : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-[12px] font-bold text-slate-400">🔒 source link unlocks with the profile</span>`}
        </div>`;
   /* i fatti che valgono qualcosa anche quando la descrizione manca:
@@ -1173,7 +1176,7 @@ function dettaglioAzienda(ref) {
         <p class="text-[14px] font-black text-white">The full record unlocks with one credit</p>
         <p class="mt-0.5 text-[12.5px] text-slate-400">Name, domain, tech stack, locations and live postings — pay once, it's yours forever.</p>
       </div>
-      <button onclick="rivelaAzienda('${ref}', this)" class="rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal this company · 1 credit</button>
+      <button onclick="rivelaAzienda(${jsArg(ref)}, this)" class="rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal this company · 1 credit</button>
     </div>
   </div>`);
 }
