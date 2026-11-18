@@ -323,7 +323,7 @@ body.modale-aperto { overflow: hidden; }
       </div>
       <div class="mt-5 rounded-xl bg-brand-50 border border-brand-100 px-4 py-3 flex items-center gap-4 flex-wrap">
         <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Need more credits for API calls or filtered downloads? Choose the amount and check out yourself. Top-ups do not change the monthly feed entitlements above.</p>
-        <a href="#buy-slider" class="w-full sm:w-auto text-center whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-[12px] font-bold text-white">Choose credits →</a>
+        <button type="button" onclick="vaiAiCrediti()" class="w-full sm:w-auto text-center whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-[12px] font-bold text-white">Choose credits →</button>
       </div>
     </section>
 
@@ -1861,6 +1861,11 @@ async function stimaExport() {
   vai.classList.remove("hidden");
   vai.disabled = false;
 }
+function vaiAiCrediti() {
+  const slider = document.getElementById("buy-slider");
+  slider.scrollIntoView({ behavior: "smooth", block: "center" });
+  slider.focus({ preventScroll: true });
+}
 function vaiAllaRicarica() {
   if (exDati) {
     const mancano = exDati.crediti - exDati.saldo;
@@ -1869,7 +1874,7 @@ function vaiAllaRicarica() {
     bsl.dispatchEvent(new Event("input"));
   }
   chiudiExport();
-  document.getElementById("buy-slider").scrollIntoView({ behavior: "smooth", block: "center" });
+  vaiAiCrediti();
 }
 ["ex-paese", "ex-tec", "ex-dal"].forEach(id =>
   document.getElementById(id).addEventListener("input", () => {
