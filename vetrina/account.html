@@ -167,15 +167,15 @@ body.modale-aperto { overflow: hidden; }
       <a href="#usage-security" class="rounded-lg bg-white border border-slate-200 px-3 py-2 text-[12px] font-bold whitespace-nowrap">Usage & Security</a>
     </nav>
 
-    <section id="onboarding" aria-labelledby="onboarding-title" class="mt-5 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 via-white to-mint-500/10 p-5 shadow-sm">
+    <section id="onboarding" aria-labelledby="onboarding-title" class="mt-5 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-100/80 via-brand-50 to-mint-500/20 p-5 shadow-sm">
       <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div><h2 id="onboarding-title" class="text-[16px] font-black">Get started in three steps</h2><p class="mt-1 text-[12.5px] text-slate-500">Your first real API query, with nothing to install.</p></div>
+        <div><h2 id="onboarding-title" class="text-[16px] font-black">Get started in three steps</h2><p class="mt-1 text-[12.5px] text-slate-600">Your first real API query, with nothing to install.</p></div>
         <a href="#api-quickstart" class="text-[12px] font-bold text-brand-600">Open the guide →</a>
       </div>
       <ol class="mt-4 grid sm:grid-cols-3 gap-3">
-        <li class="rounded-xl bg-white/80 border border-white p-3 flex items-center gap-3"><span id="onboard-key" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">1</span><span class="text-[13px] font-bold">Create your API key</span></li>
-        <li class="rounded-xl bg-white/80 border border-white p-3 flex items-center gap-3"><span id="onboard-copy" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">2</span><span class="text-[13px] font-bold">Copy your first request</span></li>
-        <li class="rounded-xl bg-white/80 border border-white p-3 flex items-center gap-3"><span id="onboard-call" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">3</span><span class="text-[13px] font-bold">Run your first API call</span></li>
+        <li class="rounded-xl bg-white border border-slate-200/80 p-3 flex items-center gap-3 shadow-sm"><span id="onboard-key" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">1</span><span class="text-[13px] font-bold">Create your API key</span></li>
+        <li class="rounded-xl bg-white border border-slate-200/80 p-3 flex items-center gap-3 shadow-sm"><span id="onboard-copy" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">2</span><span class="text-[13px] font-bold">Copy your first request</span></li>
+        <li class="rounded-xl bg-white border border-slate-200/80 p-3 flex items-center gap-3 shadow-sm"><span id="onboard-call" class="h-7 w-7 rounded-full bg-brand-500 text-white grid place-items-center text-[12px] font-black shrink-0">3</span><span class="text-[13px] font-bold">Run your first API call</span></li>
       </ol>
     </section>
 
@@ -322,8 +322,8 @@ body.modale-aperto { overflow: hidden; }
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Historical backfill</b><p id="access-history" class="mt-1 text-[12px] text-slate-500">Requires 1,000,000 credits/month</p></div>
       </div>
       <div class="mt-5 rounded-xl bg-brand-50 border border-brand-100 px-4 py-3 flex items-center gap-4 flex-wrap">
-        <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Top-ups add credits but never change this access tier. To change your monthly volume, contact us so we can set up the right plan.</p>
-        <a href="mailto:hello@nivult.com?subject=Monthly%20plan%20upgrade" class="w-full sm:w-auto text-center whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-[12px] font-bold text-white">Ask about an upgrade →</a>
+        <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Need more credits for API calls or filtered downloads? Choose the amount and check out yourself. Top-ups do not change the monthly feed entitlements above.</p>
+        <a href="#buy-slider" class="w-full sm:w-auto text-center whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-[12px] font-bold text-white">Choose credits →</a>
       </div>
     </section>
 
@@ -1744,7 +1744,7 @@ document.addEventListener("click", e => {
 });
 
 /* ══ l'export filtrato: stima prima, download dopo ══ */
-let exStimaTimer = null, exDati = null;
+let exStimaTimer = null, exDati = null, exStimaSeq = 0;
 function trentaGiorniFa() {
   const d = new Date(); d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
@@ -1771,14 +1771,16 @@ function apriExport(pre) {
   const sel = document.getElementById("ex-paese");
   if (sel.options.length <= 1)
     PAESI.forEach(([n, c]) => sel.add(new Option(n + " (" + c + ")", c)));
-  /* le scorciatoie del blocco Exports precompilano il modale (03/10) */
+  sel.value = "";
+  document.getElementById("ex-tec").value = "";
+  document.getElementById("ex-dal").value = "";
   if (pre) {
     if (pre.country) sel.value = pre.country;
     if (pre.technology) document.getElementById("ex-tec").value = pre.technology;
     if (pre.dal) document.getElementById("ex-dal").value = pre.dal;
   }
   apriDialogo("export-modale");
-  stimaExport();
+  exScegliTipo(pre && pre.tipo === "companies" ? "companies" : "postings");
 }
 function chiudiExport() { chiudiDialogo("export-modale"); }
 function filtriExport() {
@@ -1798,6 +1800,7 @@ function euroPer(crediti) {
   return 2990;
 }
 async function stimaExport() {
+  const seq = ++exStimaSeq;
   const avviso = document.getElementById("ex-avviso");
   const vai = document.getElementById("ex-vai");
   const ricarica = document.getElementById("ex-ricarica");
@@ -1811,24 +1814,34 @@ async function stimaExport() {
   let r;
   try { r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) }); }
   catch (e) {
+    if (seq !== exStimaSeq) return;
     ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—");
     avviso.textContent = "The estimate could not be loaded. Check your connection and retry.";
     avviso.classList.remove("hidden");
     return;
   }
+  if (seq !== exStimaSeq) return;
   if (!r.ok) {
     ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—");
     avviso.textContent = "The estimate could not be loaded. Retry in a moment.";
     avviso.classList.remove("hidden");
     return;
   }
-  const d = await r.json(); exDati = d;
+  const d = await r.json();
+  if (seq !== exStimaSeq) return;
+  exDati = d;
   const unita = d.tipo === "companies" ? " companies" : " rows";
   document.getElementById("ex-righe").textContent = d.righe.toLocaleString("en-US") + unita;
   document.getElementById("ex-costo").textContent = d.crediti.toLocaleString("en-US") + " credits";
   const saldoEl = document.getElementById("ex-saldo");
   saldoEl.textContent = d.saldo.toLocaleString("en-US") + " credits";
   saldoEl.className = "text-[15px] font-black tabular-nums " + (d.saldo >= d.crediti ? "text-mint-400" : "text-rose-400");
+  if (d.righe === 0) {
+    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-slate-50 border border-slate-200 text-slate-600";
+    avviso.textContent = "No rows match these filters. Change the country or technology — no credits will be used.";
+    avviso.classList.remove("hidden");
+    return;
+  }
   if (d.troppo) {
     avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-amber-50 border border-amber-200 text-amber-800";
     avviso.innerHTML = "This slice is <b>" + d.righe.toLocaleString("en-US") + " rows</b> — past the " + d.tetto.toLocaleString("en-US") +
@@ -1845,10 +1858,8 @@ async function stimaExport() {
     ricarica.classList.remove("hidden");
     return;
   }
-  /* scaricabile: il bottone torna, acceso; zero righe = resta spento
-     ma visibile, perche' "niente da scaricare" e' una risposta */
   vai.classList.remove("hidden");
-  vai.disabled = d.righe === 0;
+  vai.disabled = false;
 }
 function vaiAllaRicarica() {
   if (exDati) {
