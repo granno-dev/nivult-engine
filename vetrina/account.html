@@ -1192,6 +1192,11 @@ async function rivelaAzienda(ref, btn) {
   btn.disabled = true; btn.textContent = "…";
   try {
     const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+    if (r.status === 403) {
+      btn.textContent = "Reveal · 1 credit";
+      notifica("Your account is paused. Contact support to reactivate it.", "errore");
+      return;
+    }
     if (r.status === 429) {
       btn.textContent = "credits out — top up";
       btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
