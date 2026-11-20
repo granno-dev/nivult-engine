@@ -1007,7 +1007,7 @@ async function mostraLive(f){
     return;
   }
   /* la merce non si regala: due esempi chiari, il resto sfocato, e il
-     numero esatto non si dice (26/09/2026, decisione di Giuseppe) */
+     numero esatto non si dice (26/09/2026, decisione di Nivult) */
   const chiare=d.data.map(a=>riga({nome:a.company,dominio:null,paese:a.country||'',size:null,
       tecnologie:(a.technologies||[]).slice(0,5)})).join('');
   const sfocate = d.altre ? `
@@ -1161,7 +1161,7 @@ new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&!covVista)anima
   .observe(document.querySelector('#coverage'));
 
 /* ══ copertura viva, contatori FISSI (10/10/2026) ══
-   Giuseppe: «niente numeri reali con index giornaliero, mettiamo numeri
+   Nivult: «niente numeri reali con index giornaliero, mettiamo numeri
    statici tondi con more than». I contatori sono embedded e non si muovono
    piu'; dall'endpoint pubblico arriva solo la COPERTURA per campo, che
    non e' un numero da marketing ma la mappa dei fill-rate — quella resta
