@@ -30,6 +30,13 @@ tailwind.config = { theme: { extend: {
 .live-dot { animation: pulse-dot 2.2s infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  caret-color: #0f172a;
+}
 /* rete neurale dietro il contenuto, mai sopra il testo (come la home) */
 #neural { position: absolute; inset: 0; width: 100%; height: 100%; }
 @keyframes mesh { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,-30px) scale(1.15); } 66% { transform: translate(-40px,25px) scale(.95); } }
@@ -60,13 +67,13 @@ tailwind.config = { theme: { extend: {
     <div>
       <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
         <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-        Usually answered within one business day
+        Live calendar · 30-min walkthrough
       </span>
       <h1 class="mt-6 text-4xl lg:text-5xl font-black tracking-tight leading-[1.05]">
         Talk to sales. <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">Leave with numbers.</span>
       </h1>
       <p class="mt-5 text-lg text-slate-600 leading-relaxed">
-        Thirty minutes with the Nivult team: coverage for your markets, field-level provenance, pricing that fits your volume, or a sample export cut on your competitors. Bring questions, leave with answers.
+        Thirty minutes with the Nivult team: coverage for your markets, field-level provenance, pricing that fits your volume, or a sample export cut on your target companies.
       </p>
       <div class="mt-8 grid sm:grid-cols-2 gap-3">
         <div class="rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
@@ -96,13 +103,6 @@ tailwind.config = { theme: { extend: {
           </span>
           <span><b class="block text-sm font-bold text-slate-900">Your time zone</b>
           <span class="text-[13px] text-slate-500 leading-snug">Slots show in your local time. No math needed.</span></span>
-        </div>
-        <div class="sm:col-span-2 rounded-2xl border border-slate-900/10 bg-white/70 px-4 py-3.5 flex items-start gap-3">
-          <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-mint-500/10 border border-mint-500/30">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0aa588" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-          </span>
-          <span><b class="block text-sm font-bold text-slate-900">Cancel or move anytime</b>
-          <span class="text-[13px] text-slate-500 leading-snug">One click from any reminder, no questions asked.</span></span>
         </div>
       </div>
     </div>
@@ -152,13 +152,7 @@ tailwind.config = { theme: { extend: {
               <input id="f-email" type="email" required autocomplete="email"
                 class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
             </div>
-            <div>
-              <label class="text-[13px] font-semibold text-slate-700" for="f-tel">Phone <span class="font-normal text-slate-400">(optional)</span></label>
-              <input id="f-tel" type="tel" maxlength="24" autocomplete="tel" placeholder="+44 20 1234 5678"
-                class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
-              <p id="errore-tel" class="hidden mt-1.5 text-[13px] text-red-600 font-medium">Enter the number with the country code, starting with + (e.g. +44 20 1234 5678).</p>
-            </div>
-            <div>
+            <div class="sm:col-span-2">
               <label class="text-[13px] font-semibold text-slate-700" for="f-az">Company <span class="font-normal text-slate-400">(optional)</span></label>
               <input id="f-az" maxlength="160" autocomplete="organization"
                 class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500">
@@ -166,7 +160,7 @@ tailwind.config = { theme: { extend: {
             <div class="sm:col-span-2">
               <label class="text-[13px] font-semibold text-slate-700" for="f-note">Notes for the call <span class="font-normal text-slate-400">(optional)</span></label>
               <textarea id="f-note" rows="2" maxlength="2000"
-                placeholder="Coverage in your markets, a competitor to look at, volumes and pricing…"
+                placeholder="Coverage in your markets, target companies to look at, volumes and pricing…"
                 class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-[15px] transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 placeholder:text-slate-400"></textarea>
             </div>
             <!-- honeypot: invisibile agli umani, i bot lo riempiono -->
@@ -176,18 +170,25 @@ tailwind.config = { theme: { extend: {
           <button id="invia" class="group relative mt-6 w-full overflow-hidden rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-[length:180%_100%] bg-left hover:bg-right px-7 py-4 font-bold text-white shadow-xl shadow-brand-500/30 transition-all duration-500 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-brand-500/40 disabled:opacity-60 disabled:hover:translate-y-0">
             Confirm my slot <span class="inline-block transition-transform duration-300 group-hover:translate-x-1">→</span>
           </button>
+          <p class="mt-3 flex items-center justify-center gap-1.5 text-[13px] text-slate-500">
+            <svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0aa588" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            Cancel or reschedule in one click, no questions asked.
+          </p>
           <p id="errore-form" class="hidden mt-3 text-sm text-red-600 font-medium"></p>
         </form>
 
         <!-- stato: controlla la mail -->
         <div id="stato-inbox" class="hidden text-center py-6">
           <div class="mx-auto h-14 w-14 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-2xl">✉️</div>
-          <h2 class="mt-4 text-2xl font-black tracking-tight">Check your inbox</h2>
+          <h2 class="mt-4 text-2xl font-black tracking-tight">One last step: check your inbox</h2>
           <p class="mt-3 text-[15px] text-slate-600 leading-relaxed max-w-sm mx-auto">
             We sent a confirmation link for <b id="inbox-quando" class="text-slate-900"></b>.
-            One click and the calendar invite with the Teams link is yours.
           </p>
-          <p class="mt-4 text-[13px] text-slate-400">Nothing is booked until you confirm.</p>
+          <div class="mt-5 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3">
+            <p class="text-[15px] font-bold text-brand-700">Click Confirm booking in our email to reserve your slot.</p>
+            <p class="mt-1 text-[13px] text-slate-600">Your calendar invite and Teams link will follow.</p>
+          </div>
+          <p class="mt-4 text-[13px] text-slate-500">Not in your inbox? Check spam or junk. Nothing is booked until you confirm.</p>
         </div>
 
         <!-- stato: confermata -->
@@ -346,17 +347,8 @@ document.getElementById("stato-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const nome = document.getElementById("f-nome").value.trim();
   const email = document.getElementById("f-email").value.trim();
-  const tel = document.getElementById("f-tel").value.trim();
   const err = document.getElementById("errore-form");
-  const errTel = document.getElementById("errore-tel");
   err.classList.add("hidden");
-  errTel.classList.add("hidden");
-  // il numero, se c'e', deve partire col prefisso internazionale: + e cifre
-  if (tel && !/^\+\d[\d\s-]{6,18}$/.test(tel)) {
-    errTel.classList.remove("hidden");
-    document.getElementById("f-tel").focus();
-    return;
-  }
   if (!nome || !email || !email.includes("@")) {
     err.textContent = "Name and a valid work email are needed.";
     err.classList.remove("hidden");
@@ -370,7 +362,6 @@ document.getElementById("stato-form").addEventListener("submit", async (ev) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nome, email,
-        telefono: tel || null,
         azienda: document.getElementById("f-az").value.trim() || null,
         note: document.getElementById("f-note").value.trim() || null,
         starts_at: slotSel.toISOString(),
