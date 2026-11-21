@@ -80,12 +80,12 @@ tailwind.config = {
     "url": "https://nivult.com"
    },
    "measurementTechnique": "Daily reading of employer career systems; a posting counts as active while it appears on the employer's own board, and is marked closed only when it leaves the source.",
-   "dateModified": "2026-11-21T12:13:58.163289+00:00",
+   "dateModified": "2026-11-21T18:46:44.478303+00:00",
    "distribution": [
     {
      "@type": "DataDownload",
      "encodingFormat": "application/json",
-     "contentUrl": "https://api.nivult.com/v1/jobs?ats=bundesanstellung&limit=25"
+     "contentUrl": "https://api.nivult.com/v1/jobs?ats=bundesagentur&limit=25"
     },
     {
      "@type": "DataDownload",
@@ -288,7 +288,7 @@ curl -H &quot;X-API-Key: &lt;your-key&gt;&quot; \
     <span class="ml-2 font-mono text-[11.5px] text-slate-500">GET /v1/jobs</span>
   </div>
   <pre class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200">curl -H &quot;X-Api-Key: $NIVULT_API_KEY&quot; \
-  &quot;https://api.nivult.com/v1/jobs?ats=bundesanstellung&amp;limit=25&quot;</pre>
+  &quot;https://api.nivult.com/v1/jobs?ats=bundesagentur&amp;limit=25&quot;</pre>
 </div></div>
     <div class="mt-6 grid lg:grid-cols-[1.4fr_1fr] gap-5 items-start">
       <div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
@@ -305,6 +305,8 @@ curl -H &quot;X-API-Key: &lt;your-key&gt;&quot; \
  <span class="k">"city"</span>: <span class="s">"Fischach, Schwaben"</span>,
  <span class="k">"location"</span>: <span class="s">"Fischach, Schwaben"</span>,
  <span class="k">"url"</span>: <span class="s">"https://www.persy.jobs/persy/l/job-jwgwj-b"</span>,
+ <span class="k">"remote"</span>: <span class="s">"onsite"</span>,
+ <span class="k">"seniority"</span>: <span class="s">"mid"</span>,
  <span class="k">"posted_at"</span>: <span class="s">"2026-11-20T00:00:00+00:00"</span>,
  <span class="k">"first_seen"</span>: <span class="s">"2026-11-20T17:45:18.556106+00:00"</span>,
  <span class="k">"last_seen"</span>: <span class="s">"2026-11-20T17:45:18.556106+00:00"</span>,
@@ -347,7 +349,7 @@ curl -H &quot;X-API-Key: &lt;your-key&gt;&quot; \
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
     <h2 class="text-2xl font-black tracking-tight">We also read</h2>
-    <div class="mt-5 flex flex-wrap gap-2.5"><a href="/ats/cornerstone/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">Cornerstone OnDemand</a><a href="/ats/eightfold/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">Eightfold AI</a><a href="/ats/francetravail/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">France Travail (France)</a><a href="/ats/freshteam/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">Freshteam (Freshworks)</a><a href="/ats/greenhouse/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">Greenhouse</a><a href="/ats/homerun/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">Homerun</a><a href="/ats/icims/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">iCIMS</a><a href="/ats/jazzhr/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">JazzHR</a>
+    <div class="mt-5 flex flex-wrap gap-2.5">
       <a href="/ats/" class="rounded-xl border border-brand-500/30 bg-brand-50 px-4 py-2.5 text-[13.5px] font-bold text-brand-600 hover:bg-brand-100 transition">All 77+ sources →</a>
     </div>
   </div>

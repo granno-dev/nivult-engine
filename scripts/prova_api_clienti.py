@@ -17,6 +17,8 @@ import types
 from datetime import date
 from pathlib import Path
 
+from nivult.api_clienti import dati as dati_reali
+
 _TMP_DIR = tempfile.TemporaryDirectory(prefix="nivult-banco-")
 _TMP = Path(_TMP_DIR.name)
 _dati = types.ModuleType("nivult.api_clienti.dati")
@@ -24,6 +26,8 @@ _vivo = types.ModuleType("nivult.api_clienti.vivo")
 
 OFFERTE = [{"id": f"o{i}", "title": f"Ruolo {i}",
             "country": "DE" if i % 2 else "FR"} for i in range(7)]
+OFFERTE[0].update({"contact_email": "recruiter@example.com",
+                   "recruiter": {"nome": "Mara"}})
 AZIENDE = {"acme": {"slug": "acme", "piattaforma": "linkedin",
                     "name": "Acme", "country": "DE",
                     "technologies": ["python", "postgres"]},
@@ -43,10 +47,12 @@ def _pagina_finta(righe, cursore, limite):
 
 
 _dati.ultima_chiamata = {}
+_dati.ultimo_limite = {}
 
 
 def _offerte(filtri, cursore, limite):
     _dati.ultima_chiamata["offerte"] = dict(filtri)
+    _dati.ultimo_limite["offerte"] = limite
     righe = OFFERTE
     if "country" in filtri:
         righe = [r for r in righe if r["country"] == filtri["country"]]
@@ -55,17 +61,23 @@ def _offerte(filtri, cursore, limite):
 
 def _aziende(filtri, cursore, limite):
     _dati.ultima_chiamata["aziende"] = dict(filtri)
+    _dati.ultimo_limite["aziende"] = limite
     righe = list(AZIENDE.values())
     if "country" in filtri:
         righe = [r for r in righe if r["country"] == filtri["country"]]
     return _pagina_finta(righe, cursore, limite)
 
 
+def _cambiamenti(da, cursore, limite):
+    _dati.ultimo_limite["cambiamenti"] = limite
+    return _pagina_finta(CAMBIAMENTI, cursore, limite)
+
+
 _dati.apri = lambda percorso=None: None
 _dati.offerte = _offerte
 _dati.aziende = _aziende
 _dati.azienda = lambda piattaforma, slug: AZIENDE.get(slug)
-_dati.cambiamenti = lambda da, cursore, limite: _pagina_finta(CAMBIAMENTI, cursore, limite)
+_dati.cambiamenti = _cambiamenti
 _dati.copertura = lambda: {"campi": {"salary": 0.41, "country": 1.0}, "marca": "banco"}
 _dati.stato_export = lambda: {
     "data": "2026-09-23", "righe": {"offerte": 2, "aziende": 1},
@@ -73,11 +85,17 @@ _dati.stato_export = lambda: {
              "aziende": str(_TMP / "aziende-non-ce.jsonl.gz")}}
 _dati.demo_stats = lambda: {"offerte": 7, "aziende": 2}
 _dati.demo_tecnologie = lambda q: {"esempi": [AZIENDE["acme"]], "altre": 1}
+_dati.stream_export_senza_pii = dati_reali.stream_export_senza_pii
 _vivo.offerte = _offerte
 _vivo.rivela_offerta = lambda offerta_id: next(
     (o for o in OFFERTE if o["id"] == offerta_id), None)
 sys.modules["nivult.api_clienti.dati"] = _dati
 sys.modules["nivult.api_clienti.vivo"] = _vivo
+
+import nivult.api_clienti as _pacchetto  # noqa: E402
+
+_pacchetto.dati = _dati
+_pacchetto.vivo = _vivo
 
 from nivult.api_clienti import chiavi  # noqa: E402
 
@@ -110,6 +128,11 @@ CHIAVE_REVOCATA = "nv-banco-revocata"
 CHIAVE_VECCHIA = "nv-banco-vecchia"
 BULK499, BULK500 = "nv-bulk-499999", "nv-bulk-500000"
 DELTA199, DELTA200 = "nv-delta-199999", "nv-delta-200000"
+FREE = "nv-free-1000"
+RATE_FREE_KEY, RATE_PAID_KEY = "nv-rate-free", "nv-rate-paid"
+_chiave(FREE, "free-1", "u-free", 1000)
+_chiave(RATE_FREE_KEY, "rate-free", "u-rate-free", 1000)
+_chiave(RATE_PAID_KEY, "rate-paid", "u-rate-paid", 10000)
 _chiave(CHIAVE, "main-1", "u-main", 10000)
 _chiave(CHIAVE_SECONDA, "main-2", "u-main", 10000)
 _chiave(CHIAVE_POVERA, "poor-1", "u-poor", 2)
@@ -199,6 +222,8 @@ app = FastAPI()
 app.include_router(v1.router)
 client = TestClient(app)
 H = {"X-Api-Key": CHIAVE}
+_rate_originale = v1._applica_rate_limit
+v1._applica_rate_limit = lambda request, cliente: None
 fallite = []
 
 
@@ -236,6 +261,12 @@ r = client.get("/v1/jobs", params={"country": "DE"}, headers=H)
 prova("jobs passa per il fake vivo e filtra",
       _dati.ultima_chiamata.get("offerte") == {"country": "DE"}
       and all(o["country"] == "DE" for o in r.json()["data"]))
+r = client.get("/v1/jobs", params={"ats": "bundesagentur"}, headers=H)
+prova("alias Bundesagentur mappa al codice canonico", r.status_code == 200
+      and _dati.ultima_chiamata.get("offerte") == {"ats": "bundesanstellung"})
+r = client.get("/v1/jobs", params={"ats": "bundesanstellung"}, headers=H)
+prova("codice canonico Bundesagentur resta invariato", r.status_code == 200
+      and _dati.ultima_chiamata.get("offerte") == {"ats": "bundesanstellung"})
 visti, cursore = [], None
 while True:
     r = client.get("/v1/jobs", params={"limit": 3, **({"cursor": cursore} if cursore else {})},
@@ -316,6 +347,9 @@ prova("499.999 bulk -> 403 gratis", r.status_code == 403 and _consumi() == prima
 r = client.get("/v1/exports/latest/offerte", headers={"X-Api-Key": BULK500})
 scaricate = gzip.decompress(r.content).decode().splitlines() if r.status_code == 200 else []
 prova("500.000 bulk -> file e un addebito", len(scaricate) == 2 and _consumi() == prima + 1)
+prova("bulk da file precedente senza campi PII",
+      all("contact_email" not in riga and "recruiter" not in riga
+          for riga in map(json.loads, scaricate)))
 prima = _consumi()
 r = client.get("/v1/exports/latest/aziende", headers={"X-Api-Key": BULK500})
 prova("file mancante -> 404 gratis", r.status_code == 404 and _consumi() == prima)
@@ -323,6 +357,78 @@ r = client.get("/v1/exports/latest/altro", headers={"X-Api-Key": BULK500})
 prova("nome export ignoto -> 404 gratis", r.status_code == 404 and _consumi() == prima)
 r = client.get("/v1/exports/latest/offerte", headers=RH)
 prova("bulk RapidAPI resta 403 senza addebito", r.status_code == 403 and _consumi() == prima)
+
+print("cap free, limiti paganti e rate limiting")
+HF = {"X-Api-Key": FREE}
+r = client.get("/v1/jobs", params={"limit": 500}, headers=HF)
+prova("free jobs: limit=500 troncato a 25",
+      r.status_code == 200 and _dati.ultimo_limite["offerte"] == 25)
+r = client.get("/v1/jobs", headers=HF)
+prova("free jobs: anche il default diventa 25",
+      r.status_code == 200 and _dati.ultimo_limite["offerte"] == 25)
+r = client.get("/v1/companies", params={"limit": 500}, headers=HF)
+prova("free companies: limit=500 troncato a 25",
+      r.status_code == 200 and _dati.ultimo_limite["aziende"] == 25)
+r = client.get("/v1/jobs", params={"limit": 500}, headers=H)
+prova("tier pagante jobs: limit=500 invariato",
+      r.status_code == 200 and _dati.ultimo_limite["offerte"] == 500)
+r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z", "limit": 500},
+               headers={"X-Api-Key": DELTA200})
+prova("tier pagante changes: limit=500 invariato",
+      r.status_code == 200 and _dati.ultimo_limite["cambiamenti"] == 500)
+prova("il cap segue il monthly tier, incluso zero",
+      v1._limite_per_tier({"monthly_tier": 0}, 500) == 25
+      and v1._limite_per_tier({"monthly_tier": 1000}, 500) == 25
+      and v1._limite_per_tier({"monthly_tier": 1001}, 500) == 500)
+
+v1._applica_rate_limit = _rate_originale
+v1._rate_limiter.clear()
+prima = _consumi()
+rate_free = [client.get("/v1/jobs", headers={"X-Api-Key": RATE_FREE_KEY})
+             for _ in range(6)]
+prova("free API: burst 5, sesta richiesta 429",
+      [r.status_code for r in rate_free] == [200, 200, 200, 200, 200, 429])
+prova("429 free ha Retry-After e non spende il sesto credito",
+      int(rate_free[-1].headers.get("Retry-After", "0")) >= 1
+      and _consumi() == prima + 5)
+v1._rate_limiter.clear()
+prima = _consumi()
+rate_paid = [client.get("/v1/usage", headers={"X-Api-Key": RATE_PAID_KEY})
+             for _ in range(31)]
+prova("API pagante: burst 30, trentunesima richiesta 429",
+      [r.status_code for r in rate_paid] == [200] * 30 + [429])
+prova("429 pagante non spende oltre le 30 richieste ammesse",
+      _consumi() == prima + 30)
+
+from nivult.api import booking  # noqa: E402
+
+class _ConnessioneFinta:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+booking.psycopg.connect = lambda dsn: _ConnessioneFinta()
+booking._slot_giorno = lambda conn, giorno: []
+booking_app = FastAPI()
+booking.registra(booking_app)
+booking_client = TestClient(booking_app)
+booking._rate_limiter.clear()
+slot_ip = {"CF-Connecting-IP": "203.0.113.50"}
+slot_rate = [booking_client.get("/booking/slots", params={"day": "2026-11-23"},
+                                headers=slot_ip) for _ in range(6)]
+prova("booking slots: burst 5 per IP, poi 429",
+      [r.status_code for r in slot_rate] == [200] * 5 + [429])
+booking._rate_limiter.clear()
+post_ip = {"CF-Connecting-IP": "203.0.113.51"}
+honeypot = {"nome": "Bot", "email": "bot@example.com",
+            "starts_at": "2027-01-01T10:00:00Z", "sito": "compilato"}
+post_rate = [booking_client.post("/booking", json=honeypot, headers=post_ip)
+             for _ in range(6)]
+prova("booking POST: honeypot intatto, burst 5 poi 429",
+      [r.status_code for r in post_rate] == [200] * 5 + [429]
+      and int(post_rate[-1].headers.get("Retry-After", "0")) >= 1)
 
 print("demo: IP e campioni EXPORT_DIR")
 def _campione(nome, valore):

@@ -95,6 +95,8 @@ def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
 
 def _filtri(**coppie) -> dict:
     """Solo i parametri presenti: al data layer non arrivano i None."""
+    if coppie.get("ats") == "bundesagentur":
+        coppie["ats"] = "bundesanstellung"
     return {k: v for k, v in coppie.items() if v is not None}
 
 

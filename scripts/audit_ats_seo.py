@@ -69,6 +69,8 @@ def main() -> int:
         check("Location as posted" not in text, f"{slug}: location placeholder")
         check(not re.search(r">Q\d+<", text), f"{slug}: Wikidata Q-ID")
         check("/ats/bundesanstellung/" not in text, f"{slug}: vecchio slug Bundesagentur")
+        check("v1/jobs?ats=bundesanstellung" not in text,
+              f"{slug}: vecchio slug nello snippet curl")
 
         header = text.split("<header", 1)[-1].split("</header>", 1)[0]
         top = header.split("Top countries", 1)[-1]

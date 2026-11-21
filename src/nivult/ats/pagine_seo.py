@@ -713,7 +713,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
                 f"{nome} Job Postings Dataset",
                 f"{_n(m.attive)} live postings from {_n(m.aziende)} companies "
                 f"on {nome}; latest content update {_data(m.ultimo)}.",
-                canonical, m.ultimo, slug),
+                canonical, m.ultimo, public_slug),
             _ld_faq(faq),
         ],
     }]
@@ -857,7 +857,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 
     # ── blocco developer: API, record reale e copertura specifica dell'ATS
     curl = (f'curl -H "X-Api-Key: $NIVULT_API_KEY" \\\n'
-            f'  "https://api.nivult.com/v1/jobs?ats={slug}&limit=25"')
+            f'  "https://api.nivult.com/v1/jobs?ats={public_slug}&limit=25"')
     righe_fill = "".join(
         f'<tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">{campo}</td>'
         f'<td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">'
