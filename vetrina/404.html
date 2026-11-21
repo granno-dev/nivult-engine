@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found | Nivult</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: #f5f4ef; color: #0f172a; font-family: Inter, system-ui, sans-serif; }
+nav { height: 72px; display: flex; align-items: center; justify-content: space-between; max-width: 1200px; margin: 0 auto; padding: 0 24px; border-bottom: 1px solid rgba(15,23,42,.07); }
+nav img { width: 106px; height: auto; }
+nav a { color: #64748b; font-size: 14px; font-weight: 600; text-decoration: none; }
+nav a:hover { color: #0f172a; }
+main { position: relative; isolation: isolate; overflow: hidden; min-height: calc(100vh - 72px); display: grid; place-items: center; padding: 80px 24px; }
+main::before, main::after { content: ""; position: absolute; z-index: -1; width: 520px; height: 520px; border-radius: 50%; filter: blur(110px); pointer-events: none; }
+main::before { top: -180px; left: -160px; background: rgba(94,139,255,.20); }
+main::after { right: -160px; bottom: -220px; background: rgba(47,224,182,.18); }
+section { width: 100%; max-width: 720px; text-align: center; }
+.code { margin: 0; background: linear-gradient(90deg,#3b6ef6,#8b5cf6,#0fbf9a); background-clip: text; -webkit-background-clip: text; color: transparent; font-size: clamp(96px,20vw,180px); font-weight: 900; line-height: .9; letter-spacing: -.08em; }
+h1 { margin: 28px 0 0; font-size: clamp(32px,5vw,48px); line-height: 1.1; letter-spacing: -.04em; }
+p { max-width: 520px; margin: 20px auto 0; color: #64748b; font-size: 17px; line-height: 1.7; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 36px; }
+.actions a { padding: 14px 24px; border-radius: 12px; font-size: 15px; font-weight: 700; text-decoration: none; transition: transform .2s, box-shadow .2s, border-color .2s; }
+.actions a:hover { transform: translateY(-2px); }
+.primary { background: linear-gradient(90deg,#3b6ef6,#8b5cf6,#0fbf9a); color: white; box-shadow: 0 12px 30px rgba(59,110,246,.22); }
+.secondary { border: 1px solid rgba(15,23,42,.15); color: #1e293b; background: rgba(255,255,255,.45); }
+.secondary:hover { border-color: rgba(59,110,246,.6); }
+@media (prefers-reduced-motion: reduce) { .actions a { transition: none; } }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" aria-label="Nivult home"><img src="/brand/nivult.svg" alt="Nivult"></a>
+  <a href="/">Back to Nivult</a>
+</nav>
+<main>
+  <section>
+    <div class="code" aria-hidden="true">404</div>
+    <h1>Page not found</h1>
+    <p>The page you requested does not exist or may have moved. Explore Nivult's hiring data or browse our ATS coverage.</p>
+    <div class="actions">
+      <a class="primary" href="/">Go to homepage</a>
+      <a class="secondary" href="/ats/">Explore ATS coverage</a>
+    </div>
+  </section>
+</main>
+</body>
+</html>
