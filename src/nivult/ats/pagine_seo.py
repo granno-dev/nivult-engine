@@ -164,6 +164,8 @@ def _nome_azienda(nome: str | None, slug: str) -> str | None:
         return _senza_paese_finale(verificato)
     if re.match(r"(?:Careers|Field|Jobs|Internal)\s", nome, re.IGNORECASE):
         return None
+    if re.fullmatch(r"Q\d+", nome, re.IGNORECASE):
+        return None
     if _chiave_nome(nome) == _chiave_nome(slug):
         return None
     return _senza_paese_finale(nome) or None
@@ -962,7 +964,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
           <b class="text-[16.5px] font-bold tracking-tight">{html.escape(p["name"])}</b>
           <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-black shrink-0">{_n(m.attive)} live</span>
         </div>
-        <p class="mt-2 text-[13px] text-slate-500">{_n(m.aziende)} companies · updated {_data(m.ultimo)}</p>
+        <p class="mt-2 text-[13px] text-slate-500">{_n(m.aziende)} companies · last refresh {_data(m.ultimo_fetch)}</p>
         <p class="mt-2.5 text-[13px] text-slate-500 leading-relaxed">{html.escape(p["editoriale"]["headline_angle"])}</p>
       </a>"""
 
