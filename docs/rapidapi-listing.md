@@ -82,7 +82,7 @@ Parameters:
 - `country` — ISO 3166-1 alpha-2, such as `DE`, `US` or `IT`.
 - `technology` — case-insensitive exact match against extracted, normalized technologies; not arbitrary text search.
 - `category`, `ats`, `seniority`, `remote`, `language` — corresponding exported values.
-- `posted_after` — posted on/after `YYYY-MM-DD`; `dal` is an alias. If both are supplied, `posted_after` wins.
+- `posted_after` — posted on/after `YYYY-MM-DD`.
 - `limit` — 1–500, default 100.
 - `cursor` — previous response's `next_cursor`.
 

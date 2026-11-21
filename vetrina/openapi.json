@@ -13,7 +13,7 @@
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. q uses PostgreSQL full-text search over title and description. posted_after and dal are aliases; posted_after wins when both are present. Unknown query parameters are ignored. Unknown filter values normally produce an empty page rather than a validation error.",
+        "description": "Active postings with keyset pagination. q uses PostgreSQL full-text search over title and description. Unknown query parameters are ignored. Unknown filter values normally produce an empty page rather than a validation error.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "ISO 3166-1 alpha-2 country code" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP" }, "description": "Case-insensitive exact match against extracted, normalized technologies" },
@@ -24,7 +24,6 @@
           { "name": "language", "in": "query", "schema": { "type": "string", "example": "en" } },
           { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "PostgreSQL full-text query over job title and description" },
           { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
-          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Alias of posted_after" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],

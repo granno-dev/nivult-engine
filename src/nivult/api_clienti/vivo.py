@@ -84,6 +84,18 @@ _DESCR = ("coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', "
           "WHERE length(v) >= 80 LIMIT 1), '')")
 
 
+_SEARCH_DOC = ("to_tsvector('simple', j.title || ' ' || "
+               "COALESCE(NULLIF(j.raw->>'description', ''), "
+               "NULLIF(j.raw->>'content', ''), NULLIF(j.raw->>'descriptionHtml', ''), "
+               "NULLIF(j.raw->>'descriptionPlain', ''), NULLIF(j.raw->>'externalDescription', ''), "
+               "NULLIF(j.raw->>'jobDescription', ''), NULLIF(j.raw->>'job_description', ''), "
+               "NULLIF(j.raw->>'Job_Description', ''), NULLIF(j.raw->>'body', ''), "
+               "NULLIF(j.raw->>'content_html', ''), NULLIF(j.raw->>'description_html', ''), "
+               "NULLIF(j.raw->>'descriptionBody', ''), NULLIF(j.raw->>'text', ''), "
+               "NULLIF(j.raw->'_jobposting'->>'description', ''), "
+               "NULLIF(j.raw->>'ShortDescriptionStr', ''), ''))")
+
+
 def _dove(filtri: dict) -> tuple[str, dict]:
     """I filtri della lista, identici a dati.offerte. Ogni valore e' un
     PARAMETRO: mai concatenato, mai."""
@@ -112,8 +124,8 @@ def _dove(filtri: dict) -> tuple[str, dict]:
             if isinstance(v, bool) else str(v)
         dove.append("j.remote = %(remote)s")
     if filtri.get("q"):
-        dove.append("j.title ILIKE %(q)s ESCAPE '\\'")
-        par["q"] = _like(str(filtri["q"]))
+        dove.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)")
+        par["q"] = str(filtri["q"])
     if filtri.get("technology"):
         dove.append("EXISTS (SELECT 1 FROM tecnologie_v1 tv"
                     "  WHERE tv.job_id = j.id"

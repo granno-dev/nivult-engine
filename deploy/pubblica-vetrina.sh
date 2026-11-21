@@ -5,8 +5,8 @@
 # Il clone operativo NON e' pulito e NON va rebase-ato: file e directory di
 # produzione differiscono deliberatamente dalla storia. La pubblicazione usa
 # quindi un worktree temporaneo, staccato da origin/main aggiornato, e ci
-# copia solo vetrina/ats e le due sitemap. Niente push forzato, niente
-# modifiche al clone che esegue i demoni.
+# copia vetrina/ats, vetrina/job-board e le sitemap. Niente push forzato,
+# niente modifiche al clone che esegue i demoni.
 set -uo pipefail
 BASE=/opt/nivult/engine
 LOG=/var/log/nivult-pagine-seo.log
@@ -31,12 +31,13 @@ fi
 # --delete agisce SOLO nel worktree temporaneo: riproduce anche le pagine
 # eliminate dal generatore, senza toccare il clone operativo.
 rsync -a --delete "$BASE/vetrina/ats/" "$TMP/vetrina/ats/"
+rsync -a --delete "$BASE/vetrina/job-board/" "$TMP/vetrina/job-board/"
 for f in sitemap-ats.xml sitemap-jobboard.xml sitemap-sito.xml sitemap.xml; do
   cp "$BASE/vetrina/$f" "$TMP/vetrina/$f"
 done
 
-git -C "$TMP" add vetrina/ats vetrina/sitemap-ats.xml vetrina/sitemap-jobboard.xml \
-    vetrina/sitemap-sito.xml vetrina/sitemap.xml
+git -C "$TMP" add vetrina/ats vetrina/job-board vetrina/sitemap-ats.xml \
+    vetrina/sitemap-jobboard.xml vetrina/sitemap-sito.xml vetrina/sitemap.xml
 if git -C "$TMP" diff --cached --quiet; then
   exit 0
 fi

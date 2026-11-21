@@ -8,10 +8,10 @@ due metà che non si mescolano:
     scritti a mano una volta (lo stato reale dell'API pubblica di
     quell'ATS, un esempio di codice vero, le FAQ specifiche) — è la parte
     che rende la pagina unica e non un clone;
-  · le misure dal database ATS, ricalcolate a ogni giro: offerte attive,
-    aziende, ultimo fetch, top aziende, offerte di esempio, paesi, quota
-    con salario. Il lastmod della sitemap è il max(fetched_at) REALE:
-    Google impara presto a diffidare di chi dichiara freschezza finta.
+  · le misure dal database ATS, ricalcolate a ogni giro sul perimetro attivo
+    deduplicato dell'API: offerte, aziende, ultimo fetch, ultima modifica del
+    contenuto, aziende ed esempi risolti, paesi e fill rate. Il lastmod segue
+    content_updated_at con fallback sul fetch, mai la data di build.
 
 **Quality gate.** Una pagina ATS si pubblica solo se: esiste la voce
 editoriale, la piattaforma è attiva, e ha almeno --min-attive offerte vive
@@ -32,10 +32,12 @@ import argparse
 import html
 import json
 import logging
+import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 
@@ -62,6 +64,28 @@ MESI = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
 STATI_API = {"public-json", "public-feed", "official-partner",
              "none-public", "unknown"}
 
+_DESCR_CAMPI = (
+    "raw->>'description'", "raw->>'content'", "raw->>'descriptionHtml'",
+    "raw->>'descriptionPlain'", "raw->>'externalDescription'",
+    "raw->>'jobDescription'", "raw->>'job_description'",
+    "raw->>'Job_Description'", "raw->>'body'", "raw->>'content_html'",
+    "raw->>'description_html'", "raw->>'descriptionBody'", "raw->>'text'",
+    "raw->'_jobposting'->>'description'", "raw->>'ShortDescriptionStr'",
+)
+_DESCR = ("CASE " + " ".join(
+    f"WHEN length({campo}) >= 80 THEN {campo}" for campo in _DESCR_CAMPI
+) + " ELSE '' END")
+_DOVE_ATTIVE = (
+    "j.expired_at IS NULL "
+    "AND (j.posted_at IS NULL OR j.posted_at <= now()) "
+    "AND NOT EXISTS (SELECT 1 FROM ats_jobs d"
+    "  WHERE d.duplicate_key = j.duplicate_key"
+    "    AND j.duplicate_key IS NOT NULL"
+    "    AND d.expired_at IS NULL"
+    "    AND (COALESCE(d.created_at, d.posted_at, d.fetched_at), d.id)"
+    "        < (COALESCE(j.created_at, j.posted_at, j.fetched_at), j.id))"
+)
+
 
 def _data(dt: datetime | None) -> str:
     """«11 Oct 2026», oppure una dicitura onesta se il fetch manca."""
@@ -72,6 +96,27 @@ def _data(dt: datetime | None) -> str:
 
 def _n(n: int) -> str:
     return f"{n:,}"
+
+
+def _arrotonda(n: int) -> str:
+    if n >= 1_000_000:
+        valore = (n // 100_000) * 100_000
+        cifre = f"{valore / 1_000_000:.1f}".rstrip("0").rstrip(".")
+        return f"{cifre}M+"
+    if n >= 100_000:
+        return f"{((n // 5_000) * 5_000) // 1_000}K+"
+    if n >= 10_000:
+        return f"{n // 1_000}K+"
+    return f"{_n((n // 500) * 500)}+"
+
+
+def _testo_pulito(valore: object) -> str:
+    testo = html.unescape(str(valore or ""))
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", testo)).strip()
+
+
+def _chiave_nome(valore: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", valore.casefold())
 
 
 _NOMI_AZIENDE = {
@@ -85,13 +130,54 @@ _NOMI_AZIENDE = {
     "babilou": "Babilou",
 }
 
+_PAESI_FINALI = {
+    "argentina", "australia", "austria", "belgium", "brazil", "bulgaria",
+    "canada", "chile", "china", "colombia", "costa rica", "croatia",
+    "czech republic", "czechia", "denmark", "estonia", "finland", "france",
+    "germany", "greece", "hong kong", "hungary", "iceland", "india",
+    "indonesia", "ireland", "israel", "italy", "japan", "latvia",
+    "lithuania", "luxembourg", "malaysia", "mexico", "morocco",
+    "netherlands", "the netherlands", "new zealand", "norway", "peru",
+    "philippines", "poland", "portugal", "romania", "saudi arabia",
+    "singapore", "slovakia", "slovenia", "south africa", "south korea",
+    "spain", "sweden", "switzerland", "taiwan", "thailand", "turkey",
+    "ukraine", "united arab emirates", "united kingdom", "uk",
+    "united states", "united states of america", "usa", "vietnam",
+}
 
-def _nome_azienda(nome: str | None, slug: str) -> str:
-    """Il nome vero se c'e'; altrimenti uno slug leggibile, con i soli
-    acronimi verificati. Niente title-case automatico su nomi sconosciuti."""
-    if nome:
-        return _NOMI_AZIENDE.get(nome.casefold(), nome)
-    return _NOMI_AZIENDE.get(slug.casefold(), slug.replace("-", " "))
+
+def _senza_paese_finale(nome: str) -> str:
+    match = re.search(r"\s*\(([^()]+)\)\s*$", nome)
+    if match and match.group(1).casefold() in _PAESI_FINALI:
+        return nome[:match.start()].strip()
+    return nome
+
+
+def _nome_azienda(nome: str | None, slug: str) -> str | None:
+    nome = _testo_pulito(nome)
+    if not nome:
+        return None
+    verificato = (_NOMI_AZIENDE.get(nome.casefold())
+                  or _NOMI_AZIENDE.get(_chiave_nome(nome))
+                  or _NOMI_AZIENDE.get(slug.casefold()))
+    if verificato:
+        return _senza_paese_finale(verificato)
+    if re.match(r"(?:Careers|Field|Jobs|Internal)\s", nome, re.IGNORECASE):
+        return None
+    if _chiave_nome(nome) == _chiave_nome(slug):
+        return None
+    return _senza_paese_finale(nome) or None
+
+
+def _url_valido(url: object) -> bool:
+    testo = str(url or "")
+    if re.search(r"\s", testo):
+        return False
+    try:
+        parti = urlsplit(testo)
+        return parti.scheme == "https" and bool(parti.netloc)
+    except ValueError:
+        return False
 
 
 # ── misure dal database ATS ────────────────────────────────────────────────
@@ -101,62 +187,174 @@ class Misure:
     """Tutto ciò che una pagina ATS mostra, misurato in un colpo solo."""
     attive: int = 0
     aziende: int = 0
+    ultimo_fetch: datetime | None = None
     ultimo: datetime | None = None
     top_aziende: list[tuple[str, int]] = field(default_factory=list)
     esempi: list[dict] = field(default_factory=list)
     paesi: list[tuple[str, int]] = field(default_factory=list)
     quota_salario: float = 0.0
+    fill_rate: dict[str, float] = field(default_factory=dict)
 
 
-def misura(conn: psycopg.Connection, platform_id: str) -> Misure:
+_CHIAVI_ESEMPIO = [
+    "id", "external_id", "company_slug", "title", "company",
+    "source_company", "country", "city", "location", "url", "posted_at",
+    "created_at", "fetched_at", "remote", "seniority", "skills",
+    "salary_min", "salary_max", "salary_currency",
+]
+_SOURCE_COMPANY_SQL = """COALESCE(
+    j.raw->'company'->>'name', j.raw->'employer'->>'name',
+    j.raw->'entreprise'->>'nom', j.raw->>'firma',
+    j.raw->'hiringOrganization'->>'name', j.raw->>'company_name',
+    j.raw->>'organization'
+)"""
+
+
+def _campioni(cur: psycopg.Cursor, platform_id: str) -> list[dict]:
+    scelti: list[dict] = []
+    aziende: set[str] = set()
+    for campo in ("city", "location"):
+        cur.execute(f"""
+            SELECT * FROM (
+              SELECT DISTINCT ON (COALESCE(c.company_name,
+                                           {_SOURCE_COMPANY_SQL}, j.slug))
+                     j.id, j.external_id, j.slug AS company_slug,
+                     j.title, c.company_name AS company,
+                     CASE WHEN c.company_name IS NULL
+                          THEN ({_SOURCE_COMPANY_SQL}) ELSE NULL END AS source_company,
+                     j.country, j.city, j.location, j.url, j.posted_at,
+                     j.created_at, j.fetched_at, j.remote, j.seniority,
+                     j.skills, j.salary_min, j.salary_max, j.salary_currency
+                FROM ats_jobs j
+                LEFT JOIN ats_companies c
+                       ON c.platform_id = j.platform_id AND c.slug = j.slug
+               WHERE j.platform_id = %s AND {_DOVE_ATTIVE}
+                 AND j.posted_at IS NOT NULL
+                 AND NULLIF(btrim(j.{campo}), '') IS NOT NULL
+                 AND EXISTS (SELECT 1 FROM iso_paesi p
+                              WHERE p.code = j.country)
+               ORDER BY COALESCE(c.company_name, {_SOURCE_COMPANY_SQL}, j.slug),
+                        j.posted_at DESC, j.id
+            ) t ORDER BY posted_at DESC, id DESC""", (platform_id,))
+        for valori in cur.fetchall():
+            e = dict(zip(_CHIAVI_ESEMPIO, valori))
+            e["title"] = _testo_pulito(e["title"])
+            e["company"] = (_nome_azienda(e["company"], e["company_slug"])
+                            or _nome_azienda(e["source_company"],
+                                             e["company_slug"]))
+            e["city"] = _testo_pulito(e["city"])
+            e["location"] = _testo_pulito(e["location"])
+            if not all((e["title"], e["company"], e[campo], e["country"])):
+                continue
+            if not _url_valido(e["url"]):
+                continue
+            azienda = e["company"].casefold()
+            if azienda in aziende:
+                continue
+            scelti.append(e)
+            aziende.add(azienda)
+            if len(scelti) == 3:
+                return scelti
+    return scelti
+
+
+_FILL_CAMPI = ("description", "location", "country", "salary_observed",
+               "date_posted")
+
+
+def fill_rate_export() -> dict[str, dict[str, float]]:
+    """Fill rate per ATS dal daily export deduplicato, in una sola passata."""
+    import duckdb
+
+    from nivult.api_clienti.dati import PERCORSO
+
+    with duckdb.connect(PERCORSO, read_only=True) as conn:
+        conn.execute("SET memory_limit = '2GB'")
+        conn.execute("SET preserve_insertion_order = false")
+        conn.execute("SET threads = 1")
+        tmp = Path(PERCORSO).resolve().parent / "duckdb-tmp"
+        if tmp.is_dir():
+            conn.execute("SET temp_directory = '" + str(tmp).replace("'", "''") + "'")
+        righe = conn.execute("""
+            SELECT ats, count(*),
+                   count(*) FILTER (WHERE length(raw->>'description') >= 80),
+                   count(*) FILTER (WHERE NULLIF(trim(raw->>'location'), '') IS NOT NULL),
+                   count(*) FILTER (WHERE NULLIF(trim(raw->>'country'), '') IS NOT NULL),
+                   count(*) FILTER (WHERE raw->>'salary_min' IS NOT NULL),
+                   count(*) FILTER (WHERE raw->>'posted_at' IS NOT NULL)
+              FROM offerte GROUP BY ats
+        """).fetchall()
+    return {
+        slug: {campo: 100.0 * n / totale if totale else 0.0
+               for campo, n in zip(_FILL_CAMPI, valori)}
+        for slug, totale, *valori in righe
+    }
+
+
+def misura(conn: psycopg.Connection, platform_id: str,
+           fill_rate: dict[str, float] | None = None) -> Misure:
     m = Misure()
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT count(*), count(DISTINCT slug), max(fetched_at), "
-            "       count(*) FILTER (WHERE salary_min IS NOT NULL "
-            "                        OR salary_max IS NOT NULL) "
-            "FROM ats_jobs WHERE platform_id = %s AND expired_at IS NULL",
-            (platform_id,))
-        attive, aziende, ultimo, con_salario = cur.fetchone()
-        m.attive, m.aziende, m.ultimo = attive, aziende, ultimo
-        m.quota_salario = (100.0 * con_salario / attive) if attive else 0.0
+        cur.execute(f"""
+            SELECT count(*), count(DISTINCT j.slug), max(j.fetched_at),
+                   max(COALESCE(j.content_updated_at, j.fetched_at))
+              FROM ats_jobs j
+             WHERE j.platform_id = %s AND {_DOVE_ATTIVE}""", (platform_id,))
+        m.attive, m.aziende, m.ultimo_fetch, m.ultimo = cur.fetchone()
 
-        cur.execute(
-            "SELECT c.company_name, j.slug, count(*) "
-            "FROM ats_jobs j "
-            "LEFT JOIN ats_companies c ON c.platform_id = j.platform_id "
-            "                         AND c.slug = j.slug "
-            "WHERE j.platform_id = %s AND j.expired_at IS NULL "
-            "GROUP BY 1, 2 ORDER BY 3 DESC, 2 LIMIT 15", (platform_id,))
-        m.top_aziende = [(_nome_azienda(nome, slug), n)
-                         for nome, slug, n in cur.fetchall()]
+        if fill_rate is None:
+            cur.execute(f"""
+                SELECT count(*),
+                       count(*) FILTER (WHERE length({_DESCR}) >= 80),
+                       count(*) FILTER (WHERE NULLIF(btrim(j.location), '') IS NOT NULL),
+                       count(*) FILTER (WHERE NULLIF(btrim(j.country), '') IS NOT NULL),
+                       count(*) FILTER (WHERE j.salary_min IS NOT NULL),
+                       count(*) FILTER (WHERE j.posted_at IS NOT NULL)
+                  FROM ats_jobs j
+                 WHERE j.platform_id = %s AND j.expired_at IS NULL
+                   AND (j.posted_at IS NULL OR j.posted_at <= now())""",
+                        (platform_id,))
+            valori = cur.fetchone()
+            m.fill_rate = {
+                campo: (100.0 * n / valori[0] if valori[0] else 0.0)
+                for campo, n in zip(_FILL_CAMPI, valori[1:])
+            }
+        else:
+            m.fill_rate = fill_rate
+        m.quota_salario = m.fill_rate["salary_observed"]
 
-        # DISTINCT ON slug: tre offerte da tre aziende diverse, altrimenti
-        # l'ultima azienda fetciata occupa tutta la vetrina di esempio.
-        cur.execute(
-            "SELECT title, company, country, city, url, posted_at, "
-            "       salary_min, salary_max, salary_currency FROM ("
-            "  SELECT DISTINCT ON (j.slug) "
-            "         j.title, COALESCE(c.company_name, j.slug) AS company, "
-            "         j.country, j.city, j.url, "
-            "         COALESCE(j.posted_at, j.fetched_at) AS posted_at, "
-            "         j.salary_min, j.salary_max, j.salary_currency "
-            "  FROM ats_jobs j "
-            "  LEFT JOIN ats_companies c ON c.platform_id = j.platform_id "
-            "                           AND c.slug = j.slug "
-            "  WHERE j.platform_id = %s AND j.expired_at IS NULL "
-            "    AND j.url IS NOT NULL "
-            "  ORDER BY j.slug, COALESCE(j.posted_at, j.fetched_at) DESC, j.id"
-            ") t ORDER BY posted_at DESC, url LIMIT 3",
-            (platform_id,))
-        chiavi = ["title", "company", "country", "city", "url", "posted_at",
-                  "salary_min", "salary_max", "salary_currency"]
-        m.esempi = [dict(zip(chiavi, r)) for r in cur.fetchall()]
+        cur.execute(f"""
+            SELECT c.company_name,
+                   CASE WHEN c.company_name IS NULL
+                        THEN ({_SOURCE_COMPANY_SQL}) ELSE NULL END,
+                   j.slug, count(*)
+              FROM ats_jobs j
+              LEFT JOIN ats_companies c
+                     ON c.platform_id = j.platform_id AND c.slug = j.slug
+             WHERE j.platform_id = %s AND {_DOVE_ATTIVE}
+             GROUP BY 1, 2, 3 ORDER BY 4 DESC, 3 LIMIT 100""", (platform_id,))
+        aggregate: dict[str, tuple[str, int]] = {}
+        for nome, fonte, slug, n in cur.fetchall():
+            pulito = (_nome_azienda(nome, slug)
+                      or _nome_azienda(fonte, slug))
+            if not pulito:
+                continue
+            chiave = pulito.casefold()
+            if chiave in aggregate:
+                aggregate[chiave] = (aggregate[chiave][0],
+                                     aggregate[chiave][1] + n)
+            else:
+                aggregate[chiave] = (pulito, n)
+        m.top_aziende = sorted(aggregate.values(),
+                               key=lambda r: (-r[1], r[0].casefold()))[:15]
 
-        cur.execute(
-            "SELECT COALESCE(country, '??'), count(*) FROM ats_jobs "
-            "WHERE platform_id = %s AND expired_at IS NULL "
-            "GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 6", (platform_id,))
+        m.esempi = _campioni(cur, platform_id)
+
+        cur.execute(f"""
+            SELECT COALESCE(j.country, '??'), count(*)
+              FROM ats_jobs j
+             WHERE j.platform_id = %s AND {_DOVE_ATTIVE}
+             GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 6""", (platform_id,))
         m.paesi = [(p, n) for p, n in cur.fetchall()]
     return m
 
@@ -200,8 +398,8 @@ _NAV = """
       <a href="/ats/" class="text-sm font-semibold text-brand-600 hover:text-brand-700 transition">ATS coverage</a>
     </div>
     <div class="flex-1"></div>
-    <a href="/account.html" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
-    <a href="/account.html" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
+    <a href="/account" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
+    <a href="/account" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
   </div>
 </nav>
 """
@@ -235,9 +433,9 @@ _FOOTER = """
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Company</p>
         <ul class="mt-5 space-y-3 text-sm">
           <li><a href="mailto:hello@nivult.com" class="hover:text-white transition">hello@nivult.com</a></li>
-          <li><a href="/booking.html" class="hover:text-white transition">Book a call</a></li>
-          <li><a href="/account.html" class="hover:text-white transition">Your account</a></li>
-          <li><a href="/terms.html" class="hover:text-white transition">Terms</a> · <a href="/privacy.html" class="hover:text-white transition">Privacy</a></li>
+          <li><a href="/booking" class="hover:text-white transition">Book a call</a></li>
+          <li><a href="/account" class="hover:text-white transition">Your account</a></li>
+          <li><a href="/terms" class="hover:text-white transition">Terms</a> · <a href="/privacy" class="hover:text-white transition">Privacy</a></li>
         </ul>
       </div>
     </div>
@@ -254,7 +452,7 @@ def _testa(title: str, description: str, canonical: str,
            json_ld: list[dict]) -> str:
     blocchi = "\n".join(
         f'<script type="application/ld+json">\n'
-        f'{json.dumps(b, ensure_ascii=False, indent=1)}\n</script>'
+        f'{json.dumps(b if "@context" in b else {"@context": "https://schema.org", **b}, ensure_ascii=False, indent=1)}\n</script>'
         for b in json_ld)
     return f"""<!doctype html>
 <!-- Pagina generata da nivult.ats.pagine_seo: i numeri sono misurati sul
@@ -300,8 +498,8 @@ tailwind.config = {{
 .k{{color:#8ab8ff}}.s{{color:#7ee8c3}}.n{{color:#ffc078}}
 @media (prefers-reduced-motion: reduce) {{ .live-dot {{ animation: none !important; }} }}
 </style>
-</head>
 {blocchi}
+</head>
 <body class="bg-paper text-slate-900 font-sans antialiased">
 {_NAV}"""
 
@@ -339,7 +537,6 @@ def _pre_json(obj: dict, etichetta: str) -> str:
 
 def _ld_breadcrumb(voci: list[tuple[str, str]]) -> dict:
     return {
-        "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         "itemListElement": [
             {"@type": "ListItem", "position": i + 1,
@@ -351,7 +548,6 @@ def _ld_breadcrumb(voci: list[tuple[str, str]]) -> dict:
 
 def _ld_faq(faq: list[dict]) -> dict:
     return {
-        "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
             {"@type": "Question", "name": f["q"],
@@ -362,27 +558,36 @@ def _ld_faq(faq: list[dict]) -> dict:
 
 
 def _ld_dataset(nome: str, descrizione: str, canonical: str,
-                ultimo: datetime | None) -> dict:
+                ultimo: datetime | None, slug: str | None = None) -> dict:
     """Il Dataset schema.org. MAI JobPosting: sulle pagine lista è vietato."""
-    return {
-        "@context": "https://schema.org",
+    dato = {
         "@type": "Dataset",
         "name": nome,
         "description": descrizione,
         "url": canonical,
-        "creator": {"@type": "Organization", "name": "Nivult",
-                    "url": SITO},
+        "creator": {"@type": "Organization", "name": "Nivult", "url": SITO},
         "measurementTechnique": (
             "Daily reading of employer career systems; a posting counts as "
             "active while it appears on the employer's own board, and is "
             "marked closed only when it leaves the source."),
-        "temporalCoverage": ultimo.date().isoformat() if ultimo else None,
-        "distribution": {
-            "@type": "DataDownload",
-            "encodingFormat": "application/json",
-            "contentUrl": ACTOR_GLOBALE,
-        },
     }
+    if slug:
+        if ultimo:
+            dato["dateModified"] = ultimo.isoformat()
+        dato["distribution"] = [
+            {"@type": "DataDownload", "encodingFormat": "application/json",
+             "contentUrl": f"https://api.nivult.com/v1/jobs?ats={slug}&limit=25"},
+            {"@type": "DataDownload", "encodingFormat": "application/x-ndjson",
+             "contentUrl": ("https://api.nivult.com/v1/exports/latest/"
+                            "offerte-attive"),
+             "description": ("The download is a gzip-compressed .jsonl.gz "
+                             "NDJSON file.")},
+        ]
+        dato["variableMeasured"] = [
+            "job title", "company", "location", "salary", "posted date",
+            "closing date", "full description",
+        ]
+    return dato
 
 
 # ── FAQ generate dai dati ──────────────────────────────────────────────────
@@ -419,8 +624,8 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
     faq = [
         {"q": f"Does {nome} have a public API?", "a": r_api},
         {"q": f"How many {nome} job postings are live right now?",
-         "a": (f"As of the last refresh ({_data(m.ultimo)}), our index holds "
-               f"{_n(m.attive)} active {nome} postings across "
+         "a": (f"As of the last refresh ({_data(m.ultimo_fetch)}), our index "
+               f"holds {_n(m.attive)} active {nome} postings across "
                f"{_n(m.aziende)} companies. A posting counts as active only "
                f"while it appears on the employer's own board; when it "
                f"leaves the source we mark it closed, we never let it age "
@@ -429,9 +634,8 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
          "a": (f"Through the Nivult index: {nome} postings arrive already "
                f"unified with {fonti}+ other ATS sources in one schema, "
                f"enriched with seniority, workplace, language, skills and a "
-               f"salary signal. Start with the free sample on the Apify "
-               f"actor linked above, or book a call for the full daily "
-               f"export.")},
+               f"salary signal. Get a free Nivult API key and sample from "
+               f"your account, or book a call for the full daily export.")},
     ]
     faq.extend(edit.get("faq_extra") or [])
     return faq
@@ -440,66 +644,61 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
 # ── pagina ATS ─────────────────────────────────────────────────────────────
 
 def _riga_feed(slug: str, e: dict) -> dict:
-    """Una riga col formato reale dell'export, costruita da un'offerta vera.
-
-    I campi che non abbiamo (la stima salariale del modello gira
-    nell'arricchimento, non qui) restano fuori: la riga deve essere vera,
-    non completa a tutti i costi.
-    """
+    """Un sottoinsieme del contratto API/export, senza campi inventati."""
     riga: dict = {
         "title": e["title"],
         "company": e["company"],
+        "company_slug": e["company_slug"],
         "ats": slug,
         "country": e["country"],
         "city": e["city"],
+        "location": e["location"],
+        "url": e["url"],
+        "remote": e.get("remote"),
+        "seniority": e.get("seniority"),
+        "skills": list(e.get("skills") or [])[:6],
+        "salary_min": (float(e["salary_min"])
+                       if e.get("salary_min") is not None else None),
+        "salary_max": (float(e["salary_max"])
+                       if e.get("salary_max") is not None else None),
+        "salary_currency": e.get("salary_currency"),
+        "posted_at": e["posted_at"].isoformat(),
+        "first_seen": (e["created_at"].isoformat()
+                       if e.get("created_at") else None),
+        "last_seen": (e["fetched_at"].isoformat()
+                      if e.get("fetched_at") else None),
     }
-    if e.get("remote"):
-        riga["remote"] = e["remote"]
-    if e.get("seniority"):
-        riga["seniority"] = e["seniority"]
-    if e.get("skills"):
-        riga["technologies"] = list(e["skills"])[:6]
-    if e.get("salary_min") is not None or e.get("salary_max") is not None:
-        # Salario DICHIARATO dal datore: nei nostri export è observed, la
-        # stima è un campo gemello che qui non abbiamo e non inventiamo.
-        riga["salary_observed_min"] = (float(e["salary_min"])
-                                       if e["salary_min"] is not None else None)
-        riga["salary_observed_max"] = (float(e["salary_max"])
-                                       if e["salary_max"] is not None else None)
-        riga["salary_observed_currency"] = e["salary_currency"]
-    riga["posted_at"] = (e["posted_at"].date().isoformat()
-                         if e.get("posted_at") else None)
-    riga["url"] = e["url"]
-    return {k: v for k, v in riga.items() if v is not None}
+    for campo in ("id", "external_id"):
+        if e.get(campo) is not None:
+            riga[campo] = str(e[campo])
+    return {k: v for k, v in riga.items() if v not in (None, "", [])}
 
 
 def pagina_ats(plat: dict, m: Misure, edit: dict,
                altri: list[dict], fonti: int) -> str:
     slug, nome = plat["slug"], plat["name"]
-    nome_breve = nome.split(" (", 1)[0]
     canonical = f"{SITO}/ats/{slug}/"
-    title = f"{nome} jobs dataset: {_n(m.attive)} live, daily | Nivult"
-    if len(title) > 60:
-        title = f"{nome_breve} job postings: {_n(m.attive)} live | Nivult"
-    description = (f"{_n(m.attive)} live {nome} jobs from {_n(m.aziende)} "
-                   f"companies, refreshed daily. Real sample rows, official API "
-                   f"status and one clean dataset with {fonti}+ ATS sources.")
-    if len(description) > 160:
-        description = (f"{_n(m.attive)} live {nome_breve} jobs from {_n(m.aziende)} "
-                       f"companies, refreshed daily. One clean dataset with "
-                       f"{fonti}+ ATS sources.")
+    title = (f"{nome} Jobs API & Dataset "
+             f"({_arrotonda(m.attive)} Live Postings) | Nivult")
+    description = (f"{_n(m.attive)} live {nome} job postings from "
+                   f"{_n(m.aziende)} companies. Access the Nivult API and "
+                   f"daily dataset, refreshed across {fonti}+ ATS sources.")
 
     faq = _faq_ats(nome, edit, m, fonti)
-    ld = [
-        _ld_dataset(f"{nome} job postings (Nivult index)",
-                    f"Active job postings published on {nome} career "
-                    f"systems, refreshed daily and closure-verified.",
-                    canonical, m.ultimo),
-        _ld_faq(faq),
-        _ld_breadcrumb([("Home", f"{SITO}/"),
-                        ("ATS coverage", f"{SITO}/ats/"),
-                        (nome, canonical)]),
-    ]
+    ld = [{
+        "@context": "https://schema.org",
+        "@graph": [
+            _ld_breadcrumb([("Home", f"{SITO}/"),
+                            ("ATS coverage", f"{SITO}/ats/"),
+                            (nome, canonical)]),
+            _ld_dataset(
+                f"{nome} Job Postings Dataset",
+                f"{_n(m.attive)} live postings from {_n(m.aziende)} companies "
+                f"on {nome}; latest content update {_data(m.ultimo)}.",
+                canonical, m.ultimo, slug),
+            _ld_faq(faq),
+        ],
+    }]
 
     parti = [_testa(title, description, canonical, ld)]
 
@@ -518,12 +717,10 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
     </nav>
     <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
       <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-      {_n(m.attive)} live postings right now
+      Live ATS index
     </span>
-    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">
-      {html.escape(nome)} job postings, as clean data:
-      <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">{_n(m.attive)} live right now</span>
-    </h1>
+    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">{html.escape(nome)} Job Postings API &amp; Dataset</h1>
+    <p class="mt-3 text-xl font-bold text-brand-600">{_n(m.attive)} live postings right now</p>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">{html.escape(edit["headline_angle"])}</p>
     <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
@@ -539,7 +736,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
         <span class="text-[12.5px] text-slate-500">with employer-declared salary</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">{_data(m.ultimo)}</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">{_data(m.ultimo_fetch)}</b>
         <span class="text-[12.5px] text-slate-500">last refresh · daily cycle</span>
       </div>
     </div>""")
@@ -573,10 +770,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 </section>""")
 
     # ── The Nivult route
-    cta_dedicato = ""
-    if slug in ACTOR_DEDICATI:
-        cta_dedicato = f"""
-        <a href="{ACTOR_DEDICATI[slug]}" class="rounded-xl border border-mint-500/40 bg-mint-500/10 px-6 py-3 font-bold text-mint-600 hover:bg-mint-500/20 transition">The dedicated {html.escape(nome)} dataset on Apify →</a>"""
+    apify = ACTOR_DEDICATI.get(slug, ACTOR_GLOBALE)
     parti.append(f"""
 <section class="py-14 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
@@ -586,10 +780,11 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
       Reading {html.escape(nome)} yourself buys you one source and a maintenance burden. The Nivult index already reads {html.escape(nome)} next to {fonti}+ other career systems, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
     </p>
     <div class="mt-7 flex flex-wrap gap-3.5">
-      <a href="{ACTOR_GLOBALE}" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get the feed on Apify →</a>{cta_dedicato}
-      <a href="/booking.html" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
+      <a href="/account" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get a free API key →</a>
+      <a href="{SITO}/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
-    <p class="mt-3 text-[13px] text-slate-400 font-medium">Free sample export on the actor page · no credit card required</p>
+    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/export-campione?tipo=offerte" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
+    <p class="mt-5 text-[12px] text-slate-400"><a href="{apify}" rel="noopener nofollow" class="hover:text-slate-600 hover:underline">Also available on Apify</a></p>
   </div>
 </section>""")
 
@@ -605,7 +800,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Live right now</p>
     <h2 class="text-3xl font-black tracking-tight">Top companies hiring via {html.escape(nome)} right now</h2>
-    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, {_data(m.ultimo)}. Company names come from our employer spine, with the board slug as fallback.</p>
+    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, {_data(m.ultimo)}. Only resolved, normalized company names are shown; unresolved board slugs stay out.</p>
     <div class="mt-7 rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
       <table class="w-full text-[14.5px]">
         <thead><tr class="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
@@ -620,33 +815,60 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
     if m.esempi:
         carte = ""
         for e in m.esempi:
-            dove = " · ".join(p for p in (e["city"], e["country"]) if p) or "Location as posted"
-            quando = e["posted_at"].date().isoformat() if e.get("posted_at") else ""
+            localita = e["city"] or e["location"]
+            dove = " · ".join(p for p in (localita, e["country"]) if p)
+            quando = e["posted_at"].date().isoformat()
             carte += f"""
       <a href="{html.escape(e["url"])}" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
         <b class="block text-[15.5px] font-bold leading-snug">{html.escape(e["title"])}</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">{html.escape(e["company"])} · {html.escape(dove)}{" · " + quando if quando else ""}</span>
+        <span class="mt-1.5 block text-[13px] text-slate-500">{html.escape(e["company"])} · {html.escape(dove)} · {quando}</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>"""
+        titolo_esempi = ("Three postings we read today" if len(m.esempi) == 3
+                         else "Recent postings with complete source fields")
         parti.append(f"""
 <section class="py-14 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Real rows, real links</p>
-    <h2 class="text-3xl font-black tracking-tight">Three postings we read today</h2>
-    <p class="mt-3 text-[15px] text-slate-500">The most recent live {html.escape(nome)} postings in the index. Links go to the employer's own page, where the posting either still stands or shows its closure.</p>
+    <h2 class="text-3xl font-black tracking-tight">{titolo_esempi}</h2>
+    <p class="mt-3 text-[15px] text-slate-500">The most recent live {html.escape(nome)} postings with resolved companies and real locations. Links go to the employer's own page.</p>
     <div class="mt-7 grid md:grid-cols-3 gap-4">{carte}
     </div>
   </div>
 </section>""")
 
-        # ── riga JSON del feed
-        parti.append(f"""
+    # ── blocco developer: API, record reale e copertura specifica dell'ATS
+    curl = (f'curl -H "X-Api-Key: $NIVULT_API_KEY" \\\n'
+            f'  "https://api.nivult.com/v1/jobs?ats={slug}&limit=25"')
+    righe_fill = "".join(
+        f'<tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">{campo}</td>'
+        f'<td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">'
+        f'{m.fill_rate.get(campo, 0.0):.1f}%</td></tr>'
+        for campo in ("description", "location", "country",
+                      "salary_observed", "date_posted"))
+    record = (_pre_json(_riga_feed(slug, m.esempi[0]),
+                        "API record · selected fields from a real posting")
+              if m.esempi else
+              '<p class="text-sm text-slate-500">No example row is shown: no posting currently passes every company, location and source-quality check.</p>')
+    testo_record = ("The JSON below is a real posting from this ATS, reduced "
+                    "to selected non-personal fields." if m.esempi else
+                    "The example row stays hidden when no posting passes "
+                    "every source-quality check.")
+    parti.append(f"""
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
-    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The shape of the feed</p>
-    <h2 class="text-3xl font-black tracking-tight">One real row, as the export ships it</h2>
-    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">The first posting above, serialized with the field names of the daily export. Fields we could not measure on this row are simply absent: a declared salary appears as salary_observed_*, and when the employer declares nothing the modelled salary_estimate_* fields take its place in the full export.</p>
-    <div class="mt-7 max-w-3xl">{_pre_json(_riga_feed(slug, m.esempi[0]), "jobs.jsonl · one line per posting")}</div>
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">For developers</p>
+    <h2 class="text-3xl font-black tracking-tight">Query {html.escape(nome)} through the Nivult API</h2>
+    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">Use your trial key or an existing key. {testo_record}</p>
+    <div class="mt-7">{_codebox("GET /v1/jobs", curl)}</div>
+    <div class="mt-6 grid lg:grid-cols-[1.4fr_1fr] gap-5 items-start">
+      {record}
+      <div class="rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
+        <p class="px-5 pt-5 font-bold text-slate-900">Field fill rate for {html.escape(nome)}</p>
+        <p class="px-5 pt-1 pb-3 text-[12px] text-slate-500">Measured for this ATS on the latest deduplicated daily export.</p>
+        <table class="w-full text-[13px]"><tbody class="divide-y divide-slate-100">{righe_fill}</tbody></table>
+      </div>
+    </div>
   </div>
 </section>""")
 
@@ -687,7 +909,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 <section class="py-10 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[13px] text-slate-400 leading-relaxed max-w-3xl">
-      Numbers on this page are measured from our own index of employer career systems, refreshed daily. The «last refresh» date is the timestamp of the last real data change, not the page build time.
+      Numbers on this page are measured from our own deduplicated index of employer career systems, refreshed daily. «Last refresh» records the latest source read; structured data and sitemap dates use the latest real content change, never the page build time.
       <a href="/#coverage" class="text-brand-600 font-semibold hover:underline">How we collect data</a> ·
       <a href="/ats/" class="text-brand-600 font-semibold hover:underline">All ATS sources</a>
     </p>
@@ -707,13 +929,29 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
     # 11/10/2026: il numero in testa e' l'indice INTERO, non la somma delle
     # pagine pubblicate — 2,5M contro 4,03M reali, segnalato da Giuseppe.
     # Le piattaforme senza pagina esistono lo stesso, e si dicono.
-    title = (f"ATS coverage: {len(pubblicate)} platforms, {_n(totale_reale)} live "
-             f"postings | Nivult")
-    description = (f"We read {fonti}+ applicant tracking systems directly, "
-                   f"every day. Per platform: live postings, companies, "
-                   f"public API status and real sample rows.")
-    ld = [_ld_breadcrumb([("Home", f"{SITO}/"),
-                          ("ATS coverage", canonical)])]
+    title = (f"ATS Jobs API & Coverage: {fonti}+ Platforms, "
+             f"{_arrotonda(totale_reale)} Live Postings | Nivult")
+    description = (f"Access {_n(totale_reale)} live postings across {fonti}+ "
+                   f"applicant tracking systems through one API and dataset. "
+                   f"Explore dedicated coverage pages for {len(pubblicate)} "
+                   f"major platforms, with exact counts and real sample rows.")
+    ld = [{
+        "@context": "https://schema.org",
+        "@graph": [
+            _ld_breadcrumb([("Home", f"{SITO}/"),
+                            ("ATS coverage", canonical)]),
+            {"@type": "CollectionPage", "name": title,
+             "description": description, "url": canonical,
+             "mainEntity": {
+                 "@type": "ItemList", "numberOfItems": len(pubblicate),
+                 "itemListElement": [
+                     {"@type": "ListItem", "position": i + 1,
+                      "name": p["name"],
+                      "url": f"{SITO}/ats/{p['slug']}/"}
+                     for i, p in enumerate(pubblicate)
+                 ]}},
+        ],
+    }]
 
     carte = ""
     for p in pubblicate:
@@ -733,10 +971,10 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
   <div class="pointer-events-none absolute -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-gradient-to-br from-brand-400/20 to-violet-400/10 blur-[100px]"></div>
   <div class="max-w-6xl mx-auto px-6 relative">
     <h1 class="text-4xl sm:text-5xl font-black tracking-tight leading-[1.05]">
-      Every ATS we read, <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">measured live</span>
+      ATS Jobs API &amp; Coverage, <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">measured live</span>
     </h1>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">
-      {_n(totale_reale)} active postings across {fonti}+ platforms, counted from employer career systems this morning. The {len(pubblicate)} biggest have their own page below: each shows the public API status honestly, with real numbers and real sample rows.
+      {_n(totale_reale)} active postings across {fonti}+ applicant tracking systems in the Nivult index. The {len(pubblicate)} major platforms below have dedicated detail pages; every source is available through the same API and daily dataset.
     </p>
   </div>
 </header>
@@ -844,7 +1082,7 @@ def pagina_jobboard(edit: dict, altri: list[dict], oggi: str, fonti: int) -> str
     </p>
     <div class="mt-7 flex flex-wrap gap-3.5">
       <a href="{ACTOR_GLOBALE}" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get the feed on Apify →</a>
-      <a href="/booking.html" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
+      <a href="/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
     <p class="mt-3 text-[13px] text-slate-400 font-medium">Free sample export on the actor page · no credit card required</p>
   </div>
@@ -940,13 +1178,14 @@ def sitemap_urlset(urls: list[tuple[str, str | None]]) -> str:
     return "\n".join(righe) + "\n"
 
 
-def sitemap_index(voci: list[tuple[str, str]]) -> str:
+def sitemap_index(voci: list[tuple[str, str | None]]) -> str:
     righe = ['<?xml version="1.0" encoding="UTF-8"?>',
              '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
     for loc, lastmod in voci:
         righe.append("  <sitemap>")
         righe.append(f"    <loc>{loc}</loc>")
-        righe.append(f"    <lastmod>{lastmod}</lastmod>")
+        if lastmod:
+            righe.append(f"    <lastmod>{lastmod}</lastmod>")
         righe.append("  </sitemap>")
     righe.append("</sitemapindex>")
     return "\n".join(righe) + "\n"
@@ -977,13 +1216,20 @@ def main() -> int:
     editoriali_ats = carica_editoriali(args.dati, "ats.json")
     editoriali_jb = carica_editoriali(args.dati, "jobboards.json")
 
+    try:
+        fill_rates = fill_rate_export()
+    except Exception as e:  # noqa: BLE001
+        log.warning("export fill rate non disponibile (%s): fallback Postgres", e)
+        fill_rates = {}
+
     conn = psycopg.connect(ats_database_url())
     try:
         tutte = piattaforme(conn)
         fonti = len(tutte)
-        totale_reale = conn.execute(
-            "SELECT count(*) FROM ats_jobs WHERE expired_at IS NULL"
-        ).fetchone()[0]
+        totale_reale, ultimo_globale = conn.execute(f"""
+            SELECT count(*), max(COALESCE(j.content_updated_at, j.fetched_at))
+              FROM ats_jobs j WHERE {_DOVE_ATTIVE}
+        """).fetchone()
 
         pubblicate: list[dict] = []
         saltate: list[tuple[str, str]] = []
@@ -993,13 +1239,13 @@ def main() -> int:
                 continue
             edit = editoriali_ats.get(slug)
             if edit is None:
-                saltate.append((slug, "voce editoriale mancante "
-                                      "in dati/seo/ats.json"))
+                saltate.append((slug, ("voce editoriale mancante "
+                                       "in dati/seo/ats.json")))
                 continue
-            m = misura(conn, slug)
+            m = misura(conn, slug, fill_rates.get(slug))
             if m.attive < args.min_attive:
-                saltate.append((slug, f"sotto soglia: {m.attive} attive "
-                                      f"< {args.min_attive}"))
+                saltate.append((slug, (f"sotto soglia: {m.attive} attive "
+                                       f"< {args.min_attive}")))
                 continue
             pubblicate.append({**plat,
                                # il nome nel DB porta qualificatori italiani
@@ -1016,6 +1262,8 @@ def main() -> int:
         return 1
 
     oggi = datetime.now().date().isoformat()
+    lastmod_dati = (ultimo_globale.date().isoformat()
+                    if ultimo_globale else None)
 
     # ── pagine ATS: gli 8 cross-link ruotano in modo deterministico,
     #    così ogni pagina linka vicini diversi senza ricostruire grafi
@@ -1031,7 +1279,7 @@ def main() -> int:
         _scrivi(args.vetrina / "ats" / "index.html",
                 pagina_hub_ats(pubblicate, fonti, totale_reale), args.dry_run)
 
-    # ── pagine job board: contenuto editoriale, lastmod = giorno di build
+    # Le pagine job board descrivono il feed globale: il lastmod segue i dati.
     voci_jb = list(editoriali_jb.values())
     for v in voci_jb:
         altri = [x for x in voci_jb if x["slug"] != v["slug"]][:8]
@@ -1040,9 +1288,9 @@ def main() -> int:
     _scrivi(args.vetrina / "job-board" / "index.html",
             pagina_hub_jobboard(voci_jb), args.dry_run)
 
-    # ── sitemap: lastmod ATS = max(fetched_at) REALE, mai la build
+    # ── sitemap: il lastmod viene dai dati o dai file, mai dalla build
     if not args.solo:
-        urls_ats = [(f"{SITO}/ats/", None)]
+        urls_ats = [(f"{SITO}/ats/", lastmod_dati)]
         for p in pubblicate:
             m = p["misure"]
             urls_ats.append((f"{SITO}/ats/{p['slug']}/",
@@ -1050,8 +1298,9 @@ def main() -> int:
         _scrivi(args.vetrina / "sitemap-ats.xml",
                 sitemap_urlset(urls_ats), args.dry_run)
 
-        urls_jb = [(f"{SITO}/job-board/", oggi)]
-        urls_jb += [(f"{SITO}/job-board/{v['slug']}/", oggi) for v in voci_jb]
+        urls_jb = [(f"{SITO}/job-board/", lastmod_dati)]
+        urls_jb += [(f"{SITO}/job-board/{v['slug']}/", lastmod_dati)
+                    for v in voci_jb]
         _scrivi(args.vetrina / "sitemap-jobboard.xml",
                 sitemap_urlset(urls_jb), args.dry_run)
 
@@ -1064,32 +1313,28 @@ def main() -> int:
             if "<urlset" in vecchio:
                 _scrivi(args.vetrina / "sitemap-main.xml", vecchio,
                         args.dry_run)
-                voci_index.append((f"{SITO}/sitemap-main.xml", oggi))
+                voci_index.append((f"{SITO}/sitemap-main.xml", lastmod_dati))
                 log.info("sitemap.xml era un urlset: spostato in "
                          "sitemap-main.xml e referenziato nell'indice")
-        # le pagine principali INDICIZZABILI: il lastmod e' il mtime vero del
-        # file. Una noindex in sitemap e' un segnale contraddittorio (booking,
-        # segnalato da Search Console il 15/10/2026), quindi resta fuori.
+        # Una noindex in sitemap e' un segnale contraddittorio (booking).
         urls_sito = []
         for pagina, url in (("index.html", "/"), ("booking.html", "/booking"),
                             ("privacy.html", "/privacy"), ("terms.html", "/terms"),
                             ("account.html", "/account")):
             f = args.vetrina / pagina
-            # Sul server i file principali non ci sono: booking resta esclusa
-            # esplicitamente; altrove vale anche il meta letto dal file.
             if pagina == "booking.html":
                 continue
             if f.exists() and 'content="noindex"' in f.read_text(encoding="utf-8").lower():
                 continue
             lm = (datetime.fromtimestamp(f.stat().st_mtime).date().isoformat()
-                  if f.exists() else oggi)
+                  if f.exists() else None)
             urls_sito.append((f"{SITO}{url}", lm))
         _scrivi(args.vetrina / "sitemap-sito.xml",
                 sitemap_urlset(urls_sito), args.dry_run)
-        lastmod_ats = max((lm for _, lm in urls_ats if lm), default=oggi)
-        voci_index += [(f"{SITO}/sitemap-sito.xml", oggi),
-                       (f"{SITO}/sitemap-ats.xml", lastmod_ats),
-                       (f"{SITO}/sitemap-jobboard.xml", oggi)]
+        lastmod_sito = max((lm for _, lm in urls_sito if lm), default=None)
+        voci_index += [(f"{SITO}/sitemap-sito.xml", lastmod_sito),
+                       (f"{SITO}/sitemap-ats.xml", lastmod_dati),
+                       (f"{SITO}/sitemap-jobboard.xml", lastmod_dati)]
         _scrivi(principale, sitemap_index(voci_index), args.dry_run)
 
         robots = args.vetrina / "robots.txt"

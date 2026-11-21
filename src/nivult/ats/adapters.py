@@ -3053,8 +3053,8 @@ class OracleRecruiting(BaseAdapter):
     carriere; l'API è aperta, senza token.
     """
     platform_id = "oracle"
-    PER_PAGINA = 25
-    MAX_PAGINE = 30
+    PER_PAGINA = 200
+    MAX_PAGINE = 200
 
     def jobs(self, slug: str) -> list[AtsJob]:
         base = f"https://{slug}"
