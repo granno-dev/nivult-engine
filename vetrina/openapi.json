@@ -170,7 +170,8 @@
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
       "CreditsExhausted": { "description": "Monthly and purchased credits exhausted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
-      "CounterUnavailable": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+      "CounterUnavailable": { "description": "Credit counter temporarily unavailable; the request fails closed" },
+      "DatabaseTimeout": { "description": "Database query exceeded its time limit; no credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
     },
     "schemas": {
       "JobPage": { "$ref": "#/components/schemas/Page" },
@@ -194,10 +195,10 @@
           "detail": {
             "type": "object",
             "properties": {
-              "errore": { "type": "string", "example": "monthly and purchased credits exhausted" },
-              "crediti_mensili": { "type": "integer" },
-              "crediti_extra": { "type": "integer" },
-              "mese_uso": { "type": "string", "format": "date" }
+              "error": { "type": "string", "example": "monthly and purchased credits exhausted" },
+              "monthly_credits": { "type": "integer" },
+              "purchased_credits": { "type": "integer" },
+              "usage_month": { "type": "string", "format": "date" }
             }
           }
         }
@@ -222,21 +223,22 @@
       },
       "Usage": {
         "type": "object",
+        "required": ["monthly_credits", "used", "remaining", "usage_month", "monthly_remaining", "purchased_credits", "balance", "key_credits_used", "account_monthly_credits"],
         "properties": {
-          "crediti_mensili": { "type": "integer" },
-          "usati": { "type": "integer" },
-          "residui": { "type": "integer" },
-          "mese_uso": { "type": "string", "format": "date" },
-          "residui_mensili": { "type": "integer" },
-          "crediti_extra": { "type": "integer" },
-          "saldo": { "type": "integer" },
-          "usati_chiave": { "type": "integer" },
-          "volume_account": { "type": "integer" }
+          "monthly_credits": { "type": "integer" },
+          "used": { "type": "integer" },
+          "remaining": { "type": "integer", "description": "Total remaining credits, including purchased credits" },
+          "usage_month": { "type": "string", "format": "date" },
+          "monthly_remaining": { "type": "integer" },
+          "purchased_credits": { "type": "integer" },
+          "balance": { "type": "integer", "description": "Same total balance as remaining" },
+          "key_credits_used": { "type": "integer" },
+          "account_monthly_credits": { "type": "integer" }
         }
       },
       "RapidApiUsage": {
         "type": "object",
-        "properties": { "via": { "type": "string", "example": "rapidapi" }, "nota": { "type": "string" } }
+        "properties": { "via": { "type": "string", "example": "rapidapi" }, "note": { "type": "string" } }
       }
     }
   }
