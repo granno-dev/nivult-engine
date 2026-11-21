@@ -317,7 +317,7 @@ body.modale-aperto { overflow: hidden; }
         <div class="text-right"><span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">monthly volume</span><b id="access-volume" class="text-xl tabular-nums">—</b></div>
       </div>
       <div class="mt-5 grid sm:grid-cols-3 gap-3">
-        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Daily bulk export</b><p id="access-bulk" class="mt-1 text-[12px] text-slate-500">Requires 50,000 credits/month</p></div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Daily bulk export</b><p id="access-bulk" class="mt-1 text-[12px] text-slate-500">Requires 500,000 credits/month</p></div>
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Delta feed</b><p id="access-delta" class="mt-1 text-[12px] text-slate-500">Requires 200,000 credits/month</p></div>
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Historical backfill</b><p id="access-history" class="mt-1 text-[12px] text-slate-500">Requires 1,000,000 credits/month</p></div>
       </div>
@@ -702,7 +702,7 @@ function aggiornaOnboarding() {
 function disegnaAccesso() {
   const volume = Number(saldoAccount.crediti_mensili || 0);
   document.getElementById("access-volume").textContent = volume.toLocaleString("en-US") + " credits / month";
-  for (const [id, soglia] of [["access-bulk", 50000], ["access-delta", 200000], ["access-history", 1000000]]) {
+  for (const [id, soglia] of [["access-bulk", 500000], ["access-delta", 200000], ["access-history", 1000000]]) {
     document.getElementById(id).textContent = volume >= soglia
       ? "Included in your current access"
       : `Not included · requires ${soglia.toLocaleString("en-US")} credits/month`;

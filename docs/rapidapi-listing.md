@@ -121,7 +121,7 @@ Returns the latest available export manifest. This endpoint is authenticated and
 
 ## GET /v1/exports/latest/{nome}
 
-`nome` is `offerte` or `aziende`; the response is JSONL gzip. Direct accounts require a monthly tier of at least 50,000 credits. One-time top-ups do not unlock this tier. RapidAPI does not include bulk-file downloads.
+`nome` is `offerte` or `aziende`; the response is JSONL gzip. Direct accounts require a monthly tier of at least 500,000 credits. One-time top-ups do not unlock this tier. RapidAPI does not include bulk-file downloads.
 
 ## GET /v1/coverage
 

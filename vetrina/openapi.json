@@ -104,7 +104,7 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 50,000-credit bulk-file tier, but it is authenticated and metered.",
+        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 500,000-credit bulk-file tier, but it is authenticated and metered.",
         "responses": {
           "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
@@ -117,7 +117,7 @@
       "get": {
         "summary": "Download the latest available bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 50,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
+        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 500,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
         "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
           "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
