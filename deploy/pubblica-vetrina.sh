@@ -19,6 +19,11 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$BASE"
+if ! "$BASE/.venv/bin/python" "$BASE/scripts/audit_ats_seo.py" \
+    --vetrina "$BASE/vetrina" >> "$LOG" 2>&1; then
+  echo "$(date -Is) audit ATS FALLITO: pubblicazione bloccata" >> "$LOG"
+  exit 1
+fi
 if ! git fetch -q origin main >> "$LOG" 2>&1; then
   echo "$(date -Is) fetch FALLITO: pubblicazione rinviata" >> "$LOG"
   exit 1
@@ -32,12 +37,13 @@ fi
 # eliminate dal generatore, senza toccare il clone operativo.
 rsync -a --delete "$BASE/vetrina/ats/" "$TMP/vetrina/ats/"
 rsync -a --delete "$BASE/vetrina/job-board/" "$TMP/vetrina/job-board/"
-for f in sitemap-ats.xml sitemap-jobboard.xml sitemap-sito.xml sitemap.xml; do
+for f in sitemap-ats.xml sitemap-jobboard.xml sitemap-sito.xml sitemap.xml _redirects; do
   cp "$BASE/vetrina/$f" "$TMP/vetrina/$f"
 done
 
 git -C "$TMP" add vetrina/ats vetrina/job-board vetrina/sitemap-ats.xml \
-    vetrina/sitemap-jobboard.xml vetrina/sitemap-sito.xml vetrina/sitemap.xml
+    vetrina/sitemap-jobboard.xml vetrina/sitemap-sito.xml vetrina/sitemap.xml \
+    vetrina/_redirects
 if git -C "$TMP" diff --cached --quiet; then
   exit 0
 fi

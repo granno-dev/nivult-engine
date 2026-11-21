@@ -41,6 +41,8 @@ from urllib.parse import urlsplit
 
 import psycopg
 
+from nivult.ats.esporta import _skills_pulite
+from nivult.ats.profilo import ha_rest_tecnico
 from nivult.ponte_ats import ats_database_url
 
 log = logging.getLogger("nivult.ats.pagine_seo")
@@ -182,6 +184,12 @@ def _url_valido(url: object) -> bool:
         return False
 
 
+_LOCALITA_PLACEHOLDER = re.compile(
+    r"(?:\d+\s+locations?|multiple locations|various locations|several locations)",
+    re.IGNORECASE,
+)
+
+
 # ── misure dal database ATS ────────────────────────────────────────────────
 
 @dataclass(slots=True)
@@ -246,6 +254,9 @@ def _campioni(cur: psycopg.Cursor, platform_id: str) -> list[dict]:
                                              e["company_slug"]))
             e["city"] = _testo_pulito(e["city"])
             e["location"] = _testo_pulito(e["location"])
+            for chiave in ("city", "location"):
+                if _LOCALITA_PLACEHOLDER.fullmatch(e[chiave]):
+                    e[chiave] = ""
             if not all((e["title"], e["company"], e[campo], e["country"])):
                 continue
             if not _url_valido(e["url"]):
@@ -353,9 +364,10 @@ def misura(conn: psycopg.Connection, platform_id: str,
         m.esempi = _campioni(cur, platform_id)
 
         cur.execute(f"""
-            SELECT COALESCE(j.country, '??'), count(*)
+            SELECT j.country, count(*)
               FROM ats_jobs j
              WHERE j.platform_id = %s AND {_DOVE_ATTIVE}
+               AND EXISTS (SELECT 1 FROM iso_paesi p WHERE p.code = j.country)
              GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 6""", (platform_id,))
         m.paesi = [(p, n) for p, n in cur.fetchall()]
     return m
@@ -634,7 +646,7 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
                f"out silently.")},
         {"q": f"How do I get all {nome} jobs in one feed?",
          "a": (f"Through the Nivult index: {nome} postings arrive already "
-               f"unified with {fonti}+ other ATS sources in one schema, "
+               f"unified with {fonti}+ employer and public sources in one schema, "
                f"enriched with seniority, workplace, language, skills and a "
                f"salary signal. Get a free Nivult API key and sample from "
                f"your account, or book a call for the full daily export.")},
@@ -647,6 +659,9 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
 
 def _riga_feed(slug: str, e: dict) -> dict:
     """Un sottoinsieme del contratto API/export, senza campi inventati."""
+    skills = _skills_pulite(e.get("skills"))
+    if not ha_rest_tecnico(e["title"]):
+        skills = [s for s in skills if s.casefold() != "rest"]
     riga: dict = {
         "title": e["title"],
         "company": e["company"],
@@ -658,7 +673,7 @@ def _riga_feed(slug: str, e: dict) -> dict:
         "url": e["url"],
         "remote": e.get("remote"),
         "seniority": e.get("seniority"),
-        "skills": list(e.get("skills") or [])[:6],
+        "skills": skills[:6],
         "salary_min": (float(e["salary_min"])
                        if e.get("salary_min") is not None else None),
         "salary_max": (float(e["salary_max"])
@@ -679,7 +694,8 @@ def _riga_feed(slug: str, e: dict) -> dict:
 def pagina_ats(plat: dict, m: Misure, edit: dict,
                altri: list[dict], fonti: int) -> str:
     slug, nome = plat["slug"], plat["name"]
-    canonical = f"{SITO}/ats/{slug}/"
+    public_slug = plat.get("public_slug", slug)
+    canonical = f"{SITO}/ats/{public_slug}/"
     title = (f"{nome} Jobs API & Dataset "
              f"({_arrotonda(m.attive)} Live Postings) | Nivult")
     description = (f"{_n(m.attive)} live {nome} job postings from "
@@ -746,7 +762,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
     # distribuzione paesi, top 6
     if m.paesi:
         chips = "".join(
-            f'<span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">{html.escape("unknown" if p == "??" else p)} · {_n(n)}</span>'
+            f'<span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">{html.escape(p)} · {_n(n)}</span>'
             for p, n in m.paesi)
         parti.append(f"""
     <div class="mt-6 flex flex-wrap items-center gap-2">
@@ -779,13 +795,13 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The Nivult route</p>
     <h2 class="text-3xl font-black tracking-tight">One schema across {fonti}+ sources, closures included</h2>
     <p class="mt-4 text-[16px] text-slate-600 leading-relaxed max-w-3xl">
-      Reading {html.escape(nome)} yourself buys you one source and a maintenance burden. The Nivult index already reads {html.escape(nome)} next to {fonti}+ other career systems, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
+      Reading {html.escape(nome)} yourself buys you one source and a maintenance burden. The Nivult index already reads {html.escape(nome)} within {fonti}+ employer and public sources, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
     </p>
     <div class="mt-7 flex flex-wrap gap-3.5">
       <a href="/account" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get a free API key →</a>
       <a href="{SITO}/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
-    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/export-campione?tipo=offerte" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
+    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/sample-export?type=jobs" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
     <p class="mt-5 text-[12px] text-slate-400"><a href="{apify}" rel="noopener nofollow" class="hover:text-slate-600 hover:underline">Also available on Apify</a></p>
   </div>
 </section>""")
@@ -896,7 +912,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
 
     # ── cross-link e nota metodologica
     link_altri = "".join(
-        f'<a href="/ats/{a["slug"]}/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">{html.escape(a["name"])}</a>'
+        f'<a href="/ats/{a.get("public_slug", a["slug"])}/" class="rounded-xl border border-slate-900/10 bg-white px-4 py-2.5 text-[13.5px] font-bold text-slate-600 hover:border-brand-500/50 hover:text-brand-600 transition">{html.escape(a["name"])}</a>'
         for a in altri)
     parti.append(f"""
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
@@ -931,12 +947,12 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
     # 11/10/2026: il numero in testa e' l'indice INTERO, non la somma delle
     # pagine pubblicate — 2,5M contro 4,03M reali, segnalato da Giuseppe.
     # Le piattaforme senza pagina esistono lo stesso, e si dicono.
-    title = (f"ATS Jobs API & Coverage: {fonti}+ Platforms, "
+    title = (f"ATS Jobs API & Coverage: {fonti}+ Sources, "
              f"{_arrotonda(totale_reale)} Live Postings | Nivult")
     description = (f"Access {_n(totale_reale)} live postings across {fonti}+ "
-                   f"applicant tracking systems through one API and dataset. "
+                   f"employer and public sources through one API and dataset. "
                    f"Explore dedicated coverage pages for {len(pubblicate)} "
-                   f"major platforms, with exact counts and real sample rows.")
+                   f"major sources, with exact counts and real sample rows.")
     ld = [{
         "@context": "https://schema.org",
         "@graph": [
@@ -949,7 +965,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
                  "itemListElement": [
                      {"@type": "ListItem", "position": i + 1,
                       "name": p["name"],
-                      "url": f"{SITO}/ats/{p['slug']}/"}
+                      "url": f"{SITO}/ats/{p.get('public_slug', p['slug'])}/"}
                      for i, p in enumerate(pubblicate)
                  ]}},
         ],
@@ -958,13 +974,20 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
     carte = ""
     for p in pubblicate:
         m = p["misure"]
+        public_slug = p.get("public_slug", p["slug"])
+        if p["slug"] in {"arbetsformedlingen", "bundesanstellung",
+                         "francetravail"} and m.aziende == 1:
+            aziende = "1 public portal"
+        else:
+            aziende = (f"{_n(m.aziende)} companies" if m.aziende != 1
+                       else "1 company")
         carte += f"""
-      <a href="/ats/{p["slug"]}/" class="lift rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition block">
+      <a href="/ats/{public_slug}/" class="lift rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition block">
         <div class="flex items-baseline justify-between gap-3">
           <b class="text-[16.5px] font-bold tracking-tight">{html.escape(p["name"])}</b>
           <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-black shrink-0">{_n(m.attive)} live</span>
         </div>
-        <p class="mt-2 text-[13px] text-slate-500">{_n(m.aziende)} companies · last refresh {_data(m.ultimo_fetch)}</p>
+        <p class="mt-2 text-[13px] text-slate-500">{aziende} · last refresh {_data(m.ultimo_fetch)}</p>
         <p class="mt-2.5 text-[13px] text-slate-500 leading-relaxed">{html.escape(p["editoriale"]["headline_angle"])}</p>
       </a>"""
 
@@ -976,7 +999,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
       ATS Jobs API &amp; Coverage, <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">measured live</span>
     </h1>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">
-      {_n(totale_reale)} active postings across {fonti}+ applicant tracking systems in the Nivult index. The {len(pubblicate)} major platforms below have dedicated detail pages; every source is available through the same API and daily dataset.
+      {_n(totale_reale)} active postings across {fonti}+ employer and public sources in the Nivult index. The {len(pubblicate)} major sources below have dedicated detail pages; every source is available through the same API and daily dataset.
     </p>
   </div>
 </header>
@@ -1254,6 +1277,7 @@ def main() -> int:
                                # («(Svezia)»): la voce editoriale può
                                # sostituirlo con la forma inglese
                                "name": edit.get("display_name") or plat["name"],
+                               "public_slug": edit.get("public_slug") or slug,
                                "editoriale": edit, "misure": m})
     finally:
         conn.close()
@@ -1274,7 +1298,7 @@ def main() -> int:
                  for k in range(min(8, len(pubblicate) - 1))] \
             if len(pubblicate) > 1 else []
         html_pagina = pagina_ats(p, p["misure"], p["editoriale"], altri, fonti)
-        _scrivi(args.vetrina / "ats" / p["slug"] / "index.html",
+        _scrivi(args.vetrina / "ats" / p.get("public_slug", p["slug"]) / "index.html",
                 html_pagina, args.dry_run)
 
     if not args.solo:
@@ -1295,7 +1319,7 @@ def main() -> int:
         urls_ats = [(f"{SITO}/ats/", lastmod_dati)]
         for p in pubblicate:
             m = p["misure"]
-            urls_ats.append((f"{SITO}/ats/{p['slug']}/",
+            urls_ats.append((f"{SITO}/ats/{p.get('public_slug', p['slug'])}/",
                              m.ultimo.date().isoformat() if m.ultimo else None))
         _scrivi(args.vetrina / "sitemap-ats.xml",
                 sitemap_urlset(urls_ats), args.dry_run)

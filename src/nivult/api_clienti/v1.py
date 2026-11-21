@@ -289,12 +289,22 @@ CAMPIONI_EXPORT = {
 }
 
 
+@router.get("/demo/sample-export")
 @router.get("/demo/export-campione")
-def demo_export_campione(request: Request, tipo: str = Query(default="offerte")):
-    """Il campione gratuito dell'export, senza chiave (28/09/2026):
-    la landing lo linka, il buyer lo apre. Stessa difesa della demo.
-    `tipo` e' chiuso: offerte o aziende, nient'altro."""
+def demo_export_campione(
+    request: Request,
+    tipo: str | None = Query(default=None),
+    sample_type: str | None = Query(default=None, alias="type"),
+):
+    """Campione gratuito, con alias inglese e legacy retrocompatibile."""
     _demo_gate(request)
+    if sample_type is not None:
+        tipi = {"jobs": "offerte", "companies": "aziende"}
+        if sample_type not in tipi:
+            raise HTTPException(404, "unknown sample type: use jobs or companies")
+        tipo = tipi[sample_type]
+    else:
+        tipo = tipo or "offerte"
     p = CAMPIONI_EXPORT.get(tipo)
     if not p:
         raise HTTPException(404, "campione sconosciuto: valori ammessi "

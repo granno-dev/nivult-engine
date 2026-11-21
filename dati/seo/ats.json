@@ -473,6 +473,7 @@
     },
     {
       "slug": "bundesanstellung",
+      "public_slug": "bundesagentur",
       "api_status": "public-json",
       "api_docs_url": "https://jobsuche.api.bund.dev",
       "headline_angle": "Germany's federal job database, free with a registered API key.",
