@@ -3,7 +3,7 @@
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
     "version": "1.0.0",
-    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support PostgreSQL full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
+    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support PostgreSQL full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy. Free monthly tiers up to 1,000 credits/month return at most 25 records/page and allow 2 requests/second with burst 5. Higher monthly tiers return up to 500 records/page and allow 15 requests/second with burst 30. Values above the free page cap are truncated to 25.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://api.nivult.com" }],
@@ -161,14 +161,14 @@
       "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key. RapidAPI users authenticate through the RapidAPI proxy instead." }
     },
     "parameters": {
-      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
+      "PageLimit": { "name": "limit", "in": "query", "description": "Requested page size. Free monthly tiers up to 1,000 credits/month are truncated to 25 records/page; higher tiers allow up to 500.", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
       "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
     },
     "responses": {
       "BadRequest": { "description": "Invalid date or cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
-      "CreditsExhausted": { "description": "Monthly and purchased credits exhausted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
+      "CreditsExhausted": { "description": "Monthly/purchased credits exhausted, or rate limit exceeded: free tiers 2 requests/second with burst 5; higher tiers 15/second with burst 30. Rate-limit responses include Retry-After.", "headers": { "Retry-After": { "description": "Seconds to wait after a rate-limit response", "schema": { "type": "integer", "minimum": 1 } } }, "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/CreditError" }, { "$ref": "#/components/schemas/ErrorResponse" }] } } } },
       "CounterUnavailable": { "description": "Credit counter temporarily unavailable; the request fails closed" }
     },
     "schemas": {
