@@ -55,7 +55,7 @@ tailwind.config = {
    (scrollW 1692px su un telefono da 393): il pre e' figlio flex e di
    default non si restringe sotto la larghezza del contenuto. min-w-0 lo
    sblocca: il JSON scorre dentro la card, la pagina resta larga giusta. */
-.codebox { min-width: 0; }
+.codebox { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* neural canvas sits behind the hero, never above the text */
 #neural { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* spinner for the demo */
@@ -105,7 +105,7 @@ tailwind.config = {
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
 /* i loghi della marquee: a riposo in grigio, al tocco a colori */
 #marquee img { filter: grayscale(1) opacity(.72); transition: filter .35s; }
-#marquee div:hover img { filter: none; }
+#marquee .ats-logo:hover img { filter: none; }
 /* chi chiede meno moto lo ottiene: niente drift, tick, fluttuazioni, mesh */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track, .tick-track, .float-a, .float-b, .float-c, .mesh-a, .mesh-b,
@@ -249,7 +249,7 @@ tailwind.config = {
 
 <!-- ══ ATS marquee: real local logos, slow ══ -->
 <section class="border-y border-slate-900/5 bg-white/60 py-9 overflow-hidden">
-  <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-7">Collected from 65 ATS platforms plus public employment portals, including</p>
+  <p class="text-center text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500 mb-7">Collected from 65 ATS platforms plus public employment portals, including <a href="/ats/" class="ml-3 normal-case tracking-normal text-brand-600 hover:text-brand-700 transition">Browse all 65+ ATS platforms →</a></p>
   <div class="relative">
     <div class="pointer-events-none absolute inset-y-0 left-0 w-28 bg-gradient-to-r from-paper to-transparent z-10"></div>
     <div class="pointer-events-none absolute inset-y-0 right-0 w-28 bg-gradient-to-l from-paper to-transparent z-10"></div>
@@ -316,7 +316,7 @@ tailwind.config = {
       </div>
       <div class="reveal lift rounded-2xl border border-slate-900/5 bg-white p-8 hover:border-pink-400/40 hover:shadow-xl">
         <div class="h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-pink-400 grid place-items-center text-xl font-black text-white shadow-lg shadow-pink-500/25">✦</div>
-        <h3 class="mt-5 text-lg font-bold">Legal identity, at scale</h3>
+        <h3 class="mt-5 text-lg font-bold">Official business registries</h3>
         <p class="mt-2 text-[15px] text-slate-600 leading-relaxed">Legal name, legal form, registration number and founding year from public business registries across Europe, North America and Oceania — the layer that job-board resellers cannot sell you.</p>
       </div>
     </div>
@@ -328,8 +328,8 @@ tailwind.config = {
           <th class="px-6 py-4">The field</th><th class="px-6 py-4">The value</th><th class="px-6 py-4">The source, declared</th></tr></thead>
         <tbody class="divide-y divide-slate-100">
           <tr><td class="px-6 py-4 font-bold">industry</td><td class="px-6 py-4 text-slate-600">Food &amp; Beverage</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">sirene</code></td></tr>
-          <tr><td class="px-6 py-4 font-bold">size_range</td><td class="px-6 py-4 text-slate-600">10,001+ employees</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl (free dataset)</code></td></tr>
-          <tr><td class="px-6 py-4 font-bold">founded</td><td class="px-6 py-4 text-slate-600">1919</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl (free dataset, year only)</code></td></tr>
+          <tr><td class="px-6 py-4 font-bold">size_range</td><td class="px-6 py-4 text-slate-600">10,001+ employees</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl</code></td></tr>
+          <tr><td class="px-6 py-4 font-bold">founded</td><td class="px-6 py-4 text-slate-600">1919</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">pdl (year only)</code></td></tr>
           <tr><td class="px-6 py-4 font-bold">salary_estimate</td><td class="px-6 py-4 text-slate-600">€42k–56k / year</td><td class="px-6 py-4"><code class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-xs font-bold">nivult model (estimated, never mixed)</code></td></tr>
         </tbody>
       </table>
@@ -712,7 +712,7 @@ tailwind.config = {
             </span>
             <h3 class="font-bold text-lg tracking-tight">What happens when my credits run out?</h3>
           </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear <code class="text-brand-600 font-semibold">429</code> (the standard "too many requests — credit finished" signal) until you top up, the 1,000 free credits renew on the 1st of every month, and purchased credits never expire.</p>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear <code class="text-brand-600 font-semibold">429</code> (the standard "too many requests — credit finished" signal) until you top up. The 1,000 free credits renew on the 1st of every month, and one-time top-up credits never expire. Monthly tiers and top-ups are separate: top-ups do not unlock bulk or delta entitlements.</p>
           <div class="mt-auto pt-5">
             <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
               <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
@@ -773,7 +773,7 @@ tailwind.config = {
           <div class="mt-auto pt-5">
             <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
               <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">No subscription, no seat minimums, no card required for the trial key — and where the market enters at ~$30 per 1,000 calls, we enter at €4.90.</p>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">Choose a monthly tier for recurring volume or a one-time top-up for extra calls. Top-ups never change your bulk or delta entitlements. No seat minimums and no card required for the trial key.</p>
             </div>
           </div>
         </div>
@@ -827,6 +827,7 @@ tailwind.config = {
         <ul class="mt-5 space-y-3 text-sm">
           <li><a href="#data" class="hover:text-white transition">The data</a></li>
           <li><a href="#coverage" class="hover:text-white transition">Coverage</a></li>
+          <li><a href="/ats/" class="hover:text-white transition">ATS Platforms</a></li>
           <li><a href="#api" class="hover:text-white transition">API</a></li>
           <li><a href="#pricing" class="hover:text-white transition">Pricing</a></li>
         </ul>
@@ -848,6 +849,7 @@ tailwind.config = {
         </ul>
       </div>
     </div>
+    <p class="mt-10 max-w-3xl text-[12px] leading-relaxed text-slate-500">Selected company firmographics include data from People Data Labs, licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" class="hover:text-white transition">CC BY 4.0</a>.</p>
     <div class="mt-14 pt-7 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-[13px] text-slate-500">
       <span>© 2026 Nivult — hiring and company intelligence</span>
       <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5"><span class="live-dot h-2 w-2 rounded-full bg-mint-400"></span><span class="font-semibold text-slate-300">Live index</span><span class="text-slate-500">· updated daily</span></span>
@@ -901,15 +903,16 @@ document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 })();
 
 /* ══ ATS marquee: local logos (downloaded once, no network at runtime) ══ */
-const ATS=[["Greenhouse","greenhouse"],["Workday","workday"],["SmartRecruiters","smartrecruiters"],
-["Lever","lever"],["iCIMS","icims"],["Ashby","ashbyhq"],["Teamtailor","teamtailor"],
-["SAP SuccessFactors","successfactors"],["Personio","personio"],["Workable","workable"],
-["Recruitee","recruitee"],["Breezy","breezy"],["JazzHR","jazzhr"],["BambooHR","bamboohr"],
-["Rippling","rippling"],["Zoho Recruit","zohorecruit"]];
+const ATS=[["Greenhouse","greenhouse","greenhouse"],["Workday","workday","workday"],["SmartRecruiters","smartrecruiters","smartrecruiters"],
+["Lever","lever","lever"],["iCIMS","icims","icims"],["Ashby","ashbyhq","ashby"],["Teamtailor","teamtailor","teamtailor"],
+["SAP SuccessFactors","successfactors","successfactors"],["Personio","personio","personio"],["Workable","workable","workable"],
+["Recruitee","recruitee","recruitee"],["Breezy","breezy","breezy"],["JazzHR","jazzhr","jazzhr"],["BambooHR","bamboohr","bamboohr"],
+["Rippling","rippling",null],["Zoho Recruit","zohorecruit","zohorecruit"]];
 const mq=document.getElementById('marquee');
-[...ATS,...ATS].forEach(([nome,file])=>{
-  const el=document.createElement('div');
-  el.className='flex items-center gap-3.5 shrink-0';
+[...ATS,...ATS].forEach(([nome,file,slug])=>{
+  const el=document.createElement(slug?'a':'div');
+  el.className='ats-logo flex items-center gap-3.5 shrink-0 no-underline';
+  if(slug)el.href=`/ats/${slug}/`;
   el.innerHTML=`<span class="h-11 w-11 rounded-xl bg-white border border-slate-900/5 p-1.5 grid place-items-center shadow-sm">
     <img src="loghi/${file}.png" alt="${nome}" class="max-h-full max-w-full object-contain" loading="lazy"></span>
     <b class="text-[15px] font-bold text-slate-600 whitespace-nowrap tracking-tight">${nome}</b>`;
@@ -1077,10 +1080,10 @@ q.addEventListener('input',e=>cerca(e.target.value));
 mostraLocale('');
 
 /* ══ representative export shapes, illustrative values ══ */
-const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",industry_source:"registre du commerce",
-  size_range:"10001+",size_range_source:"pdl (free dataset)",
+const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",industry_source:"sirene",
+  size_range:"10001+",size_range_source:"pdl",
   headquarters:{city:"Paris",country:"FR",source:"sirene"},legal_name:"DANONE SA",legal_form:"société anonyme",
-  founded:"1919-01-01",founded_source:"pdl (free dataset, year only)",active_jobs:980,
+  founded:"1919-01-01",founded_source:"pdl (year only)",active_jobs:980,
   technologies:[{technology:"SAP",active_jobs:41,first_verified_at:"2026-03-02",last_verified_at:"2026-11-20"},{technology:"Excel",active_jobs:38}]};
 const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",country:"FR",city:"Paris",
   seniority:"mid",employment_type:"full_time",remote:"hybrid",language:"fr",category:"Data & Analytics",
@@ -1111,9 +1114,9 @@ description:"Full text",language:"Language",employment_type:"Contract type",seni
 country:"Country",salary_estimate:"Salary, modelled",state:"State / region",geo:"Coordinates",
 skills:"Skills",benefits:"Benefits",technologies:"Technologies (rolling fill)",
 salary_text:"Salary, as written",department:"Department",shift_schedule:"Shift schedule",
-work_hours:"Working hours",salary_observed:"Salary, declared by the employer",recruiter:"Recruiter identity",
-valid_through:"Application deadline",contact_email:"Recruiter contact",job_sources:"Corroborating sources"};
-const copFallback=[["category",97.3],["title / description / url",95.5],["language",91.9],["country",88.1],["remote",87.1],["seniority",82.4],["employment_type",83.1],["salary_estimate",60.0],["benefits",43.1],["geo",45.9],["department",17.4],["technologies",46.6],["salary_observed",15.7],["contact_email",7.0],["valid_through",15.0]];
+work_hours:"Working hours",salary_observed:"Salary, declared by the employer",
+valid_through:"Application deadline",job_sources:"Corroborating sources"};
+const copFallback=[["category",97.3],["title / description / url",95.5],["language",91.9],["country",88.1],["remote",87.1],["seniority",82.4],["employment_type",83.1],["salary_estimate",60.0],["benefits",43.1],["geo",45.9],["department",17.4],["technologies",46.6],["salary_observed",15.7],["valid_through",15.0]];
 const NOMI_COP_AZ={country:"Country",domain:"Domain",website:"Website",
 industry:"Industry (with source)",size_range:"Size band",employees:"Headcount",
 legal_name:"Legal name",legal_form:"Legal form",registration_id:"Registration number",
@@ -1225,7 +1228,7 @@ function aggiornaPrezzo(){
   document.getElementById('pz-barra').style.width=Math.max(4,Math.round(100*unit/UNIT_ENTRATA))+"%";
   sl.style.setProperty('--fill',(sl.value/10)+"%");
   const chips=[...CHIP_BASE];
-  if(c>=50000)chips.push("Daily bulk export");
+  if(c>=500000)chips.push("Daily bulk export");
   if(c>=200000)chips.push("Delta feed: new · updated · closed");
   if(c>=1000000)chips.push("Historical backfill");
   document.getElementById('pz-incluso').innerHTML=chips.map(x=>
