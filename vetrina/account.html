@@ -371,7 +371,7 @@ body.modale-aperto { overflow: hidden; }
             <option value="chiuse">Recently closed postings</option>
             </select>
           </div>
-          <p id="f-q-help" class="mt-2 text-[11.5px] text-slate-400">Keyword searches both job titles and full descriptions.</p>
+          <p id="f-q-help" class="mt-2 text-[11.5px] text-slate-400">Open postings search titles and full descriptions; recently closed postings search titles.</p>
           <p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
         </div>
         <div class="mt-3 flex items-center justify-between">
@@ -1062,7 +1062,7 @@ function cambiaTab(t) {
   document.getElementById("f-q").placeholder = t === "jobs" ? "Job title or description…" : "Industry (exact)…";
   document.getElementById("f-q").setAttribute("aria-label", t === "jobs" ? "Job title or description" : "Industry (exact)");
   document.getElementById("f-q-help").textContent = t === "jobs"
-    ? "Keyword searches both job titles and full descriptions."
+    ? "Open postings search titles and full descriptions; recently closed postings search titles."
     : "Industry filters company records. Job title and description search is available in Jobs.";
   document.getElementById("f-stato").style.display = t === "jobs" ? "" : "none";
   document.getElementById("f-remoto").style.display = t === "jobs" ? "" : "none";
