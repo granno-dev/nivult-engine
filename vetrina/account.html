@@ -1671,7 +1671,7 @@ while True:
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500"`,
   "Use ats + company_slug as the record key. Provenance is exposed for selected enriched fields, not for every field."],
- ["Limits & errors", "401, 403, 422, 429, 400, 503 and 504", "401: missing or revoked key. 403: monthly tier lacks the required entitlement. 422: parameter validation failed. 429: monthly and purchased credits are exhausted. 400: invalid date, cursor or delta retention window. 503: database temporarily unavailable. 504: query timeout as JSON; failed database calls do not spend credits.",
+ ["Limits & errors", "401, 403, 422, 429, 400 and 503", "401: missing or revoked key. 403: monthly tier lacks the required entitlement. 422: parameter validation failed. 429: monthly and purchased credits are exhausted. 400: invalid date, cursor or delta retention window. 503: database unavailable or query timeout, returned as JSON; failed database calls do not spend credits.",
 `HTTP/1.1 429
 {
   "detail": {
