@@ -1,218 +1,205 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.1.0",
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
-    "description": "Live job postings collected directly from employer ATS systems (Greenhouse, Workday, Lever, SmartRecruiters and 60+ more) plus national employment portals — enriched with technology stack, seniority, remote policy, salary and language requirements. One record per employer in /v1/companies, with industry and size. Updated continuously; closures are verified against the source. Browse is cheap, freshness is the product.",
     "version": "1.0.0",
-    "contact": {
-      "name": "Nivult",
-      "url": "https://nivult.com",
-      "email": "hello@nivult.com"
-    }
+    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support PostgreSQL full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
+    "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
-  "servers": [
-    { "url": "https://api.nivult.com" }
-  ],
+  "servers": [{ "url": "https://api.nivult.com" }],
+  "security": [{ "ApiKeyAuth": [] }],
   "paths": {
     "/v1/jobs": {
       "get": {
         "summary": "Search live job postings",
-        "description": "Active job postings from employer ATS sources. Keyset pagination: follow next_cursor until null. Filters: country (ISO-2), technology, ats platform, category, seniority, remote, language, free-text q on title and description, and posted_after (or its dal alias).",
         "operationId": "jobs",
+        "description": "Active postings with keyset pagination. q uses PostgreSQL full-text search over title and description. posted_after and dal are aliases; posted_after wins when both are present. Unknown query parameters are ignored. Unknown filter values normally produce an empty page rather than a validation error.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "ISO 3166-1 alpha-2 country code" },
-          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP" }, "description": "Technology mentioned in the posting (case-insensitive)" },
-          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "greenhouse" }, "description": "Source ATS platform (greenhouse, workday, lever, smartrecruiters, ...)" },
-          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology" }, "description": "Job family" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP" }, "description": "Case-insensitive exact match against extracted, normalized technologies" },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "greenhouse" } },
+          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology" } },
           { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "senior" } },
-          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote" } },
+          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote" }, "description": "remote, hybrid or onsite" },
           { "name": "language", "in": "query", "schema": { "type": "string", "example": "en" } },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Free text on title and description" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "PostgreSQL full-text query over job title and description" },
           { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
           { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Alias of posted_after" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
-          { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from the previous page" }
+          { "$ref": "#/components/parameters/PageLimit" },
+          { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": {
-            "description": "A page of postings",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/JobPage" }
-              }
-            }
-          },
-          "400": { "description": "Invalid filter or unreadable cursor" },
-          "401": { "description": "Missing, invalid or revoked API key" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "200": { "description": "A page of postings", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobPage" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     },
     "/v1/companies": {
       "get": {
-        "summary": "The company spine: one record per employer",
-        "description": "Employers with live postings: name, domain, industry, size band, technology stack, locations, active postings count and 30-day hiring pace.",
+        "summary": "Search company records",
         "operationId": "companies",
+        "description": "Company records keyed by ATS + company_slug. q searches the company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
-          { "name": "industry", "in": "query", "schema": { "type": "string" } },
+          { "name": "industry", "in": "query", "schema": { "type": "string" }, "description": "Exact industry value" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Case-insensitive company-name search" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" } },
           { "name": "employees_min", "in": "query", "schema": { "type": "integer", "example": 500 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
-          { "name": "cursor", "in": "query", "schema": { "type": "string" } }
+          { "name": "employees_max", "in": "query", "schema": { "type": "integer", "example": 5000 } },
+          { "$ref": "#/components/parameters/PageLimit" },
+          { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": {
-            "description": "A page of companies",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/CompanyPage" }
-              }
-            }
-          },
-          "400": { "description": "Invalid filter or unreadable cursor" },
-          "401": { "description": "Missing, invalid or revoked API key" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "200": { "description": "A page of companies", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompanyPage" } } } },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/companies/{piattaforma}/{slug}": {
+      "get": {
+        "summary": "Get one company record",
+        "operationId": "companyDetail",
+        "parameters": [
+          { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier" },
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Employer slug within that ATS" }
+        ],
+        "responses": {
+          "200": { "description": "The company record", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Company not found" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     },
     "/v1/changes": {
       "get": {
-        "summary": "The delta feed: new, updated, closed",
-        "description": "New postings, full updated snapshots and verified closures since a timestamp. Delta history is retained for 7 days. Direct API keys require an account monthly tier of at least 200,000 credits; purchased top-ups do not raise this entitlement. RapidAPI plans are not subject to the direct-account tier check.",
+        "summary": "Delta feed: new, updated and closed events",
         "operationId": "changes",
+        "description": "Delta history is retained for seven days. Direct keys require an account monthly tier of at least 200,000 credits; top-ups do not raise this entitlement. RapidAPI plans bypass the direct-account tier check. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
         "parameters": [
-          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "example": "2026-10-01T00:00:00Z" }, "description": "ISO 8601 timestamp; must not predate retention_since" },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
-          { "name": "cursor", "in": "query", "schema": { "type": "string" } }
+          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp within retained history" },
+          { "$ref": "#/components/parameters/PageLimit" },
+          { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": {
-            "description": "A page of new, updated or closed events",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ChangePage" }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing or malformed since, unreadable cursor, or since older than retained history. A retention error requires a full resync.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "oneOf": [
-                    { "$ref": "#/components/schemas/ErrorResponse" },
-                    { "$ref": "#/components/schemas/DeltaRetentionResponse" }
-                  ]
-                }
-              }
-            }
-          },
-          "401": { "description": "Missing, invalid or revoked API key" },
+          "200": { "description": "A page of events", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePage" } } } },
+          "400": { "description": "Missing/malformed since, invalid cursor, or expired retention window; retention errors require resync", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/ErrorResponse" }, { "$ref": "#/components/schemas/DeltaRetentionResponse" }] } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "Direct account below the 200,000 credits/month delta tier" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/exports/latest": {
+      "get": {
+        "summary": "Get the latest export manifest",
+        "operationId": "exportManifest",
+        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 50,000-credit bulk-file tier, but it is authenticated and metered.",
+        "responses": {
+          "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     },
     "/v1/exports/latest/{nome}": {
       "get": {
-        "summary": "Download today's bulk export",
-        "description": "Download the offerte or aziende JSONL gzip export. Direct API keys require an account monthly tier of at least 50,000 credits; purchased top-ups do not raise this entitlement. The daily bulk export is not included in RapidAPI plans.",
+        "summary": "Download the latest available bulk export",
         "operationId": "exportFile",
-        "parameters": [
-          { "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }
-        ],
+        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 50,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
+        "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
-          "200": {
-            "description": "The gzip export",
-            "content": {
-              "application/gzip": {
-                "schema": { "type": "string", "format": "binary" }
-              }
-            }
-          },
-          "401": { "description": "Missing, invalid or revoked API key" },
-          "403": { "description": "Direct account below the 50,000 credits/month bulk tier, or RapidAPI channel" },
-          "404": { "description": "Unknown export name or export not available today" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Bulk tier missing, or RapidAPI channel" },
+          "404": { "description": "Unknown export name or no export available" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     },
     "/v1/coverage": {
       "get": {
-        "summary": "Field fill-rates across the dataset",
-        "description": "How complete each field is today (description 95%, country 86%, salary observed vs estimated...). Declared, not hidden: a data buyer should never have to measure this alone.",
+        "summary": "Coverage for documented fields",
         "operationId": "coverage",
+        "description": "Returns percentages from 0 to 100 for the documented set of posting and company fields measured in the latest export; it is not a schema of every response field.",
         "responses": {
-          "200": { "description": "Coverage percentages per field" },
-          "401": { "description": "Missing, invalid or revoked API key" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "200": { "description": "Field coverage percentages", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     },
     "/v1/usage": {
       "get": {
-        "summary": "Your account credit balance",
-        "description": "For direct portal keys, monthly volume and current-month consumption are account-level across all keys, including revoked ones. The monthly allowance is spent before purchased credits. This endpoint is metered like other direct API calls; RapidAPI quotas are managed by RapidAPI.",
+        "summary": "Get current credit usage",
         "operationId": "usage",
+        "description": "Direct-account usage is shared across keys, including revoked keys. Monthly allowance is spent before purchased credits. This endpoint itself consumes one credit and returns 429 at a zero balance. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
         "responses": {
-          "200": {
-            "description": "Account-level credit usage for the current month",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Usage" }
-              }
-            }
-          },
-          "401": { "description": "Missing, invalid or revoked API key" },
-          "429": { "description": "Monthly and purchased credits exhausted" },
-          "503": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+          "200": { "description": "Direct usage or RapidAPI channel note", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Usage" }, { "$ref": "#/components/schemas/RapidApiUsage" }] } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
     }
   },
   "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key. RapidAPI users authenticate through the RapidAPI proxy instead." }
+    },
+    "parameters": {
+      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
+      "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
+    },
+    "responses": {
+      "BadRequest": { "description": "Invalid date or cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Unauthorized": { "description": "Missing, invalid or revoked API key" },
+      "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
+      "CreditsExhausted": { "description": "Monthly and purchased credits exhausted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
+      "CounterUnavailable": { "description": "Credit counter temporarily unavailable; the request fails closed" }
+    },
     "schemas": {
-      "JobPage": {
+      "JobPage": { "$ref": "#/components/schemas/Page" },
+      "CompanyPage": { "$ref": "#/components/schemas/Page" },
+      "ChangePage": { "$ref": "#/components/schemas/Page" },
+      "Page": {
         "type": "object",
+        "required": ["data", "next_cursor", "count_page"],
         "properties": {
           "data": { "type": "array", "items": { "type": "object" } },
           "next_cursor": { "type": ["string", "null"] },
           "count_page": { "type": "integer" }
         }
       },
-      "CompanyPage": {
-        "type": "object",
-        "properties": {
-          "data": { "type": "array", "items": { "type": "object" } },
-          "next_cursor": { "type": ["string", "null"] },
-          "count_page": { "type": "integer" }
-        }
-      },
-      "ChangePage": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "description": "A raw export event: new, updated (full snapshot) or closed"
-            }
-          },
-          "next_cursor": { "type": ["string", "null"] },
-          "count_page": { "type": "integer" }
-        }
-      },
-      "ErrorResponse": {
+      "ErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "string" } } },
+      "ValidationErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "array", "items": { "type": "object" } } } },
+      "CreditError": {
         "type": "object",
         "required": ["detail"],
         "properties": {
-          "detail": { "type": "string" }
+          "detail": {
+            "type": "object",
+            "properties": {
+              "errore": { "type": "string", "example": "monthly and purchased credits exhausted" },
+              "crediti_mensili": { "type": "integer" },
+              "crediti_extra": { "type": "integer" },
+              "mese_uso": { "type": "string", "format": "date" }
+            }
+          }
         }
       },
       "DeltaRetentionResponse": {
@@ -221,13 +208,12 @@
         "properties": {
           "detail": {
             "type": "object",
-            "required": ["code", "error", "message", "since", "retention_since", "action", "resync_required"],
             "properties": {
               "code": { "type": "string", "example": "delta_retention_exceeded" },
               "error": { "type": "string", "example": "delta_retention_exceeded" },
-              "message": { "type": "string", "example": "since predates the retained delta history; perform a full resync" },
-              "since": { "type": "string", "example": "2026-10-01T00:00:00+00:00" },
-              "retention_since": { "type": "string", "example": "2026-10-17T00:00:00+00:00" },
+              "message": { "type": "string" },
+              "since": { "type": "string", "format": "date-time" },
+              "retention_since": { "type": "string", "format": "date-time" },
               "action": { "type": "string", "example": "resync" },
               "resync_required": { "type": "boolean", "example": true }
             }
@@ -236,18 +222,21 @@
       },
       "Usage": {
         "type": "object",
-        "description": "Direct-account response. Quota and current-month usage include every account key, revoked keys included.",
         "properties": {
-          "crediti_mensili": { "type": "integer", "description": "Account monthly volume, not increased by top-ups" },
-          "usati": { "type": "integer", "description": "Current-month usage summed across all account keys" },
-          "residui": { "type": "integer", "description": "Remaining monthly credits plus purchased credits" },
+          "crediti_mensili": { "type": "integer" },
+          "usati": { "type": "integer" },
+          "residui": { "type": "integer" },
           "mese_uso": { "type": "string", "format": "date" },
           "residui_mensili": { "type": "integer" },
-          "crediti_extra": { "type": "integer", "description": "Unspent purchased credits" },
-          "saldo": { "type": "integer", "description": "Total spendable balance: residui_mensili + crediti_extra" },
-          "usati_chiave": { "type": "integer", "description": "Current-month usage recorded on the presented key" },
-          "volume_account": { "type": "integer", "description": "Account monthly volume used for tier entitlements" }
+          "crediti_extra": { "type": "integer" },
+          "saldo": { "type": "integer" },
+          "usati_chiave": { "type": "integer" },
+          "volume_account": { "type": "integer" }
         }
+      },
+      "RapidApiUsage": {
+        "type": "object",
+        "properties": { "via": { "type": "string", "example": "rapidapi" }, "nota": { "type": "string" } }
       }
     }
   }
