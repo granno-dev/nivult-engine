@@ -185,7 +185,7 @@ se la raffineria ne ha centinaia di migliaia: il motore e' guidato dalla
   ponte.
 - `nivult-api` — sito + cruscotto.
 
-Deploy: `scp` sul server `37.27.36.85:/opt/nivult/engine`, poi
+Deploy: `scp` sul server `37.27.158.164:/opt/nivult/engine`, poi
 `systemctl restart`. Ogni modifica ad un adapter richiede il **riavvio di
 `nivult-scrape`** (tiene il codice in memoria): dimenticarlo fa girare il
 demone col codice vecchio.

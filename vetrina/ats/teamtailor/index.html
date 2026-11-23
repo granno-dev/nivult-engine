@@ -7,11 +7,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Teamtailor job postings: 65,905 live, refreshed daily | Nivult</title>
-<meta name="description" content="65,905 active Teamtailor job postings from 4,302 companies, measured today from employer career systems. Public API status, real sample rows, one schema across 77+ ATS sources.">
+<title>Teamtailor Jobs API &amp; Dataset (65K+ Live Postings) | Nivult</title>
+<meta name="description" content="65,762 live Teamtailor job postings from 4,261 companies. Access the Nivult API and daily dataset, refreshed across 77+ ATS sources.">
 <link rel="canonical" href="https://nivult.com/ats/teamtailor/">
-<meta property="og:title" content="Teamtailor job postings: 65,905 live, refreshed daily | Nivult">
-<meta property="og:description" content="65,905 active Teamtailor job postings from 4,302 companies, measured today from employer career systems. Public API status, real sample rows, one schema across 77+ ATS sources.">
+<meta property="og:title" content="Teamtailor Jobs API &amp; Dataset (65K+ Live Postings) | Nivult">
+<meta property="og:description" content="65,762 live Teamtailor job postings from 4,261 companies. Access the Nivult API and daily dataset, refreshed across 77+ ATS sources.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nivult.com/ats/teamtailor/">
 <meta property="og:site_name" content="Nivult">
@@ -42,86 +42,101 @@ tailwind.config = {
 .k{color:#8ab8ff}.s{color:#7ee8c3}.n{color:#ffc078}
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none !important; } }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Home",
+     "item": "https://nivult.com/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "ATS coverage",
+     "item": "https://nivult.com/ats/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "Teamtailor",
+     "item": "https://nivult.com/ats/teamtailor/"
+    }
+   ]
+  },
+  {
+   "@type": "Dataset",
+   "name": "Teamtailor Job Postings Dataset",
+   "description": "65,762 live postings from 4,261 companies on Teamtailor; latest content update 21 Nov 2026.",
+   "url": "https://nivult.com/ats/teamtailor/",
+   "creator": {
+    "@type": "Organization",
+    "name": "Nivult",
+    "url": "https://nivult.com"
+   },
+   "measurementTechnique": "Daily reading of employer career systems; a posting counts as active while it appears on the employer's own board, and is marked closed only when it leaves the source.",
+   "dateModified": "2026-11-21T15:50:11.013332+00:00",
+   "distribution": [
+    {
+     "@type": "DataDownload",
+     "encodingFormat": "application/json",
+     "contentUrl": "https://api.nivult.com/v1/jobs?ats=teamtailor&limit=25"
+    },
+    {
+     "@type": "DataDownload",
+     "encodingFormat": "application/x-ndjson",
+     "contentUrl": "https://api.nivult.com/v1/exports/latest/offerte-attive",
+     "description": "The download is a gzip-compressed .jsonl.gz NDJSON file."
+    }
+   ],
+   "variableMeasured": [
+    "job title",
+    "company",
+    "location",
+    "salary",
+    "posted date",
+    "closing date",
+    "full description"
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Does Teamtailor have a public API?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Yes, as a public feed: every Teamtailor career site exposes its open positions as a document you can fetch without a key. Details and a working request are in «The official route» above. The feed answers one company at a time; nothing on their side enumerates all Teamtailor companies."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How many Teamtailor job postings are live right now?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "As of the last refresh (21 Nov 2026), our index holds 65,762 active Teamtailor postings across 4,261 companies. A posting counts as active only while it appears on the employer's own board; when it leaves the source we mark it closed, we never let it age out silently."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How do I get all Teamtailor jobs in one feed?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Through the Nivult index: Teamtailor postings arrive already unified with 77+ employer and public sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Get a free Nivult API key and sample from your account, or book a call for the full daily export."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
 </head>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "Dataset",
- "name": "Teamtailor job postings (Nivult index)",
- "description": "Active job postings published on Teamtailor career systems, refreshed daily and closure-verified.",
- "url": "https://nivult.com/ats/teamtailor/",
- "creator": {
-  "@type": "Organization",
-  "name": "Nivult",
-  "url": "https://nivult.com"
- },
- "measurementTechnique": "Daily reading of employer career systems; a posting counts as active while it appears on the employer's own board, and is marked closed only when it leaves the source.",
- "temporalCoverage": "2026-10-14",
- "distribution": {
-  "@type": "DataDownload",
-  "encodingFormat": "application/json",
-  "contentUrl": "https://apify.com/nivult/global-job-postings"
- }
-}
-</script>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "Does Teamtailor have a public API?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Yes, as a public feed: every Teamtailor career site exposes its open positions as a document you can fetch without a key. Details and a working request are in «The official route» above. The feed answers one company at a time; nothing on their side enumerates all Teamtailor companies."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How many Teamtailor job postings are live right now?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "As of the last refresh (14 Oct 2026), our index holds 65,905 active Teamtailor postings across 4,302 companies. A posting counts as active only while it appears on the employer's own board; when it leaves the source we mark it closed, we never let it age out silently."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How do I get all Teamtailor jobs in one feed?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Through the Nivult index: Teamtailor postings arrive already unified with 77+ other ATS sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Start with the free sample on the Apify actor linked above, or book a call for the full daily export."
-   }
-  }
- ]
-}
-</script>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "BreadcrumbList",
- "itemListElement": [
-  {
-   "@type": "ListItem",
-   "position": 1,
-   "name": "Home",
-   "item": "https://nivult.com/"
-  },
-  {
-   "@type": "ListItem",
-   "position": 2,
-   "name": "ATS coverage",
-   "item": "https://nivult.com/ats/"
-  },
-  {
-   "@type": "ListItem",
-   "position": 3,
-   "name": "Teamtailor",
-   "item": "https://nivult.com/ats/teamtailor/"
-  }
- ]
-}
-</script>
 <body class="bg-paper text-slate-900 font-sans antialiased">
 
 <nav class="fixed top-0 inset-x-0 z-50 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
@@ -136,8 +151,8 @@ tailwind.config = {
       <a href="/ats/" class="text-sm font-semibold text-brand-600 hover:text-brand-700 transition">ATS coverage</a>
     </div>
     <div class="flex-1"></div>
-    <a href="/account.html" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
-    <a href="/account.html" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
+    <a href="/account" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
+    <a href="/account" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
   </div>
 </nav>
 
@@ -154,20 +169,18 @@ tailwind.config = {
     </nav>
     <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
       <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-      65,905 live postings right now
+      Live ATS index
     </span>
-    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">
-      Teamtailor job postings, as clean data:
-      <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">65,905 live right now</span>
-    </h1>
+    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">Teamtailor Job Postings API &amp; Dataset</h1>
+    <p class="mt-3 text-xl font-bold text-brand-600">65,762 live postings right now</p>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">Every Teamtailor career site doubles as a JSON Feed 1.1 document.</p>
     <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">65,905</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">65,762</b>
         <span class="text-[12.5px] text-slate-500">active postings</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">4,302</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">4,261</b>
         <span class="text-[12.5px] text-slate-500">companies hiring</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
@@ -175,13 +188,13 @@ tailwind.config = {
         <span class="text-[12.5px] text-slate-500">with employer-declared salary</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">14 Oct 2026</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">21 Nov 2026</b>
         <span class="text-[12.5px] text-slate-500">last refresh · daily cycle</span>
       </div>
     </div>
     <div class="mt-6 flex flex-wrap items-center gap-2">
       <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400 mr-2">Top countries</span>
-      <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">SE · 12,167</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">FR · 10,521</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">GB · 7,023</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">ES · 4,463</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">US · 3,516</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">IT · 2,557</span>
+      <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">SE · 12,094</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">FR · 10,492</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">GB · 6,532</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">ES · 4,919</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">US · 3,540</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">DE · 2,347</span>
     </div>
   </div>
 </header>
@@ -206,25 +219,26 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The Nivult route</p>
     <h2 class="text-3xl font-black tracking-tight">One schema across 77+ sources, closures included</h2>
     <p class="mt-4 text-[16px] text-slate-600 leading-relaxed max-w-3xl">
-      Reading Teamtailor yourself buys you one source and a maintenance burden. The Nivult index already reads Teamtailor next to 77+ other career systems, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
+      Reading Teamtailor yourself buys you one source and a maintenance burden. The Nivult index already reads Teamtailor within 77+ employer and public sources, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
     </p>
     <div class="mt-7 flex flex-wrap gap-3.5">
-      <a href="https://apify.com/nivult/global-job-postings" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get the feed on Apify →</a>
-      <a href="/booking.html" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
+      <a href="/account" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get a free API key →</a>
+      <a href="https://nivult.com/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
-    <p class="mt-3 text-[13px] text-slate-400 font-medium">Free sample export on the actor page · no credit card required</p>
+    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/sample-export?type=jobs" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
+    <p class="mt-5 text-[12px] text-slate-400"><a href="https://apify.com/nivult/global-job-postings" rel="noopener nofollow" class="hover:text-slate-600 hover:underline">Also available on Apify</a></p>
   </div>
 </section>
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Live right now</p>
     <h2 class="text-3xl font-black tracking-tight">Top companies hiring via Teamtailor right now</h2>
-    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, 14 Oct 2026. Company names come from our employer spine, with the board slug as fallback.</p>
+    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, 21 Nov 2026. Only resolved, normalized company names are shown; unresolved board slugs stay out.</p>
     <div class="mt-7 rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
       <table class="w-full text-[14.5px]">
         <thead><tr class="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
           <th class="px-6 py-3.5 w-12">#</th><th class="px-6 py-3.5">Company</th><th class="px-6 py-3.5 text-right">Active postings</th></tr></thead>
-        <tbody class="divide-y divide-slate-100"><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">1</td><td class="px-6 py-3 font-semibold">AFTRAL</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">218</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">2</td><td class="px-6 py-3 font-semibold">Gialegacyplanning.Na</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">198</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">3</td><td class="px-6 py-3 font-semibold">1PACT</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">171</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">4</td><td class="px-6 py-3 font-semibold">Lovisacareers</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">168</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">5</td><td class="px-6 py-3 font-semibold">Key</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">148</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">6</td><td class="px-6 py-3 font-semibold">Libra</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">148</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">7</td><td class="px-6 py-3 font-semibold">Tucswedeninternt</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">125</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">8</td><td class="px-6 py-3 font-semibold">Knaufgroup</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">124</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">9</td><td class="px-6 py-3 font-semibold">Rhino</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">124</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">10</td><td class="px-6 py-3 font-semibold">letuelezioni</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">121</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">11</td><td class="px-6 py-3 font-semibold">Morrisgroupsite</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">121</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">12</td><td class="px-6 py-3 font-semibold">Metaline</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">120</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">13</td><td class="px-6 py-3 font-semibold">Multitempo</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">120</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">14</td><td class="px-6 py-3 font-semibold">Abdulrauf1 1741255834</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">119</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">15</td><td class="px-6 py-3 font-semibold">Tutoringjobs</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">118</td></tr></tbody>
+        <tbody class="divide-y divide-slate-100"><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">1</td><td class="px-6 py-3 font-semibold">Eyes + more</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">112</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">2</td><td class="px-6 py-3 font-semibold">Simplex Bemanning AB</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">108</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">3</td><td class="px-6 py-3 font-semibold">Compañía Energética Las Villas, S.L.</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">107</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">4</td><td class="px-6 py-3 font-semibold">GROUPE ADF</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">107</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">5</td><td class="px-6 py-3 font-semibold">SD Worx</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">106</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">6</td><td class="px-6 py-3 font-semibold">Ambea</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">104</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">7</td><td class="px-6 py-3 font-semibold">Andrew Staffing</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">103</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">8</td><td class="px-6 py-3 font-semibold">Adavo</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">102</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">9</td><td class="px-6 py-3 font-semibold">AFTRAL</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">102</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -233,21 +247,21 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Real rows, real links</p>
     <h2 class="text-3xl font-black tracking-tight">Three postings we read today</h2>
-    <p class="mt-3 text-[15px] text-slate-500">The most recent live Teamtailor postings in the index. Links go to the employer's own page, where the posting either still stands or shows its closure.</p>
+    <p class="mt-3 text-[15px] text-slate-500">The most recent live Teamtailor postings with resolved companies and real locations. Links go to the employer's own page.</p>
     <div class="mt-7 grid md:grid-cols-3 gap-4">
-      <a href="https://sprintray-demo.na.teamtailor.com/jobs/719372-manufacturing-tooling-engineer" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">Manufacturing &amp; Tooling Engineer</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">Sprintray Demo.Na · Los Angeles · US · 2026-10-14</span>
+      <a href="https://legamifrance-1747143308.teamtailor.com/jobs/8777214-conseiller-de-vente-h-f" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">Conseiller de vente (H/F)</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">Legami France · Boulogne-Billancourt · FR · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
-      <a href="https://wildfi.na.teamtailor.com/jobs/719125-multimedia-designer" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">Multimedia Designer</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">Wildfi.Na · Buenos Aires City · AR · 2026-10-13</span>
+      <a href="https://issinternational.teamtailor.com/jobs/8776856-mechanical-works-supervisor" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">Mechanical Works Supervisor</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">ISS International SpA · Ravenna · IT · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
-      <a href="https://wadegardsgroup.teamtailor.com/jobs/8541474-ce-chauffor-falkoping" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">CE Chaufför FALKÖPING</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">wadegardsgroup · Töreboda · SE · 2026-10-13</span>
+      <a href="https://volter-demo.teamtailor.com/jobs/8776387-operations-pricing-associate" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">Operations &amp; Pricing Associate</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">Volter · London · GB · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
     </div>
@@ -255,27 +269,45 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
 </section>
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
-    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The shape of the feed</p>
-    <h2 class="text-3xl font-black tracking-tight">One real row, as the export ships it</h2>
-    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">The first posting above, serialized with the field names of the daily export. Fields we could not measure on this row are simply absent: a declared salary appears as salary_observed_*, and when the employer declares nothing the modelled salary_estimate_* fields take its place in the full export.</p>
-    <div class="mt-7 max-w-3xl"><div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">For developers</p>
+    <h2 class="text-3xl font-black tracking-tight">Query Teamtailor through the Nivult API</h2>
+    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">Use your trial key or an existing key. The JSON below is a real posting from this ATS, reduced to selected non-personal fields.</p>
+    <div class="mt-7"><div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
   <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
     <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
-    <span class="ml-2 font-mono text-[11.5px] text-slate-500">jobs.jsonl · one line per posting</span>
+    <span class="ml-2 font-mono text-[11.5px] text-slate-500">GET /v1/jobs</span>
+  </div>
+  <pre class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200">curl -H &quot;X-Api-Key: $NIVULT_API_KEY&quot; \
+  &quot;https://api.nivult.com/v1/jobs?ats=teamtailor&amp;limit=25&quot;</pre>
+</div></div>
+    <div class="mt-6 grid lg:grid-cols-[1.4fr_1fr] gap-5 items-start">
+      <div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
+  <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
+    <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
+    <span class="ml-2 font-mono text-[11.5px] text-slate-500">API record · selected fields from a real posting</span>
   </div>
   <pre class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200">{
- <span class="k">"title"</span>: <span class="s">"Manufacturing &amp; Tooling Engineer"</span>,
- <span class="k">"company"</span>: <span class="s">"Sprintray Demo.Na"</span>,
+ <span class="k">"title"</span>: <span class="s">"Conseiller de vente (H/F)"</span>,
+ <span class="k">"company"</span>: <span class="s">"Legami France"</span>,
+ <span class="k">"company_slug"</span>: <span class="s">"legamifrance-1747143308"</span>,
  <span class="k">"ats"</span>: <span class="s">"teamtailor"</span>,
- <span class="k">"country"</span>: <span class="s">"US"</span>,
- <span class="k">"city"</span>: <span class="s">"Los Angeles"</span>,
- <span class="k">"salary_observed_min"</span>: <span class="n">90000.0</span>,
- <span class="k">"salary_observed_max"</span>: <span class="n">110000.0</span>,
- <span class="k">"salary_observed_currency"</span>: <span class="s">"USD"</span>,
- <span class="k">"posted_at"</span>: <span class="s">"2026-10-14"</span>,
- <span class="k">"url"</span>: <span class="s">"https://sprintray-demo.na.teamtailor.com/jobs/719372-manufacturing-tooling-engineer"</span>
+ <span class="k">"country"</span>: <span class="s">"FR"</span>,
+ <span class="k">"city"</span>: <span class="s">"Boulogne-Billancourt"</span>,
+ <span class="k">"location"</span>: <span class="s">"Boulogne-Billancourt"</span>,
+ <span class="k">"url"</span>: <span class="s">"https://legamifrance-1747143308.teamtailor.com/jobs/8777214-conseiller-de-vente-h-f"</span>,
+ <span class="k">"posted_at"</span>: <span class="s">"2026-11-20T16:41:28+00:00"</span>,
+ <span class="k">"first_seen"</span>: <span class="s">"2026-11-20T22:32:26.537865+00:00"</span>,
+ <span class="k">"last_seen"</span>: <span class="s">"2026-11-20T22:32:26.537865+00:00"</span>,
+ <span class="k">"id"</span>: <span class="s">"be7942b3-ad29-49e2-82b6-8184b72a5610"</span>,
+ <span class="k">"external_id"</span>: <span class="s">"4b1a0801-efb0-4870-b7a0-2e304983ca1c"</span>
 }</pre>
-</div></div>
+</div>
+      <div class="rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
+        <p class="px-5 pt-5 font-bold text-slate-900">Field fill rate for Teamtailor</p>
+        <p class="px-5 pt-1 pb-3 text-[12px] text-slate-500">Measured for this ATS on the latest deduplicated daily export.</p>
+        <table class="w-full text-[13px]"><tbody class="divide-y divide-slate-100"><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">description</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">99.6%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">location</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">95.7%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">country</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">97.9%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">salary_observed</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">3.0%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">date_posted</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">100.0%</td></tr></tbody></table>
+      </div>
+    </div>
   </div>
 </section>
 <section class="py-14 border-t border-slate-900/5">
@@ -289,11 +321,11 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-7">
         <h3 class="font-bold text-[16px] tracking-tight">How many Teamtailor job postings are live right now?</h3>
-        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">As of the last refresh (14 Oct 2026), our index holds 65,905 active Teamtailor postings across 4,302 companies. A posting counts as active only while it appears on the employer&#x27;s own board; when it leaves the source we mark it closed, we never let it age out silently.</p>
+        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">As of the last refresh (21 Nov 2026), our index holds 65,762 active Teamtailor postings across 4,261 companies. A posting counts as active only while it appears on the employer&#x27;s own board; when it leaves the source we mark it closed, we never let it age out silently.</p>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-7 md:col-span-2">
         <h3 class="font-bold text-[16px] tracking-tight">How do I get all Teamtailor jobs in one feed?</h3>
-        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Through the Nivult index: Teamtailor postings arrive already unified with 77+ other ATS sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Start with the free sample on the Apify actor linked above, or book a call for the full daily export.</p>
+        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Through the Nivult index: Teamtailor postings arrive already unified with 77+ employer and public sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Get a free Nivult API key and sample from your account, or book a call for the full daily export.</p>
       </div>
     </div>
   </div>
@@ -310,7 +342,7 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
 <section class="py-10 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[13px] text-slate-400 leading-relaxed max-w-3xl">
-      Numbers on this page are measured from our own index of employer career systems, refreshed daily. The «last refresh» date is the timestamp of the last real data change, not the page build time.
+      Numbers on this page are measured from our own deduplicated index of employer career systems, refreshed daily. «Last refresh» records the latest source read; structured data and sitemap dates use the latest real content change, never the page build time.
       <a href="/#coverage" class="text-brand-600 font-semibold hover:underline">How we collect data</a> ·
       <a href="/ats/" class="text-brand-600 font-semibold hover:underline">All ATS sources</a>
     </p>
@@ -345,9 +377,9 @@ curl &quot;https://{company}.teamtailor.com/jobs.json&quot;</pre>
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Company</p>
         <ul class="mt-5 space-y-3 text-sm">
           <li><a href="mailto:hello@nivult.com" class="hover:text-white transition">hello@nivult.com</a></li>
-          <li><a href="/booking.html" class="hover:text-white transition">Book a call</a></li>
-          <li><a href="/account.html" class="hover:text-white transition">Your account</a></li>
-          <li><a href="/terms.html" class="hover:text-white transition">Terms</a> · <a href="/privacy.html" class="hover:text-white transition">Privacy</a></li>
+          <li><a href="/booking" class="hover:text-white transition">Book a call</a></li>
+          <li><a href="/account" class="hover:text-white transition">Your account</a></li>
+          <li><a href="/terms" class="hover:text-white transition">Terms</a> · <a href="/privacy" class="hover:text-white transition">Privacy</a></li>
         </ul>
       </div>
     </div>

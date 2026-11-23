@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /cdn-cgi/
+Disallow: /auth/
+Disallow: /me/
 
 Sitemap: https://nivult.com/sitemap.xml

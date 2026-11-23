@@ -29,7 +29,7 @@
         },
         {
           "q": "Is there a dedicated Workday dataset?",
-          "a": "Yes: the Workday Jobs Dataset on Apify reads every Workday career site in our index, daily. Link in the Nivult route section above."
+          "a": "Yes: the Nivult Workday Jobs API & Dataset reads every Workday career site in our index, daily. Start with a free API key or download the free sample from the Nivult route section above."
         }
       ]
     },
@@ -473,6 +473,7 @@
     },
     {
       "slug": "bundesanstellung",
+      "public_slug": "bundesagentur",
       "api_status": "public-json",
       "api_docs_url": "https://jobsuche.api.bund.dev",
       "headline_angle": "Germany's federal job database, free with a registered API key.",

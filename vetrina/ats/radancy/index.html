@@ -7,11 +7,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Radancy job postings: 5,087 live, refreshed daily | Nivult</title>
-<meta name="description" content="5,087 active Radancy job postings from 6 companies, measured today from employer career systems. Public API status, real sample rows, one schema across 77+ ATS sources.">
+<title>Radancy Jobs API &amp; Dataset (5,500+ Live Postings) | Nivult</title>
+<meta name="description" content="5,510 live Radancy job postings from 6 companies. Access the Nivult API and daily dataset, refreshed across 77+ ATS sources.">
 <link rel="canonical" href="https://nivult.com/ats/radancy/">
-<meta property="og:title" content="Radancy job postings: 5,087 live, refreshed daily | Nivult">
-<meta property="og:description" content="5,087 active Radancy job postings from 6 companies, measured today from employer career systems. Public API status, real sample rows, one schema across 77+ ATS sources.">
+<meta property="og:title" content="Radancy Jobs API &amp; Dataset (5,500+ Live Postings) | Nivult">
+<meta property="og:description" content="5,510 live Radancy job postings from 6 companies. Access the Nivult API and daily dataset, refreshed across 77+ ATS sources.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nivult.com/ats/radancy/">
 <meta property="og:site_name" content="Nivult">
@@ -42,86 +42,101 @@ tailwind.config = {
 .k{color:#8ab8ff}.s{color:#7ee8c3}.n{color:#ffc078}
 @media (prefers-reduced-motion: reduce) { .live-dot { animation: none !important; } }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "BreadcrumbList",
+   "itemListElement": [
+    {
+     "@type": "ListItem",
+     "position": 1,
+     "name": "Home",
+     "item": "https://nivult.com/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 2,
+     "name": "ATS coverage",
+     "item": "https://nivult.com/ats/"
+    },
+    {
+     "@type": "ListItem",
+     "position": 3,
+     "name": "Radancy",
+     "item": "https://nivult.com/ats/radancy/"
+    }
+   ]
+  },
+  {
+   "@type": "Dataset",
+   "name": "Radancy Job Postings Dataset",
+   "description": "5,510 live postings from 6 companies on Radancy; latest content update 21 Nov 2026.",
+   "url": "https://nivult.com/ats/radancy/",
+   "creator": {
+    "@type": "Organization",
+    "name": "Nivult",
+    "url": "https://nivult.com"
+   },
+   "measurementTechnique": "Daily reading of employer career systems; a posting counts as active while it appears on the employer's own board, and is marked closed only when it leaves the source.",
+   "dateModified": "2026-11-21T02:24:21.795799+00:00",
+   "distribution": [
+    {
+     "@type": "DataDownload",
+     "encodingFormat": "application/json",
+     "contentUrl": "https://api.nivult.com/v1/jobs?ats=radancy&limit=25"
+    },
+    {
+     "@type": "DataDownload",
+     "encodingFormat": "application/x-ndjson",
+     "contentUrl": "https://api.nivult.com/v1/exports/latest/offerte-attive",
+     "description": "The download is a gzip-compressed .jsonl.gz NDJSON file."
+    }
+   ],
+   "variableMeasured": [
+    "job title",
+    "company",
+    "location",
+    "salary",
+    "posted date",
+    "closing date",
+    "full description"
+   ]
+  },
+  {
+   "@type": "FAQPage",
+   "mainEntity": [
+    {
+     "@type": "Question",
+     "name": "Does Radancy have a public API?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "No. Radancy does not publish a public job board API: postings live behind JavaScript portals or internal endpoints that are neither documented nor supported. Reading them reliably at scale is a maintained integration, which is the part we already run daily."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How many Radancy job postings are live right now?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "As of the last refresh (20 Nov 2026), our index holds 5,510 active Radancy postings across 6 companies. A posting counts as active only while it appears on the employer's own board; when it leaves the source we mark it closed, we never let it age out silently."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How do I get all Radancy jobs in one feed?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Through the Nivult index: Radancy postings arrive already unified with 77+ employer and public sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Get a free Nivult API key and sample from your account, or book a call for the full daily export."
+     }
+    }
+   ]
+  }
+ ]
+}
+</script>
 </head>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "Dataset",
- "name": "Radancy job postings (Nivult index)",
- "description": "Active job postings published on Radancy career systems, refreshed daily and closure-verified.",
- "url": "https://nivult.com/ats/radancy/",
- "creator": {
-  "@type": "Organization",
-  "name": "Nivult",
-  "url": "https://nivult.com"
- },
- "measurementTechnique": "Daily reading of employer career systems; a posting counts as active while it appears on the employer's own board, and is marked closed only when it leaves the source.",
- "temporalCoverage": "2026-10-14",
- "distribution": {
-  "@type": "DataDownload",
-  "encodingFormat": "application/json",
-  "contentUrl": "https://apify.com/nivult/global-job-postings"
- }
-}
-</script>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "Does Radancy have a public API?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "No. Radancy does not publish a public job board API: postings live behind JavaScript portals or internal endpoints that are neither documented nor supported. Reading them reliably at scale is a maintained integration, which is the part we already run daily."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How many Radancy job postings are live right now?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "As of the last refresh (14 Oct 2026), our index holds 5,087 active Radancy postings across 6 companies. A posting counts as active only while it appears on the employer's own board; when it leaves the source we mark it closed, we never let it age out silently."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How do I get all Radancy jobs in one feed?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Through the Nivult index: Radancy postings arrive already unified with 77+ other ATS sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Start with the free sample on the Apify actor linked above, or book a call for the full daily export."
-   }
-  }
- ]
-}
-</script>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "BreadcrumbList",
- "itemListElement": [
-  {
-   "@type": "ListItem",
-   "position": 1,
-   "name": "Home",
-   "item": "https://nivult.com/"
-  },
-  {
-   "@type": "ListItem",
-   "position": 2,
-   "name": "ATS coverage",
-   "item": "https://nivult.com/ats/"
-  },
-  {
-   "@type": "ListItem",
-   "position": 3,
-   "name": "Radancy",
-   "item": "https://nivult.com/ats/radancy/"
-  }
- ]
-}
-</script>
 <body class="bg-paper text-slate-900 font-sans antialiased">
 
 <nav class="fixed top-0 inset-x-0 z-50 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
@@ -136,8 +151,8 @@ tailwind.config = {
       <a href="/ats/" class="text-sm font-semibold text-brand-600 hover:text-brand-700 transition">ATS coverage</a>
     </div>
     <div class="flex-1"></div>
-    <a href="/account.html" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
-    <a href="/account.html" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
+    <a href="/account" class="hidden sm:inline-block text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Sign in</a>
+    <a href="/account" class="hidden sm:inline-block rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2 text-sm font-bold text-white shadow-lg shadow-brand-500/25">Get a trial key</a>
   </div>
 </nav>
 
@@ -154,16 +169,14 @@ tailwind.config = {
     </nav>
     <span class="inline-flex items-center gap-2.5 rounded-full border border-slate-900/10 bg-white/70 backdrop-blur px-4 py-1.5 text-[13px] font-semibold text-slate-600 shadow-sm">
       <span class="live-dot h-2 w-2 rounded-full bg-mint-500"></span>
-      5,087 live postings right now
+      Live ATS index
     </span>
-    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">
-      Radancy job postings, as clean data:
-      <span class="bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-clip-text text-transparent">5,087 live right now</span>
-    </h1>
+    <h1 class="mt-6 text-4xl sm:text-5xl font-black leading-[1.05] tracking-tight">Radancy Job Postings API &amp; Dataset</h1>
+    <p class="mt-3 text-xl font-bold text-brand-600">5,510 live postings right now</p>
     <p class="mt-5 text-lg text-slate-600 max-w-2xl leading-relaxed">Programmatic career sites for the Fortune 500, read page by page.</p>
     <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">5,087</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">5,510</b>
         <span class="text-[12.5px] text-slate-500">active postings</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
@@ -171,17 +184,17 @@ tailwind.config = {
         <span class="text-[12.5px] text-slate-500">companies hiring</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">5%</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">4%</b>
         <span class="text-[12.5px] text-slate-500">with employer-declared salary</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
-        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">14 Oct 2026</b>
+        <b class="block text-2xl font-black tracking-tight tabular-nums text-mint-600">20 Nov 2026</b>
         <span class="text-[12.5px] text-slate-500">last refresh · daily cycle</span>
       </div>
     </div>
     <div class="mt-6 flex flex-wrap items-center gap-2">
       <span class="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400 mr-2">Top countries</span>
-      <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">FR · 1,133</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">unknown · 901</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">US · 851</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">DE · 315</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">ES · 227</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">PH · 206</span>
+      <span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">US · 1,089</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">FR · 1,014</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">ES · 343</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">DE · 308</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">PH · 243</span><span class="rounded-lg bg-brand-50 text-brand-700 px-3 py-1.5 text-[12.5px] font-bold">BE · 225</span>
     </div>
   </div>
 </header>
@@ -198,25 +211,26 @@ tailwind.config = {
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The Nivult route</p>
     <h2 class="text-3xl font-black tracking-tight">One schema across 77+ sources, closures included</h2>
     <p class="mt-4 text-[16px] text-slate-600 leading-relaxed max-w-3xl">
-      Reading Radancy yourself buys you one source and a maintenance burden. The Nivult index already reads Radancy next to 77+ other career systems, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
+      Reading Radancy yourself buys you one source and a maintenance burden. The Nivult index already reads Radancy within 77+ employer and public sources, every day, in one schema: seniority, workplace, language, skills and a salary signal added by our own measured models. A posting is marked closed only when it leaves the employer's page, never because it grew old.
     </p>
     <div class="mt-7 flex flex-wrap gap-3.5">
-      <a href="https://apify.com/nivult/global-job-postings" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get the feed on Apify →</a>
-      <a href="/booking.html" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
+      <a href="/account" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get a free API key →</a>
+      <a href="https://nivult.com/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
-    <p class="mt-3 text-[13px] text-slate-400 font-medium">Free sample export on the actor page · no credit card required</p>
+    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/sample-export?type=jobs" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
+    <p class="mt-5 text-[12px] text-slate-400"><a href="https://apify.com/nivult/global-job-postings" rel="noopener nofollow" class="hover:text-slate-600 hover:underline">Also available on Apify</a></p>
   </div>
 </section>
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Live right now</p>
     <h2 class="text-3xl font-black tracking-tight">Top companies hiring via Radancy right now</h2>
-    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, 14 Oct 2026. Company names come from our employer spine, with the board slug as fallback.</p>
+    <p class="mt-3 text-[15px] text-slate-500">Counted on active postings in our index, 21 Nov 2026. Only resolved, normalized company names are shown; unresolved board slugs stay out.</p>
     <div class="mt-7 rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
       <table class="w-full text-[14.5px]">
         <thead><tr class="bg-slate-50 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
           <th class="px-6 py-3.5 w-12">#</th><th class="px-6 py-3.5">Company</th><th class="px-6 py-3.5 text-right">Active postings</th></tr></thead>
-        <tbody class="divide-y divide-slate-100"><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">1</td><td class="px-6 py-3 font-semibold">Vinci</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">1,978</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">2</td><td class="px-6 py-3 font-semibold">Veolia (Norway)</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">905</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">3</td><td class="px-6 py-3 font-semibold">ING Group</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">904</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">4</td><td class="px-6 py-3 font-semibold">Encore Global</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">576</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">5</td><td class="px-6 py-3 font-semibold">The Walt Disney Company</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">477</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">6</td><td class="px-6 py-3 font-semibold">Hager SE</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">247</td></tr></tbody>
+        <tbody class="divide-y divide-slate-100"><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">1</td><td class="px-6 py-3 font-semibold">Veolia</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">1,578</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">2</td><td class="px-6 py-3 font-semibold">ING Group</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">1,397</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">3</td><td class="px-6 py-3 font-semibold">The Walt Disney Company</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">865</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">4</td><td class="px-6 py-3 font-semibold">Vinci</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">769</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">5</td><td class="px-6 py-3 font-semibold">Encore Global</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">665</td></tr><tr class="hover:bg-slate-50/70 transition"><td class="px-6 py-3 text-slate-400 tabular-nums">6</td><td class="px-6 py-3 font-semibold">Hager SE</td><td class="px-6 py-3 text-right tabular-nums font-bold text-brand-600">236</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -225,21 +239,21 @@ tailwind.config = {
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Real rows, real links</p>
     <h2 class="text-3xl font-black tracking-tight">Three postings we read today</h2>
-    <p class="mt-3 text-[15px] text-slate-500">The most recent live Radancy postings in the index. Links go to the employer's own page, where the posting either still stands or shows its closure.</p>
+    <p class="mt-3 text-[15px] text-slate-500">The most recent live Radancy postings with resolved companies and real locations. Links go to the employer's own page.</p>
     <div class="mt-7 grid md:grid-cols-3 gap-4">
-      <a href="https://careers.ing.com/en/job/city-of-taguig/senior-analyst/3121/45842420800" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">senior analyst</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">ING Group · city of taguig · PH · 2026-10-14</span>
+      <a href="https://jobs.encoreglobal.com/en/job/rancho-mirage/event-technician-audio-visual-the-ritz-carlton-rancho-mirage/6228/103467402528" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">event technician audio visual the ritz carlton rancho mirage</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">Encore Global · rancho mirage · US · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
-      <a href="https://jobs.vinci.com/en/job/labege/chef-de-chantier-f-h/1440/41607413568" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">chef de chantier f h</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">Vinci · labege · 2026-10-14</span>
+      <a href="https://jobs.veolia.com/fr/emploi/tourcoing/stage-appui-directeur-de-site/3091/47041147072" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">stage appui directeur de site</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">Veolia · tourcoing · FR · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
-      <a href="https://careers.hager.com/en/job/blieskastel/logistics-innovation-manager-m-w-d/3352/45847550784" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
-        <b class="block text-[15.5px] font-bold leading-snug">logistics innovation manager m w d</b>
-        <span class="mt-1.5 block text-[13px] text-slate-500">Hager SE · blieskastel · DE · 2026-10-14</span>
+      <a href="https://careers.hager.com/en/job/guangzhou/%e9%94%80%e5%94%ae%e7%bb%8f%e7%90%86-%e5%b9%bf%e5%b7%9e/3352/47007899520" rel="noopener nofollow" class="lift block rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition">
+        <b class="block text-[15.5px] font-bold leading-snug">销售经理 广州</b>
+        <span class="mt-1.5 block text-[13px] text-slate-500">Hager SE · guangzhou · CN · 2026-11-20</span>
         <span class="mt-3 inline-block text-[12px] font-bold text-brand-600">View at the source ↗</span>
       </a>
     </div>
@@ -247,24 +261,54 @@ tailwind.config = {
 </section>
 <section class="py-14 border-t border-slate-900/5 bg-white/60">
   <div class="max-w-5xl mx-auto px-6">
-    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">The shape of the feed</p>
-    <h2 class="text-3xl font-black tracking-tight">One real row, as the export ships it</h2>
-    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">The first posting above, serialized with the field names of the daily export. Fields we could not measure on this row are simply absent: a declared salary appears as salary_observed_*, and when the employer declares nothing the modelled salary_estimate_* fields take its place in the full export.</p>
-    <div class="mt-7 max-w-3xl"><div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
+    <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-mint-600 mb-3">For developers</p>
+    <h2 class="text-3xl font-black tracking-tight">Query Radancy through the Nivult API</h2>
+    <p class="mt-3 text-[15px] text-slate-500 max-w-3xl">Use your trial key or an existing key. The JSON below is a real posting from this ATS, reduced to selected non-personal fields.</p>
+    <div class="mt-7"><div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
   <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
     <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
-    <span class="ml-2 font-mono text-[11.5px] text-slate-500">jobs.jsonl · one line per posting</span>
+    <span class="ml-2 font-mono text-[11.5px] text-slate-500">GET /v1/jobs</span>
+  </div>
+  <pre class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200">curl -H &quot;X-Api-Key: $NIVULT_API_KEY&quot; \
+  &quot;https://api.nivult.com/v1/jobs?ats=radancy&amp;limit=25&quot;</pre>
+</div></div>
+    <div class="mt-6 grid lg:grid-cols-[1.4fr_1fr] gap-5 items-start">
+      <div class="relative rounded-xl bg-slate-950 border border-slate-900/10 overflow-hidden shadow-lg shadow-slate-900/10 min-w-0">
+  <div class="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
+    <div class="flex gap-1.5"><i class="h-2.5 w-2.5 rounded-full bg-[#ff6159] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] block"></i><i class="h-2.5 w-2.5 rounded-full bg-[#28c840] block"></i></div>
+    <span class="ml-2 font-mono text-[11.5px] text-slate-500">API record · selected fields from a real posting</span>
   </div>
   <pre class="codebox p-5 overflow-auto text-[12.5px] leading-relaxed font-mono text-slate-200">{
- <span class="k">"title"</span>: <span class="s">"senior analyst"</span>,
- <span class="k">"company"</span>: <span class="s">"ING Group"</span>,
+ <span class="k">"title"</span>: <span class="s">"event technician audio visual the ritz carlton rancho mirage"</span>,
+ <span class="k">"company"</span>: <span class="s">"Encore Global"</span>,
+ <span class="k">"company_slug"</span>: <span class="s">"jobs.encoreglobal.com"</span>,
  <span class="k">"ats"</span>: <span class="s">"radancy"</span>,
- <span class="k">"country"</span>: <span class="s">"PH"</span>,
- <span class="k">"city"</span>: <span class="s">"city of taguig"</span>,
- <span class="k">"posted_at"</span>: <span class="s">"2026-10-14"</span>,
- <span class="k">"url"</span>: <span class="s">"https://careers.ing.com/en/job/city-of-taguig/senior-analyst/3121/45842420800"</span>
+ <span class="k">"country"</span>: <span class="s">"US"</span>,
+ <span class="k">"city"</span>: <span class="s">"rancho mirage"</span>,
+ <span class="k">"location"</span>: <span class="s">"rancho mirage"</span>,
+ <span class="k">"url"</span>: <span class="s">"https://jobs.encoreglobal.com/en/job/rancho-mirage/event-technician-audio-visual-the-ritz-carlton-rancho-mirage/6228/103467402528"</span>,
+ <span class="k">"remote"</span>: <span class="s">"onsite"</span>,
+ <span class="k">"seniority"</span>: <span class="s">"junior"</span>,
+ <span class="k">"skills"</span>: [
+  &quot;recruiting&quot;,
+  &quot;customer service&quot;,
+  &quot;sharepoint&quot;,
+  &quot;audiovisual equipment&quot;,
+  &quot;troubleshoot&quot;
+ ],
+ <span class="k">"posted_at"</span>: <span class="s">"2026-11-20T08:54:03.324066+00:00"</span>,
+ <span class="k">"first_seen"</span>: <span class="s">"2026-11-20T08:54:03.324066+00:00"</span>,
+ <span class="k">"last_seen"</span>: <span class="s">"2026-11-20T08:54:03.324066+00:00"</span>,
+ <span class="k">"id"</span>: <span class="s">"94850b42-56d8-4d43-bdae-1181fa04f0ac"</span>,
+ <span class="k">"external_id"</span>: <span class="s">"103467402528"</span>
 }</pre>
-</div></div>
+</div>
+      <div class="rounded-2xl border border-slate-900/5 bg-white overflow-hidden shadow-sm">
+        <p class="px-5 pt-5 font-bold text-slate-900">Field fill rate for Radancy</p>
+        <p class="px-5 pt-1 pb-3 text-[12px] text-slate-500">Measured for this ATS on the latest deduplicated daily export.</p>
+        <table class="w-full text-[13px]"><tbody class="divide-y divide-slate-100"><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">description</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">91.3%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">location</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">100.0%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">country</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">91.6%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">salary_observed</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">4.0%</td></tr><tr><td class="px-5 py-3 font-mono text-[12px] text-slate-600">date_posted</td><td class="px-5 py-3 text-right font-bold tabular-nums text-brand-600">100.0%</td></tr></tbody></table>
+      </div>
+    </div>
   </div>
 </section>
 <section class="py-14 border-t border-slate-900/5">
@@ -278,11 +322,11 @@ tailwind.config = {
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-7">
         <h3 class="font-bold text-[16px] tracking-tight">How many Radancy job postings are live right now?</h3>
-        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">As of the last refresh (14 Oct 2026), our index holds 5,087 active Radancy postings across 6 companies. A posting counts as active only while it appears on the employer&#x27;s own board; when it leaves the source we mark it closed, we never let it age out silently.</p>
+        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">As of the last refresh (20 Nov 2026), our index holds 5,510 active Radancy postings across 6 companies. A posting counts as active only while it appears on the employer&#x27;s own board; when it leaves the source we mark it closed, we never let it age out silently.</p>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-7 md:col-span-2">
         <h3 class="font-bold text-[16px] tracking-tight">How do I get all Radancy jobs in one feed?</h3>
-        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Through the Nivult index: Radancy postings arrive already unified with 77+ other ATS sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Start with the free sample on the Apify actor linked above, or book a call for the full daily export.</p>
+        <p class="mt-2.5 text-[14.5px] text-slate-600 leading-relaxed">Through the Nivult index: Radancy postings arrive already unified with 77+ employer and public sources in one schema, enriched with seniority, workplace, language, skills and a salary signal. Get a free Nivult API key and sample from your account, or book a call for the full daily export.</p>
       </div>
     </div>
   </div>
@@ -299,7 +343,7 @@ tailwind.config = {
 <section class="py-10 border-t border-slate-900/5">
   <div class="max-w-5xl mx-auto px-6">
     <p class="text-[13px] text-slate-400 leading-relaxed max-w-3xl">
-      Numbers on this page are measured from our own index of employer career systems, refreshed daily. The «last refresh» date is the timestamp of the last real data change, not the page build time.
+      Numbers on this page are measured from our own deduplicated index of employer career systems, refreshed daily. «Last refresh» records the latest source read; structured data and sitemap dates use the latest real content change, never the page build time.
       <a href="/#coverage" class="text-brand-600 font-semibold hover:underline">How we collect data</a> ·
       <a href="/ats/" class="text-brand-600 font-semibold hover:underline">All ATS sources</a>
     </p>
@@ -334,9 +378,9 @@ tailwind.config = {
         <p class="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Company</p>
         <ul class="mt-5 space-y-3 text-sm">
           <li><a href="mailto:hello@nivult.com" class="hover:text-white transition">hello@nivult.com</a></li>
-          <li><a href="/booking.html" class="hover:text-white transition">Book a call</a></li>
-          <li><a href="/account.html" class="hover:text-white transition">Your account</a></li>
-          <li><a href="/terms.html" class="hover:text-white transition">Terms</a> · <a href="/privacy.html" class="hover:text-white transition">Privacy</a></li>
+          <li><a href="/booking" class="hover:text-white transition">Book a call</a></li>
+          <li><a href="/account" class="hover:text-white transition">Your account</a></li>
+          <li><a href="/terms" class="hover:text-white transition">Terms</a> · <a href="/privacy" class="hover:text-white transition">Privacy</a></li>
         </ul>
       </div>
     </div>
