@@ -13,10 +13,12 @@ import statistics
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 
 import requests
 
 API = "https://api.nivult.com"
+SINCE = (datetime.now(UTC) - timedelta(days=1)).isoformat().replace("+00:00", "Z")
 KEY = sys.argv[1]
 H = {"X-Api-Key": KEY}
 
@@ -56,18 +58,81 @@ prova("cursore diverso", d2["next_cursor"] != d["next_cursor"])
 r = requests.get(f"{API}/v1/jobs", params={"cursor": "spazzatura"}, headers=H)
 prova("cursore rotto → 400", r.status_code == 400, str(r.status_code))
 
-r = requests.get(f"{API}/v1/jobs", params={"country": "DE", "technology": "SAP",
-                                           "limit": 5}, headers=H)
-d = r.json()
-prova("filtro paese+tecnologia", r.status_code == 200 and
-      all(x.get("country") == "DE" for x in d["data"] if x.get("country")))
+def cerca_jobs(nome, parametri, controllo=None):
+    inizio = time.perf_counter()
+    risposta = requests.get(f"{API}/v1/jobs", params=parametri, headers=H,
+                            timeout=30)
+    durata = time.perf_counter() - inizio
+    dati = risposta.json()
+    prova(nome + " 200 sotto 4s", risposta.status_code == 200 and durata < 4,
+          f"HTTP {risposta.status_code}, {durata:.2f}s · {json.dumps(dati)[:160]}")
+    if controllo:
+        prova(nome + " contenuto", controllo(dati), json.dumps(dati)[:200])
+    return dati
+
+
+def cerca_tecnologia(nome, technology, cursore=None):
+    parametri = {"technology": technology, "limit": 1}
+    if cursore:
+        parametri["cursor"] = cursore
+
+    def esatto(dati):
+        righe = dati.get("data", [])
+        return (dati.get("count_page") == 1 and len(righe) == 1 and
+                any(t.lower() == technology.lower()
+                    for t in righe[0].get("technologies", [])))
+
+    return cerca_jobs(nome, parametri, esatto)
+
+
+sap1 = cerca_tecnologia("SAP", "SAP")
+if sap1.get("next_cursor"):
+    sap2 = cerca_tecnologia("sap minuscolo pagina 2", "sap", sap1["next_cursor"])
+    id_sap1 = {x["id"] for x in sap1.get("data", [])}
+    id_sap2 = {x["id"] for x in sap2.get("data", [])}
+    prova("SAP pagine disgiunte", not (id_sap1 & id_sap2))
+cerca_tecnologia("Snowflake", "Snowflake")
+cerca_tecnologia("snowflake minuscolo", "snowflake")
+cerca_tecnologia("Kubernetes", "Kubernetes")
+cerca_jobs("paese e tecnologia", {"country": "DE", "technology": "SAP", "limit": 5},
+           lambda d: d["count_page"] > 0 and all(
+               x.get("country") == "DE" and
+               any(t.lower() == "sap" for t in x.get("technologies", []))
+               for x in d["data"]))
+cerca_jobs("keyword engineer", {"q": "engineer", "limit": 10},
+           lambda d: d["count_page"] > 0)
+cerca_jobs("keyword product", {"q": "product", "limit": 10},
+           lambda d: d["count_page"] > 0)
+cerca_jobs("Workday engineer completo", {
+    "country": "US", "q": "engineer", "seniority": "senior", "remote": "remote",
+    "dal": "2026-10-01", "ats": "workday", "limit": 10},
+    lambda d: d["count_page"] > 0 and all(
+        x.get("ats") == "workday" and x.get("country") == "US" and
+        x.get("seniority") == "senior" and x.get("remote") == "remote" and
+        x.get("posted_at", "") >= "2026-10-01" for x in d["data"]))
+cerca_jobs("Greenhouse product completo", {
+    "country": "DE", "q": "product", "remote": "hybrid", "dal": "2026-10-01",
+    "ats": "greenhouse", "limit": 10},
+    lambda d: d["count_page"] > 0 and all(
+        x.get("ats") == "greenhouse" and x.get("country") == "DE" and
+        x.get("remote") == "hybrid" and x.get("posted_at", "") >= "2026-10-01"
+        for x in d["data"]))
+cerca_jobs("Greenhouse DE", {"country": "DE", "ats": "greenhouse", "limit": 10},
+           lambda d: d["count_page"] > 0 and all(
+               x.get("ats") == "greenhouse" and x.get("country") == "DE"
+               for x in d["data"]))
+cerca_jobs("tecnologia e keyword", {"technology": "Kubernetes", "q": "engineer",
+                                    "limit": 5},
+           lambda d: d["count_page"] > 0 and all(
+               any(t.lower() == "kubernetes" for t in x.get("technologies", []))
+               for x in d["data"]))
 
 r = requests.get(f"{API}/v1/companies", params={"limit": 5}, headers=H)
 d = r.json()
 prova("/v1/companies 200 con nomi", r.status_code == 200 and
       d["count_page"] > 0 and d["data"][0].get("company"))
 
-r = requests.get(f"{API}/v1/changes", params={"since": "2026-10-01T00:00:00Z"}, headers=H)
+r = requests.get(f"{API}/v1/changes", params={"since": SINCE}, headers=H)
 prova("/v1/changes 200", r.status_code == 200)
 
 r = requests.get(f"{API}/v1/coverage", headers=H)

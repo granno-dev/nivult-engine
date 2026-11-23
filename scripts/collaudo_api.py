@@ -18,10 +18,12 @@ import json
 import os
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
 API = "https://api.nivult.com"
+SINCE = (datetime.now(UTC) - timedelta(days=1)).isoformat().replace("+00:00", "Z")
 SESS = os.environ.get("NV_SESSIONE", "")
 
 passati: list[str] = []
@@ -140,12 +142,12 @@ if CHIAVE:
     prova("changes senza since", "GET", "/v1/changes", chiave=CHIAVE, atteso=400)
     prova("changes data sbagliata", "GET", "/v1/changes?since=nonunadata",
           chiave=CHIAVE, atteso=400)
-    prova("changes ok", "GET", "/v1/changes?since=2026-10-01T00:00:00Z&limit=3",
+    prova("changes ok", "GET", f"/v1/changes?since={SINCE}&limit=3",
           chiave=CHIAVE)
     prova("coverage", "GET", "/v1/coverage", chiave=CHIAVE)
     prova("usage", "GET", "/v1/usage", chiave=CHIAVE,
-          controlla=lambda j: None if "residui" in j
-          else (_ for _ in ()).throw(AssertionError("campo residui mancante")))
+          controlla=lambda j: None if "remaining" in j and "residui" not in j
+          else (_ for _ in ()).throw(AssertionError("campo remaining inglese mancante")))
     prova("exports latest", "GET", "/v1/exports/latest", chiave=CHIAVE)
     prova("export nome sbagliato", "GET", "/v1/exports/latest/xyz",
           chiave=CHIAVE, atteso=404)

@@ -17,21 +17,23 @@ Cursore opaco: base64 del JSON con la chiave di ordinamento. Opaco per
 contratto (il cliente non lo costruisce a mano), ma resta leggibile in
 debug senza dover decifrare niente.
 
-Ogni risposta restituisce la riga dell'export COSI' COM'E' (il campo
-`raw` riparsato): le colonne tipizzate servono solo a filtrare e
-ordinare, il contratto col cliente e' il formato dell'export.
+Ogni risposta restituisce la riga dell'export nel formato documentato,
+senza i campi PII recruiter rimossi dal contratto. Le colonne tipizzate
+servono solo a filtrare e ordinare.
 """
 from __future__ import annotations
 
 import base64
 import binascii
 import datetime as dt
+import gzip
 import json
 import logging
 import os
 import re
 import threading
 import time
+import zlib
 
 import duckdb
 
@@ -40,6 +42,55 @@ log = logging.getLogger("nivult.api_clienti.dati")
 PERCORSO = os.environ.get("API_CLIENTI_DB",
                           "/opt/nivult/exports/api-clienti.duckdb")
 LIMITE_MAX = 500  # oltre, il cliente vuole un export bulk, non un'API
+_CAMPI_PII = frozenset({"contact_email", "recruiter"})
+
+
+def _senza_pii(valore):
+    if isinstance(valore, dict):
+        return {k: _senza_pii(v) for k, v in valore.items() if k not in _CAMPI_PII}
+    if isinstance(valore, list):
+        return [_senza_pii(v) for v in valore]
+    return valore
+
+
+def stream_export_senza_pii(percorso: str):
+    """Gzip JSONL sanitizzato riga per riga, anche da un export precedente."""
+    def genera():
+        compressore = zlib.compressobj(wbits=31)
+        with gzip.open(percorso, "rt", encoding="utf-8") as f:
+            for linea in f:
+                riga = _senza_pii(json.loads(linea))
+                dati = (json.dumps(riga, ensure_ascii=False, separators=(",", ":"))
+                        + "\n").encode()
+                blocco = compressore.compress(dati)
+                if blocco:
+                    yield blocco
+        yield compressore.flush()
+    return genera()
+
+
+class DeltaRetentionError(ValueError):
+    code = "delta_retention_exceeded"
+
+    def __init__(self, since: str, retention_since: str):
+        self.since = since
+        self.retention_since = retention_since
+        self.resync_required = True
+        self.detail = {
+            "code": self.code,
+            "error": self.code,
+            "message": "since predates the retained delta history; "
+                       "perform a full resync",
+            "since": since,
+            "retention_since": retention_since,
+            "action": "resync",
+            "resync_required": True,
+        }
+        super().__init__(self.detail["message"])
+
+    def as_dict(self) -> dict:
+        return dict(self.detail)
+
 
 _con: duckdb.DuckDBPyConnection | None = None
 _con_mtime: float | None = None
@@ -76,10 +127,13 @@ def _conn() -> duckdb.DuckDBPyConnection:
             # finche' il kernel lo ammazzava (misurato: 4,9 GB di RSS
             # per 937 righe; con il tetto: 1,2 GB e 25s). DuckDB oltre il
             # tetto svuota su disco — sul volume, non sul root da 75 GB.
-            tmp = os.path.join(os.path.dirname(_percorso), "duckdb-tmp")
+            tmp = os.path.join(os.path.dirname(os.path.abspath(_percorso)),
+                               "duckdb-tmp")
             os.makedirs(tmp, exist_ok=True)
-            _con.execute("SET memory_limit = '1500MB'")
-            _con.execute(f"SET temp_directory = '{tmp}'")
+            _con.execute("SET memory_limit = '3GB'")
+            _con.execute("SET threads = 4")
+            _con.execute("SET temp_directory = '" + tmp.replace("'", "''") + "'")
+            _con.execute("SET TimeZone = 'UTC'")
             _con_mtime = m
         return _con
 
@@ -100,7 +154,7 @@ def apri(percorso: str | None = None) -> None:
             _con.close()
             _con = None
         _con_mtime = None
-        _percorso = percorso or PERCORSO
+        _percorso = percorso or os.environ.get("API_CLIENTI_DB") or PERCORSO
 
 
 def _iso(v):
@@ -110,9 +164,9 @@ def _iso(v):
 def _norm_ts(v) -> str | None:
     """Una data in ingresso (cursore, dal, da) -> ISO naive in UTC.
 
-    Nel db i timestamp sono naive in UTC (vedi aggiorna._ts: TIMESTAMPTZ
-    richiederebbe pytz, che non e' tra le dipendenze): chi arriva col
-    fuso va convertito, non troncato — «12:00+02:00» e' le 10:00.
+    Nel db i timestamp sono naive in UTC (aggiorna._TS_SQL e _configura):
+    chi arriva col fuso va convertito, non troncato — «12:00+02:00» e'
+    le 10:00.
     """
     if not v:
         return None
@@ -120,6 +174,13 @@ def _norm_ts(v) -> str | None:
     if d.tzinfo:
         d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
     return d.isoformat()
+
+
+def _timestamp_utc(valore: str) -> dt.datetime:
+    d = dt.datetime.fromisoformat(str(valore))
+    if d.tzinfo is None:
+        return d.replace(tzinfo=dt.timezone.utc)
+    return d.astimezone(dt.timezone.utc)
 
 
 def _cursore(chiave: list) -> str:
@@ -146,7 +207,7 @@ def _pagina(sql: str, par: dict, limite: int,
     if len(righe) > limite:
         righe = righe[:limite]
         prossimo = _cursore(chiave_di(righe[-1]))
-    return [json.loads(r[0]) for r in righe], prossimo
+    return [_senza_pii(json.loads(r[0])) for r in righe], prossimo
 
 
 def _limite(limite: int | None) -> int:
@@ -157,8 +218,16 @@ def _limite(limite: int | None) -> int:
 # («Python», misurato sul golden), ma il cliente la indovina come gli
 # capita («python») — e una risposta vuota per colpa di una maiuscola
 # e' un ticket di supporto, non un dato
-_TEC = ("list_contains(list_transform(technologies, x -> lower(x)),"
+_TEC = ("list_contains(list_transform(technologies, lambda x: lower(x)),"
         " lower(${nome}))")
+_SEARCH_DOC = ("COALESCE(NULLIF(raw->>'description', ''), NULLIF(raw->>'content', ''), "
+               "NULLIF(raw->>'descriptionHtml', ''), NULLIF(raw->>'descriptionPlain', ''), "
+               "NULLIF(raw->>'externalDescription', ''), NULLIF(raw->>'jobDescription', ''), "
+               "NULLIF(raw->>'job_description', ''), NULLIF(raw->>'Job_Description', ''), "
+               "NULLIF(raw->>'body', ''), NULLIF(raw->>'content_html', ''), "
+               "NULLIF(raw->>'description_html', ''), NULLIF(raw->>'descriptionBody', ''), "
+               "NULLIF(raw->>'text', ''), NULLIF(raw->'_jobposting'->>'description', ''), "
+               "NULLIF(raw->>'ShortDescriptionStr', ''), '')")
 
 
 def _like(testo: str) -> str:
@@ -188,7 +257,7 @@ def offerte(filtri: dict, cursore: str | None,
             if isinstance(v, bool) else str(v)
         dove.append("remote = $remote")
     if filtri.get("q"):
-        dove.append("title ILIKE $q ESCAPE '\\'")
+        dove.append(f"(title || ' ' || {_SEARCH_DOC}) ILIKE $q ESCAPE '\\'")
         par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
         dove.append(_TEC.format(nome="technology"))
@@ -223,8 +292,8 @@ def cerca_portale(filtri: dict, cursore: str | None,
     rivelano con un credito, il modello visto su TheirStack il 27/09).
 
     Cercare e' gratis, rivelare no: e' il gancio che trasforma la
-    curiosita' in piano. Stessi filtri di offerte(), ma la SELECT non
-    tocca raw: il contenuto dell'annuncio non esce da qui."""
+    curiosita' in piano. Stessi filtri di offerte(), ma la risposta non
+    espone raw: il contenuto dell'annuncio non esce da qui."""
     filtri = filtri or {}
     limite = max(1, min(int(limite or 25), 50))
     # posted_at nel futuro: le «Lehre» scrivono la data d'inizio contratto
@@ -241,7 +310,7 @@ def cerca_portale(filtri: dict, cursore: str | None,
         dove.append("remote = $remote")
         par["remote"] = str(filtri["remote"])
     if filtri.get("q"):
-        dove.append("title ILIKE $q ESCAPE '\\'")
+        dove.append(f"(title || ' ' || {_SEARCH_DOC}) ILIKE $q ESCAPE '\\'")
         par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
         dove.append(_TEC.format(nome="technology"))
@@ -252,11 +321,14 @@ def cerca_portale(filtri: dict, cursore: str | None,
     if cursore:
         ts, pid = _leggi_cursore(cursore)
         par["pid"] = pid
-        dove.append("(posted_at IS NULL"
-                    " OR posted_at < CAST($pts AS TIMESTAMP)"
-                    " OR (posted_at = CAST($pts AS TIMESTAMP)"
-                    "     AND id > $pid))")
-        par["pts"] = _norm_ts(ts)
+        if ts is None:
+            dove.append("posted_at IS NULL AND id > $pid")
+        else:
+            dove.append("(posted_at IS NULL"
+                        " OR posted_at < CAST($pts AS TIMESTAMP)"
+                        " OR (posted_at = CAST($pts AS TIMESTAMP)"
+                        "     AND id > $pid))")
+            par["pts"] = _norm_ts(ts)
     with _lock:
         totale = _conn().execute(
             f"SELECT count(*) FROM offerte WHERE {' AND '.join(dove)}",
@@ -271,9 +343,12 @@ def cerca_portale(filtri: dict, cursore: str | None,
                        category, posted_at, technologies, ats,
                        company, company_slug
                   FROM (
-                    SELECT *, row_number() OVER (
-                        PARTITION BY coalesce(company_slug, company, id)
-                        ORDER BY posted_at DESC NULLS LAST, id) AS _rn
+                    SELECT id, title, country, city, seniority, remote,
+                           category, posted_at, technologies, ats,
+                           company, company_slug,
+                           row_number() OVER (
+                             PARTITION BY coalesce(company_slug, company, id)
+                             ORDER BY posted_at DESC NULLS LAST, id) AS _rn
                       FROM offerte
                      WHERE {' AND '.join(dove)})
                  WHERE _rn <= 3
@@ -296,7 +371,7 @@ def rivela_offerta(offerta_id: str) -> dict | None:
         r = _conn().execute(
             "SELECT raw FROM offerte WHERE id = $id",
             {"id": offerta_id}).fetchone()
-    return json.loads(r[0]) if r else None
+    return _senza_pii(json.loads(r[0])) if r else None
 
 
 def _dove_export(filtri: dict) -> tuple[str, dict]:
@@ -378,12 +453,14 @@ def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
     la stima, questa e' la cintura."""
     import gzip
     nome = f"ex_{int(time.time() * 1000)}"   # solo cifre: nome sicuro
-    tmp = os.path.join(os.path.dirname(_percorso), "duckdb-tmp")
+    tmp = os.path.join(os.path.dirname(os.path.abspath(_percorso)), "duckdb-tmp")
     os.makedirs(tmp, exist_ok=True)
     con = duckdb.connect(_percorso, read_only=True)
     try:
-        con.execute("SET memory_limit = '1500MB'")
-        con.execute(f"SET temp_directory = '{tmp}'")
+        con.execute("SET memory_limit = '3GB'")
+        con.execute("SET threads = 4")
+        con.execute("SET temp_directory = '" + tmp.replace("'", "''") + "'")
+        con.execute("SET TimeZone = 'UTC'")
         con.execute(
             f"CREATE TEMP TABLE {nome} AS SELECT raw FROM {tabella} "
             f"WHERE {dove} ORDER BY {ordine}", par)
@@ -399,7 +476,9 @@ def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
                 if not pezzo:
                     break
                 for (raw,) in pezzo:
-                    f.write(raw + "\n")
+                    pulito = _senza_pii(json.loads(raw))
+                    f.write(json.dumps(pulito, ensure_ascii=False,
+                                       separators=(",", ":")) + "\n")
                 scritte += len(pezzo)
         return scritte
     finally:
@@ -467,11 +546,10 @@ def rivela_azienda(riferimento: str) -> dict | None:
 
     I portali nazionali hanno slug fittizi (jobboerse, pole-emploi,
     platsbanken…): la riga in `aziende` non esiste perche' l'azienda non
-    e' il portale. Ma il datore vero, quando l'offerta lo dichiara, sta
-    in `offerte.company`: si cerca la sua scheda VERA per nome (Randstad
-    esiste come azienda, anche se l'offerta e' arrivata via agenzie), e
-    se non c'e' si risponde con una scheda snella onesta — nome, paese,
-    quante offerte attive ha adesso. Solo quando nemmeno il nome esiste
+    e' il portale. Il ripiego per nome resta nello stesso ATS e nello
+    stesso paese dell'offerta, e viene accettato solo se identifica UNA
+    scheda. Altrimenti si risponde con la scheda snella esplicita, mai
+    col profilo di un omonimo globale. Solo quando nemmeno il nome esiste
     (annunci anonimi dei PUP) si torna None: quello e' un 404 vero.
     """
     try:
@@ -483,7 +561,7 @@ def rivela_azienda(riferimento: str) -> dict | None:
             "SELECT raw FROM aziende WHERE ats = $a AND company_slug = $s "
             "LIMIT 1", {"a": ats, "s": slug}).fetchone()
         if r:
-            return json.loads(r[0])
+            return _senza_pii(json.loads(r[0]))
         nome_r = _conn().execute(
             """SELECT company, count(*) AS n FROM offerte
                 WHERE ats = $a AND company_slug = $s AND company IS NOT NULL
@@ -492,19 +570,27 @@ def rivela_azienda(riferimento: str) -> dict | None:
         if not nome_r or not nome_r[0]:
             return None
         nome = nome_r[0]
-        r = _conn().execute(
-            "SELECT raw FROM aziende WHERE lower(company) = lower($n) "
-            "LIMIT 1", {"n": nome}).fetchone()
-        if r:
-            return json.loads(r[0])
-        paese = _conn().execute(
+        paese_r = _conn().execute(
             """SELECT country, count(*) AS n FROM offerte
-                WHERE ats = $a AND company_slug = $s AND country IS NOT NULL
+                WHERE ats = $a AND company_slug = $s AND company = $n
+                  AND country IS NOT NULL
                 GROUP BY 1 ORDER BY n DESC LIMIT 1""",
-            {"a": ats, "s": slug}).fetchone()
+            {"a": ats, "s": slug, "n": nome}).fetchone()
+        paese = paese_r[0] if paese_r else None
+        par = {"a": ats, "n": nome}
+        vincolo_paese = "country IS NULL"
+        if paese:
+            vincolo_paese = "country = $p"
+            par["p"] = paese
+        candidate = _conn().execute(
+            "SELECT raw FROM aziende WHERE ats = $a"
+            " AND lower(company) = lower($n) AND " + vincolo_paese +
+            " LIMIT 2", par).fetchall()
+        if len(candidate) == 1:
+            return _senza_pii(json.loads(candidate[0][0]))
         return {"company": nome, "ats": ats, "company_slug": slug,
-                "country": paese[0] if paese else None,
-                "active_jobs": int(nome_r[1]), "profilo": "snello"}
+                "country": paese, "active_jobs": int(nome_r[1]),
+                "profilo": "snello"}
 
 
 def azienda_jobs_portale(riferimento: str) -> list[dict]:
@@ -526,13 +612,19 @@ def azienda_jobs_portale(riferimento: str) -> list[dict]:
 
 def cerca_chiuse_portale(filtri: dict, cursore: str | None,
                          limite: int = 25) -> tuple[list[dict], str | None, int]:
-    """Le offerte CHIUSE, dal flusso: stesso mascheramento delle attive."""
+    """Le offerte CHIUSE recenti, dal flusso: mascheramento delle attive."""
     filtri = filtri or {}
     limite = max(1, min(int(limite or 25), 50))
     dove = ["event = 'closed'"]
     par: dict = {}
+    if filtri.get("country"):
+        dove.append("(raw->>'country') = $country")
+        par["country"] = str(filtri["country"])
+    if filtri.get("remote"):
+        dove.append("(raw->>'remote') = $remote")
+        par["remote"] = str(filtri["remote"])
     if filtri.get("q"):
-        dove.append("raw->>'title' ILIKE $q ESCAPE '\\'")
+        dove.append("(raw->>'title') ILIKE $q ESCAPE '\\'")
         par["q"] = _like(str(filtri["q"]))
     if filtri.get("technology"):
         # nel flusso il campo si chiama skills (le technologies vengono
@@ -540,7 +632,7 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
         # foto, non l'arricchimento completo)
         dove.append("list_contains(list_transform("
                     "CAST(coalesce(raw->'skills', '[]'::json) AS VARCHAR[]), "
-                    "x -> lower(x)), lower($technology))")
+                    "lambda x: lower(x)), lower($technology))")
         par["technology"] = str(filtri["technology"])
     if cursore:
         t, cid = _leggi_cursore(cursore)
@@ -628,7 +720,7 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
             "SELECT raw FROM aziende"
             " WHERE ats = $ats AND company_slug = $slug LIMIT 1",
             {"ats": piattaforma, "slug": slug}).fetchone()
-    return json.loads(r[0]) if r else None
+    return _senza_pii(json.loads(r[0])) if r else None
 
 
 def demo_tecnologie(q: str) -> dict:
@@ -641,10 +733,10 @@ def demo_tecnologie(q: str) -> dict:
         righe = _conn().execute("""
             SELECT company, country, industry,
                    list_filter(technologies,
-                               x -> contains(lower(x), lower($q))) AS tec
+                               lambda x: contains(lower(x), lower($q))) AS tec
               FROM aziende
              WHERE len(list_filter(technologies,
-                                  x -> contains(lower(x), lower($q)))) > 0
+                                  lambda x: contains(lower(x), lower($q)))) > 0
                AND company IS NOT NULL
              ORDER BY employees DESC NULLS LAST, company
              LIMIT 24""", {"q": q}).fetchall()
@@ -752,12 +844,29 @@ def demo_stats() -> dict:
             "copertura_aziende": cop_az}
 
 
+def _inizio_retention_delta() -> dt.datetime | None:
+    meta = _meta()
+    inizio = meta.get("flusso_dal")
+    if inizio:
+        return _timestamp_utc(inizio)
+    generato = meta.get("generato_at")
+    if not generato:
+        return None
+    giorni = int(meta.get("flusso_giorni", 7))
+    return (_timestamp_utc(generato) - dt.timedelta(days=giorni)).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+
+
 def cambiamenti(da: str, cursore: str | None,
                 limite: int) -> tuple[list[dict], str | None]:
     limite = _limite(limite)
     dove = ["TRUE"]
     par: dict = {}
     if da:
+        richiesto = _timestamp_utc(da)
+        inizio = _inizio_retention_delta()
+        if inizio is not None and richiesto < inizio:
+            raise DeltaRetentionError(richiesto.isoformat(), inizio.isoformat())
         dove.append("t >= CAST($da AS TIMESTAMP)")
         par["da"] = _norm_ts(da)
     if cursore:
@@ -776,13 +885,14 @@ def cambiamenti(da: str, cursore: str | None,
 def copertura() -> dict:
     """I fill-rate dichiarati dal manifest dell'export.
 
-    Forma: {campo: pct} per le offerte (invariata dal giorno uno) piu'
-    la chiave "aziende" (27/09/2026) col fill-rate dei campi azienda.
-    Le chiavi si aggiungono, non si rinominano mai."""
+    Forma: {campo: pct} per le offerte, piu' la chiave "aziende" col
+    fill-rate dei campi azienda. I campi PII recruiter non sono esposti,
+    nemmeno leggendo un DuckDB generato prima della loro rimozione."""
     with _lock:
         righe = _conn().execute(
             "SELECT chiave, valore FROM copertura").fetchall()
-    out = {k: v for k, v in righe if not k.startswith("az:")}
+    out = {k: v for k, v in righe
+           if not k.startswith("az:") and k not in {"contact_email", "recruiter"}}
     az = {k[3:]: v for k, v in righe if k.startswith("az:")}
     if az:
         out["aziende"] = az
@@ -793,8 +903,8 @@ def stato_export() -> dict:
     """Lo stato dell'export, nella forma servita dal router.
 
     Regola dell'API: le chiavi grezze di meta restano TUTTE (stato,
-    data_export, offerte, aziende, flusso, flusso_giorni, generato_at —
-    le consuma il cruscotto interno) e ACCANTO la vista HTTP documentata
+    data_export, offerte, aziende, flusso, flusso_giorni, flusso_dal,
+    generato_at — le consuma il cruscotto interno) e ACCANTO la vista HTTP documentata
     (data, righe, file): i campi si aggiungono, non si rinominano mai.
     """
     meta = _meta()
