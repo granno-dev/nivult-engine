@@ -232,6 +232,19 @@ def test_concorrenza():
     check("saldo mai negativo", chiavi.saldo_per_utente(uid), 0)
     check("la seconda chiave eredita il volume account",
           chiavi.volume_per_utente(uid), 12)
+    rec = chiavi.verifica(k1)
+    check("tier account già presente nella query di auth", rec["monthly_tier"], 12)
+    from nivult.api_clienti import v1
+    volume_originale = chiavi.volume_per_utente
+
+    def volume_vietato(_):
+        raise AssertionError("lettura tier extra dopo l'auth")
+
+    chiavi.volume_per_utente = volume_vietato
+    try:
+        check("tier senza seconda lettura DB", v1._volume_mensile(rec), 12)
+    finally:
+        chiavi.volume_per_utente = volume_originale
     _esegui("UPDATE users SET crediti_extra = 3 WHERE id = %s", (uid,))
     extra = _paralleli(4, lambda _: chiavi.spendi_per_utente(uid))
     check("franchigia poi extra, senza overspend", sum(r is True for r in extra), 3)

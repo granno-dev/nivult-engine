@@ -49,6 +49,8 @@ jobs:
         run: python scripts/reset_and_verify.py
       - name: API clienti, DuckDB, CV, canarino, backup e pre-scorer
         run: |
+          python scripts/check_api_pooling.py
+          python scripts/check_rate_limit.py
           python scripts/prova_api_clienti.py
           python scripts/prova_api_dati.py
           python scripts/prova_salari.py

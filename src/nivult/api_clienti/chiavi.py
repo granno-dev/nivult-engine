@@ -110,7 +110,9 @@ def _leggi(key_hash: str) -> dict | None:
     with connessione() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT k.id::text, k.label, k.crediti_mensili, k.usati_mese, "
-            "       k.mese_uso, k.user_id::text "
+            "       k.mese_uso, k.user_id::text, "
+            "       (SELECT max(k2.crediti_mensili) FROM api_chiavi k2 "
+            "        WHERE k2.user_id = k.user_id) AS monthly_tier "
             "FROM api_chiavi k LEFT JOIN users u ON u.id = k.user_id "
             "WHERE k.key_hash = %s AND k.revoked_at IS NULL "
             "  AND (k.user_id IS NULL OR u.status = 'active')",
@@ -119,7 +121,8 @@ def _leggi(key_hash: str) -> dict | None:
     if not r:
         return None
     return {"id": r[0], "label": r[1], "crediti_mensili": r[2],
-            "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5]}
+            "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5],
+            "monthly_tier": int(r[6]) if r[6] is not None else int(r[2])}
 
 
 def verifica(chiave: str) -> dict:
