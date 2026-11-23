@@ -64,7 +64,8 @@ def _righe(ids: list[str] | None = None, cursore: str | None = None,
     sql = f"SELECT {vivo._COLONNE} WHERE {' AND '.join(dove)}"
     if ids is None:
         sql += " ORDER BY j.id LIMIT %(limite)s"
-    return vivo._conn().execute(sql, par).fetchall()
+    with vivo._conn() as con:
+        return con.execute(sql, par).fetchall()
 
 
 def _bulk(azioni: list[tuple[str, dict | None]]) -> None:
@@ -100,7 +101,8 @@ def _bulk(azioni: list[tuple[str, dict | None]]) -> None:
 
 def _backfill_sql() -> int:
     totali = 0
-    vivo._conn().execute("SET statement_timeout = '30min'")
+    with vivo._conn() as con:
+        con.execute("SET statement_timeout = '30min'")
     with psycopg.connect(vivo._DSN) as con:
         con.execute("SET statement_timeout = '30min'")
         con.execute(f"CREATE TEMP TABLE backfill_ids AS SELECT j.id FROM ats_jobs j WHERE {_CANONICO}")
@@ -145,7 +147,8 @@ def _backfill_duckdb() -> int:
 def _riconcilia(da: dt.datetime, worker: int = 0, workers: int = 1,
                 gap_only: bool = False) -> int:
     totali = 0
-    vivo._conn().execute("SET statement_timeout = '30min'")
+    with vivo._conn() as con:
+        con.execute("SET statement_timeout = '30min'")
     with psycopg.connect(vivo._DSN) as con:
         con.execute("SET statement_timeout = '30min'")
         partizione = (f" AND abs(('x' || substr(md5(id::text), 1, 8))::bit(32)::int) "
@@ -192,8 +195,7 @@ def backfill() -> None:
 
 
 def _sync_batch() -> int:
-    with psycopg.connect(vivo._DSN, row_factory=vivo.dict_row) as con:
-        vivo._con = con
+    with vivo._conn() as con:
         con.execute("SET statement_timeout = '2min'")
         con.execute("SET idle_in_transaction_session_timeout = '30s'")
         righe = con.execute(
@@ -219,7 +221,8 @@ def _sync_batch() -> int:
 
 
 def sync(once: bool = False) -> None:
-    vivo._conn().execute("SET statement_timeout = '2min'")
+    with vivo._conn() as con:
+        con.execute("SET statement_timeout = '2min'")
     while True:
         n = _sync_batch()
         if once:
