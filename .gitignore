@@ -28,4 +28,13 @@ venv/
 # Tooling locale, non è del progetto.
 .zcode/
 .campagna/
+.release-staging/
+.test-output/
 apify/storage/
+
+# Output locali di analisi e benchmark, rigenerabili.
+/dati/explee/
+/dati/family-benchmark/
+/dati/match-benchmark/
+/dati/match-v2/
+/dati/match-v3/

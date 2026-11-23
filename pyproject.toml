@@ -5,6 +5,7 @@ description = "Motore Nivult: ingestione offerte, matching a imbuto, consegna di
 requires-python = ">=3.11"
 dependencies = [
   "psycopg[binary]>=3.2",
+  "psycopg-pool>=3.3.3,<4",
   "httpx>=0.27",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
@@ -20,7 +21,8 @@ dependencies = [
   "pypdf>=5",           # estrai_testo: i CV in PDF
   "python-docx>=1.1",   # estrai_testo: i CV in DOCX
   "geonamescache>=2.0", # geografia.py: citta' -> paese, offline
-  "duckdb>=1.1",        # api_clienti: il dato servito ai clienti, fuori dal Postgres di produzione
+  "python-jobspy>=1.1.82", # radar_indeed.py: solo il link di candidatura diretta
+  "duckdb>=1.3",        # api_clienti: sintassi lambda compatibile con DuckDB 1.x/2.x
 ]
 
 [project.optional-dependencies]

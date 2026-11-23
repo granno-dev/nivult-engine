@@ -88,15 +88,21 @@ guardia_v1() {
   $PY - <<'EOF' 2>/dev/null || true
 import os, signal, subprocess, time
 import psycopg
+from nivult.ats.dichiarati import PIATTAFORME
 
 MARKER = "/tmp/n5-v1-riavvii"
 with psycopg.connect(os.environ["ATS_DATABASE_URL"]) as c:
     visti, coda = c.execute("""
         SELECT count(*) FILTER (WHERE locale_v1_at > now() - interval '70 minutes'),
-               count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL)
+               count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL
+                                AND (differito_v1_at IS NULL OR differito_v1_at < now() - interval '6 hours')
+                                AND (dichiarati_at IS NOT NULL OR NOT (platform_id = ANY(%s::text[]))))
           FROM ats_jobs
          WHERE locale_v1_at > now() - interval '70 minutes'
-            OR (expired_at IS NULL AND locale_v1_at IS NULL)""").fetchone()
+            OR (expired_at IS NULL AND locale_v1_at IS NULL
+                AND (differito_v1_at IS NULL OR differito_v1_at < now() - interval '6 hours')
+                AND (dichiarati_at IS NOT NULL OR NOT (platform_id = ANY(%s::text[]))))""",
+                (list(PIATTAFORME), list(PIATTAFORME))).fetchone()
 if coda <= 5000 or visti >= 500:
     raise SystemExit                       # sano: o lavora o non c'e' lavoro
 ora = time.strftime("%Y%m%d%H")
@@ -120,14 +126,14 @@ print(f"guardia-v1: demone riavviato (visti {visti}/70min, coda {coda})",
 EOF
 }
 
-# Gli endpoint CONDIVISI (un host API per migliaia di tenant) restano su
-# Hetzner, dove il rate gate del runner e' uno solo per piattaforma. Tutto
-# il resto (host per-tenant, nessun gate) lo copre la corsia di casa.
-GATE="greenhouse,lever,smartrecruiters,ashby,recruitee,workable,ukg"
+# 15/10/2026: lo scrape generale passa tutto alla CPX52 — prima BambooHR,
+# poi Breezy/Personio/Teamtailor e le piattaforme restanti, con esiti e code
+# misurati a ogni tranche. Qui restano classificazione, scoperta e arricchimento:
+# niente corsia runner, cosi' nessun tenant viene letto dalle due macchine.
 
-# IL MAESTRO e' un processo del container come gli altri demoni — e un
+# I MODELLI locali sono processi del container come gli altri demoni — e un
 # riavvio del container lo uccide (13/10/2026: il digest e' finito sul
-# ripiego a pagamento per un'ora perche' nessuno lo sapeva). Il cuore lo
+# ripiego a pagamento per un'ora perche' nessuno lo sapeva). Il cuore li
 # rialza entro 10 minuti, qualunque cosa stia facendo il giro.
 guardia_maestro() {
   pgrep -f "llama-server -m /opt/nivult/llama/Qwen3-4B" >/dev/null && return
@@ -138,8 +144,17 @@ guardia_maestro() {
   echo "-- maestro riavviato dalla guardia (era giu')" >> /opt/nivult/engine/logs/operaio.log
 }
 
+guardia_scrittore() {
+  pgrep -f "llama-server -m /opt/nivult/llama/Qwen3.6-35B" >/dev/null && return
+  ( cd /opt/nivult/llama/rocm && nohup ./llama-server \
+      -m /opt/nivult/llama/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf \
+      --host 100.119.200.7 --port 8091 -ngl 99 -fa on -c 8192 -np 2 -t 12 \
+      >> /opt/nivult/engine/logs/scrittore-server.log 2>&1 & )
+  echo "-- scrittore riavviato dalla guardia (era giu')" >> /opt/nivult/engine/logs/operaio.log
+}
+
 # il cuore indipendente dal giro: ogni 10 minuti, qualunque cosa accada
-( while true; do battito "$(cat /tmp/n5-fase 2>/dev/null || echo loop)"; guardia_v1; guardia_maestro; sleep 600; done ) &
+( while true; do battito "$(cat /tmp/n5-fase 2>/dev/null || echo loop)"; guardia_v1; guardia_maestro; guardia_scrittore; sleep 600; done ) &
 
 while true; do
   echo "== giro $(date -u +%FT%TZ)"
@@ -186,18 +201,6 @@ while true; do
     nohup nice -n 10 $PY -m nivult.ats.gocciolatoio >> /opt/nivult/engine/logs/gocciolatoio.log 2>&1 &
     echo "-- gocciolatoio avviato come demone"
   fi
-  # LA CORSIA DI CASA (13/10/2026, deciso da Giuseppe): lo scrape delle
-  # piattaforme SENZA rate gate gira qui — 24 core che dormivano e l'IP
-  # di casa, che i filtri anti-bot trattano meglio del datacenter. Su
-  # Hetzner restano gli endpoint condivisi (GATE), il database e l'API:
-  # il server era annegato (70% di attesa I/O su 4 vCPU) e il giro di
-  # rivisita durava 64 ore. Demone come v1: il giro non deve aspettarlo.
-  if ! pgrep -f "nivult.ats.runner --continuo" >/dev/null; then
-    nohup nice -n 8 $PY -m nivult.ats.runner --continuo --thread 80 \
-      --limite 2000 \
-      --salta "$GATE" >> /opt/nivult/engine/logs/scrape-casa.log 2>&1 &
-    echo "-- corsia di casa avviata (scrape senza gate, 80 thread)"
-  fi
   # I campi che il recruiter ha compilato nell'ATS (contratto, seniority,
   # remoto) vanno nelle colonne cosi' come sono: esatti e gratis (07/09/2026).
   battito "dichiarati"
@@ -205,11 +208,13 @@ while true; do
   # La lettura di dettaglio SUBITO, non di notte: SuccessFactors, Rippling,
   # Breezy, Oracle entrano dall'elenco senza testo, e senza testo nessun
   # campo si legge ne' si stima (08/09/2026: 0% di testo sulle SF nuove).
-  # 5.000 pagine per giro, le piu' recenti prima.
+  # 5.000 pagine per giro, le piu' recenti prima. 15/10/2026: 12 thread
+  # (era 8), dopo che senza lo scrape generale il N5 resta quasi scarico;
+  # lotto invariato ed errori misurati sul primo giro.
   # battito per passo (28/09/2026): il dettaglio puo' durare due ore — la
   # sentinella allarmava «operaio muto» col ciclo vivo che lavorava.
   battito "dettaglio"
-  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 8 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
+  nice -n 10 $PY -m nivult.ats.arricchisci --dettaglio --limite $DETTAGLIO --thread 12 2>&1 | grep -E "^Dettaglio|Traceback" | tail -1 || true
   # I due cantieri del testo (05/10/2026): ukg e inhire NON stanno fra le
   # piattaforme di dettaglio — le loro offerte restavano senza testo e
   # v1 le differiva a oltranza (44mila delle 81mila in coda). ukg sta su

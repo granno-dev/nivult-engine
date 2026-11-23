@@ -1,0 +1,10 @@
+[Unit]
+Description=Nivult OpenSearch reconciliation chain
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/nivult/engine
+EnvironmentFile=/opt/nivult/.env
+EnvironmentFile=/etc/systemd/system/nivult-api.env
+ExecStart=/opt/nivult/opensearch/reconcile-chain.sh

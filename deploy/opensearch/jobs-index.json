@@ -1,0 +1,44 @@
+{
+  "settings": {
+    "index": {
+      "number_of_shards": 2,
+      "number_of_replicas": 0,
+      "refresh_interval": "5s",
+      "codec": "zstd_no_dict",
+      "codec.compression_level": 3,
+      "sort.field": ["posted_at", "id"],
+      "sort.order": ["desc", "desc"],
+      "sort.missing": ["_last", "_last"]
+    },
+    "analysis": {
+      "normalizer": {
+        "nivult_lowercase": {
+          "type": "custom",
+          "filter": ["lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": false,
+    "_source": {
+      "enabled": true
+    },
+    "properties": {
+      "id": { "type": "keyword" },
+      "title": { "type": "text" },
+      "description": { "type": "text" },
+      "country": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "category": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "ats": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "seniority": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "language": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "remote": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "technologies": { "type": "keyword", "normalizer": "nivult_lowercase" },
+      "posted_at": { "type": "date" }
+    }
+  },
+  "aliases": {
+    "nivult_jobs_active": {}
+  }
+}

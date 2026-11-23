@@ -1,0 +1,15 @@
+[Unit]
+Description=Nivult OpenSearch incremental sync
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nivult/engine
+EnvironmentFile=/opt/nivult/.env
+EnvironmentFile=/etc/systemd/system/nivult-api.env
+ExecStart=/opt/nivult/engine/.venv/bin/python /opt/nivult/engine/scripts/opensearch_sync.py --sync
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

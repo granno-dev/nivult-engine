@@ -31,6 +31,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
 
 import duckdb
@@ -147,13 +148,17 @@ _READT = ("SELECT row_number() OVER () AS rn, linea FROM read_csv(?, "
           # max_line_size PER THREAD: 256 MB x 16 thread = 4 GiB chiesti
           # a ogni file, e sul box da 7 GB la build e' morta cosi' il 10 e
           # l'11/10 (misurato: OOM identico su un file da 61 byte).
-          # 64 MB coprono il massimo misurato oggi (46,5 MB) con margine;
-          # chi supera il tetto fa ERRORE rumoroso, mai taglio silenzioso.
-          "max_line_size=67108864)")
+          # 48 MB coprono il massimo misurato oggi (46,5 MB) e il record
+          # da 33 MB del 09/10. Su DuckDB 1.5 il taglio da 64 MB chiede
+          # un blocco da 1 GiB in piu' e fallisce anche con threads=1 e
+          # memory_limit=2GB; chi supera il tetto fa ERRORE rumoroso,
+          # mai taglio silenzioso.
+          "max_line_size=50331648)")
 
 # I timestamp dell'export (Postgres «2026-09-23 07:00:00+00:00» o ISO col
 # fuso): TIMESTAMPTZ converte davvero («+02:00» diventa l'istante UTC,
-# non troncato), ::TIMESTAMP toglie il fuso senza dover importare pytz.
+# non troncato), ::TIMESTAMP toglie il fuso. La sessione e' sempre UTC
+# (_configura), altrimenti DuckDB restituirebbe l'ora locale del server.
 _TS_SQL = "TRY_CAST(TRY_CAST({c} AS TIMESTAMPTZ)::TIMESTAMP AS TIMESTAMP)"
 
 _COLONNE_OFFERTE = (
@@ -174,7 +179,7 @@ _COLONNE_AZIENDE = (
     ("employees", 'TRY_CAST("employees" AS BIGINT)', ("employees",)),
     # l'export aziende ha technologies come lista di {technology, ...}:
     # in colonna i nomi soli (servono al filtro); il resto resta in raw
-    ("technologies", 'list_transform("technologies", x -> x.technology)',
+    ("technologies", 'list_transform("technologies", lambda x: x.technology)',
      ("technologies",)),
 )
 # (nome colonna, espressione SQL o callable(set_sorgente)->SQL, colonne
@@ -185,11 +190,13 @@ _COLONNE_AZIENDE = (
 _COLONNE_FLUSSO = (
     ("t",
      lambda disp: "COALESCE("
+         + _TS_SQL.format(c='"updated_at"' if "updated_at" in disp else "NULL")
+         + ", "
          + _TS_SQL.format(c='"first_seen"' if "first_seen" in disp else "NULL")
          + ", "
          + _TS_SQL.format(c='"closed_at"' if "closed_at" in disp else "NULL")
          + ")",
-     ("first_seen", "closed_at")),
+     ("updated_at", "first_seen", "closed_at")),
     ("id", '"id"', ("id",)), ("event", '"event"', ("event",)),
 )
 
@@ -220,7 +227,7 @@ def _carica_nativa(con: duckdb.DuckDBPyConnection, percorso: str,
 
 
 def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
-                   giorni: int) -> int:
+                   giorni: int, db_path: str) -> int:
     """I novita-* degli ultimi `giorni` giorni, scelti dalla data nel nome.
 
     Il file delle 09:15 contiene gli eventi fra il giro delle 09:00 e
@@ -230,24 +237,42 @@ def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
     da solo al file successivo.
     """
     taglio = dt.date.today() - dt.timedelta(days=giorni)
+    tmp = os.path.join(os.path.dirname(os.path.abspath(db_path)), "duckdb-tmp")
+    os.makedirs(tmp, exist_ok=True)
     n = 0
-    for percorso in sorted(glob.glob(
-            os.path.join(cartella, "flusso", "novita-*.jsonl.gz"))):
-        m = _FLUSSO_RX.search(os.path.basename(percorso))
-        if not m or dt.date(*map(int, m.groups())) < taglio:
-            continue
+    with tempfile.TemporaryDirectory(prefix="flusso-stage-", dir=tmp) as staging:
+        stage = os.path.join(staging, "flusso.duckdb")
+        con.execute("ATTACH " + _sql_stringa(stage) + " AS stage")
         try:
-            n += _carica_nativa(con, percorso, "flusso", _COLONNE_FLUSSO,
-                                dove="t IS NOT NULL")
-            # 11/10/2026, secondo tempo: sette giorni di flusso con la riga
-            # verbatim riempiono da soli il tetto di 4 GB (misurato: muore
-            # chiedendo un blocco da 4 GiB con 3,7 occupati, anche a db
-            # fresco). Le pagine appena scritte sono "sporche" e non
-            # riversabili finche' non si fa CHECKPOINT: uno per file e il
-            # buffer torna evocabile, il picco diventa un file solo.
+            con.execute("CREATE TABLE stage.flusso("
+                        "t TIMESTAMP, id VARCHAR, event VARCHAR, raw VARCHAR)")
+            con.execute("SET memory_limit = '3GB'")
+            con.execute("SET threads = 4")
+            con.execute("SET temp_directory = " + _sql_stringa(tmp))
+            con.execute("SET max_temp_directory_size = '100GB'")
+            con.execute("SET preserve_insertion_order = false")
+            for percorso in sorted(glob.glob(
+                    os.path.join(cartella, "flusso", "novita-*.jsonl.gz"))):
+                try:
+                    m = _FLUSSO_RX.search(os.path.basename(percorso))
+                    if not m:
+                        continue
+                    data_file = dt.date(*map(int, m.groups()))
+                    if data_file < taglio:
+                        continue
+                    caricati = _carica_nativa(
+                        con, percorso, "stage.flusso", _COLONNE_FLUSSO,
+                        dove="t IS NOT NULL")
+                    con.execute("CHECKPOINT stage")
+                    n += caricati
+                except Exception as e:               # noqa: BLE001
+                    log.warning("flusso: %s illeggibile (%s), salto", percorso, e)
+            con.execute("SET preserve_insertion_order = true")
+            con.execute("INSERT INTO flusso "
+                        "SELECT * FROM stage.flusso ORDER BY t, id")
             con.execute("CHECKPOINT")
-        except OSError as e:
-            log.warning("flusso: %s illeggibile (%s), salto", percorso, e)
+        finally:
+            con.execute("DETACH stage")
     return n
 
 
@@ -288,6 +313,24 @@ def _tabella_non_vuota(db_path: str, tabella: str) -> bool:
         con.close()
 
 
+def _sql_stringa(valore: str) -> str:
+    return "'" + valore.replace("'", "''") + "'"
+
+
+def _configura(con: duckdb.DuckDBPyConnection, db_path: str) -> None:
+    memoria = os.environ.get("AGG_MEMORIA", "3GB")
+    thread = int(os.environ.get("AGG_THREADS", "4"))
+    if thread < 1:
+        raise ValueError("AGG_THREADS deve essere almeno 1")
+    tmp = os.path.join(os.path.dirname(os.path.abspath(db_path)), "duckdb-tmp")
+    os.makedirs(tmp, exist_ok=True)
+    con.execute("SET memory_limit = " + _sql_stringa(memoria))
+    con.execute("SET preserve_insertion_order = false")
+    con.execute(f"SET threads = {thread}")
+    con.execute("SET temp_directory = " + _sql_stringa(tmp))
+    con.execute("SET TimeZone = 'UTC'")
+
+
 def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
                db_path: str | None = None, attesa_minuti: int = 60) -> dict:
     # dove finisce il db: l'argomento vince, poi l'ambiente, poi il
@@ -299,7 +342,7 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     # volume non e' montato, makedirs la creerebbe sul DISCO DI ROOT e li'
     # il builder scriverebbe 15 GB — esattamente lo scenario che il volume
     # doveva evitare. Si misura il mount, non si suppone.
-    cartella_dest = os.path.dirname(destinazione)
+    cartella_dest = os.path.dirname(os.path.abspath(destinazione))
     if cartella_dest.startswith("/mnt/") and not os.path.ismount(cartella_dest):
         raise SystemExit(f"il volume {cartella_dest} non e' montato: "
                          "non costruisco il db sul disco di root")
@@ -316,44 +359,35 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
     mancanti = [nome for nome, p in (("offerte-attive", f_offerte),
                                      ("aziende-segnali", f_aziende))
                 if p is None]
-    data_export = next((_DATA_RX.search(p).group(1)
-                        for p in (f_offerte, f_aziende) if p), None)
+    data_offerte = _DATA_RX.search(f_offerte).group(1) if f_offerte else None
+    data_aziende = _DATA_RX.search(f_aziende).group(1) if f_aziende else None
+    if data_offerte and data_aziende and data_offerte != data_aziende:
+        raise SystemExit(f"export non allineati: offerte {data_offerte}, "
+                         f"aziende {data_aziende} — non sostituisco il db live")
+    data_export = data_offerte or data_aziende
     if mancanti:
         log.warning("export mancanti: %s — costruisco comunque il db, "
                     "con le tabelle vuote e lo stato dichiarato", mancanti)
     con = duckdb.connect(tmp)
-    # Il tetto di RAM del builder, da ambiente: 2 GB sul server (il 23/09
-    # il kernel uccise il giro a 4,1 GB di RSS), 12 GB sull'N5 che ha la
-    # RAM. Oltre il tetto DuckDB riversa su disco, come deve essere.
-    # (07/10/2026: il blocco era DUPLICATO da un edit mio di stamattina —
-    # due SET a valori diversi, vinceva il secondo. Ora uno solo.)
-    con.execute("SET memory_limit = '" +
-                os.environ.get("AGG_MEMORIA", "2GB") + "'")
-    con.execute("SET preserve_insertion_order = false")
-    # i thread di default (uno per core) moltiplicano i buffer dei reader:
-    # sul box da 7 GB il picco deve stare sotto il tetto, non sfiorarlo
-    con.execute("SET threads = " + os.environ.get("AGG_THREADS", "4"))
+    # Un thread e 4 GB sono i limiti operativi: oltre il tetto il
+    # motore riversa nella directory temporanea accanto al DB. Le stesse
+    # impostazioni vanno riapplicate dopo la riapertura, che azzera il
+    # buffer fra il caricamento degli snapshot e quello del flusso.
+    _configura(con, tmp)
     _crea_tabelle(con)
     n_offerte = _carica_nativa(con, f_offerte, "offerte",
                                _COLONNE_OFFERTE) if f_offerte else 0
     n_aziende = _carica_nativa(con, f_aziende, "aziende",
                                _COLONNE_AZIENDE) if f_aziende else 0
-    # La memoria si svuota fra le due fasi (11/10/2026): il 10/10 la build
-    # e' morta con OutOfMemory caricando il flusso mentre 3,7 GB restavano
-    # occupati dalle offerte — il buffer manager era pieno e un blocco da
-    # 4 GiB non trovava posto. CHECKPOINT + riapertura sullo stesso .tmp:
-    # i dati restano (e' un file vero), il buffer riparte da zero.
     con.execute("CHECKPOINT")
     con.close()
     con = duckdb.connect(tmp)
-    con.execute("SET memory_limit = '" +
-                os.environ.get("AGG_MEMORIA", "2GB") + "'")
-    con.execute("SET preserve_insertion_order = false")
-    # i thread di default (uno per core) moltiplicano i buffer dei reader:
-    # sul box da 7 GB il picco deve stare sotto il tetto, non sfiorarlo
-    con.execute("SET threads = " + os.environ.get("AGG_THREADS", "4"))
-    n_flusso = _carica_flusso(con, cartella, flusso_giorni)
+    _configura(con, tmp)
+    n_flusso = _carica_flusso(con, cartella, flusso_giorni, tmp)
     manifest = _carica_copertura(con, cartella)
+    inizio_flusso = dt.datetime.combine(
+        dt.date.today() - dt.timedelta(days=flusso_giorni), dt.time.min,
+        tzinfo=dt.timezone.utc)
     meta = {
         "stato": "mancano gli export di oggi" if mancanti else "ok",
         "data_export": data_export or "",
@@ -361,6 +395,7 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
         "aziende": n_aziende,
         "flusso": n_flusso,
         "flusso_giorni": flusso_giorni,
+        "flusso_dal": inizio_flusso.isoformat(),
         # i path servono a /v1/exports/latest/{nome}: il download punta a
         # questi, non a un nome inventato dal client
         "file_offerte": f_offerte or "",

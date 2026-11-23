@@ -60,7 +60,7 @@ echo "── scrape"
 # lo schema si applica QUI, una volta a notte (non piu' a ogni invocazione
 # del runner: prendeva un lock esclusivo su ats_jobs ogni 30 secondi)
 "$PY" -m nivult.ats.runner --schema >> "$LOG_DIR/ats-nightly.log" 2>&1 && echo "   schema ok" || echo "   schema FALLITO"
-"$PY" -m nivult.ats.runner --thread 16 --limite 5000 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
+"$PY" -m nivult.ats.runner --thread 6 --limite 5000 >> "$LOG_DIR/ats-nightly.log" 2>&1 \
   && echo "   ok" || echo "   FALLITO (vedi log)"
 
 # ── 1b. Scoperta tenant dagli archivi (CC + Wayback, a fette) ───────

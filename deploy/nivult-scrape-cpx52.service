@@ -1,0 +1,13 @@
+[Unit]
+Description=Nivult - scrape delle piattaforme senza rate gate sulla CPX52
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nivult/engine
+ExecStart=/opt/nivult/engine/deploy/scrape-cpx52.sh
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -8,9 +8,9 @@ l'indice `ats_jobs_attive_posted_idx` le serve in millisecondi.
 
 La regola «l'API non tocca il Postgres di produzione» si evolve, non si
 abroga: nasceva contro le scansioni non indicizzate. Qui entra SOLO il
-ruolo `nivult_api_lettura` (SELECT su cinque tabelle, statement_timeout
-8s, connection limit 6), tutte le query sono per chiave o per indice, e
-i valori viaggiano parametrizzati. DuckDB continua a fare il suo:
+ruolo `nivult_api_lettura` (SELECT su sette tabelle, statement_timeout
+8s, connection limit 12; pool API massimo 4), tutte le query sono per
+chiave o per indice, e i valori viaggiano parametrizzati. DuckDB continua a fare il suo:
 export bulk, copertura, flusso — il colonnare vince li'.
 
 La risposta e' IDENTICA alla riga dell'export: stessa forma, stessi
@@ -24,8 +24,11 @@ import json
 import logging
 import os
 import threading
+import time
+from contextlib import contextmanager
 
 import psycopg
+import psycopg_pool
 from psycopg.rows import dict_row
 
 from nivult.ats.esporta import _skills_pulite
@@ -38,38 +41,90 @@ log = logging.getLogger("nivult.api_clienti.vivo")
 _DSN = os.environ.get("API_LETTURA_DSN", "")
 
 _con: psycopg.Connection | None = None
+_pool: psycopg_pool.ConnectionPool | None = None
 # RLock, MAI Lock: _bench_stipendi tiene il lock e chiama _conn() che lo
 # ripende — con un Lock semplice il primo stipendio stimato inchiodava
 # l'API per sempre (03/10/2026, trovato in banco live).
 _lock = threading.RLock()
 _bench: dict | None = None
+_bench_firma: tuple | None = None
+_bench_controllo = 0.0
+_BENCH_TTL_SECONDI = max(
+    0.0, float(os.environ.get("API_BENCH_TTL_SECONDI", "300")))
 
 
-def _conn() -> psycopg.Connection:
+def configura_pool(pool: psycopg_pool.ConnectionPool | None) -> None:
+    global _pool
+    _pool = pool
+
+
+@contextmanager
+def _conn():
     global _con
+    if _pool is not None:
+        with _pool.connection() as conn, conn.transaction():
+            conn.row_factory = dict_row
+            yield conn
+        return
     with _lock:
         if _con is None or _con.closed:
-            # autocommit: ogni statement e' una transazione a se' —
-            # niente lock tenuti fra una pagina e l'altra
             _con = psycopg.connect(_DSN, autocommit=True,
                                    row_factory=dict_row)
-        return _con
+        yield _con
+
+
+def _invalida_bench_stipendi() -> None:
+    global _bench, _bench_firma, _bench_controllo
+    with _lock:
+        _bench = None
+        _bench_firma = None
+        _bench_controllo = 0.0
+
+
+def _ricarica_bench(adesso: float) -> None:
+    global _bench, _bench_firma, _bench_controllo
+    b = {}
+    aggiornato = None
+    righe = 0
+    with _conn() as conn:
+        righe_bench = conn.execute(
+            "SELECT country, currency, family, seniority,"
+            " p25, p50, p75, n, aggiornato FROM stipendi_benchmark").fetchall()
+    for r in righe_bench:
+        b[(r["country"], r["family"], r["seniority"])] = (
+            r["currency"], r["p25"], r["p50"], r["p75"], r["n"])
+        if r["aggiornato"] is not None and (
+                aggiornato is None or r["aggiornato"] > aggiornato):
+            aggiornato = r["aggiornato"]
+        righe += 1
+    _bench = b
+    _bench_firma = (aggiornato, righe)
+    _bench_controllo = adesso
 
 
 def _bench_stipendi() -> dict:
-    """Il benchmark salari in memoria, come lo tiene esporta."""
-    global _bench
-    if _bench is None:
-        with _lock:
-            if _bench is None:
-                b = {}
-                for r in _conn().execute(
-                        "SELECT country, currency, family, seniority,"
-                        " p25, p50, p75, n FROM stipendi_benchmark"):
-                    b[(r["country"], r["family"], r["seniority"])] = (
-                        r["currency"], r["p25"], r["p50"], r["p75"], r["n"])
-                _bench = b
-    return _bench
+    """Il benchmark in cache, rivalidato al TTL e ricaricato se cambia."""
+    global _bench_controllo
+    with _lock:
+        adesso = time.monotonic()
+        if _bench is None:
+            _ricarica_bench(adesso)
+            return _bench
+        if adesso - _bench_controllo >= _BENCH_TTL_SECONDI:
+            try:
+                with _conn() as conn:
+                    r = conn.execute(
+                        "SELECT max(aggiornato) AS aggiornato,"
+                        " count(*) AS righe FROM stipendi_benchmark").fetchone()
+                firma = (r["aggiornato"], r["righe"])
+                if firma != _bench_firma:
+                    _ricarica_bench(adesso)
+                else:
+                    _bench_controllo = adesso
+            except Exception as e:                   # noqa: BLE001
+                _bench_controllo = adesso
+                log.warning("benchmark salari: uso la cache dopo errore: %s", e)
+        return _bench
 
 
 # la stessa estrazione della descrizione dell'export (esporta._DESCR),
@@ -82,6 +137,16 @@ _DESCR = ("coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', "
           "raw->>'descriptionBody', raw->>'text', "
           "raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v "
           "WHERE length(v) >= 80 LIMIT 1), '')")
+_SEARCH_DOC = ("to_tsvector('simple', j.title || ' ' || "
+               "COALESCE(NULLIF(j.raw->>'description', ''), "
+               "NULLIF(j.raw->>'content', ''), NULLIF(j.raw->>'descriptionHtml', ''), "
+               "NULLIF(j.raw->>'descriptionPlain', ''), NULLIF(j.raw->>'externalDescription', ''), "
+               "NULLIF(j.raw->>'jobDescription', ''), NULLIF(j.raw->>'job_description', ''), "
+               "NULLIF(j.raw->>'Job_Description', ''), NULLIF(j.raw->>'body', ''), "
+               "NULLIF(j.raw->>'content_html', ''), NULLIF(j.raw->>'description_html', ''), "
+               "NULLIF(j.raw->>'descriptionBody', ''), NULLIF(j.raw->>'text', ''), "
+               "NULLIF(j.raw->'_jobposting'->>'description', ''), "
+               "NULLIF(j.raw->>'ShortDescriptionStr', ''), ''))")
 
 
 def _dove(filtri: dict) -> tuple[str, dict]:
@@ -112,19 +177,31 @@ def _dove(filtri: dict) -> tuple[str, dict]:
             if isinstance(v, bool) else str(v)
         dove.append("j.remote = %(remote)s")
     if filtri.get("q"):
-        dove.append("j.title ILIKE %(q)s ESCAPE '\\'")
-        par["q"] = _like(str(filtri["q"]))
+        dove.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)")
+        par["q"] = str(filtri["q"])
     if filtri.get("technology"):
-        dove.append("EXISTS (SELECT 1 FROM tecnologie_v1 tv"
-                    "  WHERE tv.job_id = j.id"
-                    "    AND EXISTS (SELECT 1 FROM"
-                    "      jsonb_array_elements_text(tv.tecnologie) e(x)"
-                    "      WHERE lower(e.x) = lower(%(technology)s)))")
+        dove.append("tr.tecnologia = lower(%(technology)s)")
         par["technology"] = str(filtri["technology"])
     if filtri.get("dal"):
         dove.append("j.posted_at >= %(dal)s::timestamptz")
         par["dal"] = _norm_ts(filtri["dal"])
     return " AND ".join(dove), par
+
+
+def cerca_portale(filtri: dict, cursore: str | None,
+                  limite: int = 25) -> tuple[list[dict], str | None, int | None]:
+    """Ricerca full-text della /v1, senza un COUNT integrale costoso."""
+    filtri = filtri or {}
+    limite = max(1, min(int(limite or 25), 50))
+    righe, prossimo = offerte(filtri, cursore, limite)
+    return ([{"id": r["id"], "title": r["title"], "country": r.get("country"),
+              "city": r.get("city"), "seniority": r.get("seniority"),
+              "remote": r.get("remote"), "category": r.get("category"),
+              "posted_at": r.get("posted_at"),
+              "technologies": list(r.get("technologies") or []),
+              "ats": r.get("ats"), "company": r.get("company"),
+              "company_slug": r.get("company_slug")}
+             for r in righe], prossimo, None)
 
 
 def _riga_export(j: dict) -> dict:
@@ -163,7 +240,6 @@ def _riga_export(j: dict) -> dict:
         "first_seen": _iso(j["first_seen"]), "last_seen": _iso(j["last_seen"]),
         "description": pulito(j["description"]),
         "category": j["category"], "employment_type": j["employment_type"],
-        "contact_email": j["contact_email"],
         "languages_required": list(j["languages_required"] or []), **stima,
         "external_id": j["external_id"], "department": j["department"],
         "hours_type": j["orario"], "duration_type": j["durata"],
@@ -181,8 +257,8 @@ def _riga_export(j: dict) -> dict:
         "postal_code": j["postal_code"], "geo": geo,
         "applicants_count": j["applicants_count"],
         "is_easy_apply": True if j["is_easy_apply"] else None,
-        "recruiter": j["recruiter"],
         "job_sources": list(j["job_sources"] or []),
+        "updated_at": _iso(j.get("content_updated_at")),
     }
     return {k: v for k, v in riga.items() if v not in (None, [], "")}
 
@@ -194,30 +270,45 @@ _COLONNE = f"""
     j.skills, j.salary_min, j.salary_max, j.salary_currency, j.posted_at,
     COALESCE(j.created_at, j.posted_at, j.fetched_at) AS first_seen,
     j.fetched_at AS last_seen, {_DESCR} AS description, x.family AS category,
-    j.employment_type, j.contact_email, j.languages_required, j.external_id,
+    j.employment_type, j.languages_required, j.external_id,
     j.department, j.orario, j.durata, j.salary_period, j.salary_da,
     j.posted_at_estimated, t.tecnologie, sf.sintesi, sf.da AS sintesi_da,
     d.management_level, d.is_decision_maker, d.shift_schedule, d.work_hours,
     d.is_urgently_hiring, d.benefits, d.salary_text, d.valid_through,
     d.state, d.postal_code, d.latitude, d.longitude, d.geo_da,
-    d.applicants_count, d.is_easy_apply, d.recruiter, fo.job_sources
+    d.applicants_count, d.is_easy_apply, NULL AS job_sources,
+    j.content_updated_at
   FROM ats_jobs j
   LEFT JOIN ats_companies co ON co.platform_id = j.platform_id
                             AND co.slug = j.slug
   LEFT JOIN job_classifications x ON x.job_id = j.id
   LEFT JOIN tecnologie_v1 t ON t.job_id = j.id
   LEFT JOIN sintesi_finali sf ON sf.job_id = j.id
-  LEFT JOIN offerte_dettagli d ON d.job_id = j.id
-  LEFT JOIN LATERAL (
-       SELECT jsonb_agg(jsonb_build_object(
-                'id', k.id, 'ats', k.platform_id, 'company_slug', k.slug,
-                'url', k.url, 'posted_at', k.posted_at,
-                'status', CASE WHEN k.expired_at IS NULL
-                               THEN 'active' ELSE 'expired' END)
-                ORDER BY k.posted_at DESC NULLS LAST) AS job_sources
-         FROM ats_jobs k
-        WHERE j.duplicate_key IS NOT NULL
-          AND k.duplicate_key = j.duplicate_key AND k.id <> j.id) fo ON true"""
+  LEFT JOIN offerte_dettagli d ON d.job_id = j.id"""
+
+
+def _fonti_per_righe(ids: list[str]) -> dict[str, list]:
+    if not ids:
+        return {}
+    with _conn() as conn:
+        righe = conn.execute("""
+            WITH selezionate AS (
+              SELECT id, duplicate_key FROM ats_jobs
+               WHERE id = ANY(%(ids)s::uuid[]) AND duplicate_key IS NOT NULL
+            )
+            SELECT s.id AS selected_id,
+                   jsonb_agg(jsonb_build_object(
+                     'id', k.id, 'ats', k.platform_id, 'company_slug', k.slug,
+                     'url', k.url, 'posted_at', k.posted_at,
+                     'status', CASE WHEN k.expired_at IS NULL
+                                    THEN 'active' ELSE 'expired' END)
+                     ORDER BY k.posted_at DESC NULLS LAST) AS job_sources
+              FROM selezionate s
+              LEFT JOIN ats_jobs k ON k.duplicate_key = s.duplicate_key
+                                   AND k.id <> s.id
+             GROUP BY s.id
+        """, {"ids": ids}).fetchall()
+    return {str(r["selected_id"]): r["job_sources"] for r in righe}
 
 
 def offerte(filtri: dict, cursore: str | None,
@@ -225,26 +316,51 @@ def offerte(filtri: dict, cursore: str | None,
     """La pagina di offerte VIVE, per chiave: prima gli id via indice,
     poi le righe piene per quegli id — mai una scansione."""
     limite = max(1, min(int(limite or 50), 500))
-    dove, par = _dove(filtri)
+    con_tecnologia = bool(filtri.get("technology"))
+    testo_separato = bool(filtri.get("q")) and not con_tecnologia
+    data_pubblicazione = "tr.posted_at" if con_tecnologia else "j.posted_at"
+    sorgente = ("tecnologie_ricerca tr JOIN ats_jobs j ON j.id = tr.job_id"
+                if con_tecnologia else "ats_jobs j")
+    dove, par = _dove({**filtri, "q": None} if testo_separato else filtri)
     if cursore:
         ts, pid = _leggi_cursore(cursore)
         par["pid"] = pid
         if ts is None:
-            dove += (" AND j.posted_at IS NULL AND j.id > %(pid)s::uuid")
+            dove += f" AND {data_pubblicazione} IS NULL AND j.id > %(pid)s::uuid"
         else:
-            dove += (" AND (j.posted_at IS NULL"
-                     "  OR j.posted_at < %(pts)s::timestamptz"
-                     "  OR (j.posted_at = %(pts)s::timestamptz"
+            dove += (f" AND ({data_pubblicazione} IS NULL"
+                     f"  OR {data_pubblicazione} < %(pts)s::timestamptz"
+                     f"  OR ({data_pubblicazione} = %(pts)s::timestamptz"
                      "      AND j.id > %(pid)s::uuid))")
             par["pts"] = _norm_ts(ts)
-    # passo 1: la pagina di chiavi, sull'indice
-    chiavi = _conn().execute(
-        f"""SELECT j.id, j.posted_at
+    # Con una tecnologia si parte dall'indice normalizzato gia' ordinato:
+    # niente espansione JSONB e niente ordinamento di tutti i candidati.
+    selezione = f"""SELECT j.id, {data_pubblicazione} AS posted_at
+                      FROM {sorgente}
+                      LEFT JOIN job_classifications x ON x.job_id = j.id
+                     WHERE {dove}"""
+    if testo_separato:
+        paese = str(filtri.get("country") or "")
+        filtro_paese = "AND j.country = %(country)s" if paese else ""
+        selezione = f"""WITH matched AS MATERIALIZED (
+            SELECT j.id, j.posted_at, j.country, j.duplicate_key,
+                   j.created_at, j.fetched_at, j.expired_at
               FROM ats_jobs j
-              LEFT JOIN job_classifications x ON x.job_id = j.id
-             WHERE {dove}
-             ORDER BY j.posted_at DESC NULLS LAST, j.id
-             LIMIT {limite + 1}""", par).fetchall()
+             WHERE j.expired_at IS NULL {filtro_paese}
+               AND {_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)
+        )
+        SELECT j.id, j.posted_at FROM matched j
+          LEFT JOIN job_classifications x ON x.job_id = j.id
+         WHERE {dove}"""
+        par["q"] = str(filtri["q"])
+    elif filtri.get("q"):
+        selezione = f"""WITH matched AS MATERIALIZED ({selezione})
+                        SELECT id, posted_at FROM matched"""
+    with _conn() as conn:
+        chiavi = conn.execute(
+            f"""{selezione}
+                 ORDER BY posted_at DESC NULLS LAST, id
+                 LIMIT {limite + 1}""", par).fetchall()
     prossimo = None
     if len(chiavi) > limite:
         chiavi = chiavi[:limite]
@@ -253,9 +369,14 @@ def offerte(filtri: dict, cursore: str | None,
     if not chiavi:
         return [], prossimo
     # passo 2: le righe piene, per chiave primaria
-    righe = _conn().execute(
-        f"SELECT {_COLONNE} WHERE j.id = ANY(%(ids)s::uuid[])",
-        {"ids": [str(c["id"]) for c in chiavi]}).fetchall()
+    ids = [str(c["id"]) for c in chiavi]
+    with _conn() as conn:
+        righe = conn.execute(
+            f"SELECT {_COLONNE} WHERE j.id = ANY(%(ids)s::uuid[])",
+            {"ids": ids}).fetchall()
+    fonti = _fonti_per_righe(ids)
+    for r in righe:
+        r["job_sources"] = fonti.get(str(r["id"]))
     per_id = {str(r["id"]): r for r in righe}
     return ([_riga_export(per_id[str(c["id"])]) for c in chiavi
              if str(c["id"]) in per_id], prossimo)
@@ -264,9 +385,12 @@ def offerte(filtri: dict, cursore: str | None,
 def rivela_offerta(offerta_id: str) -> dict | None:
     """Il dettaglio, per chiave primaria: millisecondi, non 50 secondi."""
     try:
-        riga = _conn().execute(
-            f"SELECT {_COLONNE} WHERE j.id = %(id)s::uuid",
-            {"id": offerta_id}).fetchone()
+        with _conn() as conn:
+            riga = conn.execute(
+                f"SELECT {_COLONNE} WHERE j.id = %(id)s::uuid",
+                {"id": offerta_id}).fetchone()
     except Exception:                                # noqa: BLE001
         return None                                  # id malformato = 404
+    if riga:
+        riga["job_sources"] = _fonti_per_righe([offerta_id]).get(offerta_id)
     return _riga_export(riga) if riga else None

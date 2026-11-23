@@ -1,0 +1,5 @@
+services:
+  db:
+    mem_limit: 6g
+    memswap_limit: 6g
+    mem_swappiness: 0

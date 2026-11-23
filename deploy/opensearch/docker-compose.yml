@@ -1,0 +1,30 @@
+services:
+  opensearch:
+    image: opensearchproject/opensearch:3.10.0
+    container_name: nivult-opensearch
+    restart: unless-stopped
+    environment:
+      OPENSEARCH_JAVA_OPTS: "-Xms4g -Xmx4g"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    mem_limit: 10g
+    memswap_limit: 10g
+    mem_swappiness: 0
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - /opt/nivult/opensearch/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      - /opt/nivult/opensearch/data:/usr/share/opensearch/data
+      - /mnt/HC_Volume_106941692/opensearch-snapshots:/snapshots
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "3"
