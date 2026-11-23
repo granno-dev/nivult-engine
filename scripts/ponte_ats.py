@@ -36,7 +36,9 @@ def main() -> int:
     if a.dry_run:
         print("DRY RUN — non verrà scritto nulla")
 
-    with psycopg.connect(motore) as conn, psycopg.connect(ats) as conn_ats:
+    with psycopg.connect(motore, application_name="ponte-ats") as conn, \
+            psycopg.connect(ats, application_name="ponte-ats") as conn_ats:
+        conn_ats.autocommit = True
         r = importa(conn, conn_ats, giorni=a.giorni, dry_run=a.dry_run)
 
     print()

@@ -417,6 +417,7 @@ def importa(conn: psycopg.Connection, conn_ats: psycopg.Connection, *,
     r = Riepilogo()
     with conn.cursor() as cur, conn_ats.cursor() as cur_ats:
         clusters = _clusters_attivi(cur, solo_cluster)
+        conn.commit()
         if not clusters:
             return r
 
