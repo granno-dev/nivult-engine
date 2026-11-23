@@ -8,6 +8,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 LD_RX = re.compile(r'<script type="application/ld\+json">\s*(.*?)\s*</script>', re.DOTALL)
@@ -46,8 +47,13 @@ def main() -> int:
             failures.append(message)
 
     files = sorted((root / "ats").glob("*/index.html"))
-    check(bool(files), "nessuna pagina ATS trovata")
+    check(len(files) == 29, f"attese 29 pagine ATS, trovate {len(files)}")
     hub = (root / "ats/index.html").read_text(encoding="utf-8")
+    check(re.search(r"<title>[^<]+</title>", hub) is not None, "hub: title mancante")
+    check(re.search(r'<meta name="description" content="[^"]+">', hub) is not None,
+          "hub: description mancante")
+    check(re.search(r'<link rel="canonical" href="https://nivult\.com/ats/">', hub)
+          is not None, "hub: canonical")
     check(not re.search(r"(?<![\d,])1 companies\b", hub),
           "hub: plurale 1 companies")
     check(hub.count("1 public portal") == 3, "hub: attesi 3 public portal")
@@ -61,6 +67,10 @@ def main() -> int:
         canonical = f"https://nivult.com/ats/{slug}/"
         check(f'<link rel="canonical" href="{canonical}">' in text,
               f"{slug}: canonical")
+        check(re.search(r"<title>[^<]+</title>", text) is not None,
+              f"{slug}: title mancante")
+        check(re.search(r'<meta name="description" content="[^"]+">', text) is not None,
+              f"{slug}: description mancante")
         check("unknown ·" not in text and ">?? ·" not in text,
               f"{slug}: unknown nei Top countries")
         check("export-campione" not in text, f"{slug}: endpoint legacy")
@@ -124,6 +134,12 @@ def main() -> int:
           "homepage: sample companies mancante")
     check("65 ATS platforms within 77+ total employer and public sources" in homepage,
           "homepage: dicitura fonti non allineata")
+    check(re.search(r"<title>[^<]+</title>", homepage) is not None,
+          "homepage: title mancante")
+    check(re.search(r'<meta name="description" content="[^"]+">', homepage) is not None,
+          "homepage: description mancante")
+    check(re.search(r'<link rel="canonical" href="https://nivult\.com/">', homepage)
+          is not None, "homepage: canonical")
 
     sitemap = ET.parse(root / "sitemap-ats.xml")
     ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
@@ -134,9 +150,43 @@ def main() -> int:
     check("https://nivult.com/ats/bundesanstellung/" not in urls,
           "sitemap: vecchio slug Bundesagentur")
 
-    redirects = (root / "_redirects").read_text(encoding="utf-8")
-    check("/ats/bundesanstellung/* /ats/bundesagentur/ 301" in redirects,
-          "redirect Bundesagentur mancante")
+    indice = ET.parse(root / "sitemap.xml")
+    figlie = {node.text for node in indice.findall("s:sitemap/s:loc", ns)}
+    check(figlie == {"https://nivult.com/sitemap-sito.xml",
+                     "https://nivult.com/sitemap-ats.xml",
+                     "https://nivult.com/sitemap-jobboard.xml"},
+          "sitemap indice non allineata")
+
+    redirects = (root / "_redirects").read_text(encoding="utf-8").splitlines()
+    check(redirects == ["/ats/bundesanstellung /ats/bundesagentur/ 301",
+                        "/ats/bundesanstellung/* /ats/bundesagentur/ 301"],
+          "redirects: regole larghe, ordine errato o redirect inattesi")
+    check(len(redirects) <= 2000, "redirects: oltre il limite Cloudflare Pages")
+    check(not (ROOT / "functions").exists(), "Pages Functions possono interferire con /ats/*")
+
+    robots = (root / "robots.txt").read_text(encoding="utf-8")
+    check("Sitemap: https://nivult.com/sitemap.xml" in robots,
+          "robots: sitemap assente o dominio errato")
+    check("Disallow: /ats" not in robots, "robots: ATS escluso")
+
+    for file in root.rglob("*.html"):
+        text = file.read_text(encoding="utf-8")
+        check(not re.search(r"localhost|127\.0\.0\.1|mavult\.com|staging", text,
+                            re.IGNORECASE),
+              f"{file.relative_to(root)}: URL locale, staging o dominio errato")
+        for href in re.findall(r'href="([^"]+)"', text):
+            url = urlsplit(href)
+            if url.scheme or href.startswith(("#", "//", "mailto:", "tel:")):
+                continue
+            path = url.path
+            if not path.startswith("/") or path.endswith((".xml", ".json")):
+                continue
+            if path.startswith(("/v1/", "/api/")):
+                continue
+            candidate = root / path.lstrip("/")
+            check(candidate.exists() or candidate.with_suffix(".html").exists()
+                  or (candidate / "index.html").exists(),
+                  f"{file.relative_to(root)}: link rotto {href}")
 
     if failures:
         for failure in failures:
