@@ -15,7 +15,7 @@ l'inbox Zernio. Postgres e' la coda: un webhook perso non esiste.
 
 Regole identiche agli altri canali: etichetta della fonte sempre, mai un
 nome di ripiego sul datore, stipendio mostrato quando c'e'. E il collegamento
-lo inizia SEMPRE l'utente scrivendoci per primo (wa.me/<numero>?text=NIVULT
+lo inizia SEMPRE l'utente scrivendoci per primo (wa.me/<numero>?text=BRAND
 <gettone>): la prova di possesso non cambia motore.
 
 Configurazione: WUZAPI_URL (http://100.119.200.7:8078), WUZAPI_TOKEN (il
@@ -33,6 +33,7 @@ from urllib.parse import quote
 
 import httpx
 
+from nivult.config import product_name
 from nivult.delivery.email import _data, etichetta_link, stipendio
 from nivult.delivery.testi import t
 
@@ -70,12 +71,17 @@ def numero_bot() -> str:
     return os.environ.get("WUZAPI_NUMBER", "390000000000")
 
 
+def _parola_collegamento() -> str:
+    return re.sub(r"[^A-Z0-9]+", "", product_name().upper()) or "NIVULT"
+
+
 def link_collegamento(gettone: str) -> str:
     """Il link wa.me che apre la chat col nostro numero, testo precompilato.
     Su telefono si tocca; su computer apre WhatsApp Web. Il QR lo disegna il
     sito dal link, come per Telegram.
     """
-    return f"https://wa.me/{numero_bot()}?text={quote(f'NIVULT {gettone}')}"
+    testo = f"{_parola_collegamento()} {gettone}"
+    return f"https://wa.me/{numero_bot()}?text={quote(testo)}"
 
 
 def _http(metodo: str, percorso: str, **kw) -> dict:
@@ -114,7 +120,7 @@ def _db():
 
 
 def cerca_collegamenti() -> list[dict]:
-    """I messaggi «NIVULT <gettone>» arrivati al nostro numero.
+    """I messaggi col gettone arrivati al nostro numero.
 
     -> [{gettone_hash, telefono, conversazione}] per ogni gettone trovato.
 
@@ -129,8 +135,9 @@ def cerca_collegamenti() -> list[dict]:
         righe = conn.execute(
             "SELECT telefono, testo FROM wa_inbox WHERE NOT da_noi "
             "ORDER BY ricevuto_at DESC LIMIT 200").fetchall()
+    pattern = rf"{re.escape(_parola_collegamento())}\s+([A-Za-z0-9_-]{{20,64}})"
     for telefono, testo in righe:
-        match = re.search(r"NIVULT\s+([A-Za-z0-9_-]{20,64})", testo or "")
+        match = re.search(pattern, testo or "")
         if match:
             trovati.append({
                 "gettone_hash": hashlib.sha256(
@@ -190,17 +197,17 @@ def _compila(items: list[dict], locale: str, nome: str | None) -> list[str]:
     oggi = _data(datetime.now(timezone.utc), locale)
     primo = ((nome or "").strip().split() or [x["saluto_fallback"]])[0]
     testa = (f"{x['saluto']} {primo},\n\n"
-             f"*Nivult* — {x['digest_del'].format(data=oggi)}")
+             f"*{product_name()}* — {x['digest_del'].format(data=oggi)}")
 
     blocchi: list[str] = []
     for it in items:
         meta = [m for m in [
             ", ".join(it.get("cities") or []) or None,
             stipendio(it.get("salary"), locale) or None,
-            # date_posted puo' mancare: senza data la riga «pubblicata»
-            # non si scrive proprio (un None qui mandava in crisi _data)
+            # Una stima o un fallback non e' una data di pubblicazione.
             (x["pubblicata"].format(data=_data(it["date_posted"], locale))
-             if it.get("date_posted") else None),
+             if it.get("date_posted_declared") is True and it.get("date_posted")
+             else None),
             (x["agenzia"] if it.get("employer_kind") == "staffing_agency"
              else None),
         ] if m]

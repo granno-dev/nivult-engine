@@ -70,12 +70,14 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import psycopg
 from psycopg.types.json import Json
 
 from nivult.config import database_url
 from nivult.ingestion.models import RawJob
+from nivult.ats.geografia import paese_da_annuncio
 from nivult.ingestion.store import link_to_cluster, record_usage, upsert_job
 from nivult.ingestion.urls import canonicalize, normalize_title
 
@@ -172,12 +174,22 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
         """
         SELECT j.id::text, j.title, j.url, j.country, j.city,
                COALESCE(j.posted_at, j.fetched_at) AS posted_at,
-               j.salary_min, j.salary_max, j.salary_currency, j.raw,
+               (j.posted_at IS NOT NULL
+                AND NOT COALESCE(j.posted_at_estimated, false)) AS date_posted_declared,
+               j.salary_min, j.salary_max, j.salary_currency, j.salary_period, j.salary_da, j.raw,
                j.seniority, j.remote, j.skills, j.lang,
+               od.valid_through,
                c.family,
                COALESCE(co.company_name,
                         j.raw->'company'->>'name',
-                        j.raw->>'Company_Name')
+                        j.raw->>'Company_Name'),
+               -- Il dominio VERO dell'azienda e il suo logo curato: senza,
+               -- domain_derived puntava alla lavagnetta ATS (helplavoro.it)
+               -- e le card mostravano il favicon della piattaforma, non il
+               -- marchio del datore. brandfetch e' morto (CDN 403): mai.
+               co.site_domain,
+               CASE WHEN co.logo_url LIKE '%%cdn.brandfetch.io%%' THEN NULL
+                    ELSE co.logo_url END
         FROM ats_jobs j
         JOIN job_classifications c ON c.job_id = j.id
                                   AND coalesce(c.confidence, 0) >= 0.5
@@ -185,6 +197,7 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
              ON want.family = c.family AND want.country = j.country
         LEFT JOIN ats_companies co
                ON co.platform_id = j.platform_id AND co.slug = j.slug
+        LEFT JOIN offerte_dettagli od ON od.job_id = j.id
         WHERE j.expired_at IS NULL
           -- La data di pubblicazione ha un RIPIEGO: quando la pagina
           -- carriera non la espone (misurato: 45 offerte HR/Italia su 94,
@@ -202,9 +215,10 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
         (famiglie, paesi, soglia),
     )
     campi = ["id", "title", "url", "country", "city", "posted_at",
-             "salary_min", "salary_max", "salary_currency", "raw",
-             "seniority", "remote", "skills", "lang",
-             "family", "company_name"]
+             "date_posted_declared",
+             "salary_min", "salary_max", "salary_currency", "salary_period", "salary_da", "raw",
+             "seniority", "remote", "skills", "lang", "valid_through",
+             "family", "company_name", "site_domain", "company_logo"]
     return [dict(zip(campi, r)) for r in cur_ats.fetchall()]
 
 
@@ -257,21 +271,30 @@ def _come_rawjob(o: dict) -> RawJob:
             "senior": "5-10", "lead": "5-10", "head": "10+"}
     _REM = {"remote": "Remote Solely", "hybrid": "Hybrid",
             "onsite": "On-site"}
-    salario = None
-    if o["salary_min"] is not None or o["salary_max"] is not None:
-        # Le colonne numeric arrivano come Decimal, che Json non serializza:
-        # senza il float() il ponte INTERO moriva a ogni giro (visto il
-        # 04/09 appena i salari si sono popolati).
-        salario = {"min_value": float(o["salary_min"])
-                   if o["salary_min"] is not None else None,
-                   "max_value": float(o["salary_max"])
-                   if o["salary_max"] is not None else None,
-                   "currency": o["salary_currency"]}
+    canonica = canonicalize(o["url"])
+    valid_through = o.get("valid_through")
+    if valid_through is not None and not isinstance(valid_through, datetime):
+        valid_through = datetime.combine(
+            valid_through, datetime.min.time(), tzinfo=timezone.utc)
+    elif isinstance(valid_through, datetime) and valid_through.tzinfo is None:
+        valid_through = valid_through.replace(tzinfo=timezone.utc)
+    descrizione = str((o.get("raw") or {}).get("description") or "")
+    paese = paese_da_annuncio(descrizione) or o["country"]
     return RawJob(
         source=SORGENTE,
         source_job_id=o["id"],
         url=o["url"],
-        canonical_url=canonicalize(o["url"]),
+        canonical_url=canonica,
+        # Il dominio del datore: prima quello vero dell'azienda (scheda ATS),
+        # poi l'HOST COMPLETO dell'URL — non il dominio registrabile: sui
+        # tenant ATS (spacework.intervieweb.it) il sottodominio E' l'azienda,
+        # e spogliarlo farebbe collidere i loghi di aziende diverse.
+        domain_derived=(o.get("site_domain")
+                        or (urlparse(canonica).hostname
+                            if canonica else None)),
+        # Il logo curato nell'archivio aziende: primo anello della catena
+        # di /logo, qualita' vera invece del favicon di ripiego.
+        organization_logo=o.get("company_logo") or None,
         link_kind=LINK_KIND,
         title=o["title"],
         title_normalized=normalize_title(o["title"]),
@@ -280,9 +303,11 @@ def _come_rawjob(o: dict) -> RawJob:
         # un segnaposto spacciato per azienda è una bugia all'utente.
         organization=o["company_name"] or None,
         date_posted=o["posted_at"],
+        date_posted_declared=o.get("date_posted_declared"),
+        date_valid_through=valid_through,
         raw={"ats": o["raw"]} if o["raw"] is not None else {},
         cities=[o["city"]] if o["city"] else [],
-        countries=[o["country"]],
+        countries=[paese],
         # La famiglia viaggia con l'offerta, come su Fantastic: è ciò che
         # il funnel legge per sapere di quale scaffale fa parte.
         ai_taxonomies_a=[o["family"]],
@@ -293,7 +318,13 @@ def _come_rawjob(o: dict) -> RawJob:
         ai_job_language=o.get("lang"),
         ai_work_arrangement=_REM.get(o.get("remote") or ""),
         ai_key_skills=list(o.get("skills") or []),
-        salary=salario,
+        # Le colonne numeric arrivano come Decimal; il contratto comune crea
+        # il MonetaryAmount canonico una sola volta, insieme a questi campi.
+        salary_min=float(o["salary_min"]) if o["salary_min"] is not None else None,
+        salary_max=float(o["salary_max"]) if o["salary_max"] is not None else None,
+        salary_currency=o["salary_currency"],
+        salary_period=o["salary_period"],
+        salary_da=o["salary_da"],
     )
 
 

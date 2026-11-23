@@ -1,8 +1,8 @@
 {
   "actorSpecification": 1,
   "name": "greenhouse-jobs-dataset",
-  "title": "Greenhouse Jobs Dataset — Global, Daily, Source-Verified",
-  "description": "Live job postings from every Greenhouse board on Earth, refreshed daily. Filter by country, seniority, workplace, keyword. Every field carries its source.",
+  "title": "Greenhouse Jobs API — Global ATS Dataset",
+  "description": "Export Greenhouse jobs worldwide from a daily-refreshed index of public job boards. Search by keyword and filter by country, technology, seniority, workplace, or posting date.",
   "version": "0.1",
   "buildTag": "latest",
   "envVars": [
@@ -21,8 +21,8 @@
   "pricingInfos": [
     {
       "pricingModel": "PRICE_PER_DATASET_ITEM",
-      "pricePerItemUsd": 0.003,
-      "reasonForChange": "Lancio a $3/1.000: nel campo dei seri (2,70-5$), mai il piu' caro senza recensioni"
+      "pricePerItemUsd": 0.002,
+      "reasonForChange": "Riduzione a $2/1.000 righe, allineata al dataset Greenhouse pre-indicizzato concorrente"
     }
   ],
   "dockerfile": "../Dockerfile",

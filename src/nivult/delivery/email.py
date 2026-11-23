@@ -1,4 +1,4 @@
-"""Consegna via email: SMTP da variabili d'ambiente, template sobrio.
+"""Consegna via email: Microsoft Graph se configurato, SMTP come ripiego.
 
 Le regole di trasparenza del digest sono decisioni di prodotto, non dettagli:
 
@@ -8,9 +8,13 @@ Le regole di trasparenza del digest sono decisioni di prodotto, non dettagli:
     l'etichetta «datore non dichiarato»;
   - lo stipendio si MOSTRA quando c'è, non si filtra mai.
 
-Configurazione: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM.
-Senza SMTP_HOST la consegna vera rifiuta di partire — meglio un errore esplicito
-che una email che sembra inviata.
+Provider (20/10/2026): se MS_MAIL_FROM e' valorizzato la spedizione va a
+Microsoft 365 via Graph sendMail (nivult.msgraph, app registration del
+booking, permesso Mail.Send) — Brevo/SMTP va in pensione e la basic auth
+SMTP muore a dicembre 2026. Altrimenti SMTP come sempre, da SMTP_HOST,
+SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM. Senza NESSUNO dei due la
+consegna vera rifiuta di partire — meglio un errore esplicito che una
+email che sembra inviata.
 
     python -m nivult.delivery.email --anteprima <digest_id>   # solo compilazione
 """
@@ -26,7 +30,8 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import make_msgid
 
-from nivult.config import load_dotenv
+from nivult.config import load_dotenv, product_name, site_url, support_email
+from nivult import msgraph
 from nivult.delivery.testi import mesi, t
 
 FONTI = {"france_travail": "France Travail",
@@ -105,7 +110,9 @@ def compila(items: list[dict], locale: str = "en") -> tuple[str, str, str]:
         meta = [m for m in [
             ", ".join(it.get("cities") or []) or None,
             stipendio(it.get("salary"), locale) or None,
-            x["pubblicata"].format(data=_data(it["date_posted"], locale)),
+            (x["pubblicata"].format(data=_data(it["date_posted"], locale))
+             if it.get("date_posted_declared") is True and it.get("date_posted")
+             else None),
             (x["agenzia"] if it.get("employer_kind") == "staffing_agency"
              else None),
         ] if m]
@@ -154,7 +161,7 @@ def compila(items: list[dict], locale: str = "en") -> tuple[str, str, str]:
             f'</td></tr></table>'
             f'</td></tr></table></td></tr>')
 
-    testo = (f"Nivult — {x['digest_del'].format(data=oggi)}\n\n"
+    testo = (f"{product_name()} — {x['digest_del'].format(data=oggi)}\n\n"
              + "\n".join(righe_testo)
              + "\n" + x["piede_testo"] + "\n")
 
@@ -175,7 +182,7 @@ def compila(items: list[dict], locale: str = "en") -> tuple[str, str, str]:
         f'<table role="presentation" width="100%" cellpadding="0" '
         f'cellspacing="0"><tr>'
         f'<td style="font-size:19px;font-weight:700;color:#0f172a;">'
-        f'Nivult<span style="color:#3355ff;">.</span></td>'
+        f'{_esc(product_name())}<span style="color:#3355ff;">.</span></td>'
         f'<td align="right" style="font-size:13px;color:#6b7280;">'
         f'{_esc(x["digest_del"].format(data=oggi))}</td>'
         f'</tr></table></td></tr>'
@@ -192,29 +199,51 @@ def _esc(s: str) -> str:
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
+def _via_graph() -> bool:
+    """La posta parte da Microsoft 365? MS_MAIL_FROM e' l'interruttore.
+
+    Valorizzata -> Graph sendMail (l'unica via con futuro: la basic auth
+    SMTP muore a dicembre 2026). Assente -> SMTP/Brevo, il ripiego."""
+    return bool(os.environ.get("MS_MAIL_FROM", "").strip())
+
+
 def configurato() -> bool:
-    return bool(os.environ.get("SMTP_HOST") and os.environ.get("SMTP_FROM"))
+    return _via_graph() or bool(os.environ.get("SMTP_HOST")
+                                and os.environ.get("SMTP_FROM"))
 
 
 def invia(destinatario: str, items: list[dict], locale: str = "en") -> str:
-    """Spedisce un digest. Ritorna il Message-ID per digests.provider_message_id."""
+    """Spedisce un digest. Ritorna il Message-ID per digests.provider_message_id
+    — con Graph e' "" (sendMail non rende un id): la colonna e' nullable e
+    "" resta distinguibile dal NULL di «nessun canale email coinvolto»."""
     oggetto, testo, html = compila(items, locale)
     return invia_generica(destinatario, oggetto, testo, html)
 
 
 def invia_generica(destinatario: str, oggetto: str, testo: str, html: str) -> str:
     """Spedisce una qualsiasi email transazionale: digest, magic link, allarmi."""
+    if _via_graph():
+        # Graph manda il solo corpo HTML: l'alternativa in testo puro non ha
+        # un posto nel payload sendMail. I client che contano (Outlook,
+        # Gmail, Apple Mail) renderizzano l'HTML; il `testo` resta per il
+        # ramo SMTP e per l'anteprima su file.
+        msgraph.invia_mail(destinatario, oggetto, html)
+        return ""
     if not configurato():
-        raise RuntimeError("SMTP non configurato: servono SMTP_HOST e SMTP_FROM")
+        raise RuntimeError("posta non configurata: serve MS_MAIL_FROM "
+                           "(Graph) oppure SMTP_HOST e SMTP_FROM")
+    from urllib.parse import urlsplit
+
     msg = EmailMessage()
     msg["Subject"] = oggetto
     msg["From"] = os.environ["SMTP_FROM"]
     msg["To"] = destinatario
-    msg["Message-ID"] = make_msgid(domain="nivult.com")
+    dominio = urlsplit(site_url()).hostname or "nivult.com"
+    msg["Message-ID"] = make_msgid(domain=dominio)
     # Gmail e Yahoo lo chiedono ai sender ricorrenti, e senza si finisce in
     # spam proprio col prodotto principale. Il mailto basta al requisito
     # finché non esiste una rotta di disiscrizione a un clic.
-    msg["List-Unsubscribe"] = "<mailto:hello@nivult.com?subject=unsubscribe>"
+    msg["List-Unsubscribe"] = f"<mailto:{support_email()}?subject=unsubscribe>"
     msg.set_content(testo)
     msg.add_alternative(html, subtype="html")
 

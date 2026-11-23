@@ -58,17 +58,16 @@ _PERIODI = {
 def aggiorna(dsn: str) -> dict:
     with psycopg.connect(dsn, autocommit=True) as c:
         if _tabella_manca(c, "stipendi_benchmark"):
-            pass  # si crea sotto
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS stipendi_benchmark (
-                country   text NOT NULL,
-                currency  text NOT NULL,
-                family    text NOT NULL,
-                seniority text NOT NULL DEFAULT '',
-                p25 int NOT NULL, p50 int NOT NULL, p75 int NOT NULL,
-                n int NOT NULL,
-                aggiornato timestamptz NOT NULL DEFAULT now(),
-                PRIMARY KEY (country, currency, family, seniority))""")
+            c.execute("""
+                CREATE TABLE stipendi_benchmark (
+                    country   text NOT NULL,
+                    currency  text NOT NULL,
+                    family    text NOT NULL,
+                    seniority text NOT NULL DEFAULT '',
+                    p25 int NOT NULL, p50 int NOT NULL, p75 int NOT NULL,
+                    n int NOT NULL,
+                    aggiornato timestamptz NOT NULL DEFAULT now(),
+                    PRIMARY KEY (country, currency, family, seniority))""")
         casi = " ".join(
             f"WHEN j.salary_period = '{p}' THEN j.salary_min * {f}"
             for p, (f, _, _) in _PERIODI.items())
@@ -92,7 +91,11 @@ def aggiorna(dsn: str) -> dict:
               JOIN job_classifications x ON x.job_id = j.id
              GROUP BY 1, 2, 3, 4
             HAVING count(*) >= {{min_n}}"""
-        c.execute("TRUNCATE stipendi_benchmark")
+        c.execute("SET lock_timeout = '2s'")
+        try:
+            c.execute("TRUNCATE stipendi_benchmark")
+        finally:
+            c.execute("RESET lock_timeout")
         n_tot = 0
         # due livelli: con seniority (quando c'e') e senza (ripiego '')
         # PRIMA il pool ('' = tutte le seniority insieme), POI le celle

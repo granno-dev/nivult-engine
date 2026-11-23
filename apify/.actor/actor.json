@@ -1,8 +1,8 @@
 {
   "actorSpecification": 1,
   "name": "global-job-postings",
-  "title": "Global Job Postings — live ATS index",
-  "description": "Live job postings and enriched employer records, read directly from the career systems of tens of thousands of companies. Filter by country, technology, seniority, workplace. Every field carries its source.",
+  "title": "Global Job Postings API — ATS Dataset",
+  "description": "Search a daily-refreshed index of global job postings from 65 ATS platforms. Filter by country, technology, seniority, workplace, keyword, or date, and export job or company records.",
   "version": "0.1",
   "buildTag": "latest",
   "envVars": [

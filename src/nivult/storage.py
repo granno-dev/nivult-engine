@@ -1,9 +1,9 @@
-"""Object storage S3 per i CV cifrati: byte opachi, dentro e fuori.
+"""Object storage S3 per CV e documenti cifrati: sempre byte opachi.
 
 Il bucket è di Hetzner (stesso datacenter del database): l'endpoint è
-compatibile S3 e si parla con boto3. Le chiavi degli oggetti sono
-user_cvs.storage_key; la cancellazione GDPR raccoglie quelle chiavi prima di
-cancellare le righe, e le rimuove da qui.
+compatibile S3 e si parla con boto3. Le chiavi degli oggetti stanno in
+user_cvs.storage_key o match_documents.storage_key; la cancellazione GDPR le
+raccoglie prima di cancellare le righe, e le rimuove da qui.
 """
 
 from __future__ import annotations

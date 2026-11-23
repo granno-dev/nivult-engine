@@ -37,7 +37,7 @@ volta sola.
 ## Verifica rapida (dopo il deploy)
 
 ```bash
-ssh root@37.27.36.85
+ssh root@37.27.158.164
 cd /opt/nivult/engine && .venv/bin/python - <<'EOF'
 from nivult.config import load_dotenv
 load_dotenv()

@@ -28,8 +28,9 @@ import math
 import time
 
 import torch
-from transformers import (AutoModelForCausalLM, AutoModelForSequenceClassification,
-                          AutoTokenizer)
+from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer
+
+from nivult.matching.retrieval import prompt_reranker
 
 ISTRUZIONE = ("You are an expert recruiter judging whether THIS job posting "
               "deserves THIS candidate's time: could they do it, and would it "
@@ -88,6 +89,29 @@ def auc(positivi: list[bool], punteggi: list[float]) -> float:
     return (somma - pos * (pos - 1) / 2) / (pos * neg)
 
 
+class MiniLM:
+    nome = "multilingual-MiniLMv2-L6-mnli-xnli"
+
+    def __init__(self):
+        nome = "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli"
+        self.tok = AutoTokenizer.from_pretrained(nome)
+        self.mod = AutoModelForSequenceClassification.from_pretrained(
+            nome, dtype=torch.float32)
+        self.mod.eval()
+
+    @torch.no_grad()
+    def punteggi(self, coppie: list[tuple[str, str]], batch: int = 16) -> list[float]:
+        out = []
+        for i in range(0, len(coppie), batch):
+            lotto = coppie[i:i + batch]
+            enc = self.tok([q for q, _ in lotto], [d for _, d in lotto],
+                           padding=True, truncation=True, max_length=512,
+                           return_tensors="pt")
+            logit = self.mod(**enc).logits
+            out += (logit[:, 0] - logit[:, 2]).float().tolist()
+        return out
+
+
 class BgeM3:
     nome = "bge-reranker-v2-m3"
 
@@ -111,17 +135,18 @@ class BgeM3:
 
 class Qwen3:
     """La scheda del modello: giudizio yes/no, il punteggio e' la
-    probabilita' di "yes". Lo 0.6B e' un LM causale, non un classificatore."""
+    probabilita' di "yes". E' un LM causale, non un classificatore."""
     nome = "Qwen3-Reranker-0.6B"
     SISTEMA = ("Judge whether the Document meets the requirements based on "
                "the Query and the Instruct provided. Note that the answer "
                "can only be \"yes\" or \"no\".")
 
-    def __init__(self):
-        self.tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-Reranker-0.6B",
-                                                 padding_side="left")
-        self.mod = AutoModelForCausalLM.from_pretrained(
-            "Qwen/Qwen3-Reranker-0.6B", dtype=torch.float32)
+    def __init__(self, max_length: int = 1024, model_name: str = "Qwen/Qwen3-Reranker-0.6B",
+                 dtype=torch.float32):
+        self.max_length = max_length
+        self.nome = model_name
+        self.tok = AutoTokenizer.from_pretrained(model_name, padding_side="left")
+        self.mod = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype)
         self.mod.eval()
         self.no = self.tok.encode("no", add_special_tokens=False)[0]
         self.yes = self.tok.encode("yes", add_special_tokens=False)[0]
@@ -131,15 +156,10 @@ class Qwen3:
         out = []
         for i in range(0, len(coppie), batch):
             lotto = coppie[i:i + batch]
-            testi = []
-            for q, d in lotto:
-                msg = [{"role": "system", "content": self.SISTEMA},
-                       {"role": "user", "content":
-                        f"<Instruct>: {ISTRUZIONE}\n<Query>: {q}\n<Document>: {d}"}]
-                testi.append(self.tok.apply_chat_template(
-                    msg, tokenize=False, add_generation_prompt=True))
+            testi = [prompt_reranker(self.SISTEMA, ISTRUZIONE, q, d)
+                     for q, d in lotto]
             enc = self.tok(testi, padding=True, truncation=True,
-                           max_length=1024, return_tensors="pt")
+                           max_length=self.max_length, return_tensors="pt")
             logit = self.mod(**enc).logits[:, -1, :]
             # logit diff, non softmax: la probabilita' satura a ~1 su tutto
             # (zero-shot, 11/10/2026) e la scala diventa inutilizzabile;

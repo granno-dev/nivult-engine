@@ -6,11 +6,13 @@ una mail con un bottone: SOLO al click l'evento Teams nasce sul
 calendario di Giuseppe via Microsoft Graph (msgraph.py). Il calendario
 resta pulito per costruzione, non per fiducia nell'antispam.
 
-Anti-abuso: honeypot, max 3 prenotazioni in attesa per email, max 10 al
-giorno per IP. Il POST risponde sempre 200: non rivela se un indirizzo
-e' gia' nel sistema.
+Anti-abuso: 2 richieste/secondo per IP (burst 5), honeypot, max 3
+prenotazioni in attesa per email, max 10 al giorno per IP. Il POST risponde
+200 anche ai controlli anti-abuso storici: non rivela se un indirizzo e'
+gia' nel sistema.
 
-Le mail partono da delivery.email.invia_generica (SMTP_*), i WhatsApp
+Le mail partono da delivery.email.invia_generica (Graph se MS_MAIL_FROM
+e' valorizzata, altrimenti SMTP_*), i WhatsApp
 dal numero wuzapi SOLO se il lead ha lasciato il telefono. Le funzioni
 di invio sono a livello modulo perche' le riusa scripts/booking_reminder.py.
 """
@@ -32,6 +34,7 @@ from nivult import msgraph
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import email as email_mod
 from nivult.delivery import whatsapp as wa_mod
+from nivult.rate_limit import RateLimiter
 
 # Qui si leggono SITE_URL e simili a import-time: il .env va caricato PRIMA,
 # perche' in app.py load_dotenv() corre dopo gli import dei moduli.
@@ -46,6 +49,7 @@ PENDING_BLOCCA_H = 24                 # una pending piu' vecchia non tiene lo sl
 
 SITO = os.environ.get("SITE_URL", "https://nivult.com").rstrip("/")
 LOGO_URL = f"{SITO}/brand/nivult-email.png"
+_rate_limiter = RateLimiter()
 
 
 class Prenotazione(BaseModel):
@@ -213,15 +217,20 @@ def _slot_giorno(conn, giorno) -> list[datetime]:
 
 
 def _ip(request: Request) -> str | None:
-    """Cloudflare sta davanti: l'IP vero e' nel suo header. Se non si
-    legge come IP (test locali, proxy strani) resta None: il limite
-    per IP degrada in silenzio, quello per email resta."""
+    """Cloudflare sta davanti: l'IP vero e' nel suo header."""
     grezzo = request.headers.get("CF-Connecting-IP") \
         or (request.client.host if request.client else "")
     try:
         return str(ipaddress.ip_address(grezzo))
     except ValueError:
         return None
+
+
+def _rate_gate(request: Request) -> None:
+    ammesso, retry = _rate_limiter.allow(_ip(request) or "unknown", 2, 5)
+    if not ammesso:
+        raise HTTPException(429, "rate limit exceeded: 2 requests/second (burst 5)",
+                            headers={"Retry-After": str(retry)})
 
 
 def _url_api(percorso: str) -> str:
@@ -232,7 +241,8 @@ def registra(app) -> None:
     """Attacca le rotte booking all'app: chiamata da create_app()."""
 
     @app.get("/booking/slots")
-    def booking_slots(day: str):
+    def booking_slots(day: str, request: Request):
+        _rate_gate(request)
         try:
             giorno = datetime.strptime(day, "%Y-%m-%d").date()
         except ValueError:
@@ -243,6 +253,7 @@ def registra(app) -> None:
 
     @app.post("/booking")
     def booking_nuova(p: Prenotazione, request: Request):
+        _rate_gate(request)
         if p.sito:                              # honeypot: bot, si finge ok
             return {"ok": True}
         inizio = p.starts_at.astimezone(timezone.utc)

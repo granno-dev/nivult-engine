@@ -19,12 +19,14 @@ log = logging.getLogger("nivult.ingestion.store")
 _COLUMNS = (
     "source", "source_job_id", "url", "canonical_url", "link_kind",
     "domain_derived", "org_linkedin_slug", "title", "title_normalized",
-    "organization", "date_posted", "cities", "countries", "locations",
+    "organization", "date_posted", "date_posted_declared",
+    "cities", "countries", "locations",
     "ai_job_language", "ai_visa_sponsorship", "ai_work_arrangement",
     "ai_experience_level", "ai_employment_type", "ai_working_hours",
     "ai_key_skills", "ai_keywords", "ai_taxonomies_a",
     "ai_requirements_summary", "ai_core_responsibilities",
-    "salary", "date_valid_through", "ai_education", "organization_logo",
+    "salary", "salary_min", "salary_max", "salary_currency", "salary_period", "salary_da",
+    "date_valid_through", "ai_education", "organization_logo",
     "ai_work_arrangement_office_days",
     "org_size", "org_headcount", "org_industry", "org_logo_permalink",
     "employer_agency_declared",
@@ -55,6 +57,18 @@ def _values(job: RawJob) -> list:
             for c in _COLUMNS]
 
 
+_SALARY_COLUMNS = {
+    "salary", "salary_min", "salary_max", "salary_currency",
+    "salary_period", "salary_da",
+}
+
+
+def _mutable_for(job: RawJob) -> tuple[str, ...]:
+    if job.salary_min is None and job.salary_max is None:
+        return tuple(c for c in _MUTABLE if c not in _SALARY_COLUMNS)
+    return _MUTABLE
+
+
 def upsert_job(cur: psycopg.Cursor, job: RawJob) -> tuple[str, bool]:
     """Inserisce o aggiorna. Ritorna (job_id, è_nuova).
 
@@ -63,9 +77,11 @@ def upsert_job(cur: psycopg.Cursor, job: RawJob) -> tuple[str, bool]:
     della fonte: se l'offerta è già nostra la si aggiorna, anche se nel frattempo
     ha cambiato URL. Solo se non la conosciamo si tenta l'INSERT, dove il
     conflitto su canonical_url significa che la stessa offerta è già arrivata da
-    un'altra fonte.
+    un'altra fonte. Il salario è un gruppo atomico: assente non cancella, una
+    dichiarazione nuova sostituisce tutti i campi senza mescolare gli estremi.
     """
     vals = _values(job)
+    mutable = _mutable_for(job)
     cur.execute(
         "SELECT id FROM jobs WHERE source = %s AND source_job_id = %s",
         (job.source, job.source_job_id),
@@ -73,19 +89,19 @@ def upsert_job(cur: psycopg.Cursor, job: RawJob) -> tuple[str, bool]:
     row = cur.fetchone()
 
     if row:
-        sets = ", ".join(f"{c} = %s" for c in _MUTABLE)
+        sets = ", ".join(f"{c} = %s" for c in mutable)
         cur.execute(
             f"UPDATE jobs SET {sets}, last_seen_alive_at = now(), "
             # Un'offerta che ricompare è viva di nuovo. Il vincolo
             # jobs_expiry_ck impone che expired_at torni NULL insieme allo stato.
             "    status = 'active', expired_at = NULL "
             "WHERE id = %s",
-            [vals[_COLUMNS.index(c)] for c in _MUTABLE] + [row[0]],
+            [vals[_COLUMNS.index(c)] for c in mutable] + [row[0]],
         )
         return str(row[0]), False
 
     placeholders = ", ".join(["%s"] * len(_COLUMNS))
-    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in _MUTABLE)
+    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in mutable)
     cur.execute(
         f"INSERT INTO jobs ({', '.join(_COLUMNS)}) VALUES ({placeholders}) "
         f"ON CONFLICT (canonical_url) DO UPDATE SET {updates}, "

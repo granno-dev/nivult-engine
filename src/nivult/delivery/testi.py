@@ -17,6 +17,10 @@ dizionario non ha dipendenze e non ha sorprese.
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
+from nivult.config import product_name, site_url
+
 MESI = {
     "en": ["January", "February", "March", "April", "May", "June", "July",
            "August", "September", "October", "November", "December"],
@@ -310,8 +314,18 @@ for _d in TESTI.values():
     _d.setdefault("oggetto_poche", _d["oggetto_molte"])
 
 
+def _sito_visibile() -> str:
+    sito = site_url()
+    return urlsplit(sito).netloc or sito
+
+
 def t(locale: str) -> dict[str, str]:
-    return TESTI.get(locale, TESTI["en"])
+    testi = TESTI.get(locale, TESTI["en"])
+    nome, sito = product_name(), _sito_visibile()
+    if nome == "Nivult" and sito == "nivult.com":
+        return testi
+    return {chiave: valore.replace("Nivult", nome).replace("nivult.com", sito)
+            for chiave, valore in testi.items()}
 
 
 def mesi(locale: str) -> list[str]:

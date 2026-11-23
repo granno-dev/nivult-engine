@@ -99,9 +99,11 @@ def allarmi(cur) -> list[str]:
         (GIORNI_FALLIMENTO,)):
         fuori.append(f"{source}: fallita in {giorni} giorni distinti negli ultimi 3")
 
-    # Una fonte che non gira più affatto, pur avendo cluster che la richiedono.
+    # Una fonte attiva che non gira più affatto. Fantastic e' pensionata:
+    # lo storico delle sue esecuzioni non deve generare un falso allarme.
     for source, ultima in _fetch(cur,
-        "SELECT source, max(finished_at) FROM ingestion_runs GROUP BY 1 "
+        "SELECT source, max(finished_at) FROM ingestion_runs "
+        "WHERE source <> 'fantastic' GROUP BY 1 "
         "HAVING max(finished_at) < now() - interval '48 hours'"):
         fuori.append(f"{source}: nessuna esecuzione riuscita da {ultima:%d/%m %H:%M}")
 

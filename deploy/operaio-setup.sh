@@ -9,7 +9,7 @@
 #   3. Python, dipendenze, torch CPU dentro il container
 #   4. prova: il N5 conta le offerte nel database di Hetzner
 set -euo pipefail
-SERVER=root@37.27.36.85
+SERVER=root@37.27.158.164
 N5=root@100.119.200.7
 IP_TS_SERVER=100.117.204.17
 QUI=$(cd "$(dirname "$0")" && pwd)

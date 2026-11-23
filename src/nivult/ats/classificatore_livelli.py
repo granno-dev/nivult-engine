@@ -205,20 +205,23 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True,
             """, (limite,))
             offerte = cur.fetchall()
     if offerte:
-        # 13/10/2026: deadlock contro la corsia di casa (lo scrape scrive
-        # riga per riga mentre questo UPDATE prende un array intero). Stessa
-        # cura di classifica_v1.scrivi: tre tentativi, poi rumore.
-        for tentativo in range(3):
-            try:
-                with psycopg.connect(dsn, autocommit=True) as conn:
-                    conn.execute("UPDATE ats_jobs SET livelli_at = now() WHERE id = ANY(%s::uuid[])",
-                                 ([o[0] for o in offerte],))
-                break
-            except psycopg.errors.DeadlockDetected:
-                log.warning("deadlock sul marcatore livelli, tentativo %d", tentativo + 1)
-                time.sleep(2 * (tentativo + 1))
-        else:
-            raise RuntimeError("classificatore_livelli: deadlock persistente sul marcatore")
+        # Lotti piccoli e ordinati: un solo UPDATE da 20.000 righe puo'
+        # trattenere i lock per molti minuti e bloccare scrape e v1.
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            for inizio in range(0, len(offerte), 500):
+                ids = sorted(o[0] for o in offerte[inizio:inizio + 500])
+                for tentativo in range(3):
+                    try:
+                        conn.execute("WITH locked AS (SELECT id FROM ats_jobs WHERE id = ANY(%s::uuid[]) "
+                                     "ORDER BY id FOR UPDATE) "
+                                     "UPDATE ats_jobs j SET livelli_at = now() FROM locked WHERE j.id = locked.id",
+                                     (ids,))
+                        break
+                    except psycopg.errors.DeadlockDetected:
+                        log.warning("deadlock sul marcatore livelli, tentativo %d", tentativo + 1)
+                        time.sleep(2 * (tentativo + 1))
+                else:
+                    raise RuntimeError("classificatore_livelli: deadlock persistente sul marcatore")
 
     # livello 3: inizializza GLM solo se serve
     modello = None
@@ -245,7 +248,7 @@ def classifica(dsn: str, limite: int = 50000, usa_glm: bool = True,
                       (job_id, family, confidence, model)
                     VALUES (%s, %s, %s, %s)
                     ON CONFLICT (job_id) DO NOTHING
-                """, righe)
+                """, sorted(righe, key=lambda r: r[0]))
             conn.commit()
 
     # ── PASSATA 1: i due livelli gratuiti su tutto il lotto ──

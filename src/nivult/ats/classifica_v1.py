@@ -280,6 +280,7 @@ def main() -> int:
                          if len(r[3] or "") < 80 and r[9] is not None and r[9] > soglia_eta]
             if differiti:
                 righe = [r for r in righe if r[0] not in set(differiti)]
+                differiti.sort()
                 if not dry:
                     scrivi("UPDATE ats_jobs SET differito_v1_at = now() WHERE id = ANY(%s::uuid[])", (differiti,))
                 st["differite"] = st.get("differite", 0) + len(differiti)
@@ -357,24 +358,32 @@ def main() -> int:
             if not dry:
                 if fam_rows:
                     scrivi("INSERT INTO job_classifications (job_id, family, confidence, model, classified_at) "
-                           "SELECT * FROM unnest(%s::uuid[], %s::text[], %s::real[]), (SELECT 'nivult-v1', now()) m "
+                           "SELECT * FROM unnest(%s::uuid[], %s::text[], %s::real[]) AS v(job_id, family, confidence), "
+                           "(SELECT 'nivult-v1', now()) m ORDER BY v.job_id "
                            "ON CONFLICT (job_id) DO NOTHING",
                            ([r[0] for r in fam_rows], [r[1] for r in fam_rows], [r[2] for r in fam_rows]))
                 for col, rows in (("seniority", sen_rows), ("employment_type", con_rows), ("remote", rem_rows)):
                     if rows:
+                        rows.sort(key=lambda r: r[1])
                         scrivi(f"UPDATE ats_jobs j SET {col} = coalesce(j.{col}, v.val) "
                                f"FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
                                ([r[1] for r in rows], [r[0] for r in rows]))
                 if lin_rows:
+                    lin_rows.sort(key=lambda r: r[1])
                     scrivi("UPDATE ats_jobs j SET languages_required = coalesce(j.languages_required, string_to_array(v.val, ',')) "
                            "FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
                            ([r[1] for r in lin_rows], [",".join(r[0]) for r in lin_rows]))
                 if par_rows:
+                    par_rows.sort(key=lambda r: r[0])
                     scrivi("UPDATE job_classifications c SET v1_family = v.fam, v1_conf = v.cf "
                            "FROM unnest(%s::uuid[], %s::text[], %s::real[]) AS v(id, fam, cf) "
                            "WHERE c.job_id = v.id AND c.v1_family IS DISTINCT FROM v.fam",
                            ([r[0] for r in par_rows], [r[1] for r in par_rows], [r[2] for r in par_rows]))
-                scrivi("UPDATE ats_jobs SET locale_v1_at = now() WHERE id = ANY(%s::uuid[])", (marcati,))
+                marcati.sort()
+                scrivi("WITH locked AS (SELECT id FROM ats_jobs WHERE id = ANY(%s::uuid[]) "
+                       "ORDER BY id FOR UPDATE) "
+                       "UPDATE ats_jobs j SET locale_v1_at = now() FROM locked WHERE j.id = locked.id",
+                       (marcati,))
                 # La coda di ripasso si SVUOTA man mano (26/09/2026): le righe
                 # lavorate restavano nella tabella per sempre, e ogni lotto la
                 # rileggeva tutta per trovare le 2048 ancora da fare. Non e'

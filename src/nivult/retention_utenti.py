@@ -39,10 +39,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from html import escape
 
 import psycopg
 
 from nivult import gdpr
+from nivult.config import product_name, site_url, support_email
 
 log = logging.getLogger("nivult.retention_utenti")
 
@@ -285,16 +287,17 @@ def _avviso_email(u: Utente) -> None:
     """
     from nivult.delivery import email as email_mod
 
-    oggetto = "Your Nivult account is about to be deleted"
+    nome = product_name()
+    oggetto = f"Your {nome} account is about to be deleted"
     testo = (
-        "You have not used Nivult for a year.\n\n"
-        "We do not keep a CV longer than it is useful, so in seven days we "
-        "will delete your account, your CV and everything we read from it. "
+        f"You have not used {nome} for a year.\n\n"
+        f"We do not keep a CV longer than it is useful, so in {GIORNI_DOPO_AVVISO} "
+        "days we will delete your account, your CV and everything we read from it. "
         "This cannot be undone.\n\n"
-        "If you want to keep it, just sign in once: https://www.nivult.com/login\n\n"
+        f"If you want to keep it, just sign in once: {site_url()}/login\n\n"
         "If you would rather we deleted it now, you do not need to do "
-        "anything — or write to hello@nivult.com and a person will answer.\n")
-    html = "<p>" + testo.replace("\n\n", "</p><p>").replace("\n", "<br>") + "</p>"
+        f"anything — or write to {support_email()} and a person will answer.\n")
+    html = "<p>" + escape(testo).replace("\n\n", "</p><p>").replace("\n", "<br>") + "</p>"
     email_mod.invia_generica(u.email, oggetto, testo, html)
 
 

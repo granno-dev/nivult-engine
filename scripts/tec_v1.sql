@@ -24,6 +24,89 @@ CREATE INDEX IF NOT EXISTS tecnologie_v1_creato ON tecnologie_v1 (creato_at);
 CREATE INDEX IF NOT EXISTS tecnologie_v1_hash   ON tecnologie_v1 (testo_hash);
 -- per cercare le aziende che usano una tecnologia: e' la query del prodotto
 CREATE INDEX IF NOT EXISTS tecnologie_v1_gin    ON tecnologie_v1 USING gin (tecnologie);
+CREATE INDEX IF NOT EXISTS tecnologie_v1_tecnologie_ci_gin
+  ON tecnologie_v1 USING gin ((lower(tecnologie::text)::jsonb));
+
+CREATE TABLE IF NOT EXISTS tecnologie_ricerca (
+    job_id      UUID,
+    tecnologia  TEXT,
+    posted_at   TIMESTAMPTZ,
+    PRIMARY KEY (job_id, tecnologia)
+);
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_rigenera_job(p_job_id UUID)
+RETURNS void LANGUAGE sql AS $f$
+    DELETE FROM tecnologie_ricerca WHERE job_id = p_job_id;
+
+    INSERT INTO tecnologie_ricerca (job_id, tecnologia, posted_at)
+    SELECT DISTINCT j.id, lower(elemento.valore #>> '{}'), j.posted_at
+      FROM tecnologie_v1 tv
+      JOIN ats_jobs j ON j.id = tv.job_id
+      CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(tv.tecnologie) = 'array'
+               THEN tv.tecnologie ELSE '[]'::jsonb END
+      ) AS elemento(valore)
+     WHERE tv.job_id = p_job_id
+       AND jsonb_typeof(elemento.valore) = 'string'
+    ON CONFLICT (job_id, tecnologia) DO NOTHING;
+$f$;
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_sincronizza_v1()
+RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM tecnologie_ricerca_rigenera_job(OLD.job_id);
+        RETURN NULL;
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+        PERFORM tecnologie_ricerca_rigenera_job(OLD.job_id);
+    END IF;
+    PERFORM tecnologie_ricerca_rigenera_job(NEW.job_id);
+    RETURN NULL;
+END;
+$f$;
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_aggiorna_posted_at()
+RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+    IF NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN
+        UPDATE tecnologie_ricerca
+           SET posted_at = NEW.posted_at
+         WHERE job_id = NEW.id;
+    END IF;
+    RETURN NULL;
+END;
+$f$;
+
+DROP TRIGGER IF EXISTS trg_tecnologie_ricerca_v1 ON tecnologie_v1;
+CREATE TRIGGER trg_tecnologie_ricerca_v1
+    AFTER INSERT OR UPDATE OR DELETE ON tecnologie_v1
+    FOR EACH ROW EXECUTE FUNCTION tecnologie_ricerca_sincronizza_v1();
+
+DROP TRIGGER IF EXISTS trg_tecnologie_ricerca_posted_at ON ats_jobs;
+CREATE TRIGGER trg_tecnologie_ricerca_posted_at
+    AFTER UPDATE OF posted_at ON ats_jobs
+    FOR EACH ROW EXECUTE FUNCTION tecnologie_ricerca_aggiorna_posted_at();
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nivult_api_lettura') THEN
+        GRANT SELECT ON tecnologie_ricerca TO nivult_api_lettura;
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS tecnologie_ricerca_ordine_idx
+    ON tecnologie_ricerca (tecnologia, posted_at DESC NULLS LAST, job_id);
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_platform_country_v2_idx
+    ON ats_jobs (platform_id, country, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_country_v2_idx
+    ON ats_jobs (country, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_platform_country_senior_remote_idx
+    ON ats_jobs (platform_id, country, seniority, remote, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
 
 -- Il marcatore della coda, come locale_v1_at per v1 e estratto_2b_at per il 2B.
 -- Due colonne: quando e' stato fatto, e quando e' stato PRENOTATO (la prenotazione

@@ -106,7 +106,7 @@ def pulito(v, massimo: int | None = None) -> str:
 # una lettura, e' un'invenzione del modello. Usata dal demone v1 (prima di
 # scrivere) e dalla riparazione del 22/09.
 _STAGE_RX = re.compile(
-    r"(?<![a-zÀ-ɏ])(intern|interns|internship|internships|stagiaire|stagiaires|stagista|stagisti|"
+    r"(?<![a-zÀ-ɏ])(intern|interns|internship|internships|stagiaire|stagiaires|stagista|stagisti|stageurs?|"
     r"tirocin\w*|praktik\w*|werkstudent\w*|working student|trainee|traineeship|est[aá]gio|estagi[aá]ri[oa]|"
     r"pr[aá]cticas|becari[oa]|beca|pasant[ií]a|pasante|alternance|alternant[es]?|apprenti[es]?|apprentissage|"
     r"apprentice|apprenticeship|apprendist\w*|azubi|ausbildung|auszubildende[rn]?|lehrling|lehrstelle|"

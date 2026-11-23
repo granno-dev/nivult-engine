@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-HETZNER=root@37.27.36.85
+HETZNER=root@100.117.204.17
 BASE=/mnt/cache/appdata/nivult-backup
 RECIPIENT="$BASE/backup-recipient.pem"
 LOCAL_DIR="$BASE/dumps"

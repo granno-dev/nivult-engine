@@ -556,11 +556,16 @@ def applica(dsn: str, limite: int = 200_000) -> dict:
                               ("remote", rem), ("orario", ora), ("durata", dur),
                               ("lang", lin)):
                 if rows:
+                    rows.sort(key=lambda r: r[0])
                     conn.execute(f"UPDATE ats_jobs j SET {col} = coalesce(j.{col}, v.val) "
                                  f"FROM unnest(%s::uuid[], %s::text[]) AS v(id, val) WHERE j.id = v.id",
                                  ([r[0] for r in rows], [r[1] for r in rows]))
                     st[col] += len(rows)
-            conn.execute("UPDATE ats_jobs SET dichiarati_at = now() WHERE id = ANY(%s::uuid[])", (ids,))
+            ids.sort()
+            conn.execute("WITH locked AS (SELECT id FROM ats_jobs WHERE id = ANY(%s::uuid[]) "
+                         "ORDER BY id FOR UPDATE) "
+                         "UPDATE ats_jobs j SET dichiarati_at = now() FROM locked WHERE j.id = locked.id",
+                         (ids,))
             conn.commit()
             st["viste"] += len(righe)
     log.info("dichiarati: %s in %ds", st, time.time() - t0)

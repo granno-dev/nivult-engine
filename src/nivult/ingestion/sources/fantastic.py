@@ -11,7 +11,7 @@ Contabilità dei crediti, che qui è diversa da tutte le altre fonti:
 
 Quindi il costo non è noto prima di fare la chiamata. Il ciclo è
 riserva-poi-concilia: si riserva il costo peggiore (la dimensione di pagina),
-si chiama, e si restituisce la differenza. Vedi `cluster_settle_credits`.
+si chiama, e si restituisce la differenza. Vedi `settle_credits`.
 
 `active-ats-count` restituisce solo il conteggio: 1 Request, zero crediti Jobs.
 Serve a dimensionare prima di scaricare — su un piano a consumo, sapere quanto
@@ -24,6 +24,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from nivult.ats.salari import da_base_salary
 from nivult.ingestion.base import HttpSource
 from nivult.ingestion.models import FetchResult, RawJob
 from nivult.ingestion.urls import canonicalize, classify_link, normalize_title, registrable_domain
@@ -191,6 +192,7 @@ class FantasticClient(HttpSource):
               extra_filters: dict | None = None) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
+        first_attempt = len(self.attempts)
 
         params = self.search_params(query=query, country=country, since=since,
                                     taxonomy=taxonomy)
@@ -232,9 +234,9 @@ class FantasticClient(HttpSource):
         complete = len(records) < min(limit, MAX_LIMIT)
 
         return FetchResult(
-            jobs=jobs, complete=complete, requests_made=1,
-            credits_used=credits,
-            total_available=None, skipped=skipped)
+            jobs=jobs, complete=complete,
+            requests_made=len(self.attempts) - first_attempt,
+            credits_used=credits, total_available=None, skipped=skipped)
 
     def _to_raw_job(self, r: dict) -> RawJob:
         url = r.get("url") or ""
@@ -246,6 +248,22 @@ class FantasticClient(HttpSource):
         if posted is None:
             raise ValueError("date_posted assente")
 
+        countries = [iso for iso in
+                     (to_iso_country(c) for c in (r.get("countries_derived") or []))
+                     if iso]
+        salary_fields = {}
+        salary_info = da_base_salary(
+            r.get("salary"), countries[0] if countries else None)
+        if salary_info:
+            salary_min, salary_max, salary_currency, salary_period = salary_info
+            salary_fields = {
+                "salary_min": salary_min,
+                "salary_max": salary_max,
+                "salary_currency": salary_currency,
+                "salary_period": salary_period,
+                "salary_da": "dichiarato",
+            }
+
         return RawJob(
             source=self.source,
             source_job_id=str(r["id"]),
@@ -256,12 +274,11 @@ class FantasticClient(HttpSource):
             title_normalized=normalize_title(r["title"]),
             organization=r.get("organization") or None,
             date_posted=posted,
+            date_posted_declared=True,
             domain_derived=r.get("domain_derived") or registrable_domain(canonical),
             org_linkedin_slug=r.get("org_linkedin_slug"),
             cities=[c for c in (r.get("cities_derived") or []) if c],
-            countries=[iso for iso in
-                       (to_iso_country(c) for c in (r.get("countries_derived") or []))
-                       if iso],
+            countries=countries,
             locations=r.get("locations_raw") or r.get("locations") or None,
             ai_job_language=r.get("ai_job_language"),
             ai_visa_sponsorship=r.get("ai_visa_sponsorship"),
@@ -290,6 +307,7 @@ class FantasticClient(HttpSource):
             org_logo_permalink=r.get("org_logo_permalink"),
             employer_agency_declared=r.get("org_linkedin_recruitment_agency_derived"),
             raw=r,
+            **salary_fields,
         )
 
 

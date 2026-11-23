@@ -1,5 +1,5 @@
 {
-  "title": "Global Job Postings — input",
+  "title": "Global Job Postings API — Input",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
@@ -12,27 +12,27 @@
       ],
       "enumTitles": [
         "Job postings",
-        "Companies (enriched employer records)"
+        "Companies (employer records)"
       ],
       "default": "jobs",
-      "description": "Job postings or enriched company records"
+      "description": "Choose jobs for individual postings or companies for one employer record per company. In company mode, country, technology, and keyword filters apply; job-only filters are ignored."
     },
     "country": {
       "title": "Country (ISO-2)",
       "type": "string",
-      "description": "e.g. IT, DE, US — leave empty for worldwide",
+      "description": "Jobs: filter posting country. Companies: filter the country on the company record. ISO 3166-1 alpha-2, such as IT, DE or US; empty means worldwide.",
       "editor": "textfield"
     },
     "technology": {
       "title": "Technology",
       "type": "string",
-      "description": "e.g. SAP, Snowflake, Kubernetes — postings mentioning it in the text",
+      "description": "Jobs: exact match against extracted technologies, such as SAP, Snowflake or Kubernetes. Companies: filter the company-level technology aggregate; this is not a distinct-employers query over the filtered jobs.",
       "editor": "textfield"
     },
     "q": {
       "title": "Keyword",
       "type": "string",
-      "description": "free text in title and description",
+      "description": "Jobs: search job titles and descriptions. Companies: search company names case-insensitively. Leave empty for no keyword filter.",
       "editor": "textfield"
     },
     "seniority": {
@@ -57,7 +57,7 @@
         "head"
       ],
       "default": "",
-      "description": "Filter by seniority level (optional)"
+      "description": "Return only postings with the selected seniority. Leave empty to include all postings; not used in company mode."
     },
     "remote": {
       "title": "Workplace",
@@ -75,19 +75,20 @@
         "on site"
       ],
       "default": "",
-      "description": "Filter by workplace type (optional)"
+      "description": "Return only postings with the selected workplace type. Leave empty to include all postings; not used in company mode."
     },
     "dal": {
       "title": "Posted after",
       "type": "string",
-      "description": "ISO date, e.g. 2026-10-01 — only fresher postings",
+      "description": "Return postings dated on or after this ISO 8601 date (YYYY-MM-DD), for example 2026-10-01. Posting dates may be estimated when the source has no exact date. Leave empty for no date filter; not used in company mode.",
       "editor": "textfield"
     },
     "limite": {
       "title": "Max results",
       "type": "integer",
-      "description": "1–10,000 (for bigger slices ask about the daily full export)",
+      "description": "Maximum rows to return (1–10,000; default 100). You pay only for job or company rows returned: $0.003 per row ($3 per 1,000). An empty result costs $0.",
       "default": 100,
+      "prefill": 10,
       "minimum": 1,
       "maximum": 10000
     }

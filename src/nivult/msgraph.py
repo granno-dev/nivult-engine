@@ -1,9 +1,16 @@
-"""Microsoft Graph, contesto applicazione: il calendario di Giuseppe.
+"""Microsoft Graph, contesto applicazione: il calendario di Giuseppe
+e la posta transazionale.
 
 Nato il 10/10/2026 per nivult.com/booking: la pagina raccoglie lo slot,
 qui si crea l'evento Teams vero sul calendario business. App-only
 (client credentials) con permesso Calendars.ReadWrite — nessun utente
 loggato, nessun refresh token: il demone e' la nostra API stessa.
+
+Dal 20/10/2026 anche la POSTA parte da qui (`invia_mail`): Brevo/SMTP va
+in pensione, e la basic auth SMTP di Microsoft muore comunque a dicembre
+2026 — Graph `sendMail` con permesso application Mail.Send (admin consent)
+e' la via che resta in piedi. L'app registration e' la stessa del booking:
+stesso tenant, stesso client, un permesso in piu'.
 
 L'invito al lead NON lo mandiamo noi: lo spedisce Outlook quando
 l'evento con attendee viene creato, e lo annulla quando lo cancelliamo.
@@ -12,6 +19,8 @@ Teams: quello arriva dal calendario, canale che i filtri conoscono.
 
 Configurazione: MS_BOOKING_TENANT_ID, MS_BOOKING_CLIENT_ID,
 MS_BOOKING_CLIENT_SECRET, MS_BOOKING_ORGANIZER (UPN del calendario).
+Per la posta anche MS_MAIL_FROM (la casella mittente; a mancanza vale
+MS_BOOKING_ORGANIZER, la casella pubblica hello@nivult.com).
 Senza queste il modulo rifiuta di partire — meglio un errore chiaro
 che un 500 misterioso dalla pagina pubblica.
 """
@@ -76,6 +85,46 @@ def _graph(metodo: str, percorso: str, **kw) -> httpx.Response:
 
 def _organizer() -> str:
     return _env("MS_BOOKING_ORGANIZER")
+
+
+def _mittente_mail() -> str:
+    """La casella da cui parte la posta transazionale.
+
+    MS_MAIL_FROM se valorizzata, altrimenti la casella pubblica del
+    booking (hello@nivult.com): una sola app registration, una sola
+    faccia."""
+    return os.environ.get("MS_MAIL_FROM", "").strip() or _organizer()
+
+
+def invia_mail(destinatario: str, oggetto: str, html: str,
+               mittente: str | None = None) -> None:
+    """Spedisce una email transazionale con Graph sendMail.
+
+    POST /users/{mittente}/sendMail, permesso application Mail.Send
+    (admin consent dato a mano sull'app registration del booking).
+    202 Accepted = successo: sendMail non rende ne' un id ne' un corpo,
+    e la consegna vera resta asincrona come con SMTP — gli errori
+    transport-level arrivano come bounce alla casella mittente.
+
+    Il campo `from` NON si imposta, di proposito: Graph lo accetta solo
+    se coincide con la casella dell'URL (o con SendAs esplicito), e il
+    display name NON e' comunque controllabile dal payload — Exchange
+    mostra il nome della casella. Chi vuole «Nivult» come nome mittente
+    lo rinomina nel centro admin M365, non qui. MS_MAIL_FROM_NAME non
+    esiste proprio per questo.
+
+    `saveToSentItems: False`: la casella e' di servizio, i digest di
+    tutti gli utenti non devono riempirne la cartella Posta inviata.
+    """
+    chi = (mittente or "").strip() or _mittente_mail()
+    _graph("POST", f"/users/{chi}/sendMail", json={
+        "message": {
+            "subject": oggetto,
+            "body": {"contentType": "HTML", "content": html},
+            "toRecipients": [{"emailAddress": {"address": destinatario}}],
+        },
+        "saveToSentItems": False,
+    })
 
 
 def _interno() -> str:

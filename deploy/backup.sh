@@ -7,9 +7,10 @@
 # fuori — password manager — e serve solo al ripristino. Se il server viene
 # compromesso, l'attaccante non ottiene lo storico dei backup.
 #
-# Ripristino (su una macchina che ha la chiave privata):
-#   openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
-#     -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
+# Ripristino (su una macchina che ha la chiave privata, dalla radice del repo):
+#   python scripts/decifra_backup.py --key nivult-backup-PRIVATE.pem \
+#     < nivult-AAAA-MM-GG.sql.gz.enc | gunzip | psql -U postgres
+# Il solo `openssl cms -decrypt` non decifra in streaming i backup piu' grandi.
 #
 # Configurazione in /opt/nivult/backup.env (0600, fuori dal repo).
 
@@ -92,7 +93,7 @@ else
   fi
   [ "$libero" -ge "$bisogno" ] || die "disco insufficiente per il dump: $(( libero / 1073741824 )) GB liberi, ne servono ~$(( bisogno / 1073741824 )) (ultimo backup + 30%)"
   log "dump in corso -> $OUT"
-  docker exec "$CONTAINER" pg_dumpall -U "$DB_SUPERUSER" \
+  docker exec "$CONTAINER" ionice -c2 -n7 nice -n 10 pg_dumpall -U "$DB_SUPERUSER" \
     | gzip -9 \
     | openssl cms -encrypt -aes-256-cbc -binary -stream -outform DER \
         -recip "$RECIPIENT" -out "$OUT.part" \

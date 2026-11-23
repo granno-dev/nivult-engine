@@ -68,6 +68,48 @@ def database_name(url: str | None = None) -> str:
     return str(conninfo_to_dict(url or database_url()).get("dbname", ""))
 
 
+def product_name() -> str:
+    return os.environ.get("PRODUCT_NAME", "Nivult").strip() or "Nivult"
+
+
+def site_url() -> str:
+    return os.environ.get("SITE_URL", "https://nivult.com").strip().rstrip("/") \
+        or "https://nivult.com"
+
+
+def support_email() -> str:
+    return os.environ.get("SUPPORT_EMAIL", "hello@nivult.com").strip() \
+        or "hello@nivult.com"
+
+
+def default_delivery_channels() -> list[str]:
+    grezzo = os.environ.get("DEFAULT_DELIVERY_CHANNELS", "email")
+    canali = list(dict.fromkeys(
+        c.strip().lower() for c in grezzo.split(",") if c.strip()))
+    if not canali:
+        return ["email"]
+    ammessi = {"email", "telegram", "whatsapp", "app"}
+    sconosciuti = sorted(set(canali) - ammessi)
+    if sconosciuti:
+        raise ValueError("DEFAULT_DELIVERY_CHANNELS contiene canali sconosciuti: "
+                         + ", ".join(sconosciuti))
+    return canali
+
+
+def b2b_enabled() -> bool:
+    valore = os.environ.get("B2B_ENABLED", "1").strip().lower()
+    if valore in {"1", "true", "yes", "on"}:
+        return True
+    if valore in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("B2B_ENABLED deve essere 1/0, true/false, yes/no oppure on/off")
+
+
+def export_dir() -> Path:
+    return Path(os.environ.get("EXPORT_DIR", "/opt/nivult/exports").strip()
+                or "/opt/nivult/exports")
+
+
 def safe_dsn(url: str) -> str:
     """DSN con la password oscurata, per i log."""
     if "@" not in url:

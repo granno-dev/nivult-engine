@@ -166,6 +166,16 @@ ISCO_MINORI: dict[str, str | None] = {
 }
 
 
+# Occupazioni HR che il rollup a tre cifre disperde in Management, Consulting
+# e Administrative. L'eccezione puntuale evita di spostare interi gruppi misti.
+ISCO_OCCUPAZIONI: dict[str, str] = {
+    "1212": "Human Resources",
+    "2423": "Human Resources",
+    "2424": "Human Resources",
+    "4416": "Human Resources",
+}
+
+
 def famiglia_da_isco(codice: str | None) -> str | None:
     """Accetta «C432», «432», «4321», «http://data.europa.eu/esco/isco/C432»."""
     if not codice:
@@ -173,7 +183,8 @@ def famiglia_da_isco(codice: str | None) -> str | None:
     m = re.search(r"(?:isco/)?C?(\d{3,4})\s*$", codice.strip())
     if not m:
         return None
-    return ISCO_MINORI.get(m.group(1)[:3])
+    c = m.group(1)
+    return ISCO_OCCUPAZIONI.get(c) or ISCO_MINORI.get(c[:3])
 
 
 # SSYK 2012 = ISCO-08 con divergenze; le prime 3 cifre coincidono quasi sempre.

@@ -29,6 +29,7 @@ import psycopg
 
 from nivult import oauth as _oauth
 from nivult.ats.testo import SQL_HA_TESTO
+from nivult.matching.metrics import metriche_reali
 
 log = logging.getLogger("nivult.cruscotto")
 
@@ -356,7 +357,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
                count(*) FILTER (WHERE raw ?| array['description',
                    'descriptionHtml','jobDescription','job_description',
                    'content','externalDescription','descriptionPlain']),
-               count(employment_type), count(contact_email),
+               count(employment_type),
                -- la lingua dell'annuncio e' un filtro VENDUTO (piano Pro):
                -- la sua copertura va sorvegliata come le altre, o se un
                -- giorno si rompe non se ne accorge nessuno
@@ -375,7 +376,7 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
         SELECT count(j.duplicate_key), count(j.department), count(j.orario), count(j.durata),
                count(d.benefits), count(d.shift_schedule), count(d.work_hours),
                count(d.management_level), count(d.valid_through), count(d.state),
-               count(d.latitude), count(d.recruiter), count(d.salary_text),
+               count(d.latitude), count(d.salary_text),
                count(*) FILTER (WHERE d.is_urgently_hiring)
           FROM ats_jobs j LEFT JOIN offerte_dettagli d ON d.job_id = j.id
          WHERE j.expired_at IS NULL""", timeout_s=60)[0]
@@ -383,10 +384,10 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
         SELECT count(*) FROM tecnologie_v1 t JOIN ats_jobs j ON j.id = t.job_id
          WHERE j.expired_at IS NULL AND t.quante > 0""") or 0
     campi = [("paese", r[0]), ("descrizione", r[5]),
-             ("lingua dell'annuncio", r[8]), ("lingue richieste", r[9]),
+             ("lingua dell'annuncio", r[7]), ("lingue richieste", r[8]),
              ("seniority", r[2]),
              ("lavoro remoto", r[3]), ("competenze", r[4]),
-             ("tipo di contratto", r[6]), ("contatto nell'annuncio", r[7]),
+             ("tipo di contratto", r[6]),
              ("salario", r[1]),
              ("tecnologie (testa v2)", tec),
              ("altre copie della stessa offerta", extra[0]),
@@ -395,8 +396,8 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
              ("turni", extra[5]), ("orario di lavoro", extra[6]),
              ("livello manageriale", extra[7]), ("scadenza dichiarata", extra[8]),
              ("regione/stato", extra[9]), ("coordinate", extra[10]),
-             ("recruiter", extra[11]), ("salario nel testo", extra[12]),
-             ("assunzione urgente", extra[13])]
+             ("salario nel testo", extra[11]),
+             ("assunzione urgente", extra[12])]
     v = [{"campo": k, "n": n,
           "pct": round(100 * n / attive, 1) if attive else 0}
          for k, n in campi]
@@ -413,6 +414,29 @@ def _arricchimento(ats_dsn: str, attive: int) -> list[dict]:
 
 _CACHE_PES: dict = {"t": 0.0, "v": None, "in_corso": False}
 _CACHE_FILE = "/opt/nivult/cruscotto-cache.json"
+_CACHE_ERRORE_FILE = "/opt/nivult/cruscotto-ricalcolo-errore.json"
+
+
+def _registra_errore_pesanti(errore: Exception) -> None:
+    """La sentinella distingue un ricalcolo fallito da una cache soltanto
+    non richiesta: senza questo file ogni cruscotto chiuso sembrava rotto."""
+    import json as _json
+    try:
+        with open(_CACHE_ERRORE_FILE + ".tmp", "w") as f:
+            _json.dump({"at": time.time(),
+                        "errore": str(errore).splitlines()[0][:300]}, f)
+        os.replace(_CACHE_ERRORE_FILE + ".tmp", _CACHE_ERRORE_FILE)
+    except Exception as e:                           # noqa: BLE001
+        log.warning("cruscotto: non riesco a registrare il fallimento: %s", e)
+
+
+def _pulisci_errore_pesanti() -> None:
+    try:
+        os.remove(_CACHE_ERRORE_FILE)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        log.warning("cruscotto: non riesco a cancellare il vecchio fallimento: %s", e)
 
 
 def _carica_cache_da_disco() -> None:
@@ -459,13 +483,29 @@ def _pesanti(ats_dsn: str) -> dict:
     return _ricalcola_pesanti(ats_dsn)
 
 
+def _dsn_pesanti(ats_dsn: str) -> str:
+    # Le letture pesanti usano la replica soltanto se sta seguendo il
+    # primario: una replica ferma resta raggiungibile ma congela i pannelli.
+    replica = os.environ.get("ATS_REPLICA_URL")
+    if not replica:
+        return ats_dsn
+    try:
+        with psycopg.connect(replica, connect_timeout=5) as conn:
+            ritardo = conn.execute(
+                "SELECT extract(epoch FROM now() - pg_last_xact_replay_timestamp())"
+            ).fetchone()[0]
+        if ritardo is not None and ritardo <= 120:
+            return replica
+        log.warning("cruscotto: replica non fresca (ritardo %s), uso il primario",
+                    "mancante" if ritardo is None else f"{int(ritardo)}s")
+    except psycopg.Error as e:
+        log.warning("cruscotto: replica non raggiungibile (%s), uso il primario",
+                    type(e).__name__)
+    return ats_dsn
+
+
 def _ricalcola_pesanti(ats_dsn: str) -> dict:
-    # 12/10/2026: le letture pesanti vanno sulla REPLICA dell'N5 quando e'
-    # configurata (ATS_REPLICA_URL). Il primario resta per chi scrive e per
-    # chi paga: ieri sera ogni scansione moriva in timeout sotto
-    # export+backup+ingestione insieme, e il cruscotto serviva il giorno
-    # prima. Il ritardo della replica (secondi) non conta per i pannelli.
-    ats_dsn = os.environ.get("ATS_REPLICA_URL") or ats_dsn
+    ats_dsn = _dsn_pesanti(ats_dsn)
     import json as _json
     try:
         d = _calcola_pesanti(ats_dsn)
@@ -474,10 +514,15 @@ def _ricalcola_pesanti(ats_dsn: str) -> dict:
             with open(_CACHE_FILE + ".tmp", "w") as f:
                 _json.dump({"t": _CACHE_PES["t"], "v": d}, f, default=str)
             os.replace(_CACHE_FILE + ".tmp", _CACHE_FILE)
-        except Exception:                            # noqa: BLE001
-            pass
+        except Exception as e:                       # noqa: BLE001
+            _registra_errore_pesanti(e)
+            log.warning("cruscotto: scrittura cache fallita: %s",
+                        str(e).splitlines()[0][:160])
+        else:
+            _pulisci_errore_pesanti()
         return d
     except Exception as e:                           # noqa: BLE001
+        _registra_errore_pesanti(e)
         # una query morta per timeout non ammazza il giro: resta la cache
         # precedente (in memoria o da disco) e si riprova al prossimo tick
         log.warning("cruscotto: ricalcolo pesante fallito, servo la cache: %s",
@@ -604,8 +649,11 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
           count(*),
           count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '12 hours'
                               OR ac.last_fetch_at IS NULL),
-          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '12 hours'),
-          count(*) FILTER (WHERE ac.last_fetch_at < now()-interval '24 hours'),
+          count(*) FILTER (WHERE ac.last_ok_at >= now()-interval '12 hours'),
+          count(*) FILTER (WHERE ac.last_ok_at < now()-interval '12 hours'
+                              OR ac.last_ok_at IS NULL),
+          count(*) FILTER (WHERE ac.last_ok_at < now()-interval '24 hours'
+                              OR ac.last_ok_at IS NULL),
           count(*) FILTER (WHERE ac.last_fetch_at IS NULL),
           count(*) FILTER (WHERE ac.last_fetch_at >= now()-interval '1 hour'),
           count(*) FILTER (WHERE ac.last_fetch_at <  now()-interval '1 hour'
@@ -616,17 +664,20 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
                               AND ac.last_fetch_at >= now()-interval '24 hours')
           FROM ats_companies ac JOIN ats_platforms ap ON ap.id=ac.platform_id
          WHERE ac.is_active AND ap.is_active AND ac.job_count > 0""")
-    _tot, _fre, _o12, _o24, b0, b1, b2, b3, b4 = \
-        _fresh[0] if _fresh else (0,) * 9
+    _tot, _fre, _ok, _o12, _o24, b0, b1, b2, b3, b4 = \
+        _fresh[0] if _fresh else (0,) * 10
     _vuoti = _righe(ats_dsn, """
         SELECT count(*) FROM ats_companies ac
           JOIN ats_platforms ap ON ap.id = ac.platform_id
          WHERE ac.is_active AND ap.is_active AND coalesce(ac.job_count, 0) = 0""")
     d["salute"]["codone_vuoti"] = _vuoti[0][0] if _vuoti else 0
     d["salute"]["codone_totale"] = _tot
+    d["salute"]["codone_riuscite_12h"] = _ok
     d["salute"]["codone_oltre_12h"] = _o12
     d["salute"]["codone_oltre_24h"] = _o24
     d["salute"]["codone_freschi_pct"] = \
+        round(100 * _ok / _tot, 1) if _tot else 100.0
+    d["salute"]["codone_tentate_pct"] = \
         round(100 * _fre / _tot, 1) if _tot else 100.0
     _fasce = ["mai", "< 1h", "1–6h", "6–12h", "12–24h", "> 24h"]
     _val = [b0, b1, b2, b3, b4, _o24]
@@ -882,7 +933,7 @@ def _calcola_pesanti(ats_dsn: str) -> dict:
          WHERE j.created_at > greatest(now() - interval '30 hours',
                '2026-09-04T20:30:00+00:00'::timestamptz)
            AND j.created_at < now() - interval '6 hours'
-           AND j.expired_at IS NULL""")[0]
+           AND j.expired_at IS NULL""", timeout_s=300)[0]
     tot = r[0] or 0
     d["nuove24"] = {"totale": tot} | {
         k: (round(100 * r[i] / tot, 1) if tot else 0)
@@ -922,6 +973,8 @@ def metriche(ats_dsn: str, motore_dsn: str) -> dict:
 
 def _metriche_calcola(ats_dsn: str, motore_dsn: str) -> dict:
     d: dict = {}
+    with psycopg.connect(motore_dsn) as conn:
+        d["match_reali"] = metriche_reali(conn)
 
     # ── parte viva: fresca a ogni tick ──
     d["stato"] = {
@@ -1562,7 +1615,7 @@ async function tick(){
  +'<div class="sect"><h2>Salute del dato</h2></div><div class="grid">'
  +card(`<span class="${clP}">${h.senza_paese_pct}%</span>`,'offerte senza paese',IT(h.senza_paese)+' su '+IT(h.offerte_attive))
  +card(`<span class="${clC}">${h.non_classificate_pct}%</span>`,'offerte senza categoria',IT(h.non_classificate)+' su '+IT(h.offerte_attive))
- +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende CON OFFERTE riviste entro 12h',IT(h.codone_oltre_12h)+' oltre 12h · '+IT(h.codone_oltre_24h)+' oltre 24h · '+IT(h.codone_vuoti)+' tenant vuoti esclusi')
+ +card(`<span class="${clF}">${h.codone_freschi_pct}%</span>`,'aziende CON OFFERTE lette entro 12h',IT(h.codone_oltre_12h)+' non lette entro 12h · '+IT(h.codone_oltre_24h)+' oltre 24h · '+IT(h.codone_tentate_pct??h.codone_freschi_pct)+'% tentate · '+IT(h.codone_vuoti)+' tenant vuoti esclusi')
  +`<div class="card pend"><div class="num">${IT(h.ats_pending_n)}</div><div class="lbl">piattaforme da collegare</div>${h.ats_pending_n?`<div class="sub">${IT(h.ats_pending_aziende)} aziende trovate ma non ancora leggibili</div>`:'<div class="sub">leggiamo tutte le piattaforme trovate</div>'}</div>`
  +'</div>'
 
@@ -1577,7 +1630,7 @@ async function tick(){
  +gband('raccolta','Raccolta','censimento, freschezza, ampiezza')
  +'<div class="cols">'
  +`<div><div class="sect"><h2>Dall’azienda scoperta all’offerta consegnata</h2><span class="note">${IT(h.scadute)} scadute in archivio</span></div>`+pipeline(d.funnel)+'</div>'
- +`<div><div class="sect"><h2>Da quanto non rivediamo le aziende</h2><span class="note ${clF}">${h.codone_freschi_pct}% entro 12h</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
+ +`<div><div class="sect"><h2>Da quanto non rivediamo le aziende</h2><span class="note ${clF}">${h.codone_freschi_pct}% lette entro 12h · barre: tentativi</span></div>`+barre(d.freschezza,'fascia','n')+'</div>'
  +'</div>'
  +'<div class="sect"><h2>Aziende con offerte aperte, per piattaforma</h2><span class="note">il 100% non esiste: molte aziende vive oggi non assumono, il tetto reale è 60–70% · «potati» = account morti, esclusi dal conto</span></div>'
  +attivazione(d.attivazione)
@@ -1606,7 +1659,7 @@ async function tick(){
    +c(mg.aziende_con_settore,'aziende con settore','registri pubblici, Wikidata o mix delle offerte')
    +c(mg.aziende_con_organico,'aziende con organico','registri, Wikidata o dichiarato negli annunci')
    +c(mg.paesi_memoria,'coppie azienda-paese','per i segnali di espansione')
-   +c(mg.offerte_dettagli,'offerte con i dettagli','benefit, turni, livello, scadenza, geo, recruiter')
+   +c(mg.offerte_dettagli,'offerte con i dettagli','benefit, turni, livello, scadenza e geo')
    +c(mg.schede_azienda,'schede azienda','sede, fascia, forma giuridica, descrizione, tecnologie')
    +c(mg.schede_registro,'schede dai registri','sede legale e forma giuridica certificate')
    +'</div>';})(d.magazzino)

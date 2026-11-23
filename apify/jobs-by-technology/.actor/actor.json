@@ -1,8 +1,8 @@
 {
   "actorSpecification": 1,
   "name": "jobs-by-technology",
-  "title": "Jobs by Technology — SAP, Snowflake, Kubernetes & more",
-  "description": "Live job postings filtered by the technologies mentioned in the text — SAP, Snowflake, Kubernetes, Salesforce and thousands more. Refreshed daily, every field with its source.",
+  "title": "Jobs by Technology — Tech Hiring Leads",
+  "description": "Find companies hiring by tech stack and track B2B hiring signals in daily-refreshed job postings. Filter by technology, country, seniority, workplace, keyword, or date.",
   "version": "0.1",
   "buildTag": "latest",
   "envVars": [

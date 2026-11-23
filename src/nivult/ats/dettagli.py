@@ -7,7 +7,7 @@ una dozzina di campi che loro espongono e che qui si ricavano SENZA modelli,
 a costo di CPU, da due fonti:
 
   1. il DICHIARATO nel raw della piattaforma (scadenza, stato/regione, CAP,
-     turni, ore, benefit, recruiter, coordinate): esatto per costruzione;
+     turni, ore, benefit, coordinate): esatto per costruzione;
   2. il TESTO, con regole scritte e leggibili (urgenza, turni, benefit,
      livello di gestione): niente da addestrare, niente da esaminare con
      un giudice, ma vanno tenute per quello che sono — regole.
@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS offerte_dettagli (
   geo_da              text,        -- dichiarato / geonames
   applicants_count    integer,
   is_easy_apply       boolean,
-  recruiter           jsonb,       -- {nome, email, profilo}
   calcolato_at        timestamptz NOT NULL DEFAULT now());
 ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS dettagli_at timestamptz;
 CREATE INDEX IF NOT EXISTS ats_jobs_dettagli_idx ON ats_jobs (dettagli_at) WHERE dettagli_at IS NULL AND expired_at IS NULL;
@@ -80,8 +79,6 @@ CHIAVI = {
     "hours": ("WorkHours", "workHours", "Work Hours", "Hours", "Standard Hours", "work_hours", "hours",
               "min_hours_per_week", "max_hours_per_week", "min_hours", "max_hours", "hoursPerWeek"),
     "benefits": ("benefits", "jobBenefits", "benefits_header", "perks", "Benefits"),
-    "recruiter": ("creator", "recruiter", "contact", "application_contacts", "hiringManager", "hiring_manager",
-                  "recruiterName", "contact_person", "contactPerson"),
     "applicants": ("applicantCount", "applicants_count", "applicantsCount", "numberOfApplicants", "applicants"),
     "easy_apply": ("isEasyApply", "easyApply", "easy_apply", "is_easy_apply", "quickApply"),
 }
@@ -258,27 +255,6 @@ def _data(v) -> date | None:
     return None
 
 
-def _recruiter(v, email: str | None) -> dict | None:
-    out: dict = {}
-    if isinstance(v, dict):
-        nome = v.get("name") or v.get("fullName") or " ".join(x for x in (v.get("firstName"), v.get("lastName")) if x)
-        if nome:
-            out["nome"] = str(nome)[:120]
-        if v.get("email"):
-            out["email"] = str(v["email"])[:120]
-        for k in ("profileUrl", "profile_url", "url", "linkedin"):
-            if v.get(k):
-                out["profilo"] = str(v[k])[:200]
-                break
-    elif isinstance(v, list) and v:
-        return _recruiter(v[0], email)
-    elif isinstance(v, str) and v.strip() and "@" not in v:
-        out["nome"] = v.strip()[:120]
-    if email and "email" not in out:
-        out["email"] = email
-    return out or None
-
-
 def _shift(dichiarato: str, testo: str) -> tuple[str | None, str | None]:
     base = dichiarato or ""
     for etichetta, patt in TURNI:
@@ -355,7 +331,7 @@ def _coordinate(citta: str | None, paese: str | None):
 
 
 def dettagli(riga) -> dict:
-    (jid, titolo, raw, citta, paese, seniority, contact_email, grezzo) = riga
+    (jid, titolo, raw, citta, paese, seniority, grezzo) = riga
     raw = raw if isinstance(raw, dict) else {}
     testo = pulito(grezzo)
     out: dict = {"job_id": jid}
@@ -415,13 +391,11 @@ def dettagli(riga) -> dict:
         out["applicants_count"] = None
     ea = _cerca(raw, CHIAVI["easy_apply"])
     out["is_easy_apply"] = (bool(ea) if isinstance(ea, bool) else (str(ea).lower() in ("true", "1", "yes"))) if ea is not None else None
-    r = _recruiter(_cerca(raw, CHIAVI["recruiter"]), contact_email)
-    out["recruiter"] = json.dumps(r, ensure_ascii=False) if r else None
     return out
 
 
 SQL_CODA = """
-SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority, j.contact_email,
+SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority,
        coalesce(t.v, '')
   FROM ats_jobs j
   -- 23/09/2026: LATERAL, non la subquery doppia — il testo si valuta UNA
@@ -442,7 +416,7 @@ SELECT j.id, j.title, j.raw, j.city, j.country, j.seniority, j.contact_email,
 
 COLONNE = ("job_id", "management_level", "is_decision_maker", "shift_schedule", "shift_testo", "work_hours",
            "is_urgently_hiring", "benefits", "benefits_dichiarati", "salary_text", "valid_through", "state",
-           "postal_code", "latitude", "longitude", "geo_da", "applicants_count", "is_easy_apply", "recruiter")
+           "postal_code", "latitude", "longitude", "geo_da", "applicants_count", "is_easy_apply")
 SQL_SCRIVI = ("INSERT INTO offerte_dettagli (" + ", ".join(COLONNE) + ") VALUES (" + ", ".join(["%s"] * len(COLONNE)) + ") "
               "ON CONFLICT (job_id) DO UPDATE SET " + ", ".join(f"{c} = EXCLUDED.{c}" for c in COLONNE[1:]) + ", calcolato_at = now()")
 
@@ -466,7 +440,7 @@ def _schema(c) -> None:
 
 
 def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = False) -> dict:
-    st = {"viste": 0, "urgenti": 0, "turni": 0, "benefit": 0, "salario_testo": 0, "scadenza": 0, "geo": 0, "recruiter": 0,
+    st = {"viste": 0, "urgenti": 0, "turni": 0, "benefit": 0, "salario_testo": 0, "scadenza": 0, "geo": 0,
           # calculate senza testo (resa dei 7 giorni): i campi dal raw ci
           # sono lo stesso, ma il resoconto deve dire quante sono
           "senza_testo": 0}
@@ -487,11 +461,10 @@ def applica(dsn: str, limite: int = 200_000, lotto: int = 2000, dry: bool = Fals
                 ids.append(r[0])
                 valori.append(tuple(d[k] for k in COLONNE))
                 st["viste"] += 1
-                st["senza_testo"] += not (r[7] or "").strip()
+                st["senza_testo"] += not (r[6] or "").strip()
                 st["urgenti"] += bool(d["is_urgently_hiring"]); st["turni"] += bool(d["shift_schedule"])
                 st["benefit"] += bool(d["benefits"]); st["salario_testo"] += bool(d["salary_text"])
                 st["scadenza"] += bool(d["valid_through"]); st["geo"] += d["latitude"] is not None
-                st["recruiter"] += bool(d["recruiter"])
             if not dry:
                 with c.cursor() as cur:
                     cur.executemany(SQL_SCRIVI, valori)

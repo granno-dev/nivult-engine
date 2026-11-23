@@ -29,9 +29,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import psycopg  # noqa: E402
+import psycopg
 
-from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
+from nivult.config import database_name, database_url, safe_dsn
 
 # Impostazioni che 0001 mette a livello di database. Vanno rimosse prima del
 # reset, altrimenti il test non prova che la migrazione le imposti davvero:
@@ -127,6 +127,38 @@ def main() -> int:
         if check_roles.main() != 0:
             print("\nFALLITO: i privilegi del ruolo applicativo non sono corretti")
             return 1
+
+        print()
+        import check_oauth
+
+        if check_oauth.main() != 0:
+            print("\nFALLITO: OAuth e collegamento account non sono sicuri")
+            return 1
+
+        print()
+        import check_billing
+
+        if check_billing.main() != 0:
+            print("\nFALLITO: crediti, pagamenti o entitlement non sono corretti")
+            return 1
+
+        print()
+        os.environ["DATABASE_URL"] = dsn
+        os.environ["MIGRATOR_DATABASE_URL"] = dsn
+        import check_ingestion
+
+        if check_ingestion.main() != 0:
+            print("\nFALLITO: ingestione o migrazioni non sono corrette")
+            return 1
+
+        import importlib
+
+        for nome in ("check_match_v3", "check_embedding_v3", "check_metrics_v3",
+                     "check_spiegazioni_v3", "controlla_golden_v3"):
+            print()
+            if importlib.import_module(nome).main() != 0:
+                print(f"\nFALLITO: {nome}")
+                return 1
 
     elapsed = time.monotonic() - started
     banner(f"OK — schema ricostruito e verificato in {elapsed:.1f}s")

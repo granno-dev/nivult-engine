@@ -1,0 +1,43 @@
+default_model = "kimi-code/k3.1-pro"
+default_permission_mode = "auto"
+default_plan_mode = false
+telemetry = false
+merge_all_available_skills = false
+
+[providers."managed:kimi-code"]
+type = "kimi"
+base_url = "https://api.kimi.com/coding/v1"
+
+[models."kimi-code/kimi-for-coding"]
+provider = "managed:kimi-code"
+model = "kimi-for-coding"
+max_context_size = 262144
+capabilities = ["thinking", "always_thinking", "image_in", "video_in", "tool_use"]
+
+[tools]
+enabled = ["Read", "Grep", "Glob", "Bash", "Edit", "TodoList"]
+
+[loop_control]
+max_steps_per_turn = 25
+max_attempts_per_step = 3
+
+[task]
+print_background_mode = "exit"
+
+[[permission.rules]]
+decision = "allow"
+pattern = "Bash(sudo /opt/nivult/engine/deploy/runbook.sh*)"
+reason = "Solo il runbook puo' raggiungere la produzione via sudo"
+
+[[permission.rules]]
+decision = "allow"
+pattern = "Edit(/home/nivult-medico/chat/appunti.md)"
+reason = "Solo gli appunti persistenti della chat sono modificabili"
+
+[[permission.rules]]
+decision = "ask"
+pattern = "Bash"
+
+[[permission.rules]]
+decision = "ask"
+pattern = "Edit"

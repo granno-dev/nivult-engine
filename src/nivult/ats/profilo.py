@@ -53,7 +53,7 @@ _SKILLS = [
     "aws", "azure", "gcp", "docker", "kubernetes", "terraform", "linux",
     "git", "ci/cd", "devops", "machine learning", "deep learning", "pytorch",
     "tensorflow", "data science", "power bi", "tableau", "excel", "sap",
-    "salesforce", "etl", "spark", "hadoop", "api", "rest", "graphql",
+    "salesforce", "etl", "spark", "hadoop", "api", "graphql",
     "microservices", "html", "css", "django", "flask", "spring", "laravel",
     "selenium", "cypress", "jira", "scrum", "agile", "kanban",
     # business & ufficio
@@ -211,8 +211,13 @@ _SKILLS = [
     "hris",
     "onboarding",
 ]
-_SKILL_RX = [(s, re.compile(r"(?<![a-z0-9])" + re.escape(s).replace(r"\ ", r"\s+")
-                            + r"(?![a-z0-9])", re.I)) for s in _SKILLS]
+_SKILL_RX = [(s, re.compile(r"(?<![^\W_])" + re.escape(s).replace(r"\ ", r"\s+")
+                            + r"(?![^\W_])", re.IGNORECASE)) for s in _SKILLS]
+_REST_RX = re.compile(r"(?<![^\W_])REST(?:\s+API|ful)?(?![^\W_])")
+
+
+def ha_rest_tecnico(testo: str) -> bool:
+    return bool(_REST_RX.search(testo or ""))
 
 
 def _descrizione(raw: dict) -> str:
@@ -263,7 +268,10 @@ def deterministico(titolo: str, luogo: str, raw: dict):
             remote = "remote"
     descr = _descrizione(raw)
     campo_skill = f"{titolo}\n{descr}"
-    skills = [s for s, rx in _SKILL_RX if rx.search(campo_skill)][:20]
+    skills = [s for s, rx in _SKILL_RX if rx.search(campo_skill)]
+    if ha_rest_tecnico(campo_skill):
+        skills.append("rest")
+    skills = skills[:20]
     # ESCO entra solo a cancello aperto (`esco_calibra --apri`), e il
     # cancello e' il file /opt/nivult/esco-attivo. Il 06/09 era spento
     # per rumore misurato («compile airport certification manuals» su
@@ -273,7 +281,11 @@ def deterministico(titolo: str, luogo: str, raw: dict):
         try:
             from nivult.ats import esco as _esco
             per_esco = _esco.estrai(campo_skill, massimo=15)
-            skills += [e for e in per_esco if e not in skills]
+            viste = {s.casefold() for s in skills}
+            for e in per_esco:
+                if e.casefold() not in viste:
+                    skills.append(e)
+                    viste.add(e.casefold())
             skills = skills[:30]
         except Exception:                            # noqa: BLE001
             pass

@@ -32,13 +32,15 @@ TABLES = [
     "plan_quotas", "user_evaluation_budget",
     "cluster_source_cursors",
     "model_pricing", "benchmark_runs", "benchmark_models", "benchmark_scores",
+    "user_push_tokens", "match_interviews", "match_documents",
+    "personal_notification_dedup",
 ]
 
 INDEXES = [
     "users_email_key", "users_due_idx",
     "user_cvs_one_active_idx", "user_cvs_user_idx",
     "clusters_active_idx", "cluster_daily_budget_open_idx",
-    "user_clusters_by_cluster_idx",
+    "user_clusters_by_cluster_idx", "user_clusters_due_idx",
     "jobs_active_posted_idx", "jobs_taxonomies_idx", "jobs_countries_idx",
     "jobs_key_skills_idx", "jobs_keywords_idx", "jobs_tsv_idx",
     "jobs_filters_idx", "jobs_last_seen_idx", "jobs_fingerprint_idx",
@@ -46,6 +48,7 @@ INDEXES = [
     "job_embeddings_hnsw_idx",
     "job_clusters_by_cluster_idx",
     "matches_user_recent_idx", "matches_passed_idx", "matches_job_idx",
+    "matches_user_actions_idx",
     "digests_user_recent_idx", "digests_pending_idx",
     "digest_items_job_idx", "digest_items_user_idx",
     "ingestion_runs_cluster_idx", "ingestion_runs_running_idx",
@@ -54,15 +57,30 @@ INDEXES = [
     "deletion_requests_open_idx", "deletion_requests_status_idx",
     "login_tokens_user_idx", "login_tokens_expiry_idx",
     "sessions_user_idx", "sessions_active_idx", "oauth_identities_user_idx",
+    "user_push_tokens_token_idx",
+    "user_clusters_ricerca_unica",
+    "match_interviews_match_idx", "match_interviews_reminder_idx",
+    "match_documents_match_idx", "match_documents_user_idx",
+    "personal_notification_sent_idx",
 ]
 
 CONSTRAINTS = [
     "users_channels_ck", "users_schedule_ck", "users_deleted_ck",
-    "user_cvs_embedding_ck",
+    "user_cvs_embedding_ck", "user_cvs_location_city_ck",
+    "user_cvs_location_country_ck",
     "clusters_family_country_key", "clusters_family_fk", "cluster_daily_budget_circuit_ck",
     "jobs_source_id_key", "jobs_canonical_url_key", "jobs_expiry_ck",
     "jobs_not_self_dup_ck",
     "matches_user_job_key", "matches_id_user_key",
+    "matches_application_status_ck", "matches_dismiss_reason_ck",
+    "matches_dismiss_state_ck", "matches_applied_at_ck",
+    "matches_action_version_ck", "matches_user_action_ck",
+    "matches_note_length_ck", "matches_contact_length_ck", "matches_next_action_ck",
+    "match_interviews_match_fk", "match_interviews_note_ck",
+    "match_interviews_reminder_ck", "match_documents_match_fk",
+    "match_documents_filename_ck", "match_documents_mime_ck",
+    "match_documents_size_ck", "match_documents_sha256_ck",
+    "match_documents_encryption_ck", "personal_notification_kind_ck",
     "digests_user_slot_key", "digests_id_user_key", "digests_sent_ck",
     "digests_empty_ck", "digests_counts_ck", "digests_period_ck",
     "digest_items_rank_key", "digest_items_digest_fk", "digest_items_match_fk",
@@ -71,6 +89,11 @@ CONSTRAINTS = [
     "jobs_raw_present_ck", "jobs_purged_is_dead_ck", "cluster_month_stats_month_ck",
     "provider_budget_month_ck", "provider_budget_circuit_ck",
     "user_clusters_employer_kinds_ck",
+    "user_clusters_min_score_ck",
+    "user_clusters_frequency_ck", "user_clusters_send_weekday_ck",
+    "user_clusters_send_monthday_ck", "user_clusters_send_hour_ck",
+    "user_clusters_schedule_ck",
+    "user_clusters_ricerca_unica",
     "cluster_source_cursors_source_check",
     "login_tokens_hash_key", "login_tokens_window_ck", "login_tokens_consumed_ck",
     "sessions_hash_key", "sessions_window_ck",
@@ -97,7 +120,7 @@ TRIGGERS = [
     "users_set_updated_at", "users_valid_timezone", "clusters_set_updated_at",
     "user_clusters_seniority_order", "jobs_derive_fields_trg",
     "jobs_duplicate_target_canonical", "jobs_employer_kind_trg",
-    "user_clusters_employer_kinds_trg",
+    "user_clusters_employer_kinds_trg", "user_clusters_valid_timezone",
 ]
 
 
@@ -216,8 +239,70 @@ def main() -> int:
         cur.execute("SELECT count(*), max(version) FROM schema_migrations")
         count, top = cur.fetchone()
         expected = len(list((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql")))
-        rep.check(count == expected,
+        rep.check(count == expected and top == expected,
                   f"{expected} migrazioni applicate (trovate {count}, ultima {top})")
+
+        rep.section("frequenza per ricerca")
+        tipi_sched = {
+            "frequency": "text", "send_weekday": "smallint",
+            "send_monthday": "smallint", "send_hour_local": "smallint",
+            "timezone": "text", "next_digest_at": "timestamp with time zone",
+            "last_digest_at": "timestamp with time zone",
+        }
+        cur.execute(
+            "SELECT column_name, data_type, is_nullable, column_default "
+            "FROM information_schema.columns WHERE table_schema = 'public' "
+            "AND table_name = 'user_clusters' AND column_name = ANY(%s)",
+            (list(tipi_sched),))
+        trovate = {r[0]: r[1:] for r in cur.fetchall()}
+        rep.check(trovate.keys() == tipi_sched.keys(), "sette colonne di scheduling su user_clusters")
+        rep.check(all(trovate.get(nome) == (tipo, "YES", None)
+                      for nome, tipo in tipi_sched.items()),
+                  "colonne di scheduling nullable, tipizzate e senza backfill/default")
+        cur.execute("SELECT pg_get_indexdef(indexrelid) FROM pg_index "
+                    "WHERE indexrelid = 'user_clusters_due_idx'::regclass")
+        indice_due = cur.fetchone()
+        rep.check(indice_due is not None
+                  and "WHERE" in indice_due[0]
+                  and "frequency IS NOT NULL" in indice_due[0]
+                  and "next_digest_at IS NOT NULL" in indice_due[0],
+                  "indice parziale delle scadenze specifiche effettive")
+
+        rep.section("stato personale e provenienza delle date")
+        colonne_azione = {
+            "saved_at", "dismissed_at", "dismiss_reason", "archived_at",
+            "application_status", "applied_at", "action_version", "user_action_at",
+            "note", "contact", "next_action", "next_action_at",
+        }
+        cur.execute(
+            "SELECT column_name, data_type, is_nullable, column_default "
+            "FROM information_schema.columns WHERE table_schema = 'public' "
+            "AND table_name = 'matches'")
+        colonne = {r[0]: r[1:] for r in cur.fetchall()}
+        rep.check(colonne_azione <= colonne.keys(), "colonne delle azioni su matches")
+        rep.check(
+            colonne.get("action_version", (None, None, None))[0] == "bigint"
+            and colonne.get("action_version", (None, None, None))[1] == "NO"
+            and colonne.get("action_version", (None, None, None))[2] == "0",
+            "action_version bigint NOT NULL DEFAULT 0")
+        rep.check(
+            colonne.get("application_status", (None, None, None))[1] == "NO"
+            and colonne.get("application_status", (None, None, None))[2]
+            == "'not_started'::text",
+            "application_status NOT NULL DEFAULT not_started")
+        cur.execute(
+            "SELECT data_type, is_nullable, column_default "
+            "FROM information_schema.columns WHERE table_schema = 'public' "
+            "AND table_name = 'jobs' AND column_name = 'date_posted_declared'")
+        dichiarata = cur.fetchone()
+        rep.check(dichiarata == ("boolean", "YES", None),
+                  "jobs.date_posted_declared boolean tri-state senza backfill")
+        cur.execute("SELECT pg_get_indexdef(indexrelid) FROM pg_index "
+                    "WHERE indexrelid = 'matches_user_actions_idx'::regclass")
+        indice = cur.fetchone()[0].lower()
+        rep.check("user_id" in indice and "user_action_at desc" in indice
+                  and "where" in indice and "user_action_at is not null" in indice,
+                  "indice parziale dello storico azioni")
 
         rep.section("politica sui link")
         cur.execute("SELECT kind || '=' || rank FROM link_kinds ORDER BY rank")

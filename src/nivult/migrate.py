@@ -12,7 +12,10 @@ Uso:
 Una migrazione può disattivare l'incapsulamento in transazione mettendo
     -- nivult:no-transaction
 fra le prime righe (serve ad ALTER DATABASE e a CREATE INDEX CONCURRENTLY).
-Una migrazione così deve essere idempotente.
+Anche un file che controlla direttamente la transazione (BEGIN/COMMIT) viene
+riconosciuto e trattato così: un wrapper esterno non può renderlo atomico.
+Una migrazione no-transaction deve essere idempotente, perché dopo un errore
+viene ritentata dall'inizio.
 """
 
 from __future__ import annotations
@@ -57,6 +60,95 @@ class Migration:
         return f"{self.version:04d}_{self.name}"
 
 
+def _sql_code(sql: str) -> str:
+    """SQL senza commenti, stringhe o corpi funzione, conservando i separatori."""
+    out = list(sql)
+    i = 0
+    while i < len(sql):
+        if sql.startswith("--", i):
+            end = sql.find("\n", i + 2)
+            end = len(sql) if end < 0 else end
+            for j in range(i, end):
+                out[j] = " "
+            i = end
+            continue
+        if sql.startswith("/*", i):
+            depth, end = 1, i + 2
+            while end < len(sql) and depth:
+                if sql.startswith("/*", end):
+                    depth += 1
+                    end += 2
+                elif sql.startswith("*/", end):
+                    depth -= 1
+                    end += 2
+                else:
+                    end += 1
+            for j in range(i, min(end, len(sql))):
+                if out[j] != "\n":
+                    out[j] = " "
+            i = end
+            continue
+        if sql[i] in ("'", '"'):
+            quote = sql[i]
+            end = i + 1
+            while end < len(sql):
+                if sql[end] == quote:
+                    if end + 1 < len(sql) and sql[end + 1] == quote:
+                        end += 2
+                        continue
+                    end += 1
+                    break
+                end += 1
+            for j in range(i, min(end, len(sql))):
+                if out[j] != "\n":
+                    out[j] = " "
+            i = end
+            continue
+        if sql[i] == "$":
+            marker = re.match(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$", sql[i:])
+            if marker:
+                tag = marker.group(0)
+                end = sql.find(tag, i + len(tag))
+                end = len(sql) if end < 0 else end + len(tag)
+                for j in range(i, end):
+                    if out[j] != "\n":
+                        out[j] = " "
+                i = end
+                continue
+        i += 1
+    return "".join(out)
+
+
+def _split_sql(sql: str) -> list[str]:
+    """Statement separati; i ';' dentro funzioni o letterali non contano."""
+    code = _sql_code(sql)
+    statements: list[str] = []
+    start = 0
+    for i, char in enumerate(code):
+        if char != ";":
+            continue
+        statement = sql[start:i].strip()
+        if _sql_code(statement).strip():
+            statements.append(statement)
+        start = i + 1
+    statement = sql[start:].strip()
+    if _sql_code(statement).strip():
+        statements.append(statement)
+    return statements
+
+
+_TRANSACTION_CONTROL = re.compile(
+    r"(?:^|;)\s*(?:BEGIN(?:\s+(?:TRANSACTION|WORK))?|START\s+TRANSACTION|"
+    r"COMMIT(?:\s+(?:TRANSACTION|WORK))?|ROLLBACK(?:\s+(?:TRANSACTION|WORK))?|"
+    r"END(?:\s+(?:TRANSACTION|WORK))?|ABORT)(?:\s*;|\s*\Z)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def has_transaction_control(sql: str) -> bool:
+    return _TRANSACTION_CONTROL.search(_sql_code(sql)) is not None
+
+
 def discover(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
     if not directory.is_dir():
         raise SystemExit(f"cartella migrazioni non trovata: {directory}")
@@ -84,7 +176,8 @@ def discover(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
             path=path,
             sql=sql,
             checksum=hashlib.sha256(raw).hexdigest(),
-            transactional="-- nivult:no-transaction" not in head,
+            transactional=("-- nivult:no-transaction" not in head
+                           and not has_transaction_control(sql)),
         )
 
     migrations = [found[v] for v in sorted(found)]
@@ -177,8 +270,8 @@ def cmd_up(args: argparse.Namespace) -> int:
                                 cur.execute(m.sql)
                                 _record(cur, m, started)
                     else:
+                        _execute_no_transaction(conn, m)
                         with conn.cursor() as cur:
-                            cur.execute(m.sql)
                             _record(cur, m, started)
                 except psycopg.Error as exc:
                     print("FALLITA")
@@ -197,6 +290,27 @@ def cmd_up(args: argparse.Namespace) -> int:
         finally:
             with conn.cursor() as cur:
                 cur.execute("SELECT pg_advisory_unlock(%s)", (LOCK_KEY,))
+
+
+def _execute_no_transaction(conn: psycopg.Connection, m: Migration) -> None:
+    """Esegue un file idempotente e lo ritenta una volta dopo un errore."""
+    for attempt in (1, 2):
+        try:
+            with conn.cursor() as cur:
+                for statement in _split_sql(m.sql):
+                    cur.execute(statement)
+            return
+        except psycopg.Error:
+            # Un BEGIN interno può lasciare la sessione in stato abortito; le
+            # istruzioni già committed, invece, restano e il retry deve tollerarle.
+            conn.rollback()
+            if attempt == 2:
+                raise
+            print(
+                f"\n  {m.label}: tentativo {attempt} fallito; "
+                "ritento il file no-transaction idempotente ...",
+                file=sys.stderr,
+            )
 
 
 def _record(cur: psycopg.Cursor, m: Migration, started: float) -> None:

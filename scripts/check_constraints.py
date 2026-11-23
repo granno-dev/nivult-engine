@@ -19,9 +19,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import psycopg  # noqa: E402
+import psycopg
 
-from nivult.config import database_name, database_url, safe_dsn  # noqa: E402
+from nivult.config import database_name, database_url, safe_dsn
 
 VEC = "[" + ",".join(["0.01"] * 1024) + "]"
 
@@ -32,9 +32,8 @@ FAILED: list[str] = []
 def expect_error(conn, sqlstate: str, label: str, sql: str, params=()) -> None:
     """Il caso DEVE fallire con questo SQLSTATE."""
     try:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(sql, params)
     except psycopg.Error as exc:
         if exc.sqlstate == sqlstate:
             PASSED.append(label)
@@ -51,10 +50,9 @@ def expect_error(conn, sqlstate: str, label: str, sql: str, params=()) -> None:
 def expect_value(conn, label: str, sql: str, params, expected) -> None:
     """Il caso DEVE riuscire e produrre questo valore."""
     try:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute(sql, params)
-                got = cur.fetchone()[0]
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(sql, params)
+            got = cur.fetchone()[0]
     except psycopg.Error as exc:
         FAILED.append(label)
         print(f"  FAIL  {label} — errore inatteso {exc.sqlstate}: "
@@ -140,17 +138,16 @@ def run_deletion(conn, label: str, user_id: str, max_batches: int = 50) -> str:
     """Cicla delete_user_batch come farebbe nivult.gdpr, e ritorna l'ultimo step."""
     step = None
     try:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                for _ in range(max_batches):
-                    cur.execute(
-                        "SELECT step, rows_affected FROM delete_user_batch(%s, %s)",
-                        (user_id, 1000))
-                    step, _rows = cur.fetchone()
-                    if step == "users":
-                        break
-                else:
-                    raise RuntimeError("non converge entro max_batches")
+        with conn.transaction(), conn.cursor() as cur:
+            for _ in range(max_batches):
+                cur.execute(
+                    "SELECT step, rows_affected FROM delete_user_batch(%s, %s)",
+                    (user_id, 1000))
+                step, _rows = cur.fetchone()
+                if step == "users":
+                    break
+            else:
+                raise RuntimeError("non converge entro max_batches")
     except (psycopg.Error, RuntimeError) as exc:
         FAILED.append(label)
         print(f"  FAIL  {label} — {exc}")
@@ -304,6 +301,20 @@ def main() -> int:
             cur.execute("SELECT settle_credits('fantastic', NULL, -99999)")
         expect_value(conn, "il rimborso non scende sotto zero",
             "SELECT credits_used FROM provider_budget WHERE provider='fantastic'", (), 0)
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_requests('fantastic', NULL, -1)")
+        expect_value(conn, "anche la richiesta riservata si concilia",
+            "SELECT requests_used FROM provider_budget WHERE provider='fantastic'", (), 0)
+        expect_value(conn, "provider concede prima del rifiuto del cluster",
+            "SELECT provider_try_consume('fantastic', 10, 1)", (), True)
+        expect_value(conn, "il cluster rifiuta la riserva",
+            "SELECT cluster_try_consume(%s, 999999)", (cl,), False)
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_credits('fantastic', NULL, -10)")
+            cur.execute("SELECT settle_requests('fantastic', NULL, -1)")
+        expect_value(conn, "dopo il rifiuto crediti e richieste tornano a zero",
+            "SELECT credits_used + requests_used FROM provider_budget WHERE provider='fantastic'",
+            (), 0)
         expect_error(conn, "22007", "data non valida rifiutata",
             "INSERT INTO provider_budget (provider, period_month) "
             "VALUES ('fantastic', 'non-una-data')")
@@ -337,17 +348,30 @@ def main() -> int:
             "VALUES (%s, 'france_travail', '   ')", (cl,))
         with conn.cursor() as cur:
             cur.execute("INSERT INTO cluster_source_queries (cluster_id,source,query) "
-                        "VALUES (%s,'france_travail','ressources humaines')", (cl,))
+                        "VALUES (%s,'indeed','ressources humaines')", (cl,))
         expect_value(conn, "un termine per fonte, registrato",
             "SELECT count(*) FROM cluster_source_queries WHERE cluster_id=%s", (cl,), 1)
-        expect_error(conn, "23505", "due termini per la stessa fonte rifiutati",
+        expect_value(conn, "due termini per la stessa fonte consentiti",
             "INSERT INTO cluster_source_queries (cluster_id, source, query) "
-            "VALUES (%s, 'france_travail', 'altro')", (cl,))
+            "VALUES (%s, 'indeed', 'altro') RETURNING query", (cl,), "altro")
+        expect_value(conn, "entrambi i termini restano registrati",
+            "SELECT count(*) FROM cluster_source_queries WHERE cluster_id=%s AND source='indeed'",
+            (cl,), 2)
+        expect_value(conn, "apri_cluster usa la PK a tre colonne",
+            "SELECT apri_cluster('Human Resources','IT') = %s", (cl,), True)
+        expect_value(conn, "coverage aggregata: una riga per cluster-fonte",
+            "SELECT count(*) FROM cluster_coverage_v WHERE id=%s AND source='indeed'", (cl,), 1)
+        expect_value(conn, "coverage contiene tutti i termini",
+            "SELECT interrogabile AND query LIKE '%%altro%%' AND query LIKE '%%ressources%%' "
+            "FROM cluster_coverage_v WHERE id=%s AND source='indeed'", (cl,), True)
 
         section("cursore per coppia cluster-fonte")
         expect_error(conn, "23514", "fonte fuori vocabolario rifiutata",
             "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
-            "VALUES (%s, 'linkedin', now())", (cl,))
+            "VALUES (%s, 'sconosciuta', now())", (cl,))
+        expect_value(conn, "LinkedIn è una fonte ammessa",
+            "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
+            "VALUES (%s, 'linkedin', now()) RETURNING source", (cl,), "linkedin")
         expect_error(conn, "23505", "un solo cursore per coppia cluster-fonte",
             "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
             "VALUES (%s, 'fantastic', now()), (%s, 'fantastic', now())", (cl, cl))
@@ -359,7 +383,8 @@ def main() -> int:
                         "last_seen_posted_at) VALUES (%s, 'fantastic', "
                         "now() - interval '3 days')", (cl,))
         expect_value(conn, "un cursore registrato per la coppia",
-            "SELECT count(*) FROM cluster_source_cursors WHERE cluster_id = %s", (cl,), 1)
+            "SELECT count(*) FROM cluster_source_cursors WHERE cluster_id = %s "
+            "AND source = 'fantastic'", (cl,), 1)
         expect_value(conn, "l'upsert con una data PIÙ VECCHIA non fa regredire il cursore",
             "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
             "VALUES (%s, 'fantastic', now() - interval '10 days') "
@@ -408,6 +433,10 @@ def main() -> int:
             "WHERE cluster_id = %s", (cl,), prima)
         expect_value(conn, "e la dotazione dedicata è stata intaccata",
             "SELECT backfill_credits_used FROM clusters WHERE id = %s", (cl,), 500)
+        with conn.cursor() as cur:
+            cur.execute("SELECT settle_requests('fantastic', %s, -1, true)", (cl,))
+        expect_value(conn, "la richiesta di backfill torna nella stessa dotazione",
+            "SELECT backfill_requests_used FROM clusters WHERE id = %s", (cl,), 0)
         expect_value(conn, "oltre la dotazione: respinto",
             "SELECT cluster_try_consume_backfill(%s, 99999)", (cl,), False)
         with conn.cursor() as cur:
@@ -435,6 +464,48 @@ def main() -> int:
             "           RETURNING accepted_employer_kinds) "
             "SELECT accepted_employer_kinds::text FROM x", (u_b, cl),
             "{direct,staffing_agency,undisclosed}")
+        expect_value(conn, "righe pre-0087: eredita' e nessuna scadenza inventata",
+            "SELECT frequency IS NULL AND send_weekday IS NULL AND send_monthday IS NULL "
+            "AND send_hour_local IS NULL AND timezone IS NULL AND next_digest_at IS NULL "
+            "AND last_digest_at IS NULL FROM user_clusters WHERE user_id = %s "
+            "AND target_role_key = ''", (u_b,), True)
+        expect_error(conn, "23514", "frequenza per ricerca sconosciuta rifiutata",
+            "UPDATE user_clusters SET frequency = 'yearly' WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "daily per ricerca con weekday rifiutato",
+            "UPDATE user_clusters SET frequency = 'daily', send_weekday = 1, "
+            "send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "weekly per ricerca senza weekday rifiutato",
+            "UPDATE user_clusters SET frequency = 'weekly', send_weekday = NULL, "
+            "send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "weekly per ricerca con monthday rifiutato",
+            "UPDATE user_clusters SET frequency = 'weekly', send_weekday = 1, "
+            "send_monthday = 1 WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "monthly per ricerca senza monthday rifiutato",
+            "UPDATE user_clusters SET frequency = 'monthly', send_weekday = NULL, "
+            "send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "monthly per ricerca con weekday rifiutato",
+            "UPDATE user_clusters SET frequency = 'monthly', send_weekday = 1, "
+            "send_monthday = 1 WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "weekday per ricerca fuori range rifiutato",
+            "UPDATE user_clusters SET frequency = 'weekly', send_weekday = 8, "
+            "send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "monthday per ricerca fuori range rifiutato",
+            "UPDATE user_clusters SET frequency = 'monthly', send_weekday = NULL, "
+            "send_monthday = 29 WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "ora per ricerca fuori range rifiutata",
+            "UPDATE user_clusters SET frequency = 'daily', send_hour_local = 24, "
+            "send_weekday = NULL, send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "fuso per ricerca inesistente rifiutato dal trigger",
+            "UPDATE user_clusters SET frequency = 'daily', timezone = 'Europe/Atlantide', "
+            "send_weekday = NULL, send_monthday = NULL WHERE user_id = %s", (u_b,))
+        expect_error(conn, "23514", "scadenza specifica senza override rifiutata",
+            "UPDATE user_clusters SET frequency = NULL, send_weekday = NULL, "
+            "send_monthday = NULL, send_hour_local = NULL, timezone = NULL, "
+            "next_digest_at = now() WHERE user_id = %s", (u_b,))
+        expect_value(conn, "override daily con fallback a ora e fuso account",
+            "UPDATE user_clusters SET frequency = 'daily', send_weekday = NULL, "
+            "send_monthday = NULL, send_hour_local = NULL, timezone = NULL, "
+            "next_digest_at = now() WHERE user_id = %s RETURNING frequency", (u_b,), "daily")
         expect_error(conn, "23514", "tipo di datore inesistente rifiutato",
             "UPDATE user_clusters SET accepted_employer_kinds = ARRAY['agency'] "
             "WHERE user_id = %s", (u_b,))
@@ -444,6 +515,16 @@ def main() -> int:
         expect_value(conn, "escludere le agenzie è consentito",
             "UPDATE user_clusters SET accepted_employer_kinds = ARRAY['direct'] "
             "WHERE user_id = %s RETURNING cardinality(accepted_employer_kinds)", (u_b,), 1)
+
+        expect_value(conn, "ruoli distinti nello stesso cluster hanno ID propri",
+            "WITH a AS (INSERT INTO user_clusters (user_id,cluster_id,target_role) "
+            "           VALUES (%s,%s,'HRBP') RETURNING id), "
+            "b AS (INSERT INTO user_clusters (user_id,cluster_id,target_role) "
+            "           VALUES (%s,%s,'HR Manager') RETURNING id) "
+            "SELECT a.id <> b.id FROM a,b", (u_b, cl, u_b, cl), True)
+        expect_error(conn, "23505", "stesso ruolo con spazi e maiuscole diverse rifiutato",
+            "INSERT INTO user_clusters (user_id,cluster_id,target_role) "
+            "VALUES (%s,%s,' hrbp ')", (u_b, cl))
 
         expect_error(conn, "23503", "cancellare un cluster con iscritti rifiutato",
             "WITH s AS (INSERT INTO user_clusters (user_id,cluster_id) VALUES (%s,%s) "
@@ -551,6 +632,31 @@ def main() -> int:
                      mkorg("e6", "Randstadt Bakery"), (), "direct")
         expect_value(conn, "Manpowersystem Nordic NON è Manpower",
                      mkorg("e7", "Manpowersystem Nordic"), (), "direct")
+        expect_value(conn, "Areajob filiale -> agenzia",
+                     mkorg("e10", "Areajob Filiale di Cascina"), (), "staffing_agency")
+        expect_value(conn, "Ali Spa filiale -> agenzia",
+                     mkorg("e11", "Ali Spa - Filiale di Pescara"), (), "staffing_agency")
+        expect_value(conn, "Apisjob -> agenzia", mkorg("e12", "Apisjob"), (), "staffing_agency")
+        expect_value(conn, "Aims International -> agenzia",
+                     mkorg("e13", "Aims International Italia Società Benefit"),
+                     (), "staffing_agency")
+        expect_value(conn, "Barrington James -> agenzia",
+                     mkorg("e14", "Barrington James"), (), "staffing_agency")
+        expect_value(conn, "qualifica agenzia nel nome -> agenzia",
+                     mkorg("e15", "AxL S.p.A. - Agenzia per il Lavoro"),
+                     (), "staffing_agency")
+        expect_value(conn, "Alis Spa NON è Ali Spa",
+                     mkorg("e16", "Alis Spa"), (), "direct")
+        expect_value(conn, "Areajobbing NON è Areajob",
+                     mkorg("e17", "Areajobbing Srl"), (), "direct")
+        expect_value(conn, "ADHR Talent -> agenzia",
+                     mkorg("e18", "ADHR Talent"), (), "staffing_agency")
+        expect_value(conn, "Adhri Systems NON è ADHR",
+                     mkorg("e19", "Adhri Systems"), (), "direct")
+        expect_value(conn, "il nuovo pattern riclassifica le offerte esistenti",
+            "WITH forza AS (UPDATE jobs SET employer_kind = 'direct' "
+            "               WHERE source_job_id = 'e10' RETURNING 1) "
+            "SELECT reclassify_employers() FROM forza", (), 1)
 
         expect_value(conn, "datore assente -> undisclosed, non 'direct'",
             "INSERT INTO jobs (source,source_job_id,url,canonical_url,title,"
@@ -687,6 +793,92 @@ def main() -> int:
             "VALUES (%s,%s,70,'seconda valutazione',80,'glm-5.2')", (u_a, j1))
         expect_value(conn, "colonna generata passed coerente col punteggio",
             "SELECT passed FROM matches WHERE id = %s", (ids["match_a"],), True)
+        expect_value(conn, "default: nessuna azione e versione zero",
+            "SELECT application_status = 'not_started' AND action_version = 0 "
+            "AND user_action_at IS NULL AND saved_at IS NULL AND dismissed_at IS NULL "
+            "AND archived_at IS NULL AND applied_at IS NULL FROM matches WHERE id = %s",
+            (ids["match_a"],), True)
+        expect_error(conn, "23514", "stato candidatura fuori vocabolario",
+            "UPDATE matches SET application_status = 'ghost', applied_at = now(), "
+            "action_version = 1, user_action_at = now() WHERE id = %s",
+            (ids["match_a"],))
+        expect_error(conn, "23514", "motivo scarto fuori vocabolario",
+            "UPDATE matches SET dismissed_at = now(), dismiss_reason = 'ghost', "
+            "action_version = 1, user_action_at = now() WHERE id = %s",
+            (ids["match_a"],))
+        expect_value(conn, "motivo scarto arricchito salary accettato",
+            "UPDATE matches SET dismissed_at = now(), dismiss_reason = 'salary', "
+            "action_version = 1, user_action_at = now() WHERE id = %s "
+            "RETURNING dismiss_reason", (ids["match_b"],), "salary")
+        expect_error(conn, "23514", "scarto senza motivo rifiutato",
+            "UPDATE matches SET dismissed_at = now(), action_version = 1, "
+            "user_action_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "motivo senza scarto rifiutato",
+            "UPDATE matches SET dismiss_reason = 'target', action_version = 1, "
+            "user_action_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "scarto e salvataggio insieme rifiutati",
+            "UPDATE matches SET saved_at = now(), dismissed_at = now(), "
+            "dismiss_reason = 'company', action_version = 1, user_action_at = now() "
+            "WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "scarto e candidatura insieme rifiutati",
+            "UPDATE matches SET dismissed_at = now(), dismiss_reason = 'target', "
+            "application_status = 'applied', applied_at = now(), action_version = 1, "
+            "user_action_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "candidatura avviata senza applied_at",
+            "UPDATE matches SET application_status = 'interview', action_version = 1, "
+            "user_action_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "not_started con applied_at rifiutato",
+            "UPDATE matches SET applied_at = now(), action_version = 1, "
+            "user_action_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "versione azione negativa rifiutata",
+            "UPDATE matches SET action_version = -1 WHERE id = %s",
+            (ids["match_a"],))
+        expect_error(conn, "23514", "azione personale a versione zero rifiutata",
+            "UPDATE matches SET saved_at = now() WHERE id = %s", (ids["match_a"],))
+        expect_error(conn, "23514", "versione positiva senza user_action_at",
+            "UPDATE matches SET saved_at = now(), action_version = 1 WHERE id = %s",
+            (ids["match_a"],))
+        expect_error(conn, "23514", "user_action_at prima della prima transizione",
+            "UPDATE matches SET saved_at = now(), action_version = 1, "
+            "user_action_at = now() - interval '1 second' WHERE id = %s",
+            (ids["match_a"],))
+        expect_value(conn, "salvataggio, archivio e candidatura possono coesistere",
+            "UPDATE matches SET saved_at = now() - interval '2 days', "
+            "archived_at = now() - interval '1 day', application_status = 'applied', "
+            "applied_at = now() - interval '1 day', action_version = 1, "
+            "user_action_at = now() WHERE id = %s RETURNING application_status",
+            (ids["match_a"],), "applied")
+        expect_error(conn, "23514", "data della prossima azione senza azione",
+            "UPDATE matches SET next_action_at = now() WHERE id = %s",
+            (ids["match_a"],))
+        expect_error(conn, "23514", "promemoria colloquio negativo rifiutato",
+            "INSERT INTO match_interviews (match_id,user_id,starts_at,reminder_minutes) "
+            "VALUES (%s,%s,now(),-1)", (ids["match_a"], u_a))
+        expect_error(conn, "23503", "colloquio non puo' puntare al match di un altro utente",
+            "INSERT INTO match_interviews (match_id,user_id,starts_at) "
+            "VALUES (%s,%s,now())", (ids["match_a"], u_b))
+        expect_error(conn, "23503", "documento non puo' puntare al match di un altro utente",
+            "INSERT INTO match_documents (match_id,user_id,original_filename,mime_type,"
+            "size_bytes,sha256,storage_key,encryption_algo,encrypted_dek,nonce,auth_tag,"
+            "kek_version) VALUES (%s,%s,'cv.pdf','application/pdf',100,repeat('a',64),"
+            "'documenti/test/vincolo','aes-256-gcm',decode(repeat('ab',32),'hex'),"
+            "decode(repeat('cd',12),'hex'),decode(repeat('ef',16),'hex'),1)",
+            (ids["match_a"], u_b))
+        expect_error(conn, "23514", "tipo documento eseguibile rifiutato",
+            "INSERT INTO match_documents (match_id,user_id,original_filename,mime_type,"
+            "size_bytes,sha256,storage_key,encryption_algo,encrypted_dek,nonce,auth_tag,"
+            "kek_version) VALUES (%s,%s,'pagina.html','text/html',100,repeat('a',64),"
+            "'documenti/test/html','aes-256-gcm',decode(repeat('ab',32),'hex'),"
+            "decode(repeat('cd',12),'hex'),decode(repeat('ef',16),'hex'),1)",
+            (ids["match_a"], u_a))
+        expect_error(conn, "23514", "tipo notifica personale fuori vocabolario",
+            "INSERT INTO personal_notification_dedup (user_id,kind,event_key) "
+            "VALUES (%s,'ghost','evento')", (u_a,))
+        expect_value(conn, "data legacy senza prova resta NULL",
+            "SELECT date_posted_declared FROM jobs WHERE id = %s", (j1,), None)
+        expect_value(conn, "fallback puo' essere marcato non dichiarato",
+            "UPDATE jobs SET date_posted_declared = false WHERE id = %s "
+            "RETURNING date_posted_declared", (j1,), False)
         expect_error(conn, "23503", "cancellare un'offerta già valutata rifiutato",
             "DELETE FROM jobs WHERE id = %s", (j1,))
 
@@ -745,6 +937,18 @@ def main() -> int:
             "AND column_name ILIKE '%%password%%'", (), 0)
 
         section("cifratura dei CV")
+        expect_error(conn, "23514", "città del CV oltre 120 caratteri rifiutata",
+            "INSERT INTO user_cvs (user_id, storage_key, location_city, encryption_algo, "
+            "encrypted_dek, nonce, auth_tag, kek_version) VALUES "
+            "(%s,'cv/location-long.pdf',repeat('x',121),'aes-256-gcm',"
+            "decode(repeat('ab',32),'hex'),decode(repeat('cd',12),'hex'),"
+            "decode(repeat('ef',16),'hex'),1)", (u_a,))
+        expect_error(conn, "23514", "paese del CV non ISO2 maiuscolo rifiutato",
+            "INSERT INTO user_cvs (user_id, storage_key, location_country, encryption_algo, "
+            "encrypted_dek, nonce, auth_tag, kek_version) VALUES "
+            "(%s,'cv/location-invalid.pdf','it','aes-256-gcm',"
+            "decode(repeat('ab',32),'hex'),decode(repeat('cd',12),'hex'),"
+            "decode(repeat('ef',16),'hex'),1)", (u_a,))
         expect_error(conn, "23514", "DEK troppo corta rifiutata",
             "INSERT INTO user_cvs (user_id, storage_key, encryption_algo, encrypted_dek, "
             "nonce, auth_tag, kek_version) VALUES (%s,'cv/x.pdf','aes-256-gcm',"
@@ -781,8 +985,8 @@ def main() -> int:
                      expired_days, expired_days))
                 jid = cur.fetchone()[0]
                 cur.execute("INSERT INTO job_clusters (job_id,cluster_id) VALUES (%s,%s)", (jid, cl))
-                cur.execute("INSERT INTO job_embeddings (job_id,embedding,model) "
-                            "VALUES (%s,%s,'bge-m3')", (jid, VEC))
+                cur.execute("INSERT INTO job_embeddings (job_id,embedding,model,content_hash) "
+                            "VALUES (%s,%s,'bge-m3',repeat('ab',32))", (jid, VEC))
                 return jid
 
             j_free   = mkjob("ret-free",   "expired", 90, 120, salary=True)

@@ -42,7 +42,7 @@ class TokenBucket:
 
 @dataclass(slots=True)
 class Attempt:
-    status: int
+    status: int | None
     latency_ms: int
 
 
@@ -52,8 +52,12 @@ class SourceClient(Protocol):
     source: str
     countries: frozenset[str]
     credits_per_request: int
+    page_size: int
+    max_offset: int
+    attempts: list[Attempt]
 
-    def fetch(self, *, query: str, country: str, since, limit: int) -> FetchResult: ...
+    def fetch(self, *, query: str, country: str, since, limit: int,
+              offset: int = 0) -> FetchResult: ...
 
 
 class CreditoEsaurito(RuntimeError):
@@ -111,12 +115,15 @@ class HttpSource:
                 r = self._client.request(method, url, **kw)
             except httpx.HTTPError as exc:
                 last = exc
+                elapsed = int((time.monotonic() - started) * 1000)
+                self.attempts.append(Attempt(None, elapsed))
                 log.warning("%s: errore di rete (tentativo %d): %s",
                             self.source, attempt + 1, exc)
                 time.sleep(self._backoff(attempt))
                 continue
 
-            self.attempts.append(Attempt(r.status_code, int((time.monotonic() - started) * 1000)))
+            elapsed = int((time.monotonic() - started) * 1000)
+            self.attempts.append(Attempt(r.status_code, elapsed))
 
             if r.status_code == 429 and _saldo_esaurito(r.text):
                 # Non tutti i 429 vogliono dire "rallenta". Z.ai usa lo stesso

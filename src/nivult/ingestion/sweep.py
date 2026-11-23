@@ -33,25 +33,9 @@ def _require_clean_connection(conn: psycopg.Connection) -> None:
 
 
 def declared_removals(conn: psycopg.Connection, *, dry_run: bool) -> dict[str, int]:
-    """Segnali nativi delle fonti. Entrambi gratuiti."""
-    out: dict[str, int] = {}
-
-    from nivult.ingestion.sources.fantastic import FantasticClient
-    try:
-        with FantasticClient() as c:
-            ids = c.expired_ids(time_frame="1d")
-        log.info("fantastic: %d id dichiarati scaduti nelle ultime 24 ore", len(ids))
-        if not dry_run and ids:
-            with conn.cursor() as cur:
-                cur.execute("SELECT mark_jobs_removed('fantastic', %s)", (ids,))
-                out["fantastic"] = cur.fetchone()[0]
-            conn.commit()
-        else:
-            out["fantastic"] = 0
-    except SystemExit:
-        log.warning("fantastic: chiave assente, segnale di rimozione saltato")
-    except Exception as exc:  # noqa: BLE001
-        log.error("fantastic: segnale di rimozione non recuperato: %s", exc)
+    """Segnali nativi delle fonti attive. Fantastic e' pensionata e non viene chiamata."""
+    out: dict[str, int] = {"fantastic": 0}
+    log.info("fantastic: fonte pensionata, nessuna chiamata alle API")
 
     from datetime import datetime, timedelta, timezone
     from nivult.ingestion.sources.arbetsformedlingen import ArbetsformedlingenClient

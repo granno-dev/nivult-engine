@@ -201,11 +201,20 @@ def _controlli() -> list[Condizione]:
             # v1 RALLENTATO: la scheda del N5 si blocca (11/09 e 17/09/2026) e torch
             # ripiega sulla CPU senza dirlo. Su GPU v1 vede ~40.000 offerte l'ora; se ne
             # vede poche mentre la coda e' lunga, o e' sulla CPU o la scheda e' persa.
+            # Nella coda contano solo le offerte lavorabili ORA: i differiti in attesa
+            # del testo e chi aspetta `dichiarati` non lo sono. Il 18/10/2026 questa
+            # distinzione mancava e 35.861 attese hanno simulato un guasto alla GPU.
+            from nivult.ats.dichiarati import PIATTAFORME
             viste_ora, in_coda = db.execute("""SELECT
                     count(*) FILTER (WHERE locale_v1_at > now() - interval '1 hour'),
-                    count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL)
+                    count(*) FILTER (WHERE expired_at IS NULL AND locale_v1_at IS NULL
+                                     AND (differito_v1_at IS NULL OR differito_v1_at < now() - interval '6 hours')
+                                     AND (dichiarati_at IS NOT NULL OR NOT (platform_id = ANY(%s::text[]))))
                 FROM ats_jobs WHERE locale_v1_at > now() - interval '1 hour'
-                   OR (expired_at IS NULL AND locale_v1_at IS NULL)""").fetchone()
+                   OR (expired_at IS NULL AND locale_v1_at IS NULL
+                       AND (differito_v1_at IS NULL OR differito_v1_at < now() - interval '6 hours')
+                       AND (dichiarati_at IS NOT NULL OR NOT (platform_id = ANY(%s::text[]))))""",
+                       (list(PIATTAFORME), list(PIATTAFORME))).fetchone()
             # 13/10/2026: soglia da 3000 a 1500. Da oggi l'N5 ospita anche la
             # corsia di casa e il maestro: in contesa v1 fa ~2.200/h ed e' SANO
             # (il caso morto lo copre la guardia dell'operaio, che riparte da
@@ -411,16 +420,29 @@ def _controlli() -> list[Condizione]:
     try:
         lc = open("/opt/nivult/engine/logs/ats-cron.log", errors="replace").read()[-40000:]
         avvii = re.findall(r"=== ATS nightly (20\S+) ===", lc)
+        completati = re.findall(r"=== ATS nightly completato(?: con \d+ passi FALLITI)? (20\S+) ===", lc)
         blocco = lc.rsplit("=== ATS nightly 20", 1)[-1]
         # 26/09/2026: il giro che non e' partito NON si vedeva: la regex
         # misurava solo i passi falliti dentro un giro avvenuto oggi, e
-        # una riga di cron sparita taceva per costruzione. Ora controlla
-        # anche che il giro sia AVVENUTO entro le 26 ore.
+        # una riga di cron sparita taceva per costruzione. Controlla il
+        # giro entro 26 ore, senza accusare un giro lungo che avanza ancora.
+        # Un giro appena COMPLETATO e' prova di attivita' anche se il suo
+        # avvio, magari dal giorno prima, supera gia' le 26 ore.
         if avvii:
-            ultimo = datetime.fromisoformat(avvii[-1]).timestamp()
-            if time.time() - ultimo > 26 * 3600:
+            segni = avvii + completati
+            ultimo_testo = max(segni, key=lambda v: datetime.fromisoformat(v).timestamp())
+            ultimo = datetime.fromisoformat(ultimo_testo).timestamp()
+            nightly_vivo = bool(subprocess.run(
+                ["pgrep", "-f", "/opt/nivult/ats-nightly.sh"], capture_output=True
+            ).stdout.strip())
+            nightly_avanza = time.time() - os.path.getmtime(
+                "/opt/nivult/engine/logs/ats-nightly.log") < 3600
+            if time.time() - ultimo > 26 * 3600 and not (nightly_vivo and nightly_avanza):
+                dettaglio = f"ultimo avvio {avvii[-1]}"
+                if completati:
+                    dettaglio += f"; ultimo completamento {completati[-1]}"
                 c.append(Condizione("manutenzione", "avviso", "il giro notturno non e' partito",
-                                    f"ultimo avvio {avvii[-1]}"))
+                                    dettaglio))
         if avvii and "completato" in blocco:
             falliti = [n.split("(")[0].strip() for n, e in re.findall(r"── ([^\n]+)\n\s+(ok|FALLITO)", blocco) if e == "FALLITO"]
             if falliti and avvii[-1][:10] == time.strftime("%Y-%m-%d"):
@@ -463,7 +485,10 @@ def _controlli() -> list[Condizione]:
     try:
         import httpx
         t0 = time.time()
-        r = httpx.get("https://api.nivult.com/cruscotto", timeout=15, follow_redirects=True)
+        # Qui misuriamo l'origine, non Cloudflare: dal server il giro pubblico
+        # puo' prendere 10-20 s con l'applicazione locale sana (21/10/2026).
+        # Il percorso pubblico resta presidiato dal guardiano sul N5.
+        r = httpx.get("http://127.0.0.1:8000/cruscotto", timeout=5, follow_redirects=True)
         ms = int((time.time() - t0) * 1000)
         if r.status_code >= 500:
             c.append(Condizione("api errore", "critica", "l'API risponde con errore", f"HTTP {r.status_code} in {ms} ms"))

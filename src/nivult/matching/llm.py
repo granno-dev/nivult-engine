@@ -1,19 +1,15 @@
-"""Client per i modelli di valutazione.
+"""Client OpenAI-compatibili per valutazione, motivazione e analisi.
 
-Due modelli, due ruoli:
-
-  GLM 5.2       il giudizio vero. Punteggio 0-100 e motivazione.
-  Mistral Small il pre-screening, solo sui cluster sopra soglia: un ordinamento
-                grossolano per passare a GLM solo le migliori.
-
-NON ANCORA VERIFICATO SUL CAMPO: mancano le chiavi. Forma delle richieste presa
-dalla documentazione, non da una risposta vista.
+Il worker sceglie soltanto gli endpoint configurati e registra modello, provider
+e uso reale di ogni chiamata. Le risposte di score e tutti i campi dell'analisi
+sono validati prima di poter alimentare un match.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -21,6 +17,10 @@ from dataclasses import dataclass
 from nivult.ingestion.base import HttpSource
 
 log = logging.getLogger("nivult.matching.llm")
+
+
+class RispostaModelloNonValida(RuntimeError):
+    """Risposta HTTP riuscita ma contenuto inutilizzabile: si può ripiegare."""
 
 # La versione delle rubriche di punteggio. SI ALZA A MANO, e si alza ogni
 # volta che una modifica sposta i punteggi: soglie, regole di valutazione,
@@ -31,7 +31,8 @@ log = logging.getLogger("nivult.matching.llm")
 # contro QUESTA offerta. Il 30/08/2026 la rubrica e' cambiata due volte in
 # un giorno, e senza questa stringa i punteggi di ieri e quelli di oggi
 # sembrano confrontabili mentre non lo sono.
-VERSIONE_RUBRICA = "2026-08-30.r3"
+VERSIONE_RUBRICA = "2026-11-02.r1"
+VERSIONE_ANALISI = "2026-11-02.a2"
 
 
 @dataclass(slots=True)
@@ -68,6 +69,10 @@ class ChatModel(HttpSource):
     model = ""
     env_key = ""
 
+    @classmethod
+    def disponibile(cls) -> bool:
+        return bool(os.environ.get(cls.env_key))
+
     def __init__(self, api_key: str | None = None, **kw):
         super().__init__(rate_per_second=kw.pop("rate_per_second", 2.0),
                          timeout=kw.pop("timeout", 120.0), **kw)
@@ -76,12 +81,11 @@ class ChatModel(HttpSource):
             raise SystemExit(f"Serve {self.env_key}.")
         self.input_tokens = 0
         self.output_tokens = 0
-        # Uso dell'ULTIMA chiamata: chi valuta un'offerta alla volta lo registra
-        # su ogni riga di matches, non in aggregato.
         self.last_usage: dict = {}
 
     def chat(self, messages: list[dict], *, temperature: float = 0.0,
              max_tokens: int = 4000, extra: dict | None = None) -> str:
+        self.last_usage = {}
         payload = {"model": self.model, "messages": messages,
                    "temperature": temperature, "max_tokens": max_tokens}
         if extra:
@@ -92,23 +96,34 @@ class ChatModel(HttpSource):
                          json=payload)
         if r.status_code != 200:
             raise RuntimeError(f"{self.model} ({r.status_code}): {r.text[:300]}")
-        d = r.json()
+        try:
+            d = r.json()
+        except (TypeError, ValueError) as exc:
+            raise RispostaModelloNonValida(
+                f"{self.model}: risposta non JSON") from exc
         uso = d.get("usage") or {}
-        self.input_tokens += uso.get("prompt_tokens", 0)
-        self.output_tokens += uso.get("completion_tokens", 0)
-        self.last_usage = {
-            "input": uso.get("prompt_tokens", 0),
-            "cached": (uso.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
-            "output": uso.get("completion_tokens", 0)}
-        msg = d["choices"][0]["message"]
+        dettagli = uso.get("prompt_tokens_details") or {}
+        inp = uso.get("prompt_tokens")
+        out = uso.get("completion_tokens")
+        cached = dettagli.get("cached_tokens", 0)
+        validi = all(isinstance(v, int) and not isinstance(v, bool) and v >= 0
+                     for v in (inp, out, cached))
+        self.input_tokens += inp if isinstance(inp, int) else 0
+        self.output_tokens += out if isinstance(out, int) else 0
+        self.last_usage = {"input": inp or 0, "cached": cached or 0,
+                           "output": out or 0, "complete": validi}
+        try:
+            msg = d["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RispostaModelloNonValida(
+                f"{self.model}: risposta senza choices[0].message") from exc
         contenuto = msg.get("content")
         if contenuto is None:
-            # i modelli che ragionano a volte rispondono solo in
-            # reasoning_content: meglio quello che un crash (10/10/2026)
             contenuto = msg.get("reasoning_content")
         if contenuto is None:
-            raise RuntimeError(f"{self.model}: risposta senza content "
-                               f"(finish={d['choices'][0].get('finish_reason')})")
+            raise RispostaModelloNonValida(
+                f"{self.model}: risposta senza content "
+                f"(finish={d['choices'][0].get('finish_reason')})")
         return contenuto
 
 
@@ -249,8 +264,8 @@ class PoolModello:
 
     Ogni provider ha un 'disponibile_da': un 429 lo mette in pausa breve
     e il giro prosegue sugli altri. Se sono tutti in pausa si aspetta il
-    piu' vicino. NON e' per il matching del digest (quello resta GLM 5.2,
-    scelta di prodotto): e' per l'arricchimento ad alto volume."""
+    piu' vicino. NON e' la catena del matching del digest, che ha propri
+    contatori per modello: e' per l'arricchimento ad alto volume."""
 
     # (classe, modello, pausa dopo un 429 in secondi). Ordine = preferenza:
     # prima i piu' generosi/puliti, Mistral per ultimo (free tier severo).
@@ -341,12 +356,15 @@ candidato porta, non un requisito che l'annuncio ha mancato.
 Abbassa il punteggio solo per cio' che l'annuncio DICE e che diverge: un
 mestiere diverso, un livello lontano, una lingua che il candidato non parla.
 
-IL PAESE E' GIA' SCELTO. Questa offerta viene da una ricerca che il candidato
-ha aperto su un paese preciso: se l'annuncio e' in quel paese, la citta' NON
-conta e non abbassa il punteggio. Il candidato non ha mai dichiarato una
-citta' — dedurla dal CV e penalizzarla significa inventargli un vincolo che
-non ha posto. Abbassa per la sede solo se l'annuncio dice che si lavora in un
-paese DIVERSO da quello della ricerca.
+SEDE E PAESE. La ricerca del candidato su un paese viene prima: se l'offerta
+e' in quel paese, una citta' diversa nello stesso paese NON e' un gap e non
+abbassa il punteggio. Se il CV dichiara citta' e paese, usa quei dati: non
+segnalare MAI come problema una sede che coincide con citta' e paese del CV.
+Se il paese dell'offerta e' diverso da quello della ricerca o dal paese
+dichiarato dal CV, valuta il cambio reale: la disponibilita' al trasferimento
+lo rende una sfida gestibile, non una ragione automatica per scartare; una
+sede on-site in un altro paese resta pero' un vincolo concreto. Non inventare
+residenza, visto o disponibilita' a trasferirsi.
 
 IL RUOLO A CUI PUNTA viene PRIMA della sua storia, quando c'e': dice cosa
 vuole fare adesso, non cosa ha gia' fatto. E se nomina una FAMIGLIA
@@ -374,6 +392,13 @@ cinese perche' l'offerta li nominava.
 Rispondi SOLO con questo JSON, niente altro:
 {{"score": <0-100>, "reason": "<one sentence in {lingua}, max 10 words>"}}
 
+Quando {lingua} = Italian, la frase deve essere italiano naturale da prodotto
+professionale, non una traduzione letterale. Non usare «combacia»,
+«profilatura», «passaggio laterale plausibile» o «punti da presidiare».
+Scrivi invece «è in linea», «cambiamento di ruolo credibile», «aspetti da
+chiarire». Per CBA o Collective Bargaining Agreement usa «contrattazione
+collettiva». I titoli di lavoro restano nella lingua originale; le attività si
+spiegano con verbi concreti.
 """
 
 # Seconda passata: la motivazione che il destinatario del digest legge. Corre
@@ -387,15 +412,33 @@ RUBRICA_ANALISI = """Sei un selezionatore esperto che spiega un match al
 candidato. Rispondi SOLO con JSON:
 {{"perche": "...", "pros": ["..."], "cons": ["..."],
   "responsabilita": "...", "requisiti": "...", "benefit": "..."}}
-- perche: UNA frase (max 25 parole) che dice perché questa offerta è
-  arrivata proprio a questo candidato.
-- pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
+- perche: UNA frase (max 30 parole) che spiega il fattore decisivo del
+  punteggio: ruolo, livello o requisito specifico. Evita formule standard come
+  «livello operativo» senza il perché, generalizzazioni e semplice ripetizione
+  del titolo o dell'azienda.
+- pros: da 2 a 4 punti in cui il candidato è in linea con QUESTA offerta.
   Fatti presi dal profilo e dall'offerta, mai lodi generiche.
-- cons: da 1 a 3 punti su cui il colloquio farà domande (requisiti
-  scoperti, lingua, sede, livello). Onesti, mai scoraggianti.
-- responsabilita, requisiti, benefit: il contenuto dei blocchi omonimi
-  dell'offerta, reso fedele e compatto. null se il blocco manca.
+- cons: da 0 a 3 divergenze concrete tra profilo e offerta che il colloquio
+  potrebbe approfondire. Se non ce ne sono, restituisci []: non inventare
+  un requisito o un problema di sede per riempire il campo.
+- SEDE: confronta sempre città E paese. «Rome, US» non è «Roma, IT». Se
+  coincidono, non citare la sede fra i cons. Se il paese non è noto, non
+  dedurlo dal solo nome della città. La disponibilità al trasferimento non
+  elimina il cambio di paese, ma lo rende una scelta già dichiarata.
+- responsabilita: massimo 3 frasi sulle attività concrete che la persona
+  svolgerà, usando i verbi dell'annuncio. Non ripetere datore, sede o employer
+  branding: quelli non sono mansioni. Non limitarti al ruolo generico.
+- requisiti, benefit: il contenuto dei blocchi omonimi dell'offerta, reso
+  fedele e compatto. null se il blocco manca.
 - TUTTO in {lingua}, ogni frase breve. Dai del tu.
+- Se {lingua} = Italian, scrivi in italiano naturale professionale, non
+  tradurre letteralmente né rendere idiomi parola per parola. Usa «punti di
+  forza» e «aspetti da chiarire», mai «punti da presidiare», «combacia» o
+  «profilatura». Per HR Business Partner usa una sola volta la forma «HR
+  Business Partner (HRBP)». Per HR Generalist usa «ruolo HR generalista». Per
+  labor relations usa «relazioni sindacali», per employee relations «relazioni
+  con i dipendenti», per Permanent Placement «inserimento diretto». I titoli
+  ufficiali restano invariati; le attività si descrivono con verbi concreti.
 """
 
 RUBRICA_MOTIVAZIONE = """Sei un selezionatore esperto. Spiega in UNA frase di
@@ -458,13 +501,28 @@ al candidato giusto. Rispondi SOLO con questo JSON:
 - perche: la stessa cosa distesa, per la finestra di dettaglio del
   pannello: due o tre frasi, sempre dandogli del tu, con un dettaglio in
   più preso dall'offerta che nel digest non c'è entrato.
-- pros: da 2 a 4 punti in cui il candidato combacia con QUESTA offerta.
+- pros: da 2 a 4 punti in cui il candidato è in linea con QUESTA offerta.
   Fatti presi dal profilo e dall'offerta, mai lodi generiche.
-- cons: da 1 a 3 punti su cui il colloquio farà domande (requisiti
-  scoperti, lingua, sede, livello). Onesti, mai scoraggianti.
-- responsabilita, requisiti, benefit: il contenuto dei blocchi omonimi
-  dell'offerta, reso fedele e compatto. null se il blocco manca.
+- cons: da 0 a 3 divergenze concrete tra profilo e offerta che il colloquio
+  potrebbe approfondire. Se non ce ne sono, restituisci []: non inventare
+  un requisito o un problema di sede per riempire il campo.
+- SEDE: confronta sempre città E paese. «Rome, US» non è «Roma, IT». Se
+  coincidono, non citare la sede fra i cons. Se il paese non è noto, non
+  dedurlo dal solo nome della città. La disponibilità al trasferimento non
+  elimina il cambio di paese, ma lo rende una scelta già dichiarata.
+- responsabilita: massimo 3 frasi sulle attività concrete che la persona
+  svolgerà, usando i verbi dell'annuncio. Non ripetere datore, sede o employer
+  branding: quelli non sono mansioni. Non limitarti al ruolo generico.
+- requisiti, benefit: il contenuto dei blocchi omonimi dell'offerta, reso
+  fedele e compatto. null se il blocco manca.
 - TUTTO in {lingua}, ogni frase breve.
+- Se {lingua} = Italian, scrivi in italiano naturale professionale, non
+  tradurre letteralmente né rendere idiomi parola per parola. Usa «aspetti da
+  chiarire», «è in linea» e «cambiamento di ruolo credibile», non «punti da
+  presidiare», «combacia» o «passaggio laterale plausibile». Per labor relations
+  usa «relazioni sindacali», per employee relations «relazioni con i dipendenti»
+  e per Permanent Placement «inserimento diretto». I titoli ufficiali restano
+  invariati; le attività si descrivono con verbi concreti.
 """
 
 
@@ -480,6 +538,8 @@ def profilo_come_testo(profilo: dict) -> str:
              f"Seniority: {profilo.get('seniority','—')}"]
     fatti += [f"Competenza: {c}" for c in profilo.get("competenze", [])]
     fatti += [f"Lingua: {l}" for l in profilo.get("lingue", [])]
+    if profilo.get("residenza"):
+        fatti.append(f"Città e paese dichiarati nel CV: {profilo['residenza']}")
     if profilo.get("sedi"):
         fatti.append(f"Sedi accettate: {', '.join(profilo['sedi'])}")
     if profilo.get("note"):
@@ -502,6 +562,8 @@ def offerta_come_testo(job: dict) -> str:
         pezzi.append(f"modalità: {job['ai_work_arrangement']}")
     if job.get("cities"):
         pezzi.append(f"sede: {', '.join(job['cities'][:2])}")
+    if job.get("countries"):
+        pezzi.append(f"paese: {', '.join(job['countries'][:2])}")
     # Solo quando e' true: il false di Fantastic significa «l'annuncio non
     # ne parla», e scriverlo qui insegnerebbe al modello una bugia.
     if job.get("ai_visa_sponsorship"):
@@ -509,7 +571,9 @@ def offerta_come_testo(job: dict) -> str:
     if job.get("ai_key_skills"):
         pezzi.append(f"competenze: {', '.join(job['ai_key_skills'][:12])}")
     if job.get("ai_requirements_summary"):
-        pezzi.append(f"requisiti: {job['ai_requirements_summary'][:400]}")
+        pezzi.append(f"requisiti: {job['ai_requirements_summary'][:2000]}")
+    elif job.get("ai_core_responsibilities"):
+        pezzi.append(f"descrizione: {job['ai_core_responsibilities'][:2000]}")
     return " | ".join(pezzi)
 
 
@@ -521,17 +585,10 @@ def _testa(profilo_testo: str, rubrica: str) -> list[dict]:
             {"role": "system", "content": "PROFILO DEL CANDIDATO\n" + profilo_testo}]
 
 
-def _coda_offerta(offerta: dict, desiderio: str | None) -> str:
-    """Il messaggio dell'offerta, con in fondo le parole dell'utente.
-
-    Il desiderio va QUI e non nel prefisso, ed e' una scelta di costo prima
-    che di prompt: il prefisso (CV + rubrica) e' identico a ogni chiamata ed
-    e' quello che la cache paga. Cambiarlo per cluster manderebbe la cache a
-    vuoto ogni volta che il worker passa da una ricerca all'altra.
-
-    Sta dopo l'offerta anche per una ragione di lettura: il modello prima
-    guarda cosa c'e', poi cosa ne pensa chi cerca.
-    """
+def offerta_per_prompt(offerta: dict, desiderio: str | None = None) -> str:
+    """Offerta e preferenze nello stesso formato per ogni passo del matching."""
+    if desiderio is None:
+        desiderio = offerta.get("_wants")
     testo = "OFFERTA\n" + offerta_come_testo(offerta)
     if desiderio:
         testo += ("\n\nCOSA CERCA QUESTA PERSONA, CON PAROLE SUE\n"
@@ -542,24 +599,59 @@ def _coda_offerta(offerta: dict, desiderio: str | None) -> str:
     return testo
 
 
-def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
-                   desiderio: str | None = None,
-                   lingua: str = "English") -> tuple[int, str, dict]:
-    """UNA offerta per chiamata: punteggio e micro-motivazione.
+def _coda_offerta(offerta: dict, desiderio: str | None = None) -> str:
+    return offerta_per_prompt(offerta, desiderio)
 
-    Nel lotto il modello confronta le offerte fra loro invece di misurarle
-    contro il CV, e distribuisce i voti sulla scala del lotto: è misurato, ed
-    è il motivo di questa firma. La micro-motivazione c'è perché
-    matches.reason è NOT NULL: lo scarto dev'essere spiegato anche lui, non
-    solo ciò che passa.
-    """
+
+def _uso_modello(modello: ChatModel) -> dict:
+    uso = dict(getattr(modello, "last_usage", {}) or {})
+    uso.update({"model": modello.model, "provider": modello.source})
+    uso.setdefault("complete", True)
+    return uso
+
+
+def _accumula_uso(totale: dict, uso: dict) -> None:
+    for chiave in ("input", "cached", "output"):
+        valore = uso.get(chiave, 0)
+        totale[chiave] = totale.get(chiave, 0) + (
+            valore if isinstance(valore, (int, float))
+            and not isinstance(valore, bool) else 0)
+    totale["complete"] = (totale.get("complete", True)
+                          and uso.get("complete", True))
+
+
+def _score_valido(p: dict, modello: ChatModel) -> int:
+    if "score" not in p or p["score"] is None or isinstance(p["score"], bool):
+        raise RispostaModelloNonValida(
+            f"{modello.model}: score assente, null o booleano")
+    try:
+        numero = float(p["score"])
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise RispostaModelloNonValida(
+            f"{modello.model}: score non numerico") from exc
+    if not math.isfinite(numero):
+        raise RispostaModelloNonValida(f"{modello.model}: score non finito")
+    return max(0, min(100, int(numero)))
+
+
+def valuta_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
+                   desiderio: str | None = None, lingua: str = "English",
+                   on_usage=None) -> tuple[int, str, dict]:
+    """UNA offerta per chiamata: punteggio e micro-motivazione."""
     corpo = _testa(profilo_testo, RUBRICA.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
+        "role": "user", "content": offerta_per_prompt(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
-    p = _estrai_json(risposta)
-    score = max(0, min(100, int(p.get("score", 0))))
+    uso = _uso_modello(modello)
+    if on_usage:
+        on_usage(uso)
+    try:
+        p = _estrai_json(risposta)
+    except (TypeError, ValueError) as exc:
+        raise RispostaModelloNonValida(
+            f"{modello.model}: JSON di valutazione non valido") from exc
+    score = _score_valido(p, modello)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
-    return score, reason, dict(modello.last_usage)
+    return score, reason, uso
 
 
 def _coda_analisi(offerta: dict, desiderio: str | None,
@@ -595,14 +687,30 @@ def _coda_analisi(offerta: dict, desiderio: str | None,
     return coda
 
 
+def _testo_limitato(valore, limite: int) -> str | None:
+    testo = str(valore or "").strip()
+    if len(testo) <= limite:
+        return testo or None
+    taglio = testo[:limite + 1]
+    frase = max(taglio.rfind(". "), taglio.rfind("? "), taglio.rfind("! "),
+                taglio.rfind("\n"))
+    if frase >= int(limite * 0.65):
+        return taglio[:frase + 1].strip()
+    parola = taglio.rfind(" ")
+    if parola >= int(limite * 0.65):
+        return taglio[:parola].strip() + "…"
+    return taglio[:limite].strip() + "…"
+
+
 def _campi_analisi(p: dict, lingua: str) -> dict:
-    pros = [str(x)[:160] for x in (p.get("pros") or []) if str(x).strip()][:4]
-    cons = [str(x)[:160] for x in (p.get("cons") or []) if str(x).strip()][:3]
-    testo = lambda k, tetto: (str(p.get(k) or "").strip()[:tetto] or None)
+    pros = [_testo_limitato(x, 400) for x in (p.get("pros") or []) if str(x).strip()][:4]
+    cons = [_testo_limitato(x, 400) for x in (p.get("cons") or []) if str(x).strip()][:3]
+    testo = lambda k, tetto: _testo_limitato(p.get(k), tetto)
     return {"perche": testo("perche", 300), "pros": pros, "cons": cons,
             "responsabilita": testo("responsabilita", 700),
             "requisiti": testo("requisiti", 700),
             "benefit": testo("benefit", 500), "lang": lingua,
+            "rubrica": VERSIONE_ANALISI,
             # la prova viaggia GREZZA fino alla verifica (e' una lista di
             # indici, non testo), poi si stacca: non e' contenuto per il
             # lettore, e' il sostegno della frase.
@@ -613,22 +721,9 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
                       desiderio: str | None = None,
                       lingua: str = "English",
                       evita: list[str] | None = None,
-                      nota: str | None = None) -> tuple[str, dict, dict]:
-    """Seconda passata di consegna: motivazione E analisi in UNA chiamata.
-
-    Nasce dal conto della serva: la finestra di dettaglio del pannello
-    chiamava GLM al primo clic, a cache fredda, ripagando tutto il
-    prefisso. Qui il prefisso e' gia' caldo (stesso profilo della
-    valutazione appena fatta) e la chiamata esisteva comunque per la
-    motivazione: l'analisi costa solo l'output in piu'.
-
-    `evita` (13/10/2026): le frasi gia' scritte in QUESTO digest. Ogni
-    motivazione nasce da una chiamata separata e il modello non sa cosa ha
-    scritto prima — misurato sul digest vero: 18 motivazioni su 30 con lo
-    stesso attacco. Le frasi gia' scritte vanno nella CODA (messaggio
-    utente, diverso a ogni offerta per definizione): la cache del prefisso
-    non si tocca.
-    """
+                      nota: str | None = None,
+                      on_usage=None) -> tuple[str, dict, dict]:
+    """Seconda passata di consegna: motivazione E analisi in UNA chiamata."""
     coda = _coda_analisi(offerta, desiderio, lingua)
     if evita:
         coda += ("\n\nHAI GIA' SCRITTO per altre offerte di questo stesso "
@@ -636,45 +731,65 @@ def motiva_e_analizza(modello: ChatModel, profilo_testo: str, offerta: dict,
                  + "\nIl lettore le vedra' una dopo l'altra: non riusare "
                    "quelle frasi ne' quegli attacchi.")
     if nota:
-        # il secondo tentativo porta il perche' del primo: stessa coda,
-        # piu' il rimprovero del verificatore in fondo, dove si legge
         coda += f"\n\nAL PRIMO GIRO HAI SBAGLIATO: {nota}"
     corpo = _testa(profilo_testo, RUBRICA_CONSEGNA.format(lingua=lingua)) + [{
         "role": "user", "content": coda}]
-    # 14/10/2026: temperatura 0.5, non 0. A zero la scrittura convergeva —
-    # dodici chiusure identiche in un digest — e `evita` da solo non
-    # bastava: stesso input, stessa frase. Il verificatore resta a zero e
-    # controlla la verita'; la varieta' la fa il caso controllato.
     risposta = modello.chat(corpo, max_tokens=900, temperature=0.5)
-    p = _estrai_json(risposta)
+    uso = _uso_modello(modello)
+    if on_usage:
+        on_usage(uso)
+    try:
+        p = _estrai_json(risposta)
+    except (TypeError, ValueError) as exc:
+        raise RispostaModelloNonValida(
+            f"{modello.model}: JSON di motivazione non valido") from exc
     reason = str(p.get("reason") or "")[:400].strip() or "—"
-    return reason, _campi_analisi(p, lingua), dict(modello.last_usage)
+    return reason, _campi_analisi(p, lingua), uso
 
 
 def analizza_allineamento(modello: ChatModel, profilo_testo: str,
                           offerta: dict, desiderio: str | None = None,
-                          lingua: str = "English") -> dict:
-    """Pro e attenzioni del match, per la finestra di dettaglio del pannello.
-
-    Stessa testa in cache delle altre chiamate (profilo + rubrica), stessa
-    coda; il tetto e' piu' alto perche' qui si scrivono righe, non una.
-    """
-    corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_analisi(offerta, desiderio, lingua)}]
-    risposta = modello.chat(corpo, max_tokens=900)
-    return _campi_analisi(_estrai_json(risposta), lingua)
+                          lingua: str = "English", on_usage=None) -> dict:
+    """Analisi del dettaglio, sottoposta allo stesso controllo del digest."""
+    for tentativo in range(2):
+        coda = _coda_analisi(offerta, desiderio, lingua)
+        if tentativo:
+            coda += ("\n\nAL PRIMO GIRO HAI INVENTATO O FRAINSESO I DATI. "
+                     "Riscrivi ogni campo usando SOLO il profilo e l'offerta "
+                     "forniti. Se un fatto non è presente, non attribuirlo.")
+        corpo = _testa(profilo_testo, RUBRICA_ANALISI.format(lingua=lingua)) + [{
+            "role": "user", "content": coda}]
+        risposta = modello.chat(corpo, max_tokens=900)
+        uso = _uso_modello(modello)
+        if on_usage:
+            on_usage(uso)
+        try:
+            p = _estrai_json(risposta)
+        except (TypeError, ValueError) as exc:
+            raise RispostaModelloNonValida(
+                f"{modello.model}: JSON di analisi non valido") from exc
+        analisi = _campi_analisi(p, lingua)
+        analisi.pop("_prova", None)
+        if not _analisi_inventata(modello, "", analisi, profilo_testo, offerta,
+                                  desiderio, on_usage=on_usage):
+            return analisi
+    raise RispostaModelloNonValida(
+        f"{modello.model}: analisi rifiutata dal controllo anti-invenzione")
 
 
 def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
-                   desiderio: str | None = None,
-                   lingua: str = "English") -> tuple[str, dict]:
+                   desiderio: str | None = None, lingua: str = "English",
+                   on_usage=None) -> tuple[str, dict]:
     """Seconda passata: la motivazione che il destinatario del digest legge."""
     corpo = _testa(profilo_testo, RUBRICA_MOTIVAZIONE.format(lingua=lingua)) + [{
-        "role": "user", "content": _coda_offerta(offerta, desiderio)}]
+        "role": "user", "content": offerta_per_prompt(offerta, desiderio)}]
     risposta = modello.chat(corpo, max_tokens=120)
+    uso = _uso_modello(modello)
+    if on_usage:
+        on_usage(uso)
     p = _estrai_json(risposta)
     reason = str(p.get("reason") or "")[:400].strip() or "—"
-    return reason, dict(modello.last_usage)
+    return reason, uso
 
 
 # ── La verifica anti-invenzione (13/10/2026) ─────────────────────────────
@@ -698,31 +813,53 @@ def motiva_offerta(modello: ChatModel, profilo_testo: str, offerta: dict,
 # quindi l'output cambia anche a temperatura 0), poi il ripiego
 # deterministico, che puo' dire solo il vero.
 
-VERIFICA = """Controlla questa frase scritta per il candidato:
+VERIFICA = """Controlla questi testi scritti per il candidato:
 
 «{frase}»
 
 PROFILO DEL CANDIDATO (tutto ciò che sai di lui):
 {profilo}
 
-La frase gli attribuisce una competenza, una lingua, un'esperienza, una
-patente o una certificazione che NON compare nel profilo? O gli attribuisce
-un requisito che appartiene all'offerta? Rispondi SOLO con JSON:
+{offerta}
+I testi gli attribuiscono una competenza, una lingua, un'esperienza, una
+patente o una certificazione che NON compare nel profilo? Oppure descrivono
+requisiti, responsabilità o benefit che NON compaiono nell'offerta?
+Rispondi SOLO con JSON:
 {{"inventato": true}} oppure {{"inventato": false}}
 """
 
 
-def _inventata(modello: ChatModel, reason: str, profilo_testo: str) -> bool:
-    """Il verificatore: classificazione si/no, mai generazione. In panne non
-    blocca la consegna — la prova meccanica resta a presidiare."""
+def _inventata(modello: ChatModel, reason: str, profilo_testo: str,
+               offerta_testo: str = "", on_usage=None) -> bool:
+    """Classificazione si/no; un guasto del verificatore non ferma la consegna."""
     try:
         r = modello.chat(
-            [{"role": "user",
-              "content": VERIFICA.format(frase=reason, profilo=profilo_testo)}],
-            max_tokens=60)
-        return bool(_estrai_json(r).get("inventato"))
+            [{"role": "user", "content": VERIFICA.format(
+                frase=reason, profilo=profilo_testo,
+                offerta=("OFFERTA COMPLETA\n" + offerta_testo
+                         if offerta_testo else ""))}], max_tokens=60)
+        uso = _uso_modello(modello)
+        if on_usage:
+            on_usage(uso)
+        return _estrai_json(r).get("inventato") is True
     except Exception:
         return False
+
+
+def _analisi_inventata(modello: ChatModel, reason: str, analisi: dict,
+                       profilo_testo: str, offerta: dict,
+                       desiderio: str | None = None, on_usage=None) -> bool:
+    campi = [("motivazione", reason)]
+    for chiave in ("perche", "responsabilita", "requisiti", "benefit"):
+        if analisi.get(chiave):
+            campi.append((chiave, analisi[chiave]))
+    for chiave in ("pros", "cons"):
+        campi.extend((chiave, testo) for testo in analisi.get(chiave) or [])
+    testo = "\n".join(f"{nome}: {valore}" for nome, valore in campi if valore)
+    if not testo:
+        return False
+    return _inventata(modello, testo, profilo_testo,
+                      _coda_analisi(offerta, desiderio), on_usage=on_usage)
 
 
 def _indici_prova(prova, n_fatti: int) -> list[int] | None:
@@ -762,21 +899,21 @@ def _vietata(reason: str) -> str | None:
 
 def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
                       desiderio: str | None, lingua: str,
-                      ripiego: str,
-                      evita: list[str] | None = None) -> tuple[str, dict, dict]:
-    """motiva_e_analizza + la verifica. La reason che esce da qui o e'
-    sostenuta dal profilo o e' il ripiego deterministico: mai un'invenzione.
-
-    Chi fallisce NON va al ripiego subito: il secondo tentativo porta il
-    perche' del primo (gli indici erano fuori scala / il verificatore ha
-    trovato un'invenzione). La temperatura e' 0 ma l'input cambia, quindi
-    l'output cambia: e' la riflessione, non la ripetizione."""
+                      ripiego: str, evita: list[str] | None = None,
+                      on_usage=None) -> tuple[str, dict, dict]:
+    """Motivazione e intera analisi verificate; il ripiego non conserva il rifiuto."""
     nota = None
-    analisi: dict = {}
+    uso_totale: dict = {"complete": True}
+
+    def registra(uso: dict) -> None:
+        _accumula_uso(uso_totale, uso)
+        if on_usage:
+            on_usage(uso)
+
     for _ in range(2):
-        reason, analisi, uso = motiva_e_analizza(modello, profilo_testo,
-                                                 offerta, desiderio, lingua,
-                                                 evita=evita, nota=nota)
+        reason, analisi, _ = motiva_e_analizza(
+            modello, profilo_testo, offerta, desiderio, lingua,
+            evita=evita, nota=nota, on_usage=registra)
         prova = analisi.pop("_prova", None)
         n_fatti = len(re.findall(r"^\[\d+\]", profilo_testo, re.M))
         indici = _indici_prova(prova, n_fatti)
@@ -792,19 +929,21 @@ def motiva_verificata(modello: ChatModel, profilo_testo: str, offerta: dict,
             log.info("superlativo vietato «%s» (%s): seconda possibilita'",
                      vietata, offerta.get("id"))
             nota = (f"Hai usato «{vietata}», un superlativo vietato dalla "
-                    "rubrica: la soglia e' 80 su 100, non la perfezione. "
-                    "Riscrivi senza superlativi, sobrio.")
+                    "rubrica: riscrivi senza superlativi, sobrio.")
             continue
-        if _inventata(modello, reason, profilo_testo):
-            log.info("bocciata dal verificatore (%s): seconda possibilita'",
+        if _analisi_inventata(modello, reason, analisi, profilo_testo,
+                              offerta, desiderio, on_usage=registra):
+            log.info("analisi bocciata dal verificatore (%s): seconda possibilita'",
                      offerta.get("id"))
-            nota = ("La frase attribuiva al candidato qualcosa che il "
-                    "profilo non ha. Riscrivi usando SOLO i fatti numerati: "
-                    "un requisito dell'offerta non e' mai una sua dote.")
+            nota = ("Un campo attribuiva al candidato qualcosa che il profilo "
+                    "non ha, oppure all'offerta contenuti assenti. Riscrivi "
+                    "tutti i campi usando SOLO profilo e offerta forniti.")
             continue
-        return reason, analisi, uso
+        uso_totale.update({"model": modello.model, "provider": modello.source})
+        return reason, analisi, uso_totale
     log.info("motivazione al ripiego dopo il retry (%s)", offerta.get("id"))
-    return ripiego, analisi, uso
+    uso_totale.update({"model": modello.model, "provider": modello.source})
+    return ripiego, {}, uso_totale
 
 
 def valuta(modello: ChatModel, profilo: dict, jobs: list[dict], *,

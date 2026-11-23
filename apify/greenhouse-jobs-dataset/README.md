@@ -1,49 +1,54 @@
-![Every Greenhouse board, read live — Nivult](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-greenhouse.png)
+![Nivult Greenhouse jobs index](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-greenhouse.png)
 
-## What does this Greenhouse jobs dataset do?
+Export structured Greenhouse job postings without supplying board URLs or running a scraper. The underlying Nivult index contains **5.9M+ active job postings** from **69K+ companies** across **242 countries** and **65 ATS platforms**, refreshed **every 24 hours**. These figures describe the full index, not a Greenhouse-only count.
 
-**Greenhouse** is the ATS of the world's tech companies — startups, scale-ups, and the names you know. This Actor reads every public Greenhouse board directly, every day, and gives you the postings as clean, structured rows. When a posting leaves the board, it closes here too: the dataset never lies about what is open.
+**No scraping happens during your run.** The Actor queries the maintained index and returns its Greenhouse slice with your filters. Use it to track startup and technology hiring, monitor employers, research roles, or feed recruiting analytics.
 
-Filter **Greenhouse job postings** by what matters:
+![How it works: set filters, query the daily-refreshed index, and receive Greenhouse rows](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-greenhouse.png)
 
-- 🌍 **Country** — 240+ countries and territories
-- 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
-- 🔎 **Keyword** — free text in title and description
-- 🗓️ **Posted-after date** — only what is fresh
+## Quick start
 
-Every field carries **field-level provenance**: the row says where each value came from, so you can audit what you buy.
+Paste this input into the Actor console:
 
-### Not a scraper — a maintained index
+```json
+{
+  "tipo": "jobs",
+  "country": "DE",
+  "q": "product",
+  "seniority": "",
+  "remote": "hybrid",
+  "dal": "2026-10-01",
+  "limite": 10
+}
+```
 
-Scrape-on-demand actors ask you for career-site URLs and minutes of your
-patience, then hand you raw rows. **This dataset asks for nothing but
-filters** — the reading already happened today, whether you run us or not.
+Or call the Actor through Apify. Replace `APIFY_TOKEN` with your own token:
 
-| | Scrape-on-demand | **Nivult Dataset API** |
-|---|---|---|
-| You supply | URLs you must know | nothing — just filters |
-| Answer in | minutes | **seconds** |
-| Closed postings | stay forever | **verified closed**, daily |
-| Enrichment | raw title + link | seniority, workplace, language, skills |
-| Provenance | none | **field-level, on every row** |
+```bash
+curl --request POST \
+  --url 'https://api.apify.com/v2/acts/nivult~greenhouse-jobs-dataset/run-sync-get-dataset-items?token=APIFY_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"tipo":"jobs","country":"DE","q":"product","remote":"hybrid","limite":10}'
+```
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-greenhouse.png)
+## Input
 
-## How to use it
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tipo` | string | `jobs` | `jobs` returns Greenhouse postings; `companies` returns employer records. |
+| `country` | string | empty | ISO 3166-1 alpha-2 code, such as `IT`, `DE`, or `US`; empty means worldwide. |
+| `technology` | string | empty | Technology found in posting text, such as `SAP`, `Snowflake`, or `Kubernetes`. |
+| `q` | string | empty | Jobs: keyword search in titles and descriptions. Companies: case-insensitive company-name search. |
+| `seniority` | string | empty | `intern`, `junior`, `mid`, `senior`, `lead`, or `head`; empty includes all values. Jobs only. |
+| `remote` | string | empty | `remote`, `hybrid`, or `onsite`; empty includes all values. Jobs only. |
+| `dal` | string | empty | ISO date `YYYY-MM-DD`; returns postings dated on or after this date. Jobs only. |
+| `limite` | integer | `100` | Maximum rows, from 1 to 10,000. The console prefill is 10 for a quick sample. |
 
-1. Open the Actor and set your filters — or none, for the full Greenhouse slice.
-2. Run it, then download JSON, CSV or Excel — or read the dataset through the Apify API.
-3. For the whole Greenhouse universe every morning, ask about the daily feed (link on this page).
+The Greenhouse preset applies only to job searches. Company mode uses the full employer index, not only Greenhouse employers: `q` searches company names, `country` filters the company record, and `technology` filters its company-level aggregate. It is not a distinct-employers query over the filtered job slice. Job-only filters are ignored.
 
-## How much does a Greenhouse jobs dataset cost?
+## Output
 
-**$3 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
-
-Why a row here costs more than a raw scrape: a raw row is a title and a link that may be dead by tonight. Ours is an **enriched, verified record** — classified, provenance-stamped, and closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
-
-## What does the output look like?
-
-A real row, read the same day from a live Greenhouse board:
+Selected fields from an existing Greenhouse job record, with unrelated optional fields omitted:
 
 ```json
 {
@@ -55,31 +60,54 @@ A real row, read the same day from a live Greenhouse board:
   "seniority": "intern",
   "language": "en",
   "technologies": ["MS-Office"],
-  "salary_estimate_median": 52300,
-  "salary_estimate_currency": "USD",
-  "salary_is_estimate": true,
-  "posted_at": "2026-10-06",
+  "posted_at": "2026-10-06T00:00:00+00:00",
   "url": "https://job-boards.greenhouse.io/hankooktireamericacorp/jobs/5445258008"
 }
 ```
 
+Each job row includes its ATS and source URL. `first_seen` and `last_seen` are normally present. Enriched fields are optional and may be omitted or empty when unavailable. Download the default dataset as JSON, CSV, or Excel, or consume it through the Apify API.
+
+## Pricing
+
+You pay only for rows returned, whether they are jobs or company records.
+
+| Rows returned | Dataset-item cost |
+|---:|---:|
+| 100 | $0.20 |
+| 1,000 | $2.00 |
+| 10,000 | $20.00 |
+
+**An empty result costs $0 in dataset-item charges.** A full 10,000-row result costs $20 in dataset-item charges; the standard Actor Start event may also apply.
+
+## Coverage, dates, and limits
+
+Coverage snapshot — **21 November 2026**, across the overall Nivult index. Values vary by export, source and filtered slice, including the Greenhouse slice.
+
+| Field | Rows covered |
+|---|---:|
+| `description` | 95.4% |
+| `language` | 91.1% |
+| `category` | 97.2% |
+| `country` | 89.4% |
+| `skills` | 65.2% |
+| `employment_type` | 80.7% |
+| `seniority` | 56.7% |
+| `remote` | 55.7% |
+| `technologies` | 31.6% |
+| Observed salary | 22.7% |
+| Estimated salary | 0.0% |
+| `job_sources` | 1.9% |
+
+Salary estimates are not currently populated; observed salary information is available only on part of the index. Provenance and enrichment are not guaranteed on every row or field.
+
+Posting dates can be estimated when a source does not expose an exact publication date, so `posted_at` and the `dal` filter may use an estimated date. Refresh cycles deduplicate records and update active postings; a run does not rescrape or re-enrich rows on demand.
+
+A single run returns at most 10,000 rows. This is an independent index of public job postings, not the official Greenhouse API, and it requires no Greenhouse credentials. For larger slices or a daily export, contact **hello@nivult.com**.
+
 ## Explore the Nivult family
 
-- **[Job Postings Dataset — the full index](https://apify.com/nivult/global-job-postings)** — every ATS, every filter, company mode
-- **[Workday Jobs Dataset](https://apify.com/nivult/workday-jobs-dataset)** — every Workday career site, daily
-- **[Greenhouse Jobs Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)** — every Greenhouse board, daily
-- **[Jobs by Technology](https://apify.com/nivult/jobs-by-technology)** — postings matched by the stack in the text
+- [Global Job Postings API — ATS Dataset](https://apify.com/nivult/global-job-postings)
+- [Workday Jobs API — Global ATS Dataset](https://apify.com/nivult/workday-jobs-dataset)
+- [Jobs by Technology — Tech Hiring Leads](https://apify.com/nivult/jobs-by-technology)
 
-## FAQ
-
-**Is this the official Greenhouse API?**
-No — and it doesn't need Greenhouse credentials. We read the public boards that companies publish for candidates, politely and within their terms.
-
-**How fresh is the data?**
-The Greenhouse slice refreshes every day; new postings land within 24 hours of appearing on the board.
-
-**Do you cover other ATS platforms?**
-Yes — Workday, Lever, SmartRecruiters, SuccessFactors and dozens more. The full index (all platforms, all filters) has its own Actor; niche datasets like this one exist for the platforms people ask for most.
-
-**Is this legal?**
-We read public postings on the employer's own board, respect robots directives and rate limits, and honor removal requests.
+Questions, feedback, and custom feed requests: **hello@nivult.com**.

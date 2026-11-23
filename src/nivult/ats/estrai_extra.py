@@ -1,15 +1,9 @@
-"""Tipo di contratto e contatto del recruiter: due campi che valgono.
+"""Tipo di contratto, ricavato dai campi strutturati e dal testo.
 
-- employment_type: il campo che ogni compratore di dati si aspetta
-  (full_time, part_time, contract, temporary, internship,
-  apprenticeship). Prima si leggono i campi strutturati che le
-  piattaforme gia' danno (employmentType del JSON-LD, commitment di
-  lever, eccetera), poi le parole nel titolo/testo in sette lingue.
-- contact_email: SOLO l'email che il datore ha scritto NELL'ANNUNCIO —
-  pubblicata apposta per essere contattati, non pescata altrove. E' la
-  via pulita al valore che Mantiks vende: TheirStack dichiara di
-  fermarsi alle aziende, noi arriviamo alla porta giusta quando il
-  datore stesso l'ha indicata.
+employment_type usa i valori full_time, part_time, contract, temporary,
+internship e apprenticeship. Prima si leggono i campi delle piattaforme
+(employmentType del JSON-LD, commitment di lever, eccetera), poi le parole
+nel titolo/testo in sette lingue.
 
 Passata bulk con marcatore (extra_checked_at), lotti ordinati per id
 (regola di casa anti-deadlock), nel giro continuo dell'arricchimento.
@@ -75,13 +69,6 @@ _PAROLE = [
 ]
 _PAROLE_RX = [(v, re.compile(rx, re.I)) for v, rx in _PAROLE]
 
-# email nel testo dell'annuncio: quella del datore, non rumore da
-# infrastruttura (noreply, esempio, privacy)
-_EMAIL = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,12}")
-_EMAIL_NO = re.compile(r"noreply|no-reply|donotreply|example|sentry|"
-                       r"@.*\.(png|jpg|gif|css|js)$|privacy@|dpo@|"
-                       r"unsubscribe|webmaster@", re.I)
-
 _DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
 
@@ -107,22 +94,12 @@ def _tipo_da_testo(titolo: str, testo: str) -> str | None:
     return None
 
 
-def _email_da_testo(testo: str) -> str | None:
-    for m in _EMAIL.finditer(testo or ""):
-        e = m.group(0).lower().rstrip(".")
-        if not _EMAIL_NO.search(e) and len(e) <= 80:
-            return e
-    return None
-
-
 def arricchisci(dsn: str, limite: int = 100000) -> dict:
-    stats = {"esaminate": 0, "tipo": 0, "contatto": 0}
+    stats = {"esaminate": 0, "tipo": 0}
     with psycopg.connect(dsn, autocommit=True) as c:
         if _colonna_manca(c, "ats_jobs", "extra_checked_at"):
             c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
                       "employment_type text")
-            c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
-                      "contact_email text")
             c.execute("ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS "
                       "extra_checked_at timestamptz")
         righe = c.execute(f"""
@@ -133,14 +110,13 @@ def arricchisci(dsn: str, limite: int = 100000) -> dict:
              LIMIT %s""", (limite,)).fetchall()
 
         def scrivi(lotto: list) -> None:
-            lotto.sort(key=lambda r: r[2])
+            lotto.sort(key=lambda r: r[1])
             for _ in range(2):
                 try:
                     with c.cursor() as cur:
                         cur.executemany(
                             "UPDATE ats_jobs SET employment_type=%s, "
-                            "contact_email=%s, extra_checked_at=now() "
-                            "WHERE id=%s", lotto)
+                            "extra_checked_at=now() WHERE id=%s", lotto)
                     return
                 except psycopg.errors.DeadlockDetected:
                     pass
@@ -151,12 +127,9 @@ def arricchisci(dsn: str, limite: int = 100000) -> dict:
             stats["esaminate"] += 1
             tipo = _tipo_da_raw(raw if isinstance(raw, dict) else {}) \
                 or _tipo_da_testo(titolo, descr)
-            email = _email_da_testo(descr)
             if tipo:
                 stats["tipo"] += 1
-            if email:
-                stats["contatto"] += 1
-            lotto.append((tipo, email, jid))
+            lotto.append((tipo, jid))
             if len(lotto) >= 300:
                 scrivi(lotto)
                 lotto = []

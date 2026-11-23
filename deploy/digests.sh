@@ -15,9 +15,9 @@
 
 set -uo pipefail
 
-BASE=/opt/nivult/engine
+BASE="${BASE:-/opt/nivult/engine}"
 PY="$BASE/.venv/bin/python"
-LOCK=/var/run/nivult-digests.lock
+LOCK="${LOCK:-/var/run/nivult-digests.lock}"
 
 log() { echo "$(date -Is) $*"; }
 
@@ -30,8 +30,23 @@ if ! flock -w 10800 9; then
 fi
 
 cd "$BASE" || { log "ERRORE: $BASE non accessibile"; exit 1; }
+if [ -n "${ENV_FILE:-}" ]; then
+  [ -f "$ENV_FILE" ] || { log "ERRORE: $ENV_FILE non accessibile"; exit 1; }
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+export MAESTRO_URL="${MAESTRO_URL:-http://100.119.200.7:8090}"
+export PRESCORE_V3_URL="${PRESCORE_V3_URL:-http://100.119.200.7:8095}"
+export PRESCORE_V3_ADAPTIVE="${PRESCORE_V3_ADAPTIVE:-1}"
+export PRESCORE_V3_ANN="${PRESCORE_V3_ANN:-1}"
 
 log "=== digest ==="
+if [ "${PRESCORE_V3_ANN:-0}" = "1" ]; then
+  if ! "$PY" scripts/aggiorna_embedding_v3.py --limite 256 --produzione; then
+    log "ERRORE: aggiornamento cache embedding non riuscito; controllo copertura prima dell'ANN"
+  fi
+fi
 if ! "$PY" -m nivult.matching.worker; then
   log "ERRORE: il worker dei digest è uscito con errore"
   exit 1

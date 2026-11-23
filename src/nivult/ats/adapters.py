@@ -20,6 +20,8 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
+from .geografia import paese_da_localita
+
 log = logging.getLogger("nivult.ats")
 
 # Rate per piattaforma: chiamate al secondo. Conservative per cortesia.
@@ -350,7 +352,7 @@ class Recruitee(BaseAdapter):
             loc = j.get("location") or ""
             pezzi = [p.strip() for p in loc.split(",")] if loc else []
             city = pezzi[0] if pezzi else None
-            country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
+            country = paese_da_localita(loc) or _iso(pezzi[-1]) if len(pezzi) >= 2 else None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=str(j["id"]), title=j.get("title", ""),
@@ -379,7 +381,7 @@ class Ashby(BaseAdapter):
             loc = j.get("location") or ""
             pezzi = [p.strip() for p in loc.split(",")] if loc else []
             city = pezzi[0] if pezzi else None
-            country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
+            country = paese_da_localita(loc) or _iso(pezzi[-1]) if len(pezzi) >= 2 else None
             out.append(AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=j["id"], title=j.get("title", ""),
@@ -656,7 +658,7 @@ class Workday(BaseAdapter):
                 continue
             path = j.get("externalPath", "")
             pezzi = [p.strip() for p in loc.split(",")] if loc else []
-            country = _iso(pezzi[-1]) if len(pezzi) >= 2 else None
+            country = paese_da_localita(loc) or _iso(pezzi[-1]) if len(pezzi) >= 2 else None
             job = AtsJob(
                 platform_id=self.platform_id, slug=slug,
                 external_id=eid,
@@ -1822,6 +1824,7 @@ class Vincere(BaseAdapter):
         out: list[AtsJob] = []
         visti: set[str] = set()
         for pagina in range(1, 31):  # tetto 300 offerte
+            nuovi = 0
             url = f"https://{slug}.vincere.io/careers/?page={pagina}"
             try:
                 r = self.client.get(url, headers={"User-Agent": self._UA})
@@ -2161,8 +2164,8 @@ ADAPTERS["pinpoint"] = Pinpoint
 class Join(BaseAdapter):
     """join.com — micrositio aziendale con __NEXT_DATA__.
 
-    La lista offerte sta in initialState.jobs (5 per pagina, ?page=N).
-    L'URL pubblica dell'offerta è join.com/companies/{slug}/{idParam}.
+    La lista sta in initialState.jobs o, nel nuovo formato, in pageData.jobs
+    (5 per pagina, ?page=N). L'URL pubblica è join.com/companies/{slug}/{idParam}.
     """
     platform_id = "join"
     MAX_PAGINE = 20
@@ -2182,7 +2185,8 @@ class Join(BaseAdapter):
             if not m:
                 break
             try:
-                stato = json.loads(m.group(1))["props"]["pageProps"]["initialState"]
+                props = json.loads(m.group(1))["props"]["pageProps"]
+                stato = props.get("initialState") or props.get("pageData") or {}
                 jobs = stato.get("jobs") or {}
                 items = jobs.get("items") or []
             except (json.JSONDecodeError, KeyError):
@@ -3053,8 +3057,8 @@ class OracleRecruiting(BaseAdapter):
     carriere; l'API è aperta, senza token.
     """
     platform_id = "oracle"
-    PER_PAGINA = 25
-    MAX_PAGINE = 30
+    PER_PAGINA = 200
+    MAX_PAGINE = 200
 
     def jobs(self, slug: str) -> list[AtsJob]:
         base = f"https://{slug}"
@@ -3628,9 +3632,10 @@ class ApplicantPro(BaseAdapter):
                     break
         if not m:
             return []
-        link = _renderizza_estrai(
-            f"https://{m.group(1)}.applicantpro.com/jobs/",
-            "a[href*='/jobs/']")
+        # Prima una lettura vera: il renderer ingoia i 403 e tornerebbe zero,
+        # spacciando una manutenzione del portale per una bacheca vuota.
+        r = self.client.get(f"https://{m.group(1)}.applicantpro.com/jobs/")
+        link = _renderizza_estrai(str(r.url), "a[href*='/jobs/']")
         out: list[AtsJob] = []
         visti: set[str] = set()
         for l in link:

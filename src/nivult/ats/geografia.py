@@ -98,6 +98,23 @@ def iso_da_nome_paese(nome: str | None) -> str | None:
     return _PAESI.get(n) or _PAESI.get("the " + n) or _ALIAS.get(n)
 
 
+def paese_da_annuncio(testo: str | None) -> str | None:
+    """Il paese dai metadati testuali dell'annuncio, prima della geocodifica."""
+    intestazione = (testo or "")[:4000]
+    luogo = re.search(
+        r"\bLocation\s*:\s*([A-Za-z]{2})-[A-Za-z]{2}(?:-|\b)", intestazione, re.I)
+    if luogo:
+        return iso_da_nome_paese(luogo.group(1).upper())
+    paese = re.search(
+        r"\bCountry\s*:\s*([A-Za-zÀ-ÿ.' ]{2,60}?)(?=\s+Location\s*:)",
+        intestazione, re.I)
+    if not paese:
+        return None
+    nome = paese.group(1).strip()
+    return (iso_da_nome_paese(nome)
+            or iso_da_nome_paese(re.sub(r"\s+of America$", "", nome, flags=re.I)))
+
+
 def paese_da_localita(loc: str | None) -> str | None:
     """ISO2 del paese, o None se davvero non si capisce."""
     if not loc or not loc.strip():

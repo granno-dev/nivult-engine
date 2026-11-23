@@ -39,10 +39,10 @@ SE = ZoneInfo("Europe/Stockholm")
 
 # Mappature a regole. Dove non c'è un equivalente onesto si lascia None.
 EMPLOYMENT_MAP = {
-    "Vanlig anställning": "full-time",
-    "Tidsbegränsad anställning": "contract",
-    "Behovsanställning": "contract",
-    "Sommarjobb / feriejobb": "contract",
+    "Vanlig anställning": "FULL_TIME",
+    "Tidsbegränsad anställning": "TEMPORARY",
+    "Behovsanställning": "TEMPORARY",
+    "Sommarjobb / feriejobb": "TEMPORARY",
 }
 WORKING_HOURS_MAP = {"Heltid": "full-time", "Deltid": "part-time"}
 
@@ -67,6 +67,7 @@ class ArbetsformedlingenClient(HttpSource):
               limit: int = MAX_LIMIT, offset: int = 0) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
+        first_attempt = len(self.attempts)
 
         params: dict[str, object] = {"q": query, "limit": min(limit, MAX_LIMIT),
                                      "offset": offset}
@@ -97,9 +98,10 @@ class ArbetsformedlingenClient(HttpSource):
         # visto tutto.
         complete = total is not None and offset + len(hits) >= total
 
-        return FetchResult(jobs=jobs, complete=complete, requests_made=1,
-                           credits_used=0, total_available=total,
-                           skipped=skipped)
+        return FetchResult(
+            jobs=jobs, complete=complete,
+            requests_made=len(self.attempts) - first_attempt,
+            credits_used=0, total_available=total, skipped=skipped)
 
     def fetch_removals(self, since: datetime) -> tuple[list[str], int]:
         """Id rimossi dallo stream, e quante variazioni sono state esaminate.
@@ -149,6 +151,7 @@ class ArbetsformedlingenClient(HttpSource):
             title_normalized=normalize_title(h["headline"]),
             organization=employer.get("name") or None,
             date_posted=_dt(h["publication_date"]),
+            date_posted_declared=True,
             domain_derived=registrable_domain(canonical),
             cities=[addr["municipality"]] if addr.get("municipality") else [],
             countries=["SE"],

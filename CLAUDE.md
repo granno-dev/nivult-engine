@@ -10,6 +10,20 @@ digest ricorrente di offerte di lavoro selezionate da un'AI sulla base del suo C
 **Cluster** = coppia *famiglia professionale × paese* (es. Human Resources × Italia).
 I cluster sono condivisi tra utenti: se dieci utenti seguono HR in Italia, le offerte
 si scaricano **una volta sola**. L'ingestione è per cluster, non per utente.
+Ogni sottoscrizione in `user_clusters` ha invece un `id` proprio (0085):
+ruoli diversi nello stesso cluster sono ricerche indipendenti e non creano un
+nuovo cluster né duplicano le offerte o la chiave React.
+
+Su `matches` la 0086 conserva salvataggi, scarti, archivio personale e stati di
+candidatura self-reported, protetti da `action_version` contro gli aggiornamenti
+concorrenti. `archiviata` indica sempre la retention (`jobs.purged_at`);
+`in_archivio` è invece la scelta dell'utente. `jobs.date_posted_declared`
+distingue una pubblicazione dichiarata da una stima o da una data di rilevazione.
+
+La 0087 aggiunge la frequenza per singola ricerca senza tabelle parallele:
+`frequency = NULL` eredita il default account; gli override hanno giorno, ora,
+fuso e scadenze su `user_clusters`. La scadenza globale non viene mai anticipata
+da un override e uno slot condiviso non duplica offerte o valutazioni.
 
 > **Un cluster è sempre famiglia × paese, mai un paese intero.** Non è una
 > preferenza di stile: è il vincolo che tiene in piedi il budget. Un cluster
@@ -472,48 +486,135 @@ senza il marcatore ogni giro li rileggerebbe tutti.
 In cron alle **05:00** fra i passi diurni. Dopo il recupero iniziale resta
 il lavoro sulle nuove: pochi minuti.
 
-### 2. Matching — valutazione diretta, non a imbuto
+### 2. Matching — modelli configurati, fallback e soglia per ricerca
 
-**GLM 5.2 valuta direttamente tutte le offerte del cluster.** Niente embedding,
-niente reranker, niente ricerca ibrida: l'imbuto è stato tolto perché il
-giudizio del modello costa poco abbastanza da poterlo dare a tutte.
+Il worker valuta le offerte attive dei cluster seguiti da ciascun utente attraverso
+il funnel deterministico. Se `PRESCORE_URL` è configurato, il distillato
+locale `match-v1` seleziona chi merita la valutazione usando la soglia di ogni
+candidato; **non scrive il punteggio finale** e, se non risponde, il worker
+usa la catena normale con lo stesso cap. Senza retrieval v3 o col giudice esterno
+ogni digest valuta al massimo **30 nuove offerte**; i recuperi non vengono
+riaddebitati. Il cap non è una quota da riempire: passano solo i plausibili nella
+fascia del margine, ordinati per prescore, senza backfill automatico dei più deboli.
 
-Quattro cose lo rendono sostenibile (~2,50 $/mese per un Ultra su cluster
-stretti):
+Con `PRESCORE_V3_URL`, E5 `intfloat/multilingual-e5-large-instruct` ordina fino a
+150 candidati, senza decidere lo score finale. Sul banco congelato HRBP 70 perdeva
+2 delle 19 buone nella top 150 e backend 80 ne perdeva 2 delle 12: quei cap sono
+stati bocciati. `PRESCORE_V3_ADAPTIVE=1` lascia HRBP a 150 e riduce solo backend a
+100, che conserva tutte le 12 buone della top 150. Il giudice `qwen3-4b-locale` può
+valutarli tutti:
+la quota `user_try_evaluate` si consuma soltanto per i provider esterni, mai per
+le valutazioni locali. GLM resta un fallback, non un passaggio obbligatorio.
 
-1. **thinking OFF** — su una valutazione a rubrica il ragionamento esteso
-   moltiplica i token di uscita senza cambiare il punteggio;
-2. **riassunto e competenze**, non la descrizione integrale, che è in gran parte
-   boilerplate legale e di employer branding;
-3. **CV e rubrica in cache**, quindi in testa a ogni chiamata e identici — se
-   cambiassero fra un lotto e l'altro il risparmio sparirebbe;
-4. **due passate**: punteggio secco su tutte, motivazione solo per le prime 30.
+La migrazione 0089 conserva un embedding per offerta e modello, con SHA-256 del
+renderer `documento_ruolo` condiviso fra SQL e Python. `aggiorna_embedding_v3.py`
+ricalcola solo contenuti mancanti o cambiati; il secondo giro deve restituire zero.
+Con `PRESCORE_V3_ANN=1` il worker usa la cache solo se almeno il 98% degli annunci
+del cluster ha un hash aggiornato. Il runner orario aggiorna la cache prima dei
+digest; se il servizio, la copertura o il retrieval falliscono, torna al funnel
+completo. Il dettaglio offerta espone `evidence` factual; le metriche usano solo
+consegne e azioni realmente registrate, senza inventare aperture o candidature.
 
-Passano solo le offerte **sopra soglia alta**. Meglio un digest vuoto che un
-digest scadente.
+Il banco manuale in `dati/match-benchmark/` (48 offerte reali HR/Italia, un
+profilo HRBP, soglia 70) trovava tutte le 12 offerte buone nella top 30, ma anche
+10 scartate, soprattutto agenzie e ruoli junior. Le 4 offerte fuori fascia erano
+tutte stage scartate.
 
-**Due protezioni obbligatorie**, entrambe con la forma dei budget che già
-usiamo — configurazione a parte, una riga per periodo, nessun azzeramento:
+La 0088 amplia `staffing_agency_patterns` solo con nomi di agenzie verificati e
+riclassifica le offerte esistenti; chi accetta le agenzie non cambia preferenze.
+Se `min_seniority` è almeno `2-5`, `titolo_sotto_seniority` integra il metadato
+mancante con prove esplicite: junior/entry-level/stage nel titolo e assenza di
+esperienza dichiarata nei requisiti. Non esclude per il solo campo `NULL` e non
+si attiva sulle ricerche junior o senza seniority minima.
 
-- **Budget di valutazione per utente**, legato al piano (`plan_quotas`,
-  `user_evaluation_budget`, `user_try_evaluate`). Il costo qui è **per utente**,
-  non per cluster: il corpus è condiviso ma il giudizio no, quindi cento utenti
-  sullo stesso cluster costano cento volte.
-- **Valvola per i cluster sovradimensionati.** Sopra
-  `clusters.prescreen_threshold` offerte al mese entra un pre-screening con
-  Mistral Small, che passa a GLM solo le migliori. È **per cluster**, non
-  globale: attivarla ovunque pagherebbe un secondo modello dove non serve, e
-  aggiungerebbe un anello che può sbagliare là dove GLM ce la fa da solo.
-  Misurato: un cluster stretto fa ~300 offerte al mese, HR Germania 2.600, e
-  HR Francia in produzione è già a 2.552.
+Con vincoli espliciti coerenti col profilo del banco (agenzie escluse, seniority
+minima `5-10`) arrivano a GLM 24 offerte: **12 buone, 8 borderline, 4 scartate**,
+contro 30 con 12/8/10. Nessuna buona viene persa; la precisione sulle buone sale
+dal 40% al 50%. Senza quei vincoli il risultato di base non cambia. Anche
+aggiungere `employer_kind` al prompt non ha migliorato il banco e in alcuni casi
+ha alzato i punteggi degli scarti.
 
-> **Da decidere:** `job_embeddings`, l'indice HNSW, `user_cvs.embedding` e
-> `jobs.tsv` non servono più a nessuno. Toglierli semplifica parecchio, ma è una
-> porta che si richiude con difficoltà. Restano finché non lo decidiamo.
+**Il guardrail di famiglia è limitato a HR.** Con `FAMILY_GUARD=1` e
+`PRESCORE_URL` configurato, il worker chiama `/famiglia` solo sui massimo 30
+candidati già selezionati. Se l'unica famiglia eleggibile è `Human Resources`,
+scarta quando la probabilità cumulata di `Security & Safety` +
+`Environmental & Sustainability` è almeno 0,90. Non scarta mai per una top-1
+diversa: Legal, Finance e Management possono essere HR valide. Niente backfill,
+nessun effetto su score, recuperi o altre famiglie; servizio assente o risposta
+malformata conserva tutti i candidati. Il modello `nivult-v1` si carica lazy
+sull'N5, senza torch sui server applicativi.
+
+Il golden indipendente in `dati/family-benchmark/` contiene 80 offerte reali
+(40 IT, 10 DE, 19 FR, 11 SE; 43 HR), etichettate a mano prima delle predizioni
+e divise per azienda: 33 calibration (13 HR) e 47 holdout (30 HR). La regola ha
+respinto **0 HR su 43** e ha intercettato 4 negativi sicurezza. Sul banco HRBP
+finale arrivano a GLM **22 offerte: 12 buone, 8 borderline, 2 scartate**,
+sempre senza perdere buone; la precisione sulle buone è 54,5%. Le 2 residue
+sono specializzazioni dentro HR, non provate da altre famiglie: questo non è un
+guardrail validato globalmente né una soluzione per ogni falso positivo.
+
+**I dati gratuiti ci sono già.** ESCO 1.2.1 offre 3.039 occupazioni (download
+ufficiale in 28 lingue, CC BY 4.0); le eccezioni ISCO `1212`, `2423`, `2424`,
+`4416` ora mappano 16 occupazioni a `Human Resources` invece di disperderle in
+Management, Consulting e Administrative. Per una eventuale v2 esistono anche
+313.760 annunci silver sull'N5: non sono etichette CV-offerta e non è stato
+fatto un nuovo addestramento per questo guardrail. Il metodo da seguire, se
+servirà, è silver raffinato + hard negative + esame per azienda/fonte (ACL 2025:
+https://aclanthology.org/2025.findings-acl.1124/). Fonti ESCO:
+https://esco.ec.europa.eu/en/use-esco/download e
+https://esco.ec.europa.eu/en/copyright-notice-esco-skills-competences.
+
+**Esperimento match-v2, NON distribuito.** Il golden in `dati/match-v2/` contiene
+240 coppie per quattro profili (192 nuove + 48 HRBP riservate al test), con split
+per azienda. Il fine-tuning di 200 passi da `match-v1` ha scelto il checkpoint 50
+sulla validation, ma nel test indipendente conserva 13/21 buone contro 21/21 di
+v1 (HRBP 5/12, talent acquisition 1/2; recall 61,9% contro 100%). Le scartate
+scendono da 35 a 4, ma la perdita di richiamo è inaccettabile: `match-v1` resta
+in produzione. Il rapporto è `dati/match-v2/test-v2.json`. Il corpus silver da
+1.660 coppie è stato decontaminato da 8 annunci presenti nel test; altri
+esperimenti dovranno evitare questo adattamento che dimentica il profilo originale,
+non semplicemente aumentare i dati o i passi.
+
+La catena dello score usa, nell'ordine, solo gli endpoint configurati:
+`MaestroLocale`, `GLM`, `Groq`, `Nvidia`, `MistralSmall`. Su risposta non valida,
+saldo insufficiente, rate limit o tentativi di rete esauriti passa al successivo;
+non promette che un provider sia sempre disponibile. Per la prosa prova prima
+`Scrittore`, se configurato, poi il modello che ha prodotto lo score. Restano due
+passate: punteggio sui candidati, motivazione e analisi solo per le prime 30.
+Thinking OFF dove il modello lo richiede; CV e rubrica restano stabili in testa
+al prompt per favorire la cache.
+
+**Modello e costo registrati sono quelli realmente usati, anche dopo un
+fallback.** `matches` conserva provider/modello dello score e
+`analysis_provider`/`analysis_model` della seconda passata. `api_usage` separa
+`score` e `motivation` per provider e modello, con token di input, cache e
+output anche dei tentativi falliti. `cost_micros` è in micros di dollaro ed è
+calcolato dal pricing del modello effettivo; se prezzo o uso token sono
+incompleti resta `NULL`, mai uno zero che finga costo nullo.
+
+**Le preferenze viaggiano in `_wants`.** `target_role`, `desired_technologies`,
+sponsorizzazione del visto e testo libero `wants` entrano nello stesso contesto
+per prescore, score e motivazione; tecnologie e visto restano preferenze di
+punteggio, non filtri rigidi. Anche i match recuperati ricostruiscono `_wants`
+dalla ricerca attiva e riprendono tutti i campi dell'annuncio.
+
+**La soglia è della ricerca, non una costante globale.** `user_clusters.min_score`
+vale 50–95; `NULL` significa default 70. Il worker salva la soglia usata in
+`matches.threshold_used`, ma per il digest un match non consegnato è eleggibile
+se **almeno una ricerca attiva collegata lo accetta alla sua soglia corrente**.
+Alzare o abbassare la barra cambia quindi il recupero senza ripagare il modello.
+
+Il **budget di valutazione resta per utente** (`plan_quotas`,
+`user_evaluation_budget`, `user_try_evaluate`): il corpus è condiviso, il
+giudizio no. La quota si consuma solo dopo una risposta valida di un provider esterno, non
+per una risposta malformata poi sostituita dal fallback né per il giudice locale.
+
+`job_embeddings` e il suo indice HNSW alimentano il retrieval v3. I vecchi
+`user_cvs.embedding` e `jobs.tsv` restano fuori da questo percorso.
 
 ### 3. Consegna
 
-Digest via **email**, **Telegram** o **WhatsApp**, alla frequenza scelta
+Digest via **email**, **Telegram**, **WhatsApp** o **app**, alla frequenza scelta
 dall'utente (giornaliera / settimanale / mensile).
 
 Se nessuna offerta supera la soglia, **non si manda nulla**. Un digest vuoto è
@@ -529,6 +630,38 @@ davvero nascere**: CV attivo e almeno una ricerca attiva, altrimenti si
 programmerebbe un fallimento invece di una consegna. Dal secondo in poi
 comanda la frequenza scelta.
 
+**La frequenza può essere della singola ricerca.** `users.next_digest_at` è la
+scadenza delle ricerche ereditate; `user_clusters.next_digest_at` quella di un
+override, con ora e fuso che ricadono sull'account quando sono `NULL`.
+`utenti_dovuti` include l'utente se almeno una delle due categorie è dovuta e
+`_slot_digest` sceglie la prima scadenza effettiva per `scheduled_for` e retry.
+Il funnel valuta soltanto gli UUID ammessi; se lo slot globale è dovuto include
+anche tutte le ereditate. Offerte condivise restano una sola valutazione e una
+sola voce in `digest_items`, ma ogni item conserva gli UUID eleggibili.
+
+`_rischedula` tratta le categorie separatamente: un override non avanza una
+scadenza globale non dovuta. `last_digest_at` cambia soltanto per le ricerche
+con almeno un elemento davvero incluso; una ricerca presente senza elementi non
+risulta consegnata. Prima del primo contenuto, `skipped_empty` riprova il giorno
+dopo anche con frequenza mensile. Il dry-run annulla tutte queste scritture.
+
+Nell'API nessun campo di scheduling nel PUT significa conservazione completa di
+override e scadenza; altrimenti la nuova pianificazione deve essere esplicita e
+coerente (`frequency` obbligatoria). `frequency: null` ripristina l'eredità, non
+la scadenza globale. `next_digest_at` e `last_digest_at` sono read-only.
+`GET /me` espone come `prossimo_digest` il minimo delle scadenze effettive senza
+riscrivere quella globale; `ultimo_digest` è invece il massimo delle consegne.
+Il cambio di ora o fuso account ricalcola soltanto gli override con quel campo
+`NULL`, mai i valori espliciti.
+
+Chiusura e rischedulazione formano un solo commit. Se restano `digest_items` in
+un pending/failed, la consegna è già provata: il recupero chiude `sent` senza
+rispedire né ricreare rank e lascia gli extra al prossimo slot. Lo stesso vale
+per uno `skipped_empty` con item da riparare. `next_digest_at` si aggiorna solo
+se scadenza e configurazione lette dal worker sono ancora correnti; `last` è
+monotono. Così pause, riattivazioni, retry stale e cambi API durante il giro non
+duplicano consegne e non lasciano una ricerca ferma sullo stesso slot.
+
 Con il cron orario (`10 * * * *`) questo significa **entro l'ora**, ed è ciò
 che il sito promette nello Step 3. Se un giorno la riga dovrà dire «entro
 pochi minuti», è il cron che va stretto, non il testo.
@@ -540,6 +673,25 @@ mai spedito viene recuperato dal digest successivo — e il consumo del budget d
 valutazione è per offerta, non anticipato: un errore a metà digest non butta via
 la dotazione. `jobs_evaluated_count` conta le valutazioni che alimentano il
 digest (quelle del run più le recuperate), non solo quelle appena pagate.
+I guasti di consegna sono contati per canale in
+`users.delivery_failures_by_channel`: un esito azzera o incrementa solo il
+canale interessato.
+
+### App nativa e brand configurabile
+
+Nel canale `app` la consegna è la pagina del digest nell'app, alimentata da
+`digest_items`; la push Expo è soltanto l'avviso successivo e un suo errore non
+invalida il digest. L'API accetta token Expo validi (massimo 200 caratteri),
+con un tetto di **10 dispositivi per account**. L'invio usa chunk da **100**,
+elimina i token `DeviceNotRegistered` e non propaga errori al worker.
+
+Mavult usa lo stesso `nivult.api.app:app` con identità configurata da ambiente:
+il provisioning imposta `PRODUCT_NAME=Mavult`, `SERVICE_NAME=mavult-api`,
+`SITE_URL`, `SUPPORT_EMAIL`, `NATIVE_CALLBACK`, `CORS_ORIGINS` e
+`DEFAULT_DELIVERY_CHANNELS=app`. `B2B_ENABLED=0` chiude tutta la superficie B2B
+con 404; anche in assenza della variabile, `PRODUCT_NAME=Mavult` ha default B2B
+spento. I default Nivult restano `email` e B2B attivo. Brand, link, supporto e
+testi di consegna seguono la configurazione, senza rimandi all'altro prodotto.
 
 ### WhatsApp: la verifica aziendale NON è la porta d'ingresso
 
@@ -731,73 +883,47 @@ dell'azienda.
 
 Queste sono state decise e non vanno riaperte senza motivo.
 
-### Il worker itera sui cluster, non sugli utenti
+### Ingestione cluster-first, matching user-first
 
-La personalizzazione comincia **dal reranker in poi**. Il ciclo è:
+La condivisione si ferma al corpus: l'ingestione scarica una volta per cluster,
+ma il worker dei digest itera sugli **utenti dovuti**. Filtri, `_wants`, soglia,
+budget e anti-ripetizione sono personali; non esistono più nel percorso attuale
+la ricerca ibrida e il reranker cluster-first descritti in precedenza. Il
+prescore opzionale riduce le chiamate dentro il singolo digest, senza spostare la
+personalizzazione sul cluster e senza decidere il punteggio finale.
 
-```
-per ogni cluster attivo:
-    calcola UNA VOLTA l'insieme candidato del cluster
-      (filtri deterministici + ricerca ibrida BGE-M3/full-text + RRF)
-    per ogni utente iscritto al cluster:
-        applica i filtri personali
-        reranker  ->  ~15 finaliste  ->  LLM
-```
+### Ricerca vettoriale — ANN globale e filtri personali
 
-Il motivo è il fan-out: iterando sugli utenti, diecimila utenti fanno diecimila
-ricerche ibride al giorno sullo stesso identico insieme di offerte. Iterando sui
-cluster, la parte costosa si paga una volta per cluster.
-Non scrivere la pipeline nell'altro verso "per ora che gli utenti sono pochi":
-è il cuore del motore e riscriverlo dopo costa più che farlo giusto adesso.
+Il retrieval v3 lavora in due fasi. Prima seleziona gli ID più vicini al profilo
+sull'intero `job_embeddings`, senza join né predicato sul modello che impedirebbero
+al planner di usare HNSW. Poi rilegge soltanto quegli ID con tutti i filtri del
+funnel: cluster, paese, anti-ripetizione, preferenze, seniority e lingue. Il join
+successivo impone il modello E5 corretto e ordina per distanza; il limite di 300
+candidati si applica solo dopo anche i filtri testuali, non prima.
 
-### Ricerca vettoriale — misurato, non ipotizzato
+L'overfetch parte da 300 e raddoppia se le lingue o gli altri vincoli lasciano
+troppo pochi candidati. `hnsw.ef_search` segue l'ampiezza richiesta fino a 1000 e
+viene ripristinato dopo la query. Se il margine non è raggiungibile entro quel
+limite, il worker rifa l'intero funnel senza ANN: non presenta un campione più
+povero come se fosse equivalente. La stessa via d'uscita vale per errori del
+servizio o del database. Copertura minima: 98% di hash aggiornati per ogni cluster.
 
-**Il filtro per cluster impedisce del tutto l'uso dell'indice HNSW.** Misurato su
-Postgres 17.11 + pgvector 0.8.6, 20.000 offerte, cluster al 5% del corpus:
+**Perché non una sola query col join.** Misurato su Postgres 17.11 + pgvector
+0.8.6, il filtro `JOIN job_clusters`, una subquery `IN`, `EXISTS` o un array di
+cluster fa rinunciare al planner all'HNSW e scandire tutti gli embedding. Anche il
+predicato testuale sul nome del modello ha mostrato questo effetto nel banco reale.
+La query globale senza filtri usa invece `job_embeddings_hnsw_idx`; per il secondo
+passaggio il planner può usare la primary key sui soli ID selezionati. Su un corpus
+piccolo può ancora scegliere la scansione esatta perché costa meno: è una scelta
+del planner, non una perdita di recall. Su corpus grandi il primo stadio evita la
+scansione completa a ogni digest.
 
-| Forma della query | HNSW |
-|---|---|
-| `JOIN job_clusters` (filtro in un'altra tabella) | **no** — seq scan su tutti gli embedding |
-| `WHERE job_id IN (subquery)` | **no** — identico al join |
-| `WHERE EXISTS (...)` | **no** — identico al join |
-| `WHERE cluster = ANY(cluster_ids)` (array denormalizzato) | **no** — l'array non si combina con l'ANN |
-| `WHERE country = 'IT'` (scalare, stessa tabella) | **sì** |
-| nessun filtro | **sì** |
-
-Ne seguono due conseguenze.
-
-**`hnsw.iterative_scan` non ci sta salvando da niente.** Resta attivo perché è
-gratis e servirà, ma agisce solo *dentro* una scansione HNSW già scelta dal
-planner — e col nostro filtro il planner non la sceglie mai. Non contarci come
-rete di sicurezza: non lo è.
-
-**Il problema non è la recall, è la seq scan.** Con il filtro a join Postgres
-calcola la distanza esatta sull'insieme candidato: recall perfetta, e a questi
-volumi è pure più veloce dell'ANN. Ciò che non scala è che per arrivarci scandisce
-*tutti* gli embedding. A cinque milioni di offerte sono venti gigabyte letti per
-ogni ricerca.
-
-**Forma da usare nel worker.** Restringere prima, ordinare dopo: si ricavano gli
-id candidati da `job_clusters` più i filtri deterministici, poi
-
-```sql
-SELECT job_id FROM job_embeddings
-WHERE job_id = ANY($1::uuid[])
-ORDER BY embedding <=> $2 LIMIT $3
-```
-
-che il planner risolve con un bitmap index scan sulla primary key — misurato:
-500 righe lette, 5 blocchi di heap, nessuna seq scan. Costo proporzionale alla
-dimensione del cluster e non a quella del corpus, con recall esatta.
-Da **non** scrivere come CTE materializzata: quella ricade in seq scan (misurato).
-
-**Piano futuro, non da implementare ora:** quando l'insieme candidato di un
-singolo cluster diventerà troppo grande per la distanza esatta, partizionare
-`job_embeddings` per paese. Il paese funziona perché è un **predicato scalare
-sulla tabella indicizzata** — l'unica forma che il planner combina con l'HNSW — e
-lì `iterative_scan` comincerà davvero a servire. La strada dell'array
-`cluster_ids` denormalizzato è già stata provata e non funziona.
-Il segnale per farlo: latenza della ricerca per cluster, non il numero di righe.
+`hnsw.iterative_scan` agisce solo dentro una scansione HNSW già scelta, non è una
+rete di sicurezza contro una query malformata. Il gate vero è la recall misurata:
+il banco sintetico supera 1.500 offerte e il banco reale confronta la top 150 per
+profilo, paese e fonte. Se in futuro molti modelli divideranno lo stesso indice,
+si valuterà una tabella o partizione per modello soltanto dopo una nuova misura di
+latenza e recall; non si sposta il filtro personale nella query globale.
 
 ### `matches` non è partizionata, ed è deliberato
 
@@ -846,11 +972,21 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
 - **L'offset avanza sui record RICEVUTI, non su quelli normalizzati.** Contando
   solo i normalizzati, ogni scarto sposterebbe la finestra e salterebbe
   un'offerta buona a ogni pagina.
-- **`fetch_complete` è vero solo se l'ultima pagina ha esaurito i risultati E il
-  ciclo non si è fermato per altro.** Ci si può fermare per tre motivi: tetto
-  giornaliero, limite di scorrimento della fonte (France Travail si ferma a
-  3149), rete di sicurezza sul numero di pagine. In tutti e tre la fetch è
-  troncata, e da una fetch troncata le scadute non si deducono.
+- **`fetch_complete` richiede che TUTTI i termini della fonte siano completi.**
+  L'ultima pagina di ciascun termine deve avere esaurito i risultati, senza
+  errori o stop di budget; limite di scorrimento, tetto giornaliero e rete sul
+  numero di pagine rendono la fetch troncata. Solo una fetch completa fa
+  avanzare il cursore della coppia cluster-fonte e permette di dedurre le
+  scadute; un termine incompleto ferma quel cursore senza bloccare gli altri.
+- **Ogni offerta ha il suo SAVEPOINT.** Una riga rifiutata dal database viene
+  contata in `rifiutate_dal_db` e non annulla le altre offerte della pagina.
+  Contatori e `newest` includono soltanto le scritture riuscite; usage e
+  conciliazione delle richieste reali (`client.attempts`) restano registrati.
+- **Il dry-run non persiste niente.** Scarica e normalizza, ma non scrive
+  offerte, run, budget, `api_usage` o cursori e non avvia la deduplica. Le fonti
+  a pagamento vengono saltate, salvo `--allow-paid`: con quel flag la chiamata e
+  il costo del fornitore sono reali e compaiono nel riepilogo, ma i budget
+  locali non vengono addebitati.
 - **La deduplica morbida gira DOPO tutti i cluster, mai durante.** Un'offerta
   arrivata da un cluster può essere il duplicato di una arrivata da un altro, e
   deciderlo a metà strada sceglierebbe l'originale in base a chi è passato
@@ -898,11 +1034,13 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   worker paralleli sforano entrambi credendo di stare nel tetto.
 - **Il cluster è una famiglia, le fonti lo interrogano ciascuna a modo suo.**
   `clusters.family` è un valore di `job_families` (la tassonomia del fornitore),
-  con FK: **non è un termine di ricerca**. I termini per le fonti che la
-  tassonomia non ce l'hanno stanno in `cluster_source_queries`, uno per fonte.
-  Fantastic non ne ha bisogno: chiede `ai_taxonomies_a` e basta.
-  `cluster_coverage_v` mostra i cluster che una fonte salterebbe in silenzio
-  per mancanza di termine, e `verify_schema.py` lo segnala.
+  con FK: **non è di per sé un termine di ricerca**. Per le fonti senza
+  tassonomia, `cluster_source_queries` può contenere più termini configurati
+  (famiglia e ruoli): la chiave è `(cluster_id, source, query)` e il runner
+  interroga tutti i termini in ordine, dentro un solo run per fonte. Non crea
+  termini dai filtri dei singoli utenti. Le fonti con tassonomia chiedono invece
+  la famiglia direttamente. `cluster_coverage_v` resta per cluster-fonte,
+  aggrega tutti i termini e segnala quando nessuno rende la fonte interrogabile.
 - **L'agenzia dichiarata dalla fonte vince sulla nostra lista.**
   `org_linkedin_recruitment_agency_derived` ha copertura **100%** e su un giro
   reale ha riconosciuto **95 agenzie che i nostri pattern avrebbero mancato** —
@@ -976,10 +1114,10 @@ più stretta, quindi si può conservare per sempre mentre il testo si pota.
   2026-08-25, 400 crediti per costruire la striscia dei loghi del sito senza
   chiedere prima.
 
-  `active-ats-count` e `/expired-ats` costano **zero crediti Jobs**: quelli
-  restano liberi, e bastano a verificare quasi tutto. È `active-ats` che scala
-  un credito per offerta restituita. Se serve un dato che costa, si dice prima
-  quanto costa e si aspetta la risposta.
+  Fantastic e' pensionato: runner, sweep e probe non lo chiamano piu'.
+  `/active-ats-count` e `/expired-ats` restano solo riferimenti storici, non
+  operazioni da schedulare. Il permesso prima di una spesa continua a valere
+  per ogni altra fonte a pagamento.
 
   *Nota per il sito: il filtro `organization` è a corrispondenza ESATTA sulla
   stringa dell'ATS — `Bosch` dà 0, `Bosch Group` dà 554. Una lista di aziende
@@ -1180,10 +1318,15 @@ Da mettere in cron una volta al giorno, dopo l'ingestione:
 
 ### Cancellazione dell'utente
 
-`nivult.gdpr` + `scripts/delete_user.py`. Cancella a lotti in transazioni brevi,
-in ordine di dipendenza, invece di far scattare la cascata delle FK in un colpo
-solo. `deletion_requests` sopravvive all'utente come prova di cancellazione, e
-non contiene dati personali.
+`nivult.gdpr` + `scripts/delete_user.py`. Alla richiesta l'account diventa
+subito `deleted`: smette di ricevere digest e non può più chiedere magic link;
+tutte le sessioni attive sono revocate, i login token ancora aperti sono
+consumati e le chiavi API sono revocate. La stessa chiusura è ripetuta all'inizio
+di `execute_deletion`, così anche credenziali legacy non sfuggono. La
+cancellazione procede poi a lotti in transazioni brevi, in ordine di dipendenza,
+invece di far scattare la cascata delle FK in un colpo solo.
+`deletion_requests` sopravvive all'utente come prova di cancellazione, e non
+contiene dati personali.
 
 Le righe di `api_usage` non si cancellano: si mette a NULL `user_id`. Il costo
 sostenuto resta contabilizzato, l'attribuzione a una persona no.
@@ -1207,7 +1350,7 @@ cancellazione e restano in `deletion_requests.pending_storage_keys`.
   `5-10`. La scala ipotizzata era giusta. `scripts/verify_schema.py` segnala i valori fuori vocabolario:
   quelli non vengono considerati dai filtri di seniority.
 - Il full-text usa la configurazione `'simple'` (nessuno stemming), perché le
-  offerte sono multilingua. La semantica la porta BGE-M3. La colonna
+  offerte sono multilingua. Il retrieval usa E5 multilingual-large-instruct. La colonna
   `jobs.text_search_config` e il trigger `jobs_derive_fields` sono già
   predisposti per passare a una configurazione per lingua.
 
@@ -1223,26 +1366,55 @@ Le regole non negoziabili, scritte nel codice e qui:
 - **I dati NON vengono dal Postgres di produzione**: un DuckDB ricostruito
   ogni mattina alle 07:40 DAGLI EXPORT (`nivult.api_clienti.aggiorna`,
   in `deploy/cron.sh`), atomico (tmp + os.replace), letto read-only. Il
-  builder **aspetta gli export di oggi fino a 60 minuti** (l'export sfora:
-  07:58 il 29/09/2026) e, se mancano del tutto, **conserva il db di ieri
-  invece di sostituirlo con tabelle vuote** — il 29/09 un giro senza il
-  file aziende ha azzerato i reveal dei clienti per ore. Vive
-  sul **volume dedicato** `/mnt/HC_Volume_106941692/` — il 23/09 il file da
-  15,4 GB non stava sul disco da 75 GB insieme al ciclo backup+export:
-  misurato, non ipotizzato. Il path sta in `API_CLIENTI_DB` (in
-  `/opt/nivult/.env` e nella riga cron), non nel codice.
-- **Chiave nell'header `X-Api-Key`, mai in URL** (le URL finiscono nei log):
-  in tabella solo lo sha256 (`api_chiavi`, migrazione 0062). La chiave si
-  stampa una volta sola: `python -m nivult.api_clienti.chiavi nuova
-  --etichetta "cliente X" --crediti 10000` (anche `lista` e `revoca --id`).
-  Una chiamata = un credito, contatore mensile con reset a lettura.
+  builder **aspetta gli export di oggi fino a 60 minuti** e, se mancano del
+  tutto, **conserva il db di ieri invece di sostituirlo con tabelle vuote**.
+  Vive sul volume dedicato indicato da `API_CLIENTI_DB`, non in un path
+  obbligatorio nel codice. Le query lambda usano la sintassi compatibile con
+  DuckDB 1.x/2.x (`duckdb>=1.3`). I limiti operativi sono
+  `AGG_THREADS=1` e `AGG_MEMORIA=4GB`, riapplicati anche dopo la riapertura
+  fra snapshot e flusso; oltre il tetto DuckDB riversa nella sua directory
+  temporanea accanto al database. Con 5,36 milioni di offerte e 8,1 GB di
+  JSONL compresso, 2 GB si sono dimostrati insufficienti (25/10/2026).
+  Il lock `/var/run/nivult-api-clienti-aggiorna.lock` è condiviso fra il
+  cron e il recupero manuale, così due builder non scrivono lo stesso tmp.
+- **Chiave nell'header `X-Api-Key`, mai in URL**: in tabella solo lo sha256 e
+  la chiave in chiaro si mostra una volta sola. Per gli account del portale
+  quota e consumo sono **account-level**: il volume è il massimo fra TUTTE le
+  chiavi, revocate comprese; il consumo mensile è la somma su tutte. Revocare
+  e ricreare una chiave non azzera né quota né uso. Creazione, revoca e spesa
+  passano dal lock `FOR UPDATE` della riga `users`; si spende prima la
+  franchigia mensile, poi `crediti_extra`, e addebito e `portale_uso`
+  committano insieme. Le chiavi interne con `user_id NULL` restano per-chiave.
+- **Entitlement e fail closed.** Per le chiavi dirette il download bulk
+  `/v1/exports/latest/{nome}` richiede un volume account di almeno **50.000
+  crediti/mese**, `/v1/changes` almeno **200.000**; le ricariche una tantum non
+  alzano queste soglie. Su RapidAPI il delta resta gestito dal piano RapidAPI,
+  mentre il bulk resta escluso (403). Errori del cliente, entitlement mancante
+  o file assente non addebitano. Autenticazione e addebito sono separati, ma
+  l'addebito precede sempre la risposta: se il contatore non è disponibile la
+  chiamata fallisce chiusa con **503**, senza regalare dati o file.
+  `/v1/usage` espone saldo e consumo account-level, non solo quelli della
+  chiave presentata.
+- **Webhook Creem atomico.** La firma HMAC-SHA256 è obbligatoria; evento,
+  saldo, storico acquisti e audit si applicano in UNA transazione e l'id
+  evento impedisce doppi effetti sui retry. Sono gestiti `checkout.completed`,
+  `subscription.paid`, `refund.created` e `dispute.created`. Rimborsi e dispute
+  si ricollegano all'acquisto originale e revocano solo i crediti extra non
+  spesi, fino al volume originario e al netto degli storni precedenti, senza
+  andare sotto zero e senza cancellare lo storico. Una disputa sospende anche
+  l'account (`paused`); un evento non riconciliabile risponde 422, un guasto DB
+  503 e non committa effetti parziali.
 - **I campi si aggiungono, non si rinominano e non si tolgono mai**: le
-  risposte sono le righe dell'export così come sono.
-- Il builder legge i .jsonl.gz con `read_json`/`read_csv` nativi (il giro
-  Python riga-per-riga sul corpus reale non finiva mai: misurato); il raw è
-  la riga verbatim dell'export, non riserializzata.
-- Il flusso (`novita-*`) si conserva **7 giorni**, non 48 ore: il delta feed
-  del weekend non si perde per chi legge il lunedì.
+  risposte sono le righe dell'export così come sono. Il builder legge i
+  .jsonl.gz con `read_json`/`read_csv` nativi; il raw è la riga verbatim
+  dell'export, non riserializzata.
+- **Il delta distingue `new`, `updated` e `closed`.** Gli aggiornamenti portano
+  la fotografia completa e `updated_at`, non soltanto il campo cambiato. Il
+  flusso (`novita-*`) si conserva **7 giorni**. Se `since` è anteriore a
+  `retention_since`, `/v1/changes` risponde 400 con
+  `detail.code = delta_retention_exceeded`, `action = resync` e
+  `resync_required = true`: serve un resync completo, non una pagina vuota né
+  un nuovo cursore inventato.
 
 ### I campi che si vendono, e chi li riempie
 
@@ -1303,12 +1475,18 @@ python -m nivult.migrate up              # applica
 python -m nivult.matching.worker         # digest: valuta e consegna chi è dovuto
 python -m nivult.matching.worker --user <uuid> --dry-run   # prova senza inviare
 
-python scripts/reset_and_verify.py       # azzera, riapplica tutto, verifica. Da rilanciare a ogni modifica.
+python scripts/reset_and_verify.py       # azzera, applica 0001–0092 e lancia la suite integrata
 python scripts/verify_schema.py          # struttura, sola lettura, sicuro in produzione
 python scripts/check_constraints.py      # i vincoli rifiutano davvero? (solo db _test/_dev)
 python scripts/check_modules.py          # lo strato Python committa davvero? (solo db _test/_dev)
 python scripts/check_api.py              # l'API HTTP autentica e risponde? (solo db _test/_dev)
-python scripts/check_oauth.py            # OAuth: state, claim, collegamento (solo db _test/_dev)
+python scripts/check_oauth.py            # OAuth: exp, collegamenti, revoche (solo db _test/_dev)
+python scripts/check_billing.py          # lock crediti, webhook, entitlement (DB isolato)
+python scripts/check_ingestion.py        # multi-termine, savepoint, dry-run (DB isolato)
+python scripts/check_cv.py               # CV, brand e consegna (senza DB o rete)
+python scripts/check_canarino.py         # controlli operativi e notifiche (senza DB o rete)
+python scripts/check_backup_stream.py    # backup CMS grandi, senza dati reali
+python scripts/check_prescore.py         # contratto 0–100 del pre-scorer, senza rete
 python scripts/delete_user.py --user-id <uuid>
 python -m nivult.ats.runner --schema      # applica schema.sql dell'ATS (una volta a notte; MAI a ogni lotto: lock esclusivi, 47 deadlock/giorno il 07/09)
 python scripts/ponte_ats.py --dry-run     # travaso ATS -> funnel, senza scrivere
@@ -1361,6 +1539,16 @@ runner minimo. Niente Alembic: lo schema è pesantemente specifico di Postgres e
 ogni migrazione sarebbe comunque `op.execute()` di SQL grezzo.
 **Una migrazione già applicata non si modifica** — il runner confronta i
 checksum e si rifiuta di proseguire. Se serve un cambiamento, nuova migrazione.
+Il repo arriva oggi a **92 migrazioni, 0001–0092**; `verify_schema.py` confronta
+il numero applicato con i file presenti. Lo stato di un ambiente live si legge
+solo con `python -m nivult.migrate status`, non si deduce dal repository.
+
+`reset_and_verify.py` ricostruisce tutto da zero ed esegue `verify_schema`,
+`check_constraints`, `check_modules`, `check_api`, `check_urls`, `check_roles`,
+`check_oauth`, `check_billing` e `check_ingestion`. La CI lo lancia e poi esegue
+anche `prova_api_clienti.py`, `prova_api_dati.py`, `prova_salari.py` e le suite
+senza DB `check_cv.py`, `check_canarino.py`, `check_backup_stream.py` e
+`check_prescore.py`.
 
 ## Sicurezza
 
@@ -1410,11 +1598,15 @@ gira contro la produzione e deve passare 12/12):
 
 ### Autenticazione: niente password
 
-Magic-link via email, più Google e Microsoft come provider OAuth. **Non esiste
-una colonna password** in nessuna tabella, e `verify_schema.py` fallisce se
-qualcuno ne aggiunge una. Niente password significa niente reset da mettere in
-sicurezza, niente credenziali riusate da altri siti, niente hash da difendere.
+Magic-link via email, più i provider OAuth configurati. **Non esiste una colonna
+password** in nessuna tabella, e `verify_schema.py` fallisce se qualcuno ne
+aggiunge una. Niente password significa niente reset da mettere in sicurezza,
+niente credenziali riusate da altri siti, niente hash da difendere.
 
+- Il magic link vale **15 minuti e una volta sola**; la sessione che ne nasce
+  vale 30 giorni. Il consumo è un UPDATE atomico condizionato a scadenza e
+  mancato consumo. Vale anche il rate limit di 3 link per indirizzo ogni 15
+  minuti, senza rivelare all'esterno se il freno è scattato.
 - `login_tokens` e `sessions` conservano **solo lo sha256** del token, mai il
   token. Se il database trapela, quello che si trova non permette di entrare.
   sha256 nudo è sufficiente: i token li generiamo noi con entropia alta, non
@@ -1427,14 +1619,25 @@ sicurezza, niente credenziali riusate da altri siti, niente hash da difendere.
 
 ### OAuth: una seconda porta, non un secondo sistema
 
-`nivult.oauth`, authorization code con PKCE e `nonce`. Il giro finisce **dove
-finisce il magic link**: un gettone monouso di `login_tokens`, riscattato dal
-sito su `/verify`.
+`nivult.oauth`, authorization code con PKCE e `nonce`. Il giro web finisce
+**dove finisce il magic link**: un gettone monouso di `login_tokens`, riscattato
+dal sito su `/verify`.
 
 **Il motivo di quel giro apparentemente lungo è che il token di sessione non
 deve mai entrare in una URL** — finirebbe nel referrer, nella cronologia e nei
 log dei proxy. In URL viaggia solo un gettone che vale una volta sola e cinque
 minuti. Effetto collaterale gradito: il sito non guadagna nessuna rotta nuova.
+
+L'app nativa usa soltanto `nivult://oauth/callback`. Il suo `native_state` e il
+suo PKCE sono separati da quelli del provider: la sfida è copiata sul gettone
+monouso e `/auth/consuma` richiede il verifier, mentre il consumo web resta
+invariato. Successi ed errori tornano solo alla destinazione validata allo
+start; il callback non accetta una nuova destinazione.
+
+Anche l'app web pubblicata in `/app/` usa `native_state` e PKCE: `callback_nativa`
+li ammette solo sul dominio del sito o su localhost, mai su un altro host o sulle
+normali destinazioni web. Sul web la sessione resta in `sessionStorage` nella sola
+scheda; il nativo continua a usare SecureStore. Token e CV non vanno nei log.
 
 `login_tokens.origin` dice come è nato il gettone e viene copiato in
 `sessions.origin` al consumo. **L'origine sta sul token, non la sceglie chi
@@ -1445,29 +1648,35 @@ serve la verità, cioè indagando su un accesso sospetto.
 prova il possesso dell'indirizzo; per OAuth la decisione è già stata presa a
 monte, dove si sa di quale provider fidarsi.
 
-**Di quale email fidarsi — la regola che evita un takeover.** Un'identità nota
-entra sempre. Su un'identità nuova che porta l'indirizzo di un account già
-esistente, si collega **solo se il provider ha dato una prova**; altrimenti si
-rifiuta e si manda a passare dal magic link, che la prova sa darla.
+**Di quale email fidarsi — la regola che evita un takeover.** Per Google,
+LinkedIn e GitHub il collegamento automatico richiede un indirizzo verificato;
+per Microsoft vale soltanto il tenant consumer. Se la prova manca, un'identità
+nuova non si aggancia a un account esistente: si passa dal magic link.
 
-| Provider | Email fidata? |
-|---|---|
-| Google, `email_verified: true` | sì |
-| Google, `email_verified` falso o assente | no |
-| Microsoft, tenant consumer (account personali) | sì |
-| Microsoft, qualunque altro tenant | **no** |
-
-L'ultima riga non è prudenza generica: sugli account aziendali il claim `email`
-lo scrive l'amministratore del tenant, quindi **chiunque controlli un tenant
-può presentarsi con l'indirizzo di qualcun altro**. È la vulnerabilità nota come
-nOAuth, e la difesa raccomandata da Microsoft stessa è non usare mai l'email
-come criterio di autorizzazione. `scripts/check_oauth.py` presidia questo caso.
+**Microsoft enterprise si collega SOLTANTO da una sessione già autenticata.**
+Su tenant diversi da quello consumer il claim `email` lo decide l'amministratore:
+non è una prova di possesso e non può creare o agganciare account. Il flusso
+parte da `POST /me/oauth/microsoft/collega`, salva `link_user_id` nello state e
+il callback collega il subject senza emettere gettoni o sessioni.
+`oauth_identities` conserva `link_method`, `tenant_id` e `revoked_at`; al login
+successivo un'identità enterprise è ammessa solo se `authenticated`, non revocata
+e con lo stesso tenant. La migrazione 0084 chiude preventivamente tutte le
+identità Microsoft legacy, le cui sessioni e login token Microsoft e le cui
+chiavi API utente potrebbero essere già stati ottenuti prima della riparazione:
+revocare solo il login successivo lascerebbe quelle credenziali attive. Non
+tocca crediti, volumi, altri provider o chiavi interne con `user_id NULL`.
+Le identità revocate possono tornare attive solo tramite un nuovo collegamento
+autenticato dello stesso utente; al successivo login enterprise non provato la
+revoca viene rinnovata. `scripts/check_oauth.py` copre pre-hijack, ricollegamento,
+revoche immediate e il perimetro della 0084.
 
 **La firma dell'`id_token` non viene verificata, ed è una scelta.** Si
-controllano `iss`, `aud`, `exp` e `nonce`; per l'integrità ci si fida del TLS,
-perché il token arriva dal token endpoint in una chiamata server-to-server con
-client confidenziale — il caso in cui l'OIDC consente esplicitamente di
-saltarla. Se servirà, JWKS si innesta in `_verifica_claim` senza toccare altro.
+controllano `iss`, `aud`, `exp` e `nonce`; `exp` deve essere presente, numerico e
+finito, e un token scaduto oltre la tolleranza di 30 secondi per gli orologi è
+rifiutato. Per l'integrità ci si fida del TLS, perché il token arriva dal token
+endpoint in una chiamata server-to-server con client confidenziale — il caso in
+cui l'OIDC consente esplicitamente di saltarla. Se servirà, JWKS si innesta in
+`_verifica_claim` senza toccare altro.
 
 **I redirect URI sono configurazione condivisa con le due console.**
 `API_URL` costruisce `{API_URL}/auth/oauth/{provider}/callback`: cambiarlo qui
@@ -1524,6 +1733,11 @@ Object storage su **Hetzner Object Storage**, stesso data center del database,
 dati in UE. Il file viene cifrato **prima** dell'upload: Hetzner riceve byte
 opachi e non ha alcuna chiave.
 
+L'upload accetta PDF, DOCX e TXT fino a **20 MiB**; il DOCX viene letto da
+paragrafi e tabelle, mentre il vecchio `.doc` è rifiutato. Un byte oltre il tetto
+produce 413, un file malformato 422, e gli errori di parsing non portano il
+contenuto del CV nei log.
+
 Schema a busta: ogni CV ha la sua DEK casuale (AES-256-GCM); la DEK viene
 avvolta con la KEK che sta in variabile d'ambiente sul server, e la DEK avvolta
 finisce in `user_cvs.encrypted_dek`. La KEK non entra mai nel database.
@@ -1535,9 +1749,11 @@ invece che atomica — nessuna finestra in cui metà dei CV è illeggibile.
 
 ### Backup
 
-`deploy/backup.sh`, in cron alle 03:00. `pg_dumpall` (include i ruoli, che non
-stanno dentro il database) → gzip → **cifratura a chiave pubblica** con
-`openssl cms` → copia su Hetzner Storage Box.
+Il backup notturno usa `deploy/backup-n5.sh` e legge la **replica streaming**
+sull'N5, così il dump non trattiene lock sul primario; `deploy/backup.sh` resta
+il ripiego sul server. `pg_dumpall` (include i ruoli, che non stanno dentro il
+database) → gzip → **cifratura a chiave pubblica** con `openssl cms` → copia su
+Hetzner Storage Box e archiviazione sull'N5.
 
 **Sul server sta solo il certificato pubblico.** Quella macchina può produrre
 backup ma non può rileggerli: se viene compromessa, l'attaccante non ottiene lo
@@ -1560,10 +1776,20 @@ un off-site che smette in silenzio è il modo classico di scoprirlo troppo tardi
 
 Ripristino:
 
+Dalla radice del repository, su un database di prova Postgres 17:
+
 ```bash
-openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
-  -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
+python scripts/decifra_backup.py --key nivult-backup-PRIVATE.pem \
+  < nivult-AAAA-MM-GG.sql.gz.enc | gunzip | psql -U postgres
 ```
+
+**Non usare il solo `openssl cms -decrypt` sui backup grandi.** OpenSSL cifra
+in streaming ma la decifratura CMS carica il contenuto e fallisce sui file
+grandi ([issue 26274](https://github.com/openssl/openssl/issues/26274)).
+`decifra_backup.py` decodifica i blocchi DER con memoria limitata e lascia RSA
+e AES a OpenSSL/cryptography; `check_backup_stream.py` verifica su CMS
+sintetici sia la fedeltà sia il rifiuto dei file troncati. Hash e dimensione
+restano controlli necessari, ma non dimostrano che il contenuto sia leggibile.
 
 ### Ruoli Postgres
 

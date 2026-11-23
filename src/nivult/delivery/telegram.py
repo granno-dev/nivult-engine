@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 
 import httpx
 
-from nivult.config import load_dotenv
+from nivult.config import load_dotenv, product_name
 from nivult.delivery.email import FONTI, _data, etichetta_link, stipendio
 from nivult.delivery.testi import t
 
@@ -72,7 +72,8 @@ def _token() -> str:
 
 
 def utente_bot() -> str:
-    return os.environ.get("TELEGRAM_BOT_USERNAME", "NivultBot")
+    return os.environ.get("TELEGRAM_BOT_USERNAME", "").strip() \
+        or f"{product_name()}Bot"
 
 
 def link_collegamento(gettone: str) -> str:
@@ -108,14 +109,17 @@ def compila(items: list[dict], locale: str = "en",
     # saluto col primo nome (o il ripiego della lingua), poi la testata.
     primo = ((nome or "").strip().split() or [x["saluto_fallback"]])[0]
     testa = (f"{_esc(x['saluto'])} {_esc(primo)},\n\n"
-             f"<b>Nivult</b> — {_esc(x['digest_del'].format(data=oggi))}")
+             f"<b>{_esc(product_name())}</b> — "
+             f"{_esc(x['digest_del'].format(data=oggi))}")
 
     blocchi: list[str] = []
     for pos, it in enumerate(items, start=1):
         meta = [m for m in [
             ", ".join(it.get("cities") or []) or None,
             stipendio(it.get("salary"), locale) or None,
-            x["pubblicata"].format(data=_data(it["date_posted"], locale)),
+            (x["pubblicata"].format(data=_data(it["date_posted"], locale))
+             if it.get("date_posted_declared") is True and it.get("date_posted")
+             else None),
             (x["agenzia"] if it.get("employer_kind") == "staffing_agency"
              else None),
         ] if m]

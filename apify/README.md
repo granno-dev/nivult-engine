@@ -1,71 +1,68 @@
-![Nivult — live job postings, read at the source](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina.png)
+![Nivult global job postings index](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina.png)
 
-## Not another scraper. A maintained index.
+Query **5.9M+ active job postings** from **69K+ companies** across **242 countries** and **65 ATS platforms**. The maintained Nivult index is refreshed **every 24 hours**.
 
-Most job actors ask you for career-site URLs, then spend minutes scraping them, then hand you raw rows. **This Actor asks for nothing but filters** — and answers in seconds, because the work is already done: we read the career systems of tens of thousands of employers **every day**, whether you run us or not.
+**No scraping happens during your run.** This Actor queries the existing index with your filters; you do not need to provide career-site URLs or employer credentials. Download the resulting dataset as JSON, CSV, or Excel, or read it through the Apify API.
 
-| | Scrape-on-demand actors | **Nivult Dataset API** |
-|---|---|---|
-| You supply | career-site URLs you must know | nothing — just filters |
-| Answer in | minutes of scraping | **seconds** |
-| Closed postings | stay in your data forever | **verified closed**, daily |
-| Enrichment | raw title + link | seniority, workplace, language, skills, salary signal |
-| Company layer | a name string | **spine record: industry, size, legal identity, tech stack** |
-| Provenance | none | **field-level, on every row** |
+Use it for labor-market research, recruiter sourcing, competitor monitoring, lead generation, and location or technology hiring analysis.
 
-## What does the Nivult Job Index do?
+![How it works: set filters, query the daily-refreshed index, and receive structured rows](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-v2.png)
 
-We read job postings **directly from the career systems of tens of thousands of employers** — Workday, Greenhouse, Lever, SmartRecruiters, SuccessFactors and dozens more — across 240+ countries and territories. Refreshed daily; closed when the posting leaves the employer's own page.
+## Quick start
 
-Filter by what matters:
-
-- 🌍 **Country** — 240+ countries and territories, ISO-2
-- 🧩 **Technology** — postings that mention SAP, Snowflake, Kubernetes… in the text
-- 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
-- 🗓️ **Posted-after date** — only what is fresh
-- 🏢 **Company mode** — industry, size band, legal identity from public registries, measured technology stack
-
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-v2.png)
-
-## How to use it
-
-1. Choose **Job postings** or **Companies**.
-2. Set your filters — country, technology, keyword, seniority, workplace, posted-after.
-3. Run, and download the dataset as JSON, CSV, or Excel — or read it through the Apify API.
-
-Every result set is a slice of the same index we sell as a full daily feed.
-
-## How much does it cost — and why is a row worth more here?
-
-**$3 per 1,000 rows received** — nothing for empty filters, nothing upfront. On Apify's free plan, your monthly free usage covers your first hundreds of rows.
-
-A fair question: raw-scrape actors charge cents per thousand. A raw row is a title and a link that may be dead by tonight. Our row is an **enriched, verified record**: classified seniority and workplace, measured skills and language, salary signal, a link to the company's spine record, and the source of every field — closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
-
-For the full daily export or a custom feed (millions of rows, JSONL, daily deltas), write to us — the Actor page links to the contact.
-
-## What does the output look like?
-
-A real row from the index, verbatim (the posting went live the same day):
+Paste this input into the Actor console for a small sample:
 
 ```json
 {
-  "title": "Logistics Deduction Management Analyst",
-  "company": "Hisenseusacorporation",
-  "ats": "bamboohr",
+  "tipo": "jobs",
   "country": "US",
-  "city": "Alpharetta",
-  "remote": "onsite",
-  "seniority": "junior",
-  "technologies": ["Excel", "Microsoft Office", "PowerPoint", "SAP", "Word"],
-  "salary_estimate_median": 41600,
-  "salary_estimate_currency": "USD",
-  "salary_is_estimate": true,
-  "posted_at": "2026-10-06",
-  "url": "https://hisenseusacorporation.bamboohr.com/careers/349"
+  "technology": "Snowflake",
+  "q": "data",
+  "seniority": "",
+  "remote": "",
+  "dal": "2026-10-01",
+  "limite": 10
 }
 ```
 
-And **company mode** is a different league — one record per employer, with every enrichment carrying its own source:
+Or run the same query through Apify. Replace `APIFY_TOKEN` with your own token:
+
+```bash
+curl --request POST \
+  --url 'https://api.apify.com/v2/acts/nivult~global-job-postings/run-sync-get-dataset-items?token=APIFY_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"tipo":"jobs","country":"US","technology":"Snowflake","q":"data","limite":10}'
+```
+
+## Input
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tipo` | string | `jobs` | `jobs` returns individual postings; `companies` returns employer records. |
+| `country` | string | empty | ISO 3166-1 alpha-2 country code, such as `IT`, `DE`, or `US`; empty means worldwide. |
+| `technology` | string | empty | Technology found in posting text, such as `SAP`, `Snowflake`, or `Kubernetes`. |
+| `q` | string | empty | Jobs: keyword search in titles and descriptions. Companies: case-insensitive company-name search. |
+| `seniority` | string | empty | `intern`, `junior`, `mid`, `senior`, `lead`, or `head`; empty includes all values. Jobs only. |
+| `remote` | string | empty | `remote`, `hybrid`, or `onsite`; empty includes all values. Jobs only. |
+| `dal` | string | empty | ISO date `YYYY-MM-DD`; returns postings dated on or after this date. Jobs only. |
+| `limite` | integer | `100` | Maximum rows, from 1 to 10,000. The console prefill is 10 for a quick sample. |
+
+In company mode, `q` searches company names, `country` filters the country on the company record, and `technology` filters the company-level technology aggregate. This is not a distinct-employers query over the filtered job slice. Job-only filters are ignored.
+
+## Company mode for employer lead lists
+
+Return company records instead of individual postings:
+
+```json
+{
+  "tipo": "companies",
+  "country": "IT",
+  "technology": "SAP",
+  "limite": 10
+}
+```
+
+Selected fields from an existing company-mode example:
 
 ```json
 {
@@ -83,28 +80,70 @@ And **company mode** is a different league — one record per employer, with eve
 }
 ```
 
-Company mode returns one record per employer: name, domain, industry, size band, legal form from public registries, technology stack, and the count of live postings.
+Company attributes and their sources are optional; availability varies by employer.
+
+## Job output
+
+Selected fields from an existing job record, with unrelated optional fields omitted:
+
+```json
+{
+  "title": "Logistics Deduction Management Analyst",
+  "company": "Hisenseusacorporation",
+  "ats": "bamboohr",
+  "country": "US",
+  "city": "Alpharetta",
+  "remote": "onsite",
+  "seniority": "junior",
+  "technologies": ["Excel", "Microsoft Office", "PowerPoint", "SAP", "Word"],
+  "posted_at": "2026-10-06T00:00:00+00:00",
+  "url": "https://hisenseusacorporation.bamboohr.com/careers/349"
+}
+```
+
+Each job row includes its ATS and source URL. `first_seen` and `last_seen` are normally present. Enriched fields are optional and may be omitted or empty when unavailable.
+
+## Pricing
+
+You pay only for rows returned, whether they are jobs or company records.
+
+| Rows returned | Dataset-item cost |
+|---:|---:|
+| 100 | $0.30 |
+| 1,000 | $3.00 |
+| 10,000 | $30.00 |
+
+**An empty result costs $0 in dataset-item charges.** A full 10,000-row result costs $30 in dataset-item charges; the standard Actor Start event may also apply.
+
+## Coverage, dates, and limits
+
+Coverage snapshot — **21 November 2026**, across the overall index. Values vary by export, source and filtered slice; these figures are not a promise that every row contains every field.
+
+| Field | Rows covered |
+|---|---:|
+| `description` | 95.4% |
+| `language` | 91.1% |
+| `category` | 97.2% |
+| `country` | 89.4% |
+| `skills` | 65.2% |
+| `employment_type` | 80.7% |
+| `seniority` | 56.7% |
+| `remote` | 55.7% |
+| `technologies` | 31.6% |
+| Observed salary | 22.7% |
+| Estimated salary | 0.0% |
+| `job_sources` | 1.9% |
+
+Salary estimates are not currently populated; observed salary information is available only on part of the index. Provenance and enrichment are not guaranteed on every row or field.
+
+Posting dates can be estimated when a source does not expose an exact publication date, so `posted_at` and the `dal` filter may use an estimated date. Refresh cycles deduplicate records and update the active index; a run does not rescrape or re-enrich rows on demand.
+
+A single run returns at most 10,000 rows. For larger slices or a daily export, contact **hello@nivult.com**.
 
 ## Explore the Nivult family
 
-- **[Job Postings Dataset — the full index](https://apify.com/nivult/global-job-postings)** — every ATS, every filter, company mode
-- **[Workday Jobs Dataset](https://apify.com/nivult/workday-jobs-dataset)** — every Workday career site, daily
-- **[Greenhouse Jobs Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)** — every Greenhouse board, daily
-- **[Jobs by Technology](https://apify.com/nivult/jobs-by-technology)** — postings matched by the stack in the text
+- [Workday Jobs API — Global ATS Dataset](https://apify.com/nivult/workday-jobs-dataset)
+- [Greenhouse Jobs API — Global ATS Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)
+- [Jobs by Technology — Tech Hiring Leads](https://apify.com/nivult/jobs-by-technology)
 
-## FAQ
-
-**Where does the data come from?**
-From the employers' own career systems — the page where the company itself publishes the opening. A closure is verified: the posting left the source.
-
-**How fresh is it?**
-The index refreshes every day; new postings land within 24 hours of appearing at the source.
-
-**Is this legal?**
-We read public pages that employers publish for candidates, respect robots directives and rate limits, and honor removal requests. The company records enrich public postings with public registries.
-
-**Can I get the data through an API instead of the UI?**
-Yes — the dataset of every run is readable through the Apify API, and the full index has its own REST API with daily JSONL exports. Ask us through the store page.
-
-**Something looks off — who do I tell?**
-Write to us from the store page. We read everything, and we fix fast.
+Questions, feedback, and custom feed requests: **hello@nivult.com**.

@@ -43,7 +43,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e .
-      - name: reset, migrazioni da zero, 113 asserzioni
+      - name: reset, migrazioni e suite completa
         env:
           DATABASE_URL: postgresql://nivult@127.0.0.1:5432/nivult_test
         run: python scripts/reset_and_verify.py
+      - name: API clienti, DuckDB, CV, canarino, backup e pre-scorer
+        run: |
+          python scripts/prova_api_clienti.py
+          python scripts/prova_api_dati.py
+          python scripts/prova_salari.py
+          python scripts/check_cv.py
+          python scripts/check_canarino.py
+          python scripts/check_backup_stream.py
+          python scripts/check_prescore.py

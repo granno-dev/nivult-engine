@@ -110,12 +110,42 @@ ALTER TABLE ats_platforms ADD COLUMN IF NOT EXISTS api_endpoint TEXT;
 ALTER TABLE ats_platforms ADD COLUMN IF NOT EXISTS cc_search TEXT;
 ALTER TABLE ats_platforms ADD COLUMN IF NOT EXISTS market TEXT;
 ALTER TABLE ats_platforms ADD COLUMN IF NOT EXISTS priority SMALLINT DEFAULT 3;
-ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS vanity_checked_at TIMESTAMPTZ;
-ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS lei_source TEXT;
-ALTER TABLE iso_paesi ADD COLUMN IF NOT EXISTS code TEXT;
 
 CREATE INDEX IF NOT EXISTS ats_jobs_platform_idx ON ats_jobs(platform_id, fetched_at DESC);
 CREATE INDEX IF NOT EXISTS ats_jobs_title_idx ON ats_jobs USING gin(to_tsvector('simple', title));
+CREATE INDEX IF NOT EXISTS ats_jobs_search_idx ON ats_jobs USING gin(
+    to_tsvector('simple', title || ' ' ||
+        COALESCE(NULLIF(raw->>'description', ''), NULLIF(raw->>'content', ''),
+                 NULLIF(raw->>'descriptionHtml', ''), NULLIF(raw->>'descriptionPlain', ''),
+                 NULLIF(raw->>'externalDescription', ''), NULLIF(raw->>'jobDescription', ''),
+                 NULLIF(raw->>'job_description', ''), NULLIF(raw->>'Job_Description', ''),
+                 NULLIF(raw->>'body', ''), NULLIF(raw->>'content_html', ''),
+                 NULLIF(raw->>'description_html', ''), NULLIF(raw->>'descriptionBody', ''),
+                 NULLIF(raw->>'text', ''), NULLIF(raw->'_jobposting'->>'description', ''),
+                 NULLIF(raw->>'ShortDescriptionStr', '')))) WITH (fastupdate = false);
+ALTER INDEX IF EXISTS ats_jobs_search_idx SET (fastupdate = false);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ats_jobs_search_covering_idx ON ats_jobs USING gin(
+    to_tsvector('simple', title || ' ' ||
+        COALESCE(NULLIF(raw->>'description', ''), NULLIF(raw->>'content', ''),
+                 NULLIF(raw->>'descriptionHtml', ''), NULLIF(raw->>'descriptionPlain', ''),
+                 NULLIF(raw->>'externalDescription', ''), NULLIF(raw->>'jobDescription', ''),
+                 NULLIF(raw->>'job_description', ''), NULLIF(raw->>'Job_Description', ''),
+                 NULLIF(raw->>'body', ''), NULLIF(raw->>'content_html', ''),
+                 NULLIF(raw->>'description_html', ''), NULLIF(raw->>'descriptionBody', ''),
+                 NULLIF(raw->>'text', ''), NULLIF(raw->'_jobposting'->>'description', ''),
+                 NULLIF(raw->>'ShortDescriptionStr', ''))))
+    INCLUDE (country, posted_at, duplicate_key, created_at, fetched_at, expired_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ats_jobs_search_us_v3_idx ON ats_jobs USING gin(
+    to_tsvector('simple', title || ' ' ||
+        COALESCE(NULLIF(raw->>'description', ''), NULLIF(raw->>'content', ''),
+                 NULLIF(raw->>'descriptionHtml', ''), NULLIF(raw->>'descriptionPlain', ''),
+                 NULLIF(raw->>'externalDescription', ''), NULLIF(raw->>'jobDescription', ''),
+                 NULLIF(raw->>'job_description', ''), NULLIF(raw->>'Job_Description', ''),
+                 NULLIF(raw->>'body', ''), NULLIF(raw->>'content_html', ''),
+                 NULLIF(raw->>'description_html', ''), NULLIF(raw->>'descriptionBody', ''),
+                 NULLIF(raw->>'text', ''), NULLIF(raw->'_jobposting'->>'description', ''),
+                 NULLIF(raw->>'ShortDescriptionStr', ''))))
+WHERE expired_at IS NULL AND country = 'US';
 
 -- Cache dell'arricchimento Wikidata: una riga per azienda, per sempre.
 CREATE TABLE IF NOT EXISTS organizations (
@@ -207,6 +237,8 @@ CREATE TABLE IF NOT EXISTS company_domains (
     checked_at    TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS vanity_checked_at TIMESTAMPTZ;
+ALTER TABLE company_domains ADD COLUMN IF NOT EXISTS lei_source TEXT;
 
 CREATE INDEX IF NOT EXISTS company_domains_status_idx ON company_domains(status, employees DESC NULLS LAST);
 -- Guardia country a livello database: l'imbuto che ogni scrittore
@@ -215,6 +247,7 @@ CREATE INDEX IF NOT EXISTS company_domains_status_idx ON company_domains(status,
 -- non-ISO ('中国', 'M1', '26'...) sfuggiti da vie diverse: enforce in
 -- Postgres, non promesso dal codice.
 CREATE TABLE IF NOT EXISTS iso_paesi (code text PRIMARY KEY);
+ALTER TABLE iso_paesi ADD COLUMN IF NOT EXISTS code TEXT;
 INSERT INTO iso_paesi (code) VALUES
  ('AD'),('AE'),('AF'),('AG'),('AI'),('AL'),('AM'),('AO'),('AQ'),('AR'),
  ('AS'),('AT'),('AU'),('AW'),('AX'),('AZ'),('BA'),('BB'),('BD'),('BE'),
@@ -694,6 +727,9 @@ CREATE TABLE IF NOT EXISTS sintesi_mt5 (
     ripassata_at      TIMESTAMPTZ,
     presa_ripasso_at  TIMESTAMPTZ,
     creato_at         TIMESTAMPTZ NOT NULL DEFAULT now());
+ALTER TABLE sintesi_mt5 ADD COLUMN IF NOT EXISTS sintesi_pulita TEXT;
+ALTER TABLE sintesi_mt5 ADD COLUMN IF NOT EXISTS pulita_at TIMESTAMPTZ;
+ALTER TABLE sintesi_mt5 ADD COLUMN IF NOT EXISTS frasi_tolte INTEGER;
 
 -- Stesso ordine e stesso WHERE della query che prenota, o l'indice non viene
 -- usato: il 18/09 un (posted_at DESC) contro una query DESC NULLS LAST costava
@@ -828,4 +864,298 @@ CREATE TABLE IF NOT EXISTS wa_inbox (
     ricevuto_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX IF NOT EXISTS wa_inbox_recenti_idx ON wa_inbox (ricevuto_at DESC);
 CREATE INDEX IF NOT EXISTS wa_inbox_telefono_idx ON wa_inbox (telefono, ricevuto_at DESC);
+
+-- Delta feed: il timbro misura una variazione del contenuto venduto, non
+-- la semplice rivisita della fonte. Sullo storico resta NULL finche' non
+-- cambia qualcosa: applicare lo schema non genera milioni di update.
+ALTER TABLE ats_jobs ADD COLUMN IF NOT EXISTS content_updated_at TIMESTAMPTZ;
+
+-- Queste due tabelle alimentano l'export e devono esistere anche in un ATS
+-- ricostruito da zero; le definizioni coincidono con quelle dei moduli.
+CREATE TABLE IF NOT EXISTS tecnologie_v1 (
+    job_id      UUID PRIMARY KEY,
+    tecnologie  JSONB NOT NULL,
+    quante      INTEGER NOT NULL,
+    modello     TEXT NOT NULL,
+    soglia      REAL NOT NULL,
+    testo_hash  TEXT,
+    creato_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS tecnologie_v1_tecnologie_ci_gin
+    ON tecnologie_v1 USING gin ((lower(tecnologie::text)::jsonb));
+
+CREATE TABLE IF NOT EXISTS tecnologie_ricerca (
+    job_id      UUID,
+    tecnologia  TEXT,
+    posted_at   TIMESTAMPTZ,
+    PRIMARY KEY (job_id, tecnologia)
+);
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_rigenera_job(p_job_id UUID)
+RETURNS void LANGUAGE sql AS $f$
+    DELETE FROM tecnologie_ricerca WHERE job_id = p_job_id;
+
+    INSERT INTO tecnologie_ricerca (job_id, tecnologia, posted_at)
+    SELECT DISTINCT j.id, lower(elemento.valore #>> '{}'), j.posted_at
+      FROM tecnologie_v1 tv
+      JOIN ats_jobs j ON j.id = tv.job_id
+      CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(tv.tecnologie) = 'array'
+               THEN tv.tecnologie ELSE '[]'::jsonb END
+      ) AS elemento(valore)
+     WHERE tv.job_id = p_job_id
+       AND jsonb_typeof(elemento.valore) = 'string'
+    ON CONFLICT (job_id, tecnologia) DO NOTHING;
+$f$;
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_sincronizza_v1()
+RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        PERFORM tecnologie_ricerca_rigenera_job(OLD.job_id);
+        RETURN NULL;
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+        PERFORM tecnologie_ricerca_rigenera_job(OLD.job_id);
+    END IF;
+    PERFORM tecnologie_ricerca_rigenera_job(NEW.job_id);
+    RETURN NULL;
+END;
+$f$;
+
+CREATE OR REPLACE FUNCTION tecnologie_ricerca_aggiorna_posted_at()
+RETURNS trigger LANGUAGE plpgsql AS $f$
+BEGIN
+    IF NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN
+        UPDATE tecnologie_ricerca
+           SET posted_at = NEW.posted_at
+         WHERE job_id = NEW.id;
+    END IF;
+    RETURN NULL;
+END;
+$f$;
+
+DROP TRIGGER IF EXISTS trg_tecnologie_ricerca_v1 ON tecnologie_v1;
+CREATE TRIGGER trg_tecnologie_ricerca_v1
+    AFTER INSERT OR UPDATE OR DELETE ON tecnologie_v1
+    FOR EACH ROW EXECUTE FUNCTION tecnologie_ricerca_sincronizza_v1();
+
+DROP TRIGGER IF EXISTS trg_tecnologie_ricerca_posted_at ON ats_jobs;
+CREATE TRIGGER trg_tecnologie_ricerca_posted_at
+    AFTER UPDATE OF posted_at ON ats_jobs
+    FOR EACH ROW EXECUTE FUNCTION tecnologie_ricerca_aggiorna_posted_at();
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nivult_api_lettura') THEN
+        GRANT SELECT ON tecnologie_ricerca TO nivult_api_lettura;
+    END IF;
+END;
+$$;
+
+CREATE INDEX IF NOT EXISTS tecnologie_ricerca_ordine_idx
+    ON tecnologie_ricerca (tecnologia, posted_at DESC NULLS LAST, job_id);
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_platform_country_v2_idx
+    ON ats_jobs (platform_id, country, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_country_v2_idx
+    ON ats_jobs (country, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_platform_country_senior_remote_idx
+    ON ats_jobs (platform_id, country, seniority, remote, posted_at DESC NULLS LAST, id)
+    WHERE expired_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS offerte_dettagli (
+    job_id              UUID PRIMARY KEY REFERENCES ats_jobs(id) ON DELETE CASCADE,
+    management_level    TEXT,
+    is_decision_maker   BOOLEAN,
+    shift_schedule      TEXT,
+    shift_testo         TEXT,
+    work_hours          TEXT,
+    is_urgently_hiring  BOOLEAN,
+    benefits            JSONB,
+    benefits_dichiarati TEXT,
+    salary_text         TEXT,
+    valid_through       DATE,
+    state               TEXT,
+    postal_code         TEXT,
+    latitude            REAL,
+    longitude           REAL,
+    geo_da              TEXT,
+    applicants_count    INTEGER,
+    is_easy_apply       BOOLEAN,
+    recruiter           JSONB,
+    calcolato_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ats_jobs_attive_posted_idx
+    ON ats_jobs (posted_at DESC NULLS LAST, id) WHERE expired_at IS NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_duplicate_key_idx
+    ON ats_jobs (duplicate_key) WHERE duplicate_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ats_jobs_content_updated_idx
+    ON ats_jobs (content_updated_at) WHERE content_updated_at IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION ats_content_updated_job() RETURNS trigger AS $f$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        NEW.content_updated_at := COALESCE(NEW.content_updated_at, now());
+        RETURN NEW;
+    END IF;
+    IF ROW(NEW.platform_id, NEW.slug, NEW.external_id, NEW.title, NEW.url,
+           NEW.location, NEW.country, NEW.city, NEW.posted_at, NEW.department,
+           NEW.raw, NEW.expired_at, NEW.salary_min, NEW.salary_max,
+           NEW.salary_currency, NEW.employment_type, NEW.duplicate_key,
+           NEW.salary_period, NEW.seniority, NEW.remote, NEW.skills, NEW.lang,
+           NEW.contact_email, NEW.languages_required, NEW.orario, NEW.durata,
+           NEW.salary_da, NEW.posted_at_estimated, NEW.created_at)
+       IS DISTINCT FROM
+       ROW(OLD.platform_id, OLD.slug, OLD.external_id, OLD.title, OLD.url,
+           OLD.location, OLD.country, OLD.city, OLD.posted_at, OLD.department,
+           OLD.raw, OLD.expired_at, OLD.salary_min, OLD.salary_max,
+           OLD.salary_currency, OLD.employment_type, OLD.duplicate_key,
+           OLD.salary_period, OLD.seniority, OLD.remote, OLD.skills, OLD.lang,
+           OLD.contact_email, OLD.languages_required, OLD.orario, OLD.durata,
+           OLD.salary_da, OLD.posted_at_estimated, OLD.created_at) THEN
+        NEW.content_updated_at := now();
+    END IF;
+    RETURN NEW;
+END;
+$f$ LANGUAGE plpgsql;
+
+-- Il nome fa scattare questo BEFORE trigger dopo le guardie di paese e
+-- posted_at: il confronto vede i valori effettivamente scritti.
+DROP TRIGGER IF EXISTS trg_zz_content_updated ON ats_jobs;
+CREATE TRIGGER trg_zz_content_updated
+    BEFORE INSERT OR UPDATE OF platform_id, slug, external_id, title, url,
+        location, country, city, posted_at, department, raw, expired_at,
+        salary_min, salary_max, salary_currency, employment_type, duplicate_key,
+        salary_period, seniority, remote, skills, lang, contact_email,
+        languages_required, orario, durata, salary_da, posted_at_estimated,
+        created_at
+    ON ats_jobs FOR EACH ROW EXECUTE FUNCTION ats_content_updated_job();
+
+CREATE OR REPLACE FUNCTION ats_tocca_job_collegato() RETURNS trigger AS $f$
+DECLARE
+    campo text;
+    cambiato boolean := false;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        UPDATE ats_jobs SET content_updated_at = now() WHERE id = OLD.job_id;
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'UPDATE' THEN
+        cambiato := NEW.job_id IS DISTINCT FROM OLD.job_id;
+        FOREACH campo IN ARRAY TG_ARGV LOOP
+            IF to_jsonb(NEW) -> campo IS DISTINCT FROM to_jsonb(OLD) -> campo THEN
+                cambiato := true;
+            END IF;
+        END LOOP;
+        IF NOT cambiato THEN
+            RETURN NEW;
+        END IF;
+        IF NEW.job_id IS DISTINCT FROM OLD.job_id THEN
+            UPDATE ats_jobs SET content_updated_at = now() WHERE id = OLD.job_id;
+        END IF;
+    END IF;
+    UPDATE ats_jobs SET content_updated_at = now() WHERE id = NEW.job_id;
+    RETURN NEW;
+END;
+$f$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION ats_tocca_azienda_collegata() RETURNS trigger AS $f$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        UPDATE ats_jobs SET content_updated_at = now()
+         WHERE platform_id = OLD.platform_id AND slug = OLD.slug;
+        RETURN OLD;
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND to_jsonb(NEW) -> 'company_name'
+           IS NOT DISTINCT FROM to_jsonb(OLD) -> 'company_name' THEN
+        RETURN NEW;
+    END IF;
+    UPDATE ats_jobs SET content_updated_at = now()
+     WHERE platform_id = NEW.platform_id AND slug = NEW.slug;
+    RETURN NEW;
+END;
+$f$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_delta_azienda ON ats_companies;
+CREATE TRIGGER trg_delta_azienda
+    AFTER INSERT OR DELETE OR UPDATE OF company_name ON ats_companies
+    FOR EACH ROW EXECUTE FUNCTION ats_tocca_azienda_collegata();
+
+DROP TRIGGER IF EXISTS trg_delta_classificazione ON job_classifications;
+CREATE TRIGGER trg_delta_classificazione
+    AFTER INSERT OR DELETE OR UPDATE OF family ON job_classifications
+    FOR EACH ROW EXECUTE FUNCTION ats_tocca_job_collegato('family');
+
+DROP TRIGGER IF EXISTS trg_delta_tecnologie ON tecnologie_v1;
+CREATE TRIGGER trg_delta_tecnologie
+    AFTER INSERT OR DELETE OR UPDATE OF tecnologie ON tecnologie_v1
+    FOR EACH ROW EXECUTE FUNCTION ats_tocca_job_collegato('tecnologie');
+
+DROP TRIGGER IF EXISTS trg_delta_estrazione ON estrazioni_v2b;
+CREATE TRIGGER trg_delta_estrazione
+    AFTER INSERT OR DELETE OR UPDATE OF sintesi ON estrazioni_v2b
+    FOR EACH ROW EXECUTE FUNCTION ats_tocca_job_collegato('sintesi');
+
+DROP TRIGGER IF EXISTS trg_delta_sintesi_mt5 ON sintesi_mt5;
+CREATE TRIGGER trg_delta_sintesi_mt5
+    AFTER INSERT OR DELETE OR UPDATE OF sintesi_pulita, ripassata_at ON sintesi_mt5
+    FOR EACH ROW EXECUTE FUNCTION ats_tocca_job_collegato('sintesi_pulita', 'ripassata_at');
+
+DROP TRIGGER IF EXISTS trg_delta_dettagli ON offerte_dettagli;
+CREATE TRIGGER trg_delta_dettagli
+    AFTER INSERT OR DELETE OR UPDATE OF management_level, is_decision_maker,
+        shift_schedule, work_hours, is_urgently_hiring, benefits, salary_text,
+        valid_through, state, postal_code, latitude, longitude, geo_da,
+        applicants_count, is_easy_apply, recruiter
+    ON offerte_dettagli FOR EACH ROW EXECUTE FUNCTION ats_tocca_job_collegato(
+        'management_level', 'is_decision_maker', 'shift_schedule', 'work_hours',
+        'is_urgently_hiring', 'benefits', 'salary_text', 'valid_through', 'state',
+        'postal_code', 'latitude', 'longitude', 'geo_da', 'applicants_count',
+        'is_easy_apply', 'recruiter');
+
+-- Il lettore vivo rivalida la propria cache confrontando max(aggiornato):
+-- anche una modifica diretta a una cella deve cambiare quella firma.
+CREATE OR REPLACE FUNCTION stipendi_benchmark_aggiornato() RETURNS trigger AS $f$
+BEGIN
+    IF ROW(NEW.country, NEW.currency, NEW.family, NEW.seniority,
+           NEW.p25, NEW.p50, NEW.p75, NEW.n)
+       IS DISTINCT FROM
+       ROW(OLD.country, OLD.currency, OLD.family, OLD.seniority,
+           OLD.p25, OLD.p50, OLD.p75, OLD.n) THEN
+        NEW.aggiornato := now();
+    END IF;
+    RETURN NEW;
+END;
+$f$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS trg_stipendi_benchmark_aggiornato ON stipendi_benchmark;
+CREATE TRIGGER trg_stipendi_benchmark_aggiornato
+    BEFORE UPDATE OF country, currency, family, seniority, p25, p50, p75, n
+    ON stipendi_benchmark FOR EACH ROW EXECUTE FUNCTION stipendi_benchmark_aggiornato();
+
+-- I grant del vivo appartengono allo schema ATS, non a modifiche manuali.
+-- Il ruolo puo' non esistere in un banco minimale; le viste sono incluse.
+DO $$
+DECLARE t text;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nivult_api_lettura') THEN
+        GRANT USAGE ON SCHEMA public TO nivult_api_lettura;
+        FOREACH t IN ARRAY ARRAY['ats_jobs', 'ats_companies',
+                               'job_classifications', 'tecnologie_v1',
+                               'sintesi_finali', 'offerte_dettagli',
+                               'stipendi_benchmark']
+        LOOP
+            IF EXISTS (SELECT 1 FROM pg_class c
+                       JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = 'public' AND c.relname = t
+                          AND c.relkind IN ('r', 'v', 'm', 'p')) THEN
+                EXECUTE format('GRANT SELECT ON %I TO nivult_api_lettura', t);
+            END IF;
+        END LOOP;
+    END IF;
+END $$;
 

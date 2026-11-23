@@ -1,15 +1,15 @@
-"""Cifratura a busta per i CV: AES-256-GCM, DEK per file, KEK nell'ambiente.
+"""Cifratura a busta per CV e documenti: AES-256-GCM, DEK per file.
 
-Ogni CV ha la sua chiave di dati (DEK) casuale; la DEK viene avvolta con la
+Ogni file ha la sua chiave di dati (DEK) casuale; la DEK viene avvolta con la
 chiave master (KEK) che vive solo in variabile d'ambiente sul server. Hetzner
 riceve byte opachi: non ha né la KEK né le DEK, e non può leggere nulla.
 
 Il motivo della busta è la rotazione: cambiare KEK significa riavvolgere DEK
-di poche decine di byte, non riscaricare e ricifrare ogni CV. kek_version in
-user_cvs dice con quale generazione è avvolta ciascuna DEK, così la rotazione
-sarà incrementale invece che atomica.
+di poche decine di byte, non riscaricare e ricifrare ogni file. kek_version in
+user_cvs e match_documents dice con quale generazione è avvolta ciascuna DEK,
+così la rotazione sarà incrementale invece che atomica.
 
-Il contratto con lo schema della 0009:
+Il contratto con gli schemi 0009 e 0090:
   nonce        12 byte  — il nonce GCM dei DATI
   auth_tag     16 byte  — il tag GCM dei DATI (i dati cifrati lo portano
                           appeso: lì sta la verità, qui la fotografia)
@@ -36,9 +36,9 @@ class BustaCifrata(bytes):
 @dataclass(slots=True)
 class EsitoCifratura:
     dati: BustaCifrata          # da mandare all'object storage, così com'è
-    encrypted_dek: bytes        # da mettere in user_cvs
-    nonce: bytes                # da mettere in user_cvs
-    auth_tag: bytes             # da mettere in user_cvs
+    encrypted_dek: bytes        # metadati della riga del file
+    nonce: bytes                # metadati della riga del file
+    auth_tag: bytes             # metadati della riga del file
 
 
 def _kek() -> bytes:

@@ -2,7 +2,7 @@
 
 Due stadi, entrambi qui:
 
-  estrai_testo    il file (PDF o testo) diventa testo. È l'unica parte che
+  estrai_testo    il file (PDF, DOCX o testo) diventa testo. È l'unica parte che
                   guarda il contenuto oltre a GLM: il testo non si logga MAI,
                   è un dato personale come tutto il resto del CV
   estrai_profilo  GLM legge il testo e propone famiglie, seniority, competenze,
@@ -14,28 +14,113 @@ Due stadi, entrambi qui:
 
 from __future__ import annotations
 
+import io
 import json
+import logging
 import re
+import unicodedata
 
+from nivult.ats.geografia import iso_da_nome_paese, paese_da_localita
 from nivult.matching.llm import ChatModel
 from nivult.pseudonimizza import benda
 
-MAX_BYTES = 5 * 1024 * 1024
+# Anche i warning di pypdf possono citare byte del CV: non devono finire nei log.
+logging.getLogger("pypdf").setLevel(logging.CRITICAL + 1)
+
+MAX_BYTES = 20 * 1024 * 1024
 MAX_CARATTERI = 25_000   # il CV intero di rado li supera; tagliare protegge
                          # il contesto e il conto, non la qualità del giudizio
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _formato(nome: str, mime: str) -> str:
+    nome = (nome or "").strip().lower()
+    mime = (mime or "").split(";", 1)[0].strip().lower()
+    if nome.endswith(".doc") or mime == "application/msword":
+        raise ValueError("il formato .doc non e' supportato: usa PDF, DOCX o TXT")
+    if mime == DOCX_MIME or nome.endswith(".docx"):
+        return "docx"
+    if mime == "application/pdf" or nome.endswith(".pdf"):
+        return "pdf"
+    return "testo"
+
+
+def _testo_docx(dati: bytes) -> str:
+    from docx import Document
+
+    documento = Document(io.BytesIO(dati))
+    parti = [p.text for p in documento.paragraphs]
+    for tabella in documento.tables:
+        for riga in tabella.rows:
+            parti.append("\t".join(cella.text for cella in riga.cells))
+    return "\n".join(p for p in parti if p.strip())
+
+
+def _normalizza(testo: str) -> str:
+    senza_controlli = "".join(
+        c for c in testo if c != "\x00" and not 0xD800 <= ord(c) <= 0xDFFF)
+    return unicodedata.normalize("NFC", senza_controlli)
+
+
+def estrai_localita(testo_cv: str) -> dict:
+    testo = _normalizza(testo_cv)
+    trasferimento = re.search(
+        r"open to (?:relocation|relocate)|willing to relocate|available for relocation|"
+        r"disponibil\w+ a (?:trasferir|spostar)|mobilit[aà] geografica", testo, re.I)
+    esito = {
+        "location_city": None,
+        "location_country": None,
+        "relocation_open": True if trasferimento else None,
+    }
+    righe = [r.strip() for r in testo.splitlines() if r.strip()]
+    for riga in righe:
+        dichiarazione = re.search(
+            r"\b(?:based|living)\s+in\s+|\bresident[ei]\s+(?:a|in)\s+|"
+            r"\b(?:location|citt[aà]|city)\s*:\s*", riga, re.I)
+        if dichiarazione:
+            luogo = riga[dichiarazione.end():].strip()
+            paese = paese_da_localita(luogo)
+            citta = re.split(
+                r"[,;|]|\s+[-–]\s+|\s+(?:and|e)\s+(?:open|willing|available|disponibil)",
+                luogo, maxsplit=1, flags=re.I)[0].strip(" .")
+            if paese and citta and len(citta) <= 120 and not re.search(r"[@\d]", citta):
+                return {**esito, "location_city": citta, "location_country": paese}
+            continue
+        luogo = re.split(r"\s+[-–|]\s+", riga, maxsplit=1)[0]
+        strutturata = re.fullmatch(
+            r"([^,;|\d]{1,80}),\s*([A-Za-zÀ-ÿ.' ]{2,50})", luogo)
+        if not strutturata:
+            continue
+        citta, nome_paese = (parte.strip() for parte in strutturata.groups())
+        paese = iso_da_nome_paese(nome_paese)
+        if paese and citta and not re.search(r"@", citta):
+            return {**esito, "location_city": citta, "location_country": paese}
+    return esito
 
 
 def estrai_testo(nome: str, mime: str, dati: bytes) -> str:
     if len(dati) > MAX_BYTES:
-        raise ValueError("il file supera 5 MB")
-    if (mime or "").lower() == "application/pdf" or nome.lower().endswith(".pdf"):
-        from pypdf import PdfReader
-        import io
-        lettore = PdfReader(io.BytesIO(dati))
-        testo = "\n".join((p.extract_text() or "") for p in lettore.pages)
+        raise ValueError("il file supera i 20 MB")
+    formato = _formato(nome, mime)
+    if formato == "pdf":
+        try:
+            from pypdf import PdfReader
+            lettore = PdfReader(io.BytesIO(dati))
+            testo = "\n".join((p.extract_text() or "") for p in lettore.pages)
+        except ImportError:
+            raise
+        except Exception:
+            raise ValueError("PDF non valido o non leggibile") from None
+    elif formato == "docx":
+        try:
+            testo = _testo_docx(dati)
+        except ImportError:
+            raise
+        except Exception:
+            raise ValueError("DOCX non valido o non leggibile") from None
     else:
         testo = dati.decode("utf-8", errors="replace")
-    testo = testo.strip()
+    testo = _normalizza(testo).strip()
     if len(testo) < 30:
         raise ValueError("dal file non si riesce a leggere testo sufficiente")
     return testo[:MAX_CARATTERI]
@@ -171,6 +256,7 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
                    if isinstance(s, str) and s.strip()][:15],
         "languages": puliti("languages", lingue, 10),
         "years_experience": anni,
+        **estrai_localita(testo_cv),
         # I quattro campi «di racconto»: non si filtra su nessuno, servono
         # a far vedere al candidato che l'abbiamo letto. Vivono dentro
         # raw_extraction, che e' gia' jsonb — una colonna per ciascuno
@@ -194,6 +280,18 @@ def estrai_profilo(modello: ChatModel, testo_cv: str, *, famiglie: list[str],
             "cv_tips": elenco("cv_tips", 3, 200),
         },
     }
+
+
+def contiene_dati_professionali(profilo: dict) -> bool:
+    if any(profilo.get(chiave) for chiave in ("families", "skills")):
+        return True
+    if profilo.get("years_experience") is not None:
+        return True
+    estrazione = profilo.get("raw_extraction")
+    if not isinstance(estrazione, dict):
+        return False
+    return any(estrazione.get(chiave) for chiave in
+               ("roles", "certifications", "education"))
 
 
 def _json(testo: str) -> dict:

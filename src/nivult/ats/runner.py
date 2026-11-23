@@ -36,6 +36,40 @@ log = logging.getLogger("nivult.ats.runner")
 # il ban sui pochi condivisi. Il gate serializza al ritmo di RATE_PER_SECOND.
 _rate_lock = threading.Lock()
 _rate_next: dict[str, float] = {}
+PAUSA_429_SECONDI = float(os.environ.get("PAUSA_429_SECONDI", "1800"))
+PAUSA_429_DIR = os.environ.get("PAUSA_429_DIR", "/tmp")
+
+
+def _pausa_429_file(platform_id: str) -> str:
+    pulito = re.sub(r"[^a-z0-9_-]", "", platform_id.lower())
+    return os.path.join(PAUSA_429_DIR, f"nivult-429-{pulito}")
+
+
+def _pausa_429_attiva(platform_id: str) -> bool:
+    f = _pausa_429_file(platform_id)
+    try:
+        scade = os.path.getmtime(f) + PAUSA_429_SECONDI
+    except OSError:
+        return False
+    if scade <= time.time():
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def _piattaforme_in_pausa() -> set[str]:
+    try:
+        nomi = os.listdir(PAUSA_429_DIR)
+    except OSError:
+        return set()
+    out = set()
+    for nome in nomi:
+        if nome.startswith("nivult-429-") and _pausa_429_attiva(nome[11:]):
+            out.add(nome[11:])
+    return out
 
 
 def _rate_gate(platform_id: str) -> None:
@@ -59,6 +93,14 @@ def _rate_penalizza(platform_id: str, secondi: float = 20.0) -> None:
     with _rate_lock:
         ora = time.monotonic()
         _rate_next[platform_id] = max(_rate_next.get(platform_id, 0.0), ora) + secondi
+    # Il runner riparte a ogni lotto: il freno in memoria si azzerava e un
+    # 429 tornava a martellare la piattaforma dopo pochi minuti. Il file tiene
+    # la pausa fra processi; alla scadenza si riprova una sola volta.
+    try:
+        with open(_pausa_429_file(platform_id), "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass
 
 
 def _paese_all_ingresso(j) -> str | None:
@@ -167,6 +209,12 @@ def setup(dsn: str) -> None:
     istruzioni = _spezza_sql(schema.read_text())
     with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
+            lock_timeout = os.environ.get("ATS_LOCK_TIMEOUT")
+            if lock_timeout:
+                if not re.fullmatch(r"\d+(?:ms|s|min|h)", lock_timeout):
+                    raise ValueError("ATS_LOCK_TIMEOUT non valido")
+                cur.execute("SELECT set_config('lock_timeout', %s, false)",
+                            (lock_timeout,))
             colonne: dict[str, set] = {}
             for tab, col in cur.execute(
                     "SELECT table_name, column_name FROM information_schema.columns "
@@ -174,13 +222,17 @@ def setup(dsn: str) -> None:
                 colonne.setdefault(tab, set()).add(col)
             indici = {r[0] for r in cur.execute(
                 "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'").fetchall()}
+            fastupdate_off = cur.execute(
+                "SELECT COALESCE((SELECT reloptions::text FROM pg_class "
+                "WHERE oid = to_regclass('public.ats_jobs_search_idx')), '')").fetchone()[0]
             triggers = {r[0] for r in cur.execute(
                 "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal").fetchall()}
             # i lock restanti (i CREATE TABLE di controllo, i SET DEFAULT…)
             # si prendono con lock_timeout corto e riprova: chi legge a
             # lungo non viene strangolato, e lo schema entra nella prima
             # finestra libera invece di morire in fondo alla fila
-            cur.execute("SET lock_timeout = '4s'")
+            cur.execute("SELECT set_config('lock_timeout', %s, false)",
+                        (lock_timeout or "4s",))
             salta_create_trigger: str | None = None
             for sql in istruzioni:
                 testa = _senza_commenti_testa(sql)
@@ -193,6 +245,12 @@ def setup(dsn: str) -> None:
                     continue
                 m = re.match(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)", testa, re.I)
                 if m and m.group(1) in indici:
+                    continue
+                m = re.match(
+                    r"ALTER\s+INDEX\s+IF\s+EXISTS\s+ats_jobs_search_idx\s+"
+                    r"SET\s+\(\s*fastupdate\s*=\s*false\s*\)", testa, re.I)
+                if m and re.search(r"fastupdate\s*=\s*(?:off|false|0)\b",
+                                   fastupdate_off, re.I):
                     continue
                 m = re.match(r"DROP\s+TRIGGER\s+IF\s+EXISTS\s+(\w+)", testa, re.I)
                 if m and m.group(1) in triggers:
@@ -322,7 +380,8 @@ def _lettura_vuota(conn, az: dict, pagina: str | None, campioni_ora: dict) -> tu
 def scrape(dsn: str, piattaforma: str | None = None,
            thread: int = 10, limite: int | None = None,
            solo_attivi: bool = False,
-           salta: set[str] | None = None) -> dict[str, int]:
+           salta: set[str] | None = None,
+           tenant: list[tuple[str, str]] | None = None) -> dict[str, int]:
     """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
 
     Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
@@ -333,7 +392,8 @@ def scrape(dsn: str, piattaforma: str | None = None,
 
     Con `limite` scarica solo le prime N aziende per priorita': serve al
     demone che gira in continuo a piccoli lotti invece di un giro unico
-    da ore. La priorita' e' l'ordine qui sotto.
+    da ore. La priorita' e' l'ordine qui sotto. `tenant` limita invece
+    la lettura a coppie piattaforma/slug esplicite.
 
     `salta` (13/10/2026): le piattaforme da NON toccare in questa corsia.
     Lo scrape si divide per macchina — gli endpoint condivisi col rate
@@ -358,9 +418,19 @@ def scrape(dsn: str, piattaforma: str | None = None,
                 lista = [p.strip() for p in piattaforma.split(",") if p.strip()]
                 sql += " AND ac.platform_id = ANY(%s)"
                 params.append(lista)
+            if tenant:
+                sql += " AND (" + " OR ".join(
+                    "(ac.platform_id = %s AND ac.slug = %s)"
+                    for _ in tenant) + ")"
+                for coppia in tenant:
+                    params.extend(coppia)
             if salta:
                 sql += " AND NOT (ac.platform_id = ANY(%s))"
                 params.append(sorted(salta))
+            in_pausa = _piattaforme_in_pausa()
+            if in_pausa:
+                sql += " AND NOT (ac.platform_id = ANY(%s))"
+                params.append(sorted(in_pausa))
             if solo_attivi:
                 # corsia veloce: solo i tenant che HANNO offerte, rivisitati
                 # di continuo dal piu' stantio — cosi' le posizioni appena
@@ -599,6 +669,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.runner", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--piattaforma", help="solo queste piattaforme (elenco con virgole: greenhouse,ashby,…)")
+    ap.add_argument("--tenant", action="append", default=[], metavar="PIATTAFORMA:SLUG",
+                    help="leggi solo questo tenant; ripetibile per un onboarding mirato")
     ap.add_argument("--salta", default=None,
                     help="MAI queste piattaforme (elenco con virgole): la "
                          "corsia di casa le lascia a Hetzner e viceversa")
@@ -619,6 +691,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--schema", action="store_true",
                     help="applica schema.sql (idempotente) e registra le piattaforme; poi esce se non c'e' altro")
     args = ap.parse_args(argv)
+    tenant = []
+    for valore in args.tenant:
+        pid, sep, slug = valore.partition(":")
+        if not sep or not pid.strip() or not slug.strip():
+            ap.error(f"--tenant non valido: {valore!r}; atteso PIATTAFORMA:SLUG")
+        tenant.append((pid.strip(), slug.strip()))
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
@@ -651,12 +729,12 @@ def main(argv: list[str] | None = None) -> int:
             while True:
                 s = scrape(dsn, args.piattaforma, thread=args.thread,
                            limite=args.limite, solo_attivi=args.solo_attivi,
-                           salta=salta)
+                           salta=salta, tenant=tenant)
                 print("scrape:", s, flush=True)
                 _t.sleep(5)
         s = scrape(dsn, args.piattaforma, thread=args.thread,
                    limite=args.limite, solo_attivi=args.solo_attivi,
-                   salta=salta)
+                   salta=salta, tenant=tenant)
         if s.get("sospette"):
             print(f"\n⚠ {s['sospette']} letture SOSPETTE (adapter a zero su tenant con offerte ancora in pagina)")
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "

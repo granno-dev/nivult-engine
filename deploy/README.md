@@ -4,7 +4,8 @@ Configurazione del server, versionata. Nessun segreto qui dentro.
 
 | File | Destinazione | Note |
 |---|---|---|
-| `backup.sh` | `/opt/nivult/backup.sh` (0700) | cron 03:00 |
+| `backup.sh` | `/opt/nivult/backup.sh` (0700) | ripiego sul server |
+| `backup-n5.sh` | `/root/backup-n5.sh` sull'N5 | backup notturno dalla replica, senza lock sul primario |
 | certificato pubblico | `/opt/nivult/backup-recipient.pem` (0644) | **non versionato**: `.gitignore` blocca ogni `*.pem`, e la regola resta assoluta per non lasciare varchi |
 | `backup.env.example` | `/opt/nivult/backup.env` (0600) | credenziali Storage Box, **mai** nel repo |
 | `52nivult-security` | `/etc/apt/apt.conf.d/` | solo canale security, riavvio 04:00 |
@@ -21,9 +22,40 @@ sudo deploy/cron.sh --check  # verifica e basta, esce 1 se manca qualcosa
 |---|---|---|
 | 01:00 | ingestione (`nightly.sh`) | prima dei digest: il primo giro del mattino deve trovare le offerte della notte |
 | 02:30 | ATS/Wikidata (`ats-nightly.sh`) | dopo l'ingestione, prima del backup |
-| 03:00 | backup (`backup.sh`) | a valle di tutto, e prima del riavvio automatico delle 04:00 |
+| 03:13 | backup (`backup-n5.sh` sull'N5) | dalla replica, senza lock sul primario; `backup.sh` resta il ripiego |
 | ogni ora al :10 | digest (`digests.sh`) | l'orario di invio e' quello dell'utente, nel suo fuso: un giro al giorno consegnerebbe in ritardo |
+| ogni 15 minuti | digest Mavult (`mavult-digests.sh`) | wrapper dello stesso runner con base, lock e ambiente `/opt/mavult` |
+| ogni 5 minuti | promemoria tracker (`tracker-notifications.sh`) | colloqui, azioni, scadenze/chiusure e riepilogo del lunedi'; deduplica dopo l'invio, quindi retry at-least-once |
+| ogni 5 minuti | promemoria Mavult (`mavult-tracker-notifications.sh`) | wrapper con base, lock e ambiente `/opt/mavult`; installarlo nel crontab Mavult |
 | 05:50 | pagine SEO (`nivult.ats.pagine_seo`) | dopo l'ATS delle 02:30: rigenera `vetrina/ats/`, `vetrina/job-board/`, le due sitemap e l'indice coi numeri vivi; log in `/var/log/nivult-pagine-seo.log` |
+
+Il riepilogo push parte il lunedi' dalle 09:00 locali dell'utente. I promemoria di
+colloquio rispettano `promemoria_minuti`; quelli di scadenza partono entro 72 ore.
+Una riga `personal_notification_dedup` viene scritta solo dopo almeno un invio
+Expo riuscito: un crash puo' ripetere un avviso, non perdere un evento come gia'
+consegnato.
+
+Con `PRESCORE_V3_ANN=1` il runner aggiorna gli embedding prima dei digest e usa
+l'ANN solo con almeno il 98% di hash aggiornati. `PRESCORE_V3_ANN=0` disattiva il
+percorso senza migrazioni inverse: la cache resta disponibile per un giro successivo.
+
+Il controllo `canarino.py` sui digest dovuti considera sia
+`users.next_digest_at` (ricerche ereditate) sia le scadenze degli override in
+`user_clusters.next_digest_at`: un utente dovuto soltanto per una ricerca
+personalizzata non resta invisibile agli allarmi. Nei log, un `401` del provider
+e' un allarme immediato anche sotto la soglia degli altri errori; timestamp e
+dettagli JSON non duplicano il conteggio e un ID numerico contenente `401` non
+viene scambiato per un errore HTTP.
+
+## Indice testi ATS
+
+`ats_jobs_search_idx` usa `fastupdate = false`: la ricerca ha tempi di risposta
+stabili e le scritture non alimentano una pending list che possa bloccare il
+consolidamento in foreground. `src/nivult/ats/schema.sql` crea l'indice con
+questo parametro e `runner.setup` lo applica agli ambienti legacy senza ripetere
+il DDL quando e' gia' attivo. Dopo la conversione, una coda preesistente va
+consolidata con `gin_clean_pending_list`; il parametro non la svuota da solo.
+Non riattivare `fastupdate` senza misurare prima l'effetto sulle ricerche.
 
 **Perche' esiste questo script.** Il 2026-08-28 alle 17:53 il crontab e'
 stato riscritto a mano per installare `ats-nightly`, e `crontab <file>`
@@ -75,10 +107,19 @@ cat /opt/nivult/backup-state               # ok o failed, con data
 
 Ripristino di prova, trimestrale, su una macchina con la chiave privata:
 
+Dalla radice del repository, su una macchina con la chiave privata e un database
+di prova Postgres 17 (mai direttamente sulla produzione):
+
 ```bash
-openssl cms -decrypt -inform DER -in nivult-AAAA-MM-GG.sql.gz.enc \
-  -inkey nivult-backup-PRIVATE.pem | gunzip | psql -U postgres
+python scripts/decifra_backup.py --key nivult-backup-PRIVATE.pem \
+  < nivult-AAAA-MM-GG.sql.gz.enc | gunzip | psql -U postgres
 ```
+
+`openssl cms -decrypt` non basta per questi file: la decifratura CMS di OpenSSL
+carica il contenuto e fallisce sui backup grandi. Il lettore `decifra_backup.py`
+decodifica i blocchi DER con memoria limitata; `scripts/check_backup_stream.py`
+ne verifica il formato e il rifiuto dei file troncati. La verifica off-site di
+hash e dimensione resta necessaria, ma non sostituisce questa prova.
 
 ## Credenziali France Travail
 

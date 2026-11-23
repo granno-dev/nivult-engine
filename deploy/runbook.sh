@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# IL RUNBOOK: le uniche azioni che il «medico» (Claude sul server, utente
+# IL RUNBOOK: le uniche azioni che il «medico» (Kimi sul server, utente
 # nivult-medico) puo' eseguire sulla produzione. Tutto il resto gli e'
 # vietato per costruzione (sudoers: solo questo script). Ogni azione e'
 # idempotente e stampa cosa ha fatto.
@@ -21,7 +21,7 @@
 set -uo pipefail
 BASE=/opt/nivult/engine
 PY="$BASE/.venv/bin/python"
-DEMONI="scrape scrape-veloce profonda scoperta arricchisci volano certificati api sprint"
+DEMONI="scrape scrape-veloce scrape-cpx52 profonda scoperta arricchisci volano certificati api sprint"
 LOG_DIR="$BASE/logs"
 # registro di ogni azione: chi ha chiesto cosa, quando. E' anche il modo in
 # cui medico.sh sa se il medico ha davvero scritto su Telegram.

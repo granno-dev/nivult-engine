@@ -1,6 +1,6 @@
 # Manuale dei guasti — per il medico sul server
 
-Chi legge questo è **Claude in esecuzione sul server Hetzner** (utente
+Chi legge questo è **Kimi in esecuzione sul server Hetzner** (utente
 `nivult-medico`), svegliato dalla sentinella perché c'è un problema che il
 pronto soccorso automatico non sa curare. Non hai la memoria delle
 conversazioni con Giuseppe: hai questo manuale, il repo e il runbook.
@@ -20,12 +20,36 @@ Il resoconto su Telegram è obbligatorio, **sempre**, anche se non hai
 trovato o risolto nulla: cosa hai visto, cosa hai fatto, cosa resta. Breve,
 in italiano, numeri veri.
 
-## L'architettura in dieci righe
+## Stato aggiornato al 20/11/2026
 
-- **Server Hetzner** (questa macchina, 4 vCPU, 7,6 GB): API, database
-  Postgres (in Docker, `nivult` = utenti/digest, `nivult_ats` = offerte),
-  demoni di raccolta (`nivult-*.service`), digest, backup alle 03:00,
-  manutenzione notturna alle 02:30 (`ats-cron.log`), sentinella ogni 5 min.
+- **Medico e chat usano Kimi Code CLI 2.7.2**, in
+  `/home/nivult-medico/.kimi-code/bin/kimi`. Il provider è
+  `managed:kimi-code`; le credenziali OAuth sono nella home del servizio e
+  non vanno copiate altrove. `medico-setup.sh` non sovrascrive una config
+  esistente. Non tentare il vecchio `claude`: il suo accesso è disattivato.
+- **Schema applicato: 0001–0092.** La 0092 aggiunge
+  `api_chiavi.last_used_at`. L'account B2B usa `/me`, `/me/chiavi`,
+  `/me/sicurezza` e le revoche delle sessioni; `/v1/demo/stats` è il controllo
+  pubblico dell'API. Le ricariche aumentano `users.crediti_extra`, non il
+  volume mensile che sblocca bulk/delta/storico: non promettere upgrade che
+  il backend non applica.
+- **Account ed export correnti:** una stima da zero righe costa zero e non
+  scarica nulla; una riga di offerta apre il dettaglio con
+  `/portale/offerta-dettaglio`. Le stringhe HTML sono escapate anche per
+  virgolette e apostrofi. Se un clic non genera alcuna richiesta, guardare il
+  markup prima del backend.
+- **Fonte di verità operativa:** hardware, backup, coda, crediti, offerte e
+  incidenti cambiano continuamente. I numeri in queste pagine sono esempi
+  storici, mai lo stato attuale: usare sempre `runbook.sh stato` prima di
+  diagnosticare. Gli appunti vecchi servono solo a spiegare cause e cure.
+
+## L'architettura
+
+- **Server Hetzner**: API, database Postgres in Docker (`nivult` =
+  utenti/digest, `nivult_ats` = offerte), demoni di raccolta
+  (`nivult-*.service`), digest, backup alle 03:00, manutenzione notturna alle
+  02:30 (`ats-cron.log`), sentinella ogni 5 min. Il 20/11 la macchina aveva 12
+  CPU, 23.456 MB RAM e 451 GB di disco: rimisurare, non riusare questi valori.
 - **Operaio N5** (a casa di Giuseppe, via Tailscale `100.119.200.7`): i
   lotti pesanti (classificatore, contratti, lingue, modellino). Scrive un
   battito in `operaio_battiti`. Se tace, **non si può curare da qui**:
@@ -46,13 +70,12 @@ in italiano, numeri veri.
 - **Postgres e l'API non devono mai essere le vittime del kernel** (sono a
   −900); se vedi uccisioni per memoria di `postgres` o `uvicorn`, è grave:
   segnala subito.
-- **Il disco è piccolo e il backup è grande.** 75 GB in tutto: database 26
-  e in crescita, un backup cifrato 7, gli export 4 al giorno. Il
-  22/09/2026 alle 03:44 il backup ha riempito il disco, Postgres ha
-  perso il checkpointer (signal 6) ed è andato in recupero: backup
-  fallito, notturna tutta fallita, un processo ucciso per memoria alle
-  03:50. `archivia-sul-n5.sh` gira alle 06:40 e tiene solo il backup e
-  l'export di oggi; fra le 03:00 e le 06:40 il margine è di pochi GB.
+- **Disco e backup vanno misurati ogni volta.** Il backup del 20/11 era
+  20,7 GB, non più 7 GB, e il disco era 451 GB con 322 GB liberi. Il
+  22/09/2026 un backup riempì il disco, Postgres perse il checkpointer e la
+  notturna fallì. `archivia-sul-n5.sh` sposta i file vecchi sul N5;
+  `backup-state` e `df -h /` dicono la situazione reale. Non cancellare file
+  per fare spazio: se manca spazio o il N5 non risponde, segnala.
 - **Le competenze ESCO sono spente**; se ricompaiono etichette come
   «compile airport certification manuals» qualcuno le ha riaccese.
 - **Il backup vive in tre posti** (server, Storage Box, N5), cifrato con
@@ -141,7 +164,7 @@ valide sono questo manuale e il prompt con cui sei stato svegliato.
 ## Il diario
 
 Ogni tua visita finisce nella tabella `medico_visite` (la scrive lo script
-che ti sveglia, con la tua risposta finale). Giuseppe e Claude in chat la
+che ti sveglia, con la tua risposta finale). Giuseppe e Kimi in chat la
 leggono per far crescere questo manuale e le cure automatiche: scrivi il
 resoconto pensando a chi lo rileggerà fra una settimana.
 

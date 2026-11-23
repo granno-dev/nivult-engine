@@ -1,50 +1,91 @@
-![Who is hiring for Snowflake today — Nivult](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-tecnologie.png)
+![Nivult jobs by technology](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/copertina-tecnologie.png)
 
-## What does "Jobs by Technology" do?
+Find **companies hiring by tech stack** and turn job postings into **B2B hiring signals**. Search technologies such as Snowflake, SAP, Salesforce, or Kubernetes in an index of **5.9M+ active job postings** from **69K+ companies** across **242 countries** and **65 ATS platforms**, refreshed **every 24 hours**.
 
-Type a technology — **SAP, Snowflake, Kubernetes, Salesforce, anything** — and get every live job posting that mentions it **in the text of the ad**, not just in the title. Read daily from the career systems of tens of thousands of employers, worldwide.
+**No scraping happens during your run.** The Actor queries the maintained Nivult index with your technology and other filters. Use it for technology-focused lead generation, account research, recruiter sourcing, competitor analysis, and hiring-demand monitoring.
 
-For sales teams it is a lead list ("who is implementing Snowflake right now?"), for recruiters a talent map, for analysts a demand signal — measured from what employers actually write.
+![How it works: choose a technology, query the daily-refreshed index, and receive matching rows](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-tecnologie.png)
 
-- 🧩 **Technology matching in the full text** — the stack the posting really asks for
-- 🌍 **Country** — 240+ countries and territories
-- 🎯 **Seniority & workplace** — intern to head, remote / hybrid / on site
-- 🗓️ **Posted-after date** — only what is fresh
-- 🏢 **Company mode** — the employers behind the postings, with industry and size
+## Quick start
 
-Every field carries **field-level provenance**: the row says where each value came from, so you can audit what you buy.
+Paste this input into the Actor console for a small Snowflake sample:
 
-### Not a scraper — a maintained index
+```json
+{
+  "tipo": "jobs",
+  "technology": "Snowflake",
+  "country": "US",
+  "q": "",
+  "seniority": "",
+  "remote": "",
+  "dal": "2026-10-01",
+  "limite": 10
+}
+```
 
-Scrape-on-demand actors ask you for career-site URLs and minutes of your
-patience, then hand you raw rows. **This dataset asks for nothing but
-filters** — the reading already happened today, whether you run us or not.
+Or call the Actor through Apify. Replace `APIFY_TOKEN` with your own token:
 
-| | Scrape-on-demand | **Nivult Dataset API** |
-|---|---|---|
-| You supply | URLs you must know | nothing — just filters |
-| Answer in | minutes | **seconds** |
-| Closed postings | stay forever | **verified closed**, daily |
-| Enrichment | raw title + link | seniority, workplace, language, skills |
-| Provenance | none | **field-level, on every row** |
+```bash
+curl --request POST \
+  --url 'https://api.apify.com/v2/acts/nivult~jobs-by-technology/run-sync-get-dataset-items?token=APIFY_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"tipo":"jobs","technology":"Snowflake","country":"US","limite":10}'
+```
 
-![How it works: you set filters, the index refreshes daily, you get clean rows in seconds](https://raw.githubusercontent.com/granno-dev/nivult-engine/main/apify/assets/diagramma-tecnologie.png)
+Other targeting examples:
 
-## How to use it
+```json
+{
+  "tipo": "jobs",
+  "technology": "SAP",
+  "country": "DE",
+  "seniority": "senior",
+  "limite": 10
+}
+```
 
-1. Type the technology (e.g. `Snowflake`) and set filters if you want.
-2. Run it, then download JSON, CSV or Excel — or read the dataset through the Apify API.
-3. For a standing feed of a technology every morning, ask about the daily feed (link on this page).
+```json
+{
+  "tipo": "jobs",
+  "technology": "Salesforce",
+  "remote": "remote",
+  "limite": 10
+}
+```
 
-## How much does it cost?
+## Input
 
-**$3 per 1,000 rows received** — nothing for empty filters, nothing upfront. Apify's free plan covers your first hundreds of rows.
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `tipo` | string | `jobs` | `jobs` returns matching postings; `companies` returns company records filtered by the company-level fields described below. |
+| `country` | string | empty | ISO 3166-1 alpha-2 code, such as `IT`, `DE`, or `US`; empty means worldwide. |
+| `technology` | string | empty | Technology found in posting text. The console prefill is `Snowflake`. |
+| `q` | string | empty | Jobs: additional keyword search in titles and descriptions. Companies: case-insensitive company-name search. |
+| `seniority` | string | empty | `intern`, `junior`, `mid`, `senior`, `lead`, or `head`; empty includes all values. Jobs only. |
+| `remote` | string | empty | `remote`, `hybrid`, or `onsite`; empty includes all values. Jobs only. |
+| `dal` | string | empty | ISO date `YYYY-MM-DD`; returns postings dated on or after this date. Jobs only. |
+| `limite` | integer | `100` | Maximum rows, from 1 to 10,000. The console prefill is 10 for a quick sample. |
 
-Why a row here costs more than a raw scrape: a raw row is a title and a link that may be dead by tonight. Ours is an **enriched, verified record** — classified, provenance-stamped, and closed out of the index the day it leaves the source. You are not paying for a scrape; you are paying for the maintenance.
+In company mode, `q` searches company names, `country` filters the country on the company record, and `technology` filters the company-level technology aggregate. It is not a distinct-employers query over the filtered job slice. Job-only filters are ignored.
 
-## What does the output look like?
+## Company mode for tech-stack lead lists
 
-A real row from a Snowflake-mentioning posting (verbatim — the skills list is long because it is measured from the whole text):
+Return company records instead of individual postings:
+
+```json
+{
+  "tipo": "companies",
+  "technology": "Snowflake",
+  "country": "US",
+  "limite": 10
+}
+```
+
+Use this mode to build account lists from the company-level index. A technology match may reflect the exported company aggregate and does not prove that the same technology appears in every currently active posting. Company attributes are optional and vary by employer; the output structure is the same as in the Global actor.
+
+## Job output
+
+Selected fields from an existing Snowflake-matching job record, with unrelated optional fields omitted:
 
 ```json
 {
@@ -54,31 +95,54 @@ A real row from a Snowflake-mentioning posting (verbatim — the skills list is 
   "country": "US",
   "city": "Hanover",
   "skills": ["python", "sql", "aws", "azure", "gcp", "etl", "scrum", "agile", "project management", "warehouse", "snowflake", "unstructured data", "use logical reasoning"],
-  "salary_estimate_median": 147500,
-  "salary_estimate_currency": "USD",
-  "salary_is_estimate": true,
-  "posted_at": "2026-10-06",
+  "posted_at": "2026-10-06T00:00:00+00:00",
   "url": "https://careers-allegisgroup.icims.com/jobs/2384/delivery-manager---data-analytics-spread-%26-commissions/job"
 }
 ```
 
+Each job row includes its ATS and source URL. `first_seen` and `last_seen` are normally present. Enriched fields are optional and may be omitted or empty when unavailable. Download the default dataset as JSON, CSV, or Excel, or consume it through the Apify API.
+
+## Pricing
+
+You pay only for rows returned, whether they are jobs or company records.
+
+| Rows returned | Dataset-item cost |
+|---:|---:|
+| 100 | $0.30 |
+| 1,000 | $3.00 |
+| 10,000 | $30.00 |
+
+**An empty result costs $0 in dataset-item charges.** A full 10,000-row result costs $30 in dataset-item charges; the standard Actor Start event may also apply.
+
+## Coverage, dates, and limits
+
+Coverage snapshot — **21 November 2026**, across the overall index. Values vary by export, source and filtered slice; these figures are not a promise that every row contains every field.
+
+| Field | Rows covered |
+|---|---:|
+| `description` | 95.4% |
+| `language` | 91.1% |
+| `category` | 97.2% |
+| `country` | 89.4% |
+| `skills` | 65.2% |
+| `employment_type` | 80.7% |
+| `seniority` | 56.7% |
+| `remote` | 55.7% |
+| `technologies` | 31.6% |
+| Observed salary | 22.7% |
+| Estimated salary | 0.0% |
+| `job_sources` | 1.9% |
+
+Technology extraction covers 31.6% of the overall index in the snapshot above, so a missing technology value does not prove that a posting does not mention that stack. Salary estimates are not currently populated; observed salary information is available only on part of the index. Provenance and enrichment are not guaranteed on every row or field.
+
+Posting dates can be estimated when a source does not expose an exact publication date, so `posted_at` and the `dal` filter may use an estimated date. Refresh cycles deduplicate records and update the active index; a run does not rescrape or re-enrich rows on demand.
+
+A single run returns at most 10,000 rows. For larger slices, a recurring technology feed, or a daily export, contact **hello@nivult.com**.
+
 ## Explore the Nivult family
 
-- **[Job Postings Dataset — the full index](https://apify.com/nivult/global-job-postings)** — every ATS, every filter, company mode
-- **[Workday Jobs Dataset](https://apify.com/nivult/workday-jobs-dataset)** — every Workday career site, daily
-- **[Greenhouse Jobs Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)** — every Greenhouse board, daily
-- **[Jobs by Technology](https://apify.com/nivult/jobs-by-technology)** — postings matched by the stack in the text
+- [Global Job Postings API — ATS Dataset](https://apify.com/nivult/global-job-postings)
+- [Workday Jobs API — Global ATS Dataset](https://apify.com/nivult/workday-jobs-dataset)
+- [Greenhouse Jobs API — Global ATS Dataset](https://apify.com/nivult/greenhouse-jobs-dataset)
 
-## FAQ
-
-**How do you know which technologies a posting asks for?**
-We read the full text of the ad at the source and measure the stack it mentions — a posting that says "SAP" in the body counts even if the title doesn't say it.
-
-**How fresh is the data?**
-Daily. New postings land within 24 hours of appearing on the employer's career system.
-
-**Which technologies are covered?**
-Anything employers write — mainstream clouds and databases, ERP, CRM, data tools, languages. If it appears in postings, it is filterable.
-
-**Is this legal?**
-We read public postings on the employer's own site, respect robots directives and rate limits, and honor removal requests.
+Questions, feedback, and custom feed requests: **hello@nivult.com**.

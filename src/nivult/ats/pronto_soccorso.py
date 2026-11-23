@@ -7,7 +7,7 @@ Primo strato, senza AI: rimedi deterministici per i guasti che conosciamo
 (un demone giu' si riavvia, uno sprint morto si rilancia, un backup non
 spedito si rispedisce, un ponte fermo si rilancia). Per tutto il resto:
 il messaggio arriva lo stesso, con la diagnosi che c'e', e il secondo
-strato (una routine Claude nel cloud) ci ragiona sopra.
+strato (Kimi Code CLI sul server) ci ragiona sopra.
 
 Regole: mai due volte la stessa cura nello stesso giro; ogni cura verifica
 l'esito e lo dice; il messaggio Telegram parte solo se c'e' qualcosa di
@@ -47,7 +47,7 @@ def curabile(problema: str) -> bool:
 
 
 def chiama_medico(problemi: list[str]) -> bool:
-    """I problemi senza cura vanno al medico (Claude sul server), in
+    """I problemi senza cura vanno al medico (Kimi sul server), in
     background sotto systemd cosi' la sentinella non aspetta. Un'unita'
     sola per volta: se una visita e' in corso, si accoda al giro dopo."""
     if not problemi:
@@ -78,7 +78,9 @@ def cura(problemi: list[str]) -> list[str]:
             gia.add(m.group(1)); fatte.append(_riavvia(m.group(1))); continue
         if p.startswith("scrape fermo") and "scrape" not in gia:
             gia.add("scrape")
-            fatte.append(_riavvia("nivult-scrape")); fatte.append(_riavvia("nivult-scrape-veloce")); continue
+            fatte.append(_riavvia("nivult-scrape"))
+            fatte.append(_riavvia("nivult-scrape-veloce"))
+            fatte.append(_riavvia("nivult-scrape-cpx52")); continue
         if p.startswith("sprint fermo") and "sprint" not in gia and not os.path.exists("/opt/nivult/glm-corpus.spento"):
             gia.add("sprint")
             rc, out = _sh([f"{BASE}/deploy/sprint.sh", "start"], timeout=30)

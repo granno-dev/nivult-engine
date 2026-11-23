@@ -45,7 +45,7 @@ _HOST_NOTI = (
     r"teamtailor|personio|bamboohr|icims|sapsf|successfactors|softgarden|"
     r"workable|phenompeople|phenom|csod|cornerstone|oraclecloud|oracle|"
     r"applytojob|jazzhr|avature|taleo|eightfold|pinpointhq|breezy|"
-    r"zohorecruit|freshteam|jobvite|comeet|werecruit|radancy|jibe|adp|"
+    r"zohorecruit|freshteam|jobvite|comeet|werecruit|taleez|radancy|jibe|adp|"
     r"paylocity|ukg|rippling|manatal|join\.com|jobadder|pageuppeople|"
     r"hirevue|homerun|vidcruiter|beamery|talentsoft|jobteaser|"
     r"welcometothejungle|intervieweb|"
@@ -79,10 +79,10 @@ def controlla() -> list[str]:
     except OSError as e:
         problemi.append(f"Non trovo lo script notturno {link}: {e}")
 
-    # 2. I demoni systemd sono vivi?
+    # 2. I demoni systemd sono vivi? Il classificatore gira sull'operaio,
+    # non ha un servizio locale da controllare.
     for servizio in ("nivult-scoperta", "nivult-api",
-                     "nivult-scrape", "nivult-classifica",
-                     "nivult-arricchisci"):
+                     "nivult-scrape", "nivult-arricchisci"):
         try:
             out = subprocess.run(
                 ["systemctl", "is-active", servizio],

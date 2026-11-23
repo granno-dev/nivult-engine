@@ -37,6 +37,45 @@ CARTELLA = "/opt/nivult/exports"
 
 _DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
+_ATTIVE_SELECT = f"""
+    SELECT j.id, j.title, j.platform_id, j.slug,
+           COALESCE(co.company_name, j.raw->'company'->>'name'),
+           j.url, j.country, j.city, j.location, j.lang,
+           j.seniority, j.remote, j.skills,
+           j.salary_min, j.salary_max, j.salary_currency,
+           j.posted_at, COALESCE(j.created_at, j.posted_at, j.fetched_at),
+           j.fetched_at, {_DESCR}, x.family,
+           j.employment_type, j.languages_required,
+           j.external_id, j.department, j.orario, j.durata,
+           j.salary_period, j.salary_da, j.posted_at_estimated,
+           t.tecnologie, sf.sintesi, sf.da,
+           d.management_level, d.is_decision_maker,
+           d.shift_schedule, d.work_hours, d.is_urgently_hiring,
+           d.benefits, d.salary_text, d.valid_through, d.state,
+           d.postal_code, d.latitude, d.longitude, d.geo_da,
+           d.applicants_count, d.is_easy_apply,
+           fo.job_sources, j.content_updated_at
+      FROM ats_jobs j
+      LEFT JOIN ats_companies co
+             ON co.platform_id = j.platform_id AND co.slug = j.slug
+      LEFT JOIN job_classifications x ON x.job_id = j.id
+      LEFT JOIN tecnologie_v1 t ON t.job_id = j.id
+      LEFT JOIN sintesi_finali sf ON sf.job_id = j.id
+      LEFT JOIN offerte_dettagli d ON d.job_id = j.id
+      LEFT JOIN LATERAL (
+           SELECT jsonb_agg(jsonb_build_object(
+                    'id', k.id, 'ats', k.platform_id,
+                    'company_slug', k.slug, 'url', k.url,
+                    'posted_at', k.posted_at,
+                    'status', CASE WHEN k.expired_at IS NULL
+                                   THEN 'active' ELSE 'expired' END)
+                    ORDER BY k.posted_at DESC NULLS LAST) AS job_sources
+             FROM ats_jobs k
+            WHERE j.duplicate_key IS NOT NULL
+              AND k.duplicate_key = j.duplicate_key
+              AND k.id <> j.id) fo ON true
+"""
+
 
 def _apri(nome: str):
     os.makedirs(CARTELLA, exist_ok=True)
@@ -92,6 +131,74 @@ def _skills_pulite(valori) -> list[str]:
 def _riga(**kv) -> str:
     return json.dumps({k: v for k, v in kv.items() if v not in (None, [], "")},
                       ensure_ascii=False, default=str) + "\n"
+
+
+def _benchmark(conn) -> dict:
+    bench = {}
+    with conn.cursor() as cur:
+        cur.execute("""SELECT country, currency, family, seniority,
+                              p25, p50, p75, n
+                         FROM stipendi_benchmark""")
+        for r in cur:
+            bench[(r[0], r[2], r[3])] = (r[1], r[4], r[5], r[6], r[7])
+    return bench
+
+
+def _riga_attiva(r, bench: dict) -> dict:
+    stima = {}
+    if r[13] is None and r[6] and r[20]:
+        cella = bench.get((r[6], r[20], r[10] or ""))
+        livello = f"{r[6]} x {r[20]} x {r[10]}"
+        if not cella:
+            cella = bench.get((r[6], r[20], ""))
+            livello = f"{r[6]} x {r[20]}, all seniorities"
+        if cella:
+            val, p25, p50, p75, camp = cella
+            stima = {
+                "salary_is_estimate": True,
+                "salary_estimate_min": p25,
+                "salary_estimate_median": p50,
+                "salary_estimate_max": p75,
+                "salary_estimate_currency": val,
+                "salary_estimate_basis": f"Nivult benchmark: {camp} observed "
+                                         f"postings, {livello}"}
+    (ext_id, department, orario, durata, sal_period, sal_da,
+     posted_est, tecnologie, sintesi, sintesi_da, mgmt,
+     decisore, turni, ore, urgente, benefits, sal_testo,
+     valid_through, state, cap, lat, lon, geo_da, candidati,
+     easy, fonti) = r[23:49]
+    geo = ({"latitude": lat, "longitude": lon, "source": geo_da}
+           if lat is not None else None)
+    return {
+        "id": str(r[0]), "title": r[1], "ats": r[2], "company_slug": r[3],
+        "company": r[4], "url": r[5], "country": r[6], "city": r[7],
+        "location": r[8], "language": r[9], "seniority": r[10],
+        "remote": r[11], "skills": _skills_pulite(r[12]),
+        "salary_min": float(r[13]) if r[13] is not None else None,
+        "salary_max": float(r[14]) if r[14] is not None else None,
+        "salary_currency": r[15], "posted_at": r[16],
+        "first_seen": r[17], "last_seen": r[18],
+        "description": pulito(r[19]), "category": r[20],
+        "employment_type": r[21],
+        "languages_required": list(r[22] or []), **stima,
+        "external_id": ext_id, "department": department,
+        "hours_type": orario, "duration_type": durata,
+        "salary_period": sal_period, "salary_source": sal_da,
+        "salary_text": sal_testo,
+        "posted_at_estimated": True if posted_est else None,
+        "technologies": list(tecnologie or []),
+        "summary": sintesi, "summary_source": sintesi_da,
+        "management_level": mgmt,
+        "is_decision_maker": True if decisore else None,
+        "shift_schedule": turni, "work_hours": ore,
+        "is_urgently_hiring": True if urgente else None,
+        "benefits": list(benefits or []), "valid_through": valid_through,
+        "state": state, "postal_code": cap, "geo": geo,
+        "applicants_count": candidati,
+        "is_easy_apply": True if easy else None,
+        "job_sources": list(fonti or []),
+        "updated_at": r[49] if len(r) > 49 else None,
+    }
 
 
 def _vetrina_merge(campi: dict) -> None:
@@ -150,70 +257,19 @@ def attive(dsn: str, campione: int | None = None) -> int:
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
                                 "country", "skills", "employment_type",
-                                "contact_email", "seniority", "remote",
+                                "seniority", "remote",
                                 "technologies", "summary", "benefits",
                                 "shift_schedule", "work_hours",
                                 "management_level", "valid_through",
-                                "state", "geo", "recruiter", "job_sources",
+                                "state", "geo", "job_sources",
                                 "department", "salary_text")}
     with psycopg.connect(dsn) as conn:
         # il benchmark in memoria: stima SOLO dove l'annuncio tace, in
         # campi SEPARATI e dichiarati — mai mescolata con l'osservato
-        bench: dict = {}
-        with conn.cursor() as cur:
-            cur.execute("""SELECT country, currency, family, seniority,
-                                  p25, p50, p75, n
-                             FROM stipendi_benchmark""")
-            for r in cur:
-                bench[(r[0], r[2], r[3])] = (r[1], r[4], r[5], r[6], r[7])
+        bench = _benchmark(conn)
         with conn.cursor(name="esp_attive") as cur:
             cur.itersize = 2000
-            cur.execute(f"""
-                SELECT j.id, j.title, j.platform_id, j.slug,
-                       COALESCE(co.company_name, j.raw->'company'->>'name'),
-                       j.url, j.country, j.city, j.location, j.lang,
-                       j.seniority, j.remote, j.skills,
-                       j.salary_min, j.salary_max, j.salary_currency,
-                       j.posted_at, COALESCE(j.created_at, j.posted_at,
-                                             j.fetched_at), j.fetched_at,
-                       {_DESCR}, x.family,
-                       j.employment_type, j.contact_email,
-                       j.languages_required,
-                       -- 21/09/2026: i campi che il mercato (Coresignal,
-                       -- TheirStack) espone e noi avevamo o abbiamo appena
-                       -- calcolato; tutti dichiarati per quello che sono
-                       j.external_id, j.department, j.orario, j.durata,
-                       j.salary_period, j.salary_da, j.posted_at_estimated,
-                       t.tecnologie, sf.sintesi, sf.da,
-                       d.management_level, d.is_decision_maker,
-                       d.shift_schedule, d.work_hours, d.is_urgently_hiring,
-                       d.benefits, d.salary_text, d.valid_through, d.state,
-                       d.postal_code, d.latitude, d.longitude, d.geo_da,
-                       d.applicants_count, d.is_easy_apply, d.recruiter,
-                       fo.job_sources
-                  FROM ats_jobs j
-                  LEFT JOIN ats_companies co
-                         ON co.platform_id = j.platform_id
-                        AND co.slug = j.slug
-                  LEFT JOIN job_classifications x ON x.job_id = j.id
-                  LEFT JOIN tecnologie_v1 t ON t.job_id = j.id
-                  LEFT JOIN sintesi_finali sf ON sf.job_id = j.id
-                  LEFT JOIN offerte_dettagli d ON d.job_id = j.id
-                  -- le altre copie della stessa offerta (job_sources):
-                  -- correlata e non la vista offerte_fonti, che il
-                  -- pianificatore materializzerebbe per intero
-                  LEFT JOIN LATERAL (
-                       SELECT jsonb_agg(jsonb_build_object(
-                                'id', k.id, 'ats', k.platform_id,
-                                'company_slug', k.slug, 'url', k.url,
-                                'posted_at', k.posted_at,
-                                'status', CASE WHEN k.expired_at IS NULL
-                                               THEN 'active' ELSE 'expired' END)
-                                ORDER BY k.posted_at DESC NULLS LAST) AS job_sources
-                         FROM ats_jobs k
-                        WHERE j.duplicate_key IS NOT NULL
-                          AND k.duplicate_key = j.duplicate_key
-                          AND k.id <> j.id) fo ON true
+            cur.execute(f"""{_ATTIVE_SELECT}
                  WHERE j.expired_at IS NULL
                    -- un annuncio per chiave (titolo+azienda+citta'): nel
                    -- corpus i doppi restano (10.573 gruppi il 06/09). Al
@@ -244,88 +300,31 @@ def attive(dsn: str, campione: int | None = None) -> int:
                         fs = fs.replace(tzinfo=dt.timezone.utc)
                     if fs >= soglia_24h:
                         vet_nuove += 1
-                stima = {}
-                if r[13] is None and r[6] and r[20]:
-                    cella = bench.get((r[6], r[20], r[10] or ""))
-                    livello = f"{r[6]} x {r[20]} x {r[10]}"
-                    if not cella:
-                        cella = bench.get((r[6], r[20], ""))
-                        livello = f"{r[6]} x {r[20]}, all seniorities"
-                    if cella:
-                        val, p25, p50, p75, camp = cella
-                        stima = {
-                            "salary_is_estimate": True,
-                            "salary_estimate_min": p25,
-                            "salary_estimate_median": p50,
-                            "salary_estimate_max": p75,
-                            "salary_estimate_currency": val,
-                            "salary_estimate_basis":
-                                f"Nivult benchmark: {camp} observed "
-                                f"postings, {livello}"}
-                (ext_id, department, orario, durata, sal_period, sal_da,
-                 posted_est, tecnologie, sintesi, sintesi_da, mgmt,
-                 decisore, turni, ore, urgente, benefits, sal_testo,
-                 valid_through, state, cap, lat, lon, geo_da, candidati,
-                 easy, recruiter, fonti) = r[24:51]
-                geo = ({"latitude": lat, "longitude": lon, "source": geo_da}
-                       if lat is not None else None)
-                f.write(_riga(
-                    id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
-                    company=r[4], url=r[5], country=r[6], city=r[7],
-                    location=r[8], language=r[9], seniority=r[10],
-                    remote=r[11], skills=_skills_pulite(r[12]),
-                    salary_min=float(r[13]) if r[13] is not None else None,
-                    salary_max=float(r[14]) if r[14] is not None else None,
-                    salary_currency=r[15], posted_at=r[16],
-                    first_seen=r[17], last_seen=r[18],
-                    # testo piano: niente tag, niente entita' (Greenhouse le
-                    # codifica due volte; misurato il 21/09/2026)
-                    description=pulito(r[19]),
-                    category=r[20], employment_type=r[21],
-                    contact_email=r[22],
-                    languages_required=list(r[23] or []), **stima,
-                    external_id=ext_id, department=department,
-                    hours_type=orario, duration_type=durata,
-                    salary_period=sal_period, salary_source=sal_da,
-                    salary_text=sal_testo,
-                    posted_at_estimated=True if posted_est else None,
-                    technologies=list(tecnologie or []),
-                    summary=sintesi, summary_source=sintesi_da,
-                    management_level=mgmt,
-                    is_decision_maker=True if decisore else None,
-                    shift_schedule=turni, work_hours=ore,
-                    is_urgently_hiring=True if urgente else None,
-                    benefits=list(benefits or []),
-                    valid_through=valid_through, state=state,
-                    postal_code=cap, geo=geo,
-                    applicants_count=candidati,
-                    is_easy_apply=True if easy else None,
-                    recruiter=recruiter, job_sources=list(fonti or [])))
+                riga = _riga_attiva(r, bench)
+                f.write(_riga(**riga))
                 n += 1
                 copertura["salary_observed"] += r[13] is not None
-                copertura["salary_estimate"] += bool(stima)
+                copertura["salary_estimate"] += bool(riga.get("salary_is_estimate"))
                 copertura["description"] += bool(r[19])
                 copertura["language"] += r[9] is not None
                 copertura["category"] += r[20] is not None
                 copertura["country"] += r[6] is not None
-                copertura["skills"] += bool(r[12])
+                copertura["skills"] += bool(riga["skills"])
                 copertura["employment_type"] += r[21] is not None
-                copertura["contact_email"] += r[22] is not None
                 copertura["seniority"] += r[10] is not None
                 copertura["remote"] += r[11] is not None
-                copertura["technologies"] += bool(tecnologie)
-                copertura["summary"] += bool(sintesi)
-                copertura["benefits"] += bool(benefits)
-                copertura["shift_schedule"] += turni is not None
-                copertura["work_hours"] += ore is not None
-                copertura["management_level"] += mgmt is not None
-                copertura["valid_through"] += valid_through is not None
-                copertura["state"] += state is not None
-                copertura["geo"] += geo is not None
-                copertura["recruiter"] += bool(recruiter)
-                copertura["job_sources"] += bool(fonti)
-                copertura["department"] += bool(department)
-                copertura["salary_text"] += sal_testo is not None
+                copertura["technologies"] += bool(riga["technologies"])
+                copertura["summary"] += bool(riga["summary"])
+                copertura["benefits"] += bool(riga["benefits"])
+                copertura["shift_schedule"] += riga["shift_schedule"] is not None
+                copertura["work_hours"] += riga["work_hours"] is not None
+                copertura["management_level"] += riga["management_level"] is not None
+                copertura["valid_through"] += riga["valid_through"] is not None
+                copertura["state"] += riga["state"] is not None
+                copertura["geo"] += riga["geo"] is not None
+                copertura["job_sources"] += bool(riga["job_sources"])
+                copertura["department"] += bool(riga["department"])
+                copertura["salary_text"] += riga["salary_text"] is not None
     _chiudi(percorso, f, n)
     # il manifest: la copertura di ogni campo, dichiarata. I venditori
     # seri pubblicano i fill-rate; i buchi dichiarati sono un argomento
@@ -583,14 +582,12 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
 
 
 def flusso(dsn: str) -> dict:
-    """Il magazzino in tempo reale: le novita' dall'ultimo giro.
+    """Il delta feed: offerte nuove, aggiornate e chiuse dall'ultimo giro.
 
-    Nessuna richiesta esterna — si legge il NOSTRO database, quindi
-    zero rischio ban: il rischio sta nella raccolta, che ha i suoi
-    ritmi; qui si confeziona soltanto. Ogni giro produce un file con
-    le offerte NUOVE (prima volta viste) e CHIUSE dall'ultimo cursore:
-    e' il formato che i clienti dati chiamano delta feed, e che
-    trasforma «foto del mattino» in «flusso continuo».
+    Gli aggiornamenti portano la stessa fotografia completa dell'export
+    attive e il loro `updated_at`, non soltanto il campo cambiato. Ogni
+    query ha anche un limite superiore: il cursore non puo' saltare un
+    evento arrivato mentre il file era in scrittura.
     """
     cartella = f"{CARTELLA}/flusso"
     os.makedirs(cartella, exist_ok=True)
@@ -603,9 +600,10 @@ def flusso(dsn: str) -> dict:
     adesso = dt.datetime.now(dt.timezone.utc)
     marca = adesso.strftime("%Y%m%d-%H%M%S")
     percorso = f"{cartella}/novita-{marca}.jsonl.gz"
-    stats = {"nuove": 0, "chiuse": 0}
+    stats = {"nuove": 0, "aggiornate": 0, "chiuse": 0}
     with psycopg.connect(dsn) as conn, \
             gzip.open(percorso + ".tmp", "wt", encoding="utf-8") as f:
+        bench = _benchmark(conn)
         with conn.cursor(name="fl_nuove") as cur:
             cur.itersize = 2000
             cur.execute(f"""
@@ -620,26 +618,48 @@ def flusso(dsn: str) -> dict:
                          ON co.platform_id = j.platform_id
                         AND co.slug = j.slug
                  WHERE j.created_at > %s::timestamptz
-                   AND j.expired_at IS NULL""", (da,))
+                   AND j.created_at <= %s::timestamptz
+                   AND j.expired_at IS NULL""", (da, adesso))
             for r in cur:
                 f.write(_riga(
                     event="new", id=str(r[0]), title=r[1], ats=r[2],
                     company_slug=r[3], company=r[4], url=r[5],
                     country=r[6], city=r[7], language=r[8],
                     seniority=r[9], remote=r[10],
-                    skills=list(r[11] or []),
+                    skills=_skills_pulite(r[11]),
                     salary_min=float(r[12]) if r[12] is not None else None,
                     salary_max=float(r[13]) if r[13] is not None else None,
                     salary_currency=r[14], posted_at=r[15],
                     first_seen=r[16], description=r[17]))
                 stats["nuove"] += 1
+        with conn.cursor(name="fl_aggiornate") as cur:
+            cur.itersize = 2000
+            cur.execute(f"""{_ATTIVE_SELECT}
+                 WHERE j.content_updated_at > %s::timestamptz
+                   AND j.content_updated_at <= %s::timestamptz
+                   AND COALESCE(j.created_at, j.posted_at, j.fetched_at)
+                       <= %s::timestamptz
+                   AND j.expired_at IS NULL
+                   AND NOT EXISTS (SELECT 1 FROM ats_jobs d
+                                    WHERE d.duplicate_key = j.duplicate_key
+                                      AND j.duplicate_key IS NOT NULL
+                                      AND d.expired_at IS NULL
+                                      AND (COALESCE(d.created_at, d.posted_at,
+                                                    d.fetched_at), d.id)
+                                          < (COALESCE(j.created_at, j.posted_at,
+                                                      j.fetched_at), j.id))""",
+                        (da, adesso, da))
+            for r in cur:
+                f.write(_riga(event="updated", **_riga_attiva(r, bench)))
+                stats["aggiornate"] += 1
         with conn.cursor(name="fl_chiuse") as cur:
             cur.itersize = 2000
             cur.execute("""
                 SELECT id, title, platform_id, slug, url, country,
                        posted_at, expired_at
                   FROM ats_jobs
-                 WHERE expired_at > %s::timestamptz""", (da,))
+                 WHERE expired_at > %s::timestamptz
+                   AND expired_at <= %s::timestamptz""", (da, adesso))
             for r in cur:
                 f.write(_riga(
                     event="closed", id=str(r[0]), title=r[1], ats=r[2],

@@ -3,8 +3,8 @@
 Requisito GDPR, attivo dal primo utente.
 
 Regole rispettate qui:
-  - il contenuto del CV non viene MAI letto né registrato: si tocca solo
-    storage_key, che è un percorso opaco;
+  - il contenuto di CV e documenti non viene MAI letto né registrato: si tocca
+    solo storage_key, che è un percorso opaco;
   - ogni lotto è una transazione breve, così la cancellazione di uno storico
     lungo non tiene lock su tabelle calde;
   - le chiavi object storage vengono raccolte PRIMA di cancellare le righe,
@@ -53,8 +53,36 @@ def _require_clean_connection(conn: psycopg.Connection) -> None:
         )
 
 
+def _revoca_accesso(cur, user_id: str) -> None:
+    cur.execute(
+        "UPDATE sessions SET revoked_at = now() "
+        "WHERE user_id = %s AND revoked_at IS NULL",
+        (user_id,),
+    )
+    cur.execute(
+        "UPDATE login_tokens SET consumed_at = now() "
+        "WHERE user_id = %s AND consumed_at IS NULL",
+        (user_id,),
+    )
+    cur.execute(
+        "UPDATE api_chiavi SET revoked_at = now() "
+        "WHERE user_id = %s AND revoked_at IS NULL",
+        (user_id,),
+    )
+
+
+def _blocca_account(cur, user_id: str) -> None:
+    cur.execute(
+        "UPDATE users SET status = 'deleted', "
+        "deleted_at = COALESCE(deleted_at, now()), next_digest_at = NULL "
+        "WHERE id = %s",
+        (user_id,),
+    )
+    _revoca_accesso(cur, user_id)
+
+
 def request_deletion(conn: psycopg.Connection, user_id: str) -> str:
-    """Registra la richiesta e marca l'utente come cancellato.
+    """Marca l'utente come cancellato e revoca subito ogni via di accesso.
 
     Separata dall'esecuzione: l'utente smette immediatamente di ricevere digest,
     lo svuotamento può richiedere minuti.
@@ -66,14 +94,13 @@ def request_deletion(conn: psycopg.Connection, user_id: str) -> str:
         if cur.fetchone() is None:
             raise DeletionError(f"utente inesistente: {user_id}")
 
-        cur.execute(
-            "UPDATE users SET status = 'deleted', deleted_at = now(), "
-            "next_digest_at = NULL WHERE id = %s",
-            (user_id,),
-        )
+        _blocca_account(cur, user_id)
 
         cur.execute("SELECT storage_key FROM user_cvs WHERE user_id = %s", (user_id,))
         keys = [row[0] for row in cur.fetchall()]
+        cur.execute("SELECT storage_key FROM match_documents WHERE user_id = %s",
+                    (user_id,))
+        keys.extend(row[0] for row in cur.fetchall())
 
         cur.execute(
             "INSERT INTO deletion_requests (user_id, pending_storage_keys) "
@@ -104,7 +131,7 @@ def execute_deletion(
     max_batches: int = 10_000,
     rimuovi_blob: Callable[[str], None] | None = None,
 ) -> dict[str, int]:
-    """Esegue la cancellazione a lotti. Riprendibile: rilanciarla è sicuro."""
+    """Revoca di nuovo l'accesso, poi cancella a lotti in modo riprendibile."""
     _require_clean_connection(conn)
 
     with conn.cursor() as cur:
@@ -117,8 +144,9 @@ def execute_deletion(
         if row is None:
             raise DeletionError(f"richiesta inesistente: {request_id}")
         user_id, status, storage_keys = row
+        _blocca_account(cur, str(user_id))
         if status == "completed":
-            conn.rollback()
+            conn.commit()
             log.info("richiesta %s già completata", request_id)
             return {}
         cur.execute(

@@ -15,7 +15,7 @@
 set -euo pipefail
 
 BASE=/mnt/cache/appdata/nivult-operaio
-MODELLI=(modelli/nivult-v1 modelli/tec-v1 modelli/match-v0 mt5 tecnologie)
+MODELLI=(modelli/nivult-v1 modelli/tec-v1 modelli/match-v0 modelli/match-v1 mt5 tecnologie)
 DEST=/mnt/user/backup-nivult
 CERT="${1:-$BASE/backup-recipient.pem}"
 OGGI=$(date +%F)

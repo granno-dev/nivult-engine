@@ -115,8 +115,12 @@ class ModelloV1:
             torch.set_num_threads(4)
 
     @torch.no_grad()
-    def predici(self, testi: list[str]) -> list[dict]:
-        """Per ogni testo: {testa: (etichetta, confidenza)} + 'lingue': [(cod, prob)]."""
+    def predici(self, testi: list[str], *, distribuzione: bool = False) -> list[dict]:
+        """Per ogni testo: {testa: (etichetta, confidenza)} + 'lingue': [(cod, prob)].
+
+        Con distribuzione=True aggiunge tutte le probabilita' della famiglia;
+        il formato degli altri campi e il default restano invariati.
+        """
         enc = self.tok(testi, truncation=True, max_length=self.max_len,
                        padding=True, return_tensors="pt").to(self.device)
         out = self.rete(enc["input_ids"], enc["attention_mask"])
@@ -133,6 +137,9 @@ class ModelloV1:
                 ris[i][t] = (voc[int(idx[i])], float(conf[i]))
                 if top2 is not None:
                     ris[i][t + "_2"] = (voc[int(top2.indices[i][1])], float(top2.values[i][1]))
+                if t == "family" and distribuzione:
+                    ris[i]["family_distribution"] = {
+                        nome: float(p[i, k]) for k, nome in enumerate(voc)}
         pl = torch.sigmoid(out["lingue"].float())
         for i in range(len(testi)):
             ris[i]["lingue"] = [(cod, float(pl[i][k])) for k, cod in enumerate(self.lingue)]

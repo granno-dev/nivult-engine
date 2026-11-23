@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LA REVISIONE SETTIMANALE: il lunedì alle 07:30 UTC Claude sul server
+# LA REVISIONE SETTIMANALE: il lunedì alle 07:30 UTC Kimi sul server
 # rilegge il diario della settimana (visite del medico, chat, incidenti)
 # e scrive a Giuseppe su Telegram cosa ha imparato: quali guasti sono
 # tornati, quali cure il pronto soccorso dovrebbe imparare, quali righe

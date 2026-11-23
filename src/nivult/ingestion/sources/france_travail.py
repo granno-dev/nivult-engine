@@ -35,12 +35,12 @@ MAX_RESULTS = 3149       # tetto duro dell'API su una singola ricerca
 # experienceLibelle porta gli anni veri ("2 An(s)", "7 An(s)"), che si mappano
 # sulla nostra scala molto meglio di un codice a tre valori.
 EMPLOYMENT_MAP = {
-    "CDI": "full-time",
-    "CDD": "contract",
-    "CCE": "contract",   # CDI de chantier ou d'opération
-    "MIS": "contract",   # mission d'intérim
-    "SAI": "contract",   # saisonnier
-    "LIB": "contract",   # profession libérale
+    "CDI": "FULL_TIME",
+    "CDD": "TEMPORARY",
+    "CCE": "TEMPORARY",   # CDI de chantier ou d'opération
+    "MIS": "TEMPORARY",   # mission d'intérim
+    "SAI": "TEMPORARY",   # saisonnier
+    "LIB": "CONTRACTOR",  # profession libérale
 }
 WORKING_HOURS_MAP = {"Temps plein": "full-time", "Temps partiel": "part-time"}
 
@@ -122,6 +122,7 @@ class FranceTravailClient(HttpSource):
               limit: int = PAGE_SIZE, offset: int = 0) -> FetchResult:
         if country not in self.countries:
             raise ValueError(f"{self.source} non copre {country}")
+        first_attempt = len(self.attempts)
 
         # L'API pagina con un intervallo inclusivo, non con offset e limite.
         end = offset + min(limit, PAGE_SIZE) - 1
@@ -143,8 +144,10 @@ class FranceTravailClient(HttpSource):
         if r.status_code == 204:
             # 204 su una pagina successiva significa che i risultati sono
             # finiti, non che non ce n'erano.
-            return FetchResult(jobs=[], complete=True, requests_made=1, credits_used=0,
-                               total_available=offset)
+            return FetchResult(
+                jobs=[], complete=True,
+                requests_made=len(self.attempts) - first_attempt,
+                credits_used=0, total_available=offset)
         if r.status_code not in (200, 206):
             raise RuntimeError(f"ricerca fallita ({r.status_code}): {r.text[:300]}")
 
@@ -170,9 +173,10 @@ class FranceTravailClient(HttpSource):
 
         complete = total is not None and offset + len(offers) >= total
 
-        return FetchResult(jobs=jobs, complete=complete, requests_made=1,
-                           credits_used=0, total_available=total,
-                           skipped=skipped)
+        return FetchResult(
+            jobs=jobs, complete=complete,
+            requests_made=len(self.attempts) - first_attempt,
+            credits_used=0, total_available=total, skipped=skipped)
 
     def _to_raw_job(self, o: dict) -> RawJob:
         origin = o.get("origineOffre") or {}
@@ -197,6 +201,7 @@ class FranceTravailClient(HttpSource):
             # finirebbe nel digest come se fosse un'azienda vera.
             organization=entreprise.get("nom") or None,
             date_posted=datetime.fromisoformat(o["dateCreation"]),
+            date_posted_declared=True,
             domain_derived=registrable_domain(canonical),
             cities=[lieu["libelle"]] if lieu.get("libelle") else [],
             countries=["FR"],
@@ -204,7 +209,7 @@ class FranceTravailClient(HttpSource):
             ai_job_language="fr",
             ai_experience_level=experience_level(o),
             ai_employment_type=(
-                "internship" if o.get("alternance")
+                "INTERN" if o.get("alternance")
                 else EMPLOYMENT_MAP.get(o.get("typeContrat", ""))),
             ai_working_hours=WORKING_HOURS_MAP.get(
                 (o.get("dureeTravailLibelleConverti") or "").strip()),
