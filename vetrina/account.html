@@ -1,11 +1,4 @@
 <!doctype html>
-<!-- Nivult B2B: account self-service (27/09/2026). Pagina unica:
-     non loggato -> card di accesso (magic link + Google/Microsoft/GitHub);
-     loggato -> dashboard (chiavi, consumo, acquisto crediti).
-     La sessione vive in sessionStorage (mai nell'URL, mai nei log):
-     muore con la scheda. La chiave appena creata sta solo in MEMORIA
-     (29/09/2026) e tutto il testo di terzi passa da testoDesc+esc:
-     chi entra via XSS non trova ne' chiavi ne' markup eseguibile. -->
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
@@ -47,21 +40,12 @@ tailwind.config = {
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
 .pz-slider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%;
   background: #fff; border: 3px solid #3b6ef6; box-shadow: 0 4px 14px rgba(59,110,246,.35); cursor: grab; }
-/* scrollbar chiara per l'esploratore */
 .cov-scroll::-webkit-scrollbar { width: 8px; }
 .cov-scroll::-webkit-scrollbar-track { background: transparent; }
 .cov-scroll::-webkit-scrollbar-thumb { background: #d5dbe7; border-radius: 99px; }
-/* sfondo statico di lavoro: la rete neurale animata (90 nodi a 60 fps
-   mentre si leggono tabelle e JSON) e' rimasta nella landing, qui dentro
-   era rumore (segnalazione del 29/09/2026) — stessa griglia a puntini */
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
-/* lo scheletro della scheda mascherata respira piano: e' un'anteprima
-   viva, non una lapide */
 @keyframes skel-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 .skel { animation: skel-pulse 2.6s ease-in-out infinite; }
-/* il razzo del caricamento (07/10/2026): la corsia e' larga quanto il
-   contenitore, cosi' translateX(100%) lo porta fuori a destra; dentro,
-   il razzo beccheggia piano e la fiamma tremola */
 @keyframes razzo-corsia { from { transform: translateX(-90px); } to { transform: translateX(100%); } }
 .razzo-corsia { animation: razzo-corsia 2.4s cubic-bezier(.45,.05,.55,.95) infinite; }
 @keyframes razzo-becco { 0%,100% { transform: translateY(2px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(2deg); } }
@@ -105,7 +89,6 @@ body.modale-aperto { overflow: hidden; }
   <div class="mesh-b pointer-events-none absolute -bottom-32 -right-24 h-[420px] w-[420px] rounded-full bg-mint-400/15 blur-[110px]"></div>
   <div id="vista-avvio" role="status" class="py-24 text-center text-[14px] font-semibold text-slate-500">Loading your account…</div>
 
-  <!-- ══ ACCESSO ══ -->
   <div id="vista-login" class="hidden relative max-w-5xl mx-auto px-6 py-10 lg:py-16 grid lg:grid-cols-[1fr_1fr] gap-10 items-center">
     <section class="hidden lg:block pr-6" aria-label="Why create a Nivult account">
       <p class="text-[12px] font-black uppercase tracking-[0.14em] text-brand-600">Your data workspace</p>
@@ -147,7 +130,6 @@ body.modale-aperto { overflow: hidden; }
     </div>
   </div>
 
-  <!-- ══ DASHBOARD ══ -->
   <div id="vista-dash" class="hidden relative max-w-[1400px] mx-auto px-6 sm:px-8 py-10 w-full">
     <div class="flex items-center gap-4 flex-wrap">
       <div class="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black" id="dash-iniziale">N</div>
@@ -179,9 +161,6 @@ body.modale-aperto { overflow: hidden; }
       </ol>
     </section>
 
-    <!-- la striscia che conta: crediti, il polso dell'indice, la prima
-         chiamata pronta. Niente chiave mascherata ne' conteggio delle
-         rivelazioni: erano rumore (02/10/2026) -->
     <div id="account-overview" class="mt-6 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 flex flex-wrap items-center gap-x-6 gap-y-3 shadow-xl shadow-slate-900/15">
       <div>
         <div class="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">credits available</div>
@@ -200,9 +179,6 @@ body.modale-aperto { overflow: hidden; }
       <button onclick="copiaCurl(this)" class="ml-auto rounded-xl bg-brand-500 hover:bg-brand-600 transition px-4 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-brand-500/25">Copy your first call →</button>
     </div>
 
-    <!-- la chiave appena creata: si vede UNA volta. Il testo la lega
-         alla riga "Main key (trial)" della lista sotto — il 07/10/2026
-         l'accostamento muto faceva sembrare due chiavi diverse. -->
     <div id="chiave-nuova" class="hidden mt-8 relative overflow-hidden rounded-2xl border border-mint-500/40 bg-gradient-to-br from-mint-500/10 via-white to-brand-500/10 shadow-xl shadow-mint-500/10">
       <div class="h-1.5 bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
       <div class="p-6 sm:p-7 flex items-start gap-4">
@@ -222,7 +198,6 @@ body.modale-aperto { overflow: hidden; }
     </div>
 
     <div class="mt-8 grid lg:grid-cols-3 gap-5 items-stretch">
-      <!-- chiavi -->
       <div id="api-keys" class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
         <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
 
@@ -245,7 +220,6 @@ body.modale-aperto { overflow: hidden; }
         <div id="chiavi-lista" class="divide-y divide-slate-100 flex-1"></div>
       </div>
 
-      <!-- consumo -->
       <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
         <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-500/10 to-transparent">
@@ -279,7 +253,6 @@ body.modale-aperto { overflow: hidden; }
         </div>
       </div>
 
-      <!-- acquisto -->
       <div class="lg:col-span-1 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden flex flex-col">
         <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
@@ -327,7 +300,6 @@ body.modale-aperto { overflow: hidden; }
       </div>
     </section>
 
-    <!-- ══ l'esploratore: offerte e aziende, gratis da guardare ══ -->
     <div id="explore" class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-xl shadow-slate-900/5">
       <div class="h-1.5 rounded-t-2xl bg-gradient-to-r from-mint-500 via-brand-500 to-violet-500"></div>
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 flex-wrap">
@@ -385,19 +357,16 @@ body.modale-aperto { overflow: hidden; }
       </div>
     </div>
 
-    <!-- ══ il dettaglio: modale sopra tutto ══ -->
     <div id="dettaglio" role="dialog" aria-modal="true" aria-label="Posting and company details" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiDettaglio()"></div>
       <div class="relative w-full h-full sm:h-auto max-w-2xl max-h-full sm:max-h-[85vh] overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl" id="dettaglio-box"></div>
     </div>
 
-    <!-- ══ il registro dei consumi: modale larga, sfondo velato ══ -->
     <div id="uso" role="dialog" aria-modal="true" aria-label="Account activity" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
       <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiUso()"></div>
       <div class="relative w-full h-full sm:h-auto max-w-5xl max-h-full sm:max-h-[88vh] overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl" id="uso-box"></div>
     </div>
 
-    <!-- ══ la guida per chi integra ══ -->
     <div id="api-quickstart" class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
       <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
@@ -438,7 +407,6 @@ body.modale-aperto { overflow: hidden; }
       </div>
     </div>
 
-    <!-- ══ gli export filtrati, con stima del costo ══ -->
     <div id="exports" class="mt-8 rounded-2xl border border-slate-900/10 bg-white shadow-sm overflow-hidden">
       <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
       <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-violet-500/10 to-transparent flex-wrap">
@@ -452,7 +420,6 @@ body.modale-aperto { overflow: hidden; }
         <button onclick="apriExport()" class="ml-auto rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 px-5 py-2.5 text-[12.5px] font-bold text-white shadow-md shadow-violet-500/30 hover:shadow-lg hover:shadow-violet-500/40 hover:-translate-y-px transition flex items-center gap-2"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Build a download</button>
       </div>
       <div class="px-6 py-5">
-        <!-- come funziona: tre passi, visivi, niente prosa da marketing -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
             <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-violet-500/25">1</div>
@@ -497,7 +464,6 @@ body.modale-aperto { overflow: hidden; }
     </section>
   </div>
 
-  <!-- ══ il modale dell'export: filtri + stima, sfondo sfocato ══ -->
   <div id="export-modale" role="dialog" aria-modal="true" aria-label="Build a download" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
     <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()"></div>
     <div class="relative w-full h-full sm:h-auto max-w-lg max-h-full overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl">
@@ -514,7 +480,6 @@ body.modale-aperto { overflow: hidden; }
           </div>
         </div>
         <div class="mt-6 grid gap-4">
-          <!-- cosa scarichi: le offerte o lo spine aziende (03/10/2026) -->
           <div class="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             <button id="ex-tipo-postings" onclick="exScegliTipo('postings')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Postings</button>
             <button id="ex-tipo-companies" onclick="exScegliTipo('companies')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700">Companies</button>
@@ -540,7 +505,6 @@ body.modale-aperto { overflow: hidden; }
           <p id="ex-cosa" class="text-[12px] text-slate-400 -mt-1">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
         </div>
 
-        <!-- il conto, prima di spendere: il registro scuro, in stile -->
         <div class="mt-6 rounded-2xl bg-slate-950 overflow-hidden shadow-lg shadow-slate-900/20">
           <div class="px-5 py-3.5 flex items-center justify-between gap-3">
             <span class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">your slice</span>
@@ -575,9 +539,8 @@ body.modale-aperto { overflow: hidden; }
 
 <script>
 const API = "https://api.nivult.com";
-const QUI = location.origin + location.pathname;   // questa pagina, per i redirect
+const QUI = location.origin + location.pathname;
 
-/* ══ sessione ══ */
 const getTok = () => sessionStorage.getItem("nv_sessione") || "";
 const setTok = t => t ? sessionStorage.setItem("nv_sessione", t)
                       : sessionStorage.removeItem("nv_sessione");
@@ -612,7 +575,6 @@ async function api(percorso, opz = {}) {
   }
 }
 
-/* ══ ingresso dal gettone (magic link o OAuth, atterrano qui) ══ */
 async function verificaGettone() {
   const u = new URL(location.href);
   const token = u.searchParams.get("token");
@@ -635,7 +597,6 @@ async function verificaGettone() {
   }
 }
 
-/* ══ login ══ */
 function mostraLogin() {
   document.getElementById("vista-login").classList.remove("hidden");
   document.getElementById("vista-dash").classList.add("hidden");
@@ -664,7 +625,6 @@ async function magicLink(e) {
   }
 }
 
-/* ══ dashboard ══ */
 let chiavi = [];
 let creditiExtra = 0;
 let rivelazioni = 0;
@@ -742,24 +702,14 @@ function disegna() {
   document.getElementById("uso-liberi").textContent =
     liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " free left";
   const acc = document.getElementById("uso-acquistati");
-  /* i comprati si vedono SEMPRE, anche a zero: chi compra deve trovare
-     dove sono finiti senza chiedere (04/10/2026) */
   acc.textContent = creditiExtra > 0
     ? "💶 +" + creditiExtra.toLocaleString("en-US") + " purchased · never expire"
     : "💶 No top-ups yet — purchased credits never expire";
-  /* la striscia-eroe: solo i crediti. Le rivelazioni spiegano il modello
-     di credito dove il credito si guarda: nella card (02/10/2026) */
   document.getElementById("hero-crediti").textContent = disponibili.toLocaleString("en-US");
-  /* il bottone resta generico («View credit usage»): il conteggio degli
-     sblocchi vive DENTRO il pannello, non sul bottone (04/10/2026) */
   document.getElementById("uso-rivelazioni").textContent = "View credit usage";
   aggiornaOnboarding();
   disegnaAccesso();
 }
-/* la chiave fresca vive SOLO in memoria (variabile di modulo): gli
-   esempi del quickstart la portano dentro finche' la pagina e' aperta,
-   ma non si scrive nello storage del browser — niente da pescare per
-   uno script che riuscisse a entrare (29/09/2026) */
 let chiaveFresca = "";
 function mostraChiaveNuova(chiave) {
   const box = document.getElementById("chiave-nuova");
@@ -811,8 +761,6 @@ function copiaChiave(btn) {
     if (ok) { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); }
   });
 }
-/* la prima chiamata, pronta: con la chiave vera se e' nata in questa
-   pagina (vive solo in memoria), altrimenti col promemoria da completare */
 function curlPrimaChiamata() {
   const k = chiaveFresca || "nv_your_key";
   return `curl -H "X-Api-Key: ${k}" "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`;
@@ -925,9 +873,6 @@ function toggleFiltri() {
   document.getElementById("filtri-toggle").textContent = nascosto ? "Show filters" : "Hide filters";
 }
 
-/* ══ acquisto: l'importo lo sceglie il cliente, in euro, da 25 ══ */
-/* la stessa curva della landing, letta al contrario: dagli euro ai
-   crediti. Sotto i 49 EUR vale il prezzo d'ingresso (4,90 per mille). */
 const ANCORE = [[10000, 49], [25000, 89], [50000, 149], [100000, 229], [250000, 399],
                 [500000, 599], [1000000, 899], [2500000, 1790], [5000000, 2990]];
 const bsl = document.getElementById("buy-slider");
@@ -971,18 +916,13 @@ async function compra() {
   location.href = d.checkout_url;
 }
 
-/* ══ l'esploratore: due tab (jobs / companies), mascherato fino al reveal ══ */
 let cursore = null, cercaTimer = null, tab = "jobs";
-/* ref -> dati pubblici della riga azienda: la scheda mascherata li
-   mostra leggibili, sfoca solo cio' che si compra */
 const azInfo = {};
 function filtri() {
   const f = {};
   const q = document.getElementById("f-q").value.trim();
   const t = document.getElementById("f-tec").value.trim();
   const r = document.getElementById("f-remoto").value;
-  // il paese arriva dal menu (ISO certo); chi digita due lettere a mano
-  // trova lo stesso
   const p = paeseIso || document.getElementById("f-paese").value.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
   if (q) f[tab === "jobs" ? "q" : "industry"] = q;
   if (t) f.technology = t;
@@ -992,8 +932,6 @@ function filtri() {
     f.stato = "chiuse";
   return f;
 }
-/* gli ATS con i colori di marca: il chip in coda alla riga dice la
-   fonte senza rubare la scena (la data vive nel dettaglio, non in riga) */
 const ATS_INFO = {
   greenhouse: ["GH", "#24a47c"], lever: ["Lv", "#f0653a"],
   workday: ["Wd", "#2261b5"], smartrecruiters: ["SR", "#14957a"],
@@ -1020,8 +958,6 @@ function rigaJob(o) {
   const logo = o.company_slug
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" loading="lazy" class="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shrink-0" onerror="this.outerHTML='<div class=&quot;h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-[13px] font-black shrink-0&quot;>${esc((o.company || "?")[0].toUpperCase())}</div>'">`
     : "";
-  /* l'azienda si vede gratis (modello TheirStack): il click apre il
-     PROFILO — gratis se e' gia' dell'utente, un credito altrimenti */
   const az = o.company
     ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob(${jsArg(rif)}, ${o.az_rivelata ? "true" : "false"})">${esc(o.company)}</span> · `
     : "";
@@ -1036,8 +972,6 @@ function rigaJob(o) {
   </div>`;
 }
 function rigaAzienda(a) {
-  /* i dati pubblici della riga seguono il click nel modale: la scheda
-     mascherata li mostra leggibili, sfoca solo cio' che si compra */
   azInfo[a.ref] = a;
   return `<div class="flex items-center gap-4 flex-wrap rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 hover:border-mint-500/50 transition cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.ref)})">
     <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
@@ -1070,9 +1004,6 @@ function cambiaTab(t) {
   cursore = null;
   cerca(false);
 }
-/* l'attesa della prima pagina: il razzo che va a prendere i dati +
-   una frase che gira (07/10/2026 — prima l'area restava vuota e
-   sembrava rotta; poi una scritta sola, troppo vecchia scuola) */
 const CARICA_MSG = [
   "Launching the query rocket…",
   "Reading career pages so you don't have to…",
@@ -1118,7 +1049,7 @@ function mostraCaricamento() {
   caricaTimer = setInterval(() => {
     i = (i + 1) % CARICA_MSG.length;
     const m = document.getElementById("carica-msg");
-    if (!m) { clearInterval(caricaTimer); return; }  // risultati arrivati: il nodo non c'e' piu'
+    if (!m) { clearInterval(caricaTimer); return; }
     m.textContent = CARICA_MSG[i];
     m.classList.remove("frase-nuova"); void m.offsetWidth; m.classList.add("frase-nuova");
   }, 1600);
@@ -1128,8 +1059,6 @@ async function cerca(append = false) {
   const body = { ...filtri(), cursor: append ? cursore : null };
   const btnAltro = document.getElementById("cerca-altro");
   if (append) {
-    /* il click su Load more si vede subito: spinner dentro il bottone,
-       disabilitato finche' la pagina nuova non e' arrivata (07/10/2026) */
     btnAltro.disabled = true;
     btnAltro.innerHTML = `<svg class="spinner inline-block align-[-2px] mr-1.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>Loading…`;
   } else {
@@ -1153,9 +1082,6 @@ async function cerca(append = false) {
   }
   const d = await r.json();
   cursore = d.next_cursor;
-  /* il totale in testa e' il VIVO (lo stesso del cruscotto); la riga
-     "match" compare solo quando l'utente filtra, senza un secondo
-     numero a riposo — due numeri vicini si leggono come un errore */
   const filtrando = document.getElementById("f-q").value.trim()
     || document.getElementById("f-tec").value.trim() || paeseIso
     || (tab === "jobs" && document.getElementById("f-remoto").value)
@@ -1193,9 +1119,6 @@ function aggiornaPulisci() {
 document.getElementById("f-remoto").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
 document.getElementById("f-stato").addEventListener("change", () => { aggiornaPulisci(); cerca(false); });
 
-/* il reveal dell'azienda: una volta sola per sempre (il server lo
-   ricorda). Sui job non esiste piu': l'identita' del datore e' gratis
-   dal 28/09, il prodotto e' il profilo */
 async function rivelaAzienda(ref, btn) {
   btn.disabled = true; btn.textContent = "…";
   try {
@@ -1226,9 +1149,6 @@ async function rivelaAzienda(ref, btn) {
   }
 }
 
-/* la fonte non dichiara il datore (molti portali nazionali anonimizzano):
-   non c'e' profilo da sbloccare e il credito non parte — detto chiaro,
-   non «riprova domani» a chi non verra' mai servito (02/10/2026) */
 function aziendaAssente() {
   apriDettaglio(`<div class="h-1.5 bg-gradient-to-r from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
     <div class="mx-auto h-12 w-12 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
@@ -1238,15 +1158,7 @@ function aziendaAssente() {
   </div>`);
 }
 
-/* il dettaglio: il modale sopra tutto */
 function chiudiDettaglio() { chiudiDialogo("dettaglio"); }
-/* testo di TERZI (descrizioni, titoli, nomi): si mostra come testo, mai
-   come markup. La regex che toglieva solo script/iframe lasciava passare
-   <img onerror=…> (segnalazione del 29/09/2026): ora si tolgono TUTTI i
-   tag veri (<a>, <div>… — «<5 anni» nel testo sopravvive), i blocchi
-   diventano a-capo, le entita' si sciolgono in una textarea (contenuto
-   testuale, nulla esegue) e all'iniezione si ri-escapa con esc():
-   due serrature, non una. */
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = String(s ?? "");
@@ -1265,7 +1177,6 @@ function testoDesc(s) {
   return d.value.replace(/[ \t]+/g, " ").replace(/ ?\n ?/g, "\n")
                 .replace(/\n{3,}/g, "\n\n").trim();
 }
-/* un href che non parte da https:// non si stampa: mai javascript: */
 function urlSicuro(u) {
   u = String(u || "");
   return /^https:\/\//i.test(u) ? u : "";
@@ -1280,8 +1191,6 @@ async function dettaglioJob(id) {
     if (!r.ok) { notifica("The posting could not be opened. Retry.", "errore"); return; }
     const d = await r.json();
   const o = d.offerta || {};
-  /* la citta' non e' mai una parola-tipo: «Onsite» in city e' entrato da
-     iCIMS prima della guardia del 02/10 — difesa anche qui, al volo */
   const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
   const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
   const tec = (o.technologies || []).map(t =>
@@ -1289,8 +1198,6 @@ async function dettaglioJob(id) {
   const logo = o.company_slug
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${esc((o.company || "?")[0])}</div>'">`
     : "";
-  /* l'azienda si vede gratis (28/09): il click apre il profilo —
-     gratis se e' gia' dell'utente, un credito (dichiarato) altrimenti */
   const linkOfferta = urlSicuro(o.url);
   const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-gradient-to-r from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob(${jsArg(d.azienda_ref || "")}, ${d.azienda_rivelata ? "true" : "false"})">
          ${logo}
@@ -1302,8 +1209,6 @@ async function dettaglioJob(id) {
            ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>`
            : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-[12px] font-bold text-slate-400">🔒 source link unlocks with the profile</span>`}
        </div>`;
-  /* i fatti che valgono qualcosa anche quando la descrizione manca:
-     la fonte, il salario, le lingue, il tipo di settimana (02/10/2026) */
   const fatti = [
     o.salary_text ? ["Salary", o.salary_text] : null,
     o.hours_type ? ["Hours", o.hours_type] : null,
@@ -1342,9 +1247,6 @@ async function dettaglioJob(id) {
   }
 }
 async function apriAziendaDaJob(ref, giaSua) {
-  /* la scheda azienda dal modale dell'offerta: se e' gia' rivelata il
-     giro e' gratis (rivela_per_utente torna 'gratis'), altrimenti si
-     mostra prima il prezzo — mai un addebito per un click esplorativo */
   if (!ref) return;
   if (!giaSua) return dettaglioAzienda(ref);
   try {
@@ -1359,20 +1261,15 @@ async function apriAziendaDaJob(ref, giaSua) {
 }
 async function mostraAzienda(a, ref) {
   const slug = (ref || "").split(":")[1] || "";
-  /* molte schede sono magre per nascita: niente nome, niente dominio.
-     Il titolo cade in piedi: nome, poi ragione sociale, poi il sito */
   const nomeAz = a.company || a.legal_name || a.website || a.domain || slug || "—";
   const logo = slug
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${esc(nomeAz[0].toUpperCase())}</div>'">`
     : "";
-  /* «1 employees» su un'azienda con 85 offerte attive e' rumore del
-     fornitore, non un dato: sotto soglia non si mostra (29/09/2026) */
   const dipendenti = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
   const hq = a.headquarters && a.headquarters.city
     ? a.headquarters.city.charAt(0).toUpperCase() + a.headquarters.city.slice(1).toLowerCase()
     : null;
   const dominio = (a.domain || a.website || "").replace(/^'+/, "");
-  /* le quattro misure che decidono l'acquisto, in evidenza */
   const kpi = [
     [a.active_jobs, "active postings"],
     [a.jobs_posted_30d, "posted in 30 days"],
@@ -1383,15 +1280,12 @@ async function mostraAzienda(a, ref) {
        <p class="text-lg font-black text-slate-900 tabular-nums">${esc(v)}</p>
        <p class="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p>
      </div>`).join("");
-  /* i chip si leggono per colore: blu = anagrafica, menta = lingue,
-     viola = dove assume come famiglie */
   const chips = [
     a.founded ? "founded " + String(a.founded).slice(0, 4) : null,
     a.legal_name ? "legal: " + a.legal_name : null,
   ].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")
     + (a.languages || []).map(l => `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(String(l).toUpperCase())}</span>`).join("")
     + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg bg-violet-500/10 text-violet-600 px-2.5 py-1 text-[12px] font-bold">${esc(f)}</span>`).join("");
-  /* lo stack col peso visivo: la barra e' proporzionale ai jobs attivi */
   const techs = (a.technologies || []).slice(0, 40);
   const maxTec = Math.max(1, ...techs.map(t => t.active_jobs || t.jobs || 0));
   const tec = techs.map(t => {
@@ -1423,18 +1317,12 @@ async function mostraAzienda(a, ref) {
   const el = document.getElementById("az-jobs-lista");
   if (!r.ok) { el.textContent = "Postings could not be loaded. Close this window and retry."; return; }
   const d = await r.json();
-  /* le offerte si aprono nel modale: la scheda azienda diventa un
-     punto di partenza, non un vicolo cieco (29/09/2026) */
   el.innerHTML = (d.data || []).map(j =>
     `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${esc(j.title)}</span><span class="text-slate-400 text-[11.5px] shrink-0">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
   el.querySelectorAll("[data-job]").forEach(n =>
     n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
 function dettaglioAzienda(ref) {
-  /* il click apre il PROFILO IN TRASPARENZA: la struttura e' quella della
-     scheda vera (KPI, stack, sedi, offerte) coi valori sfocati, e i dati
-     pubblici della riga restano leggibili — si vede COSA si compra. Il
-     credito parte solo dal bottone, mai da un click esplorativo */
   const a = azInfo[ref] || {};
   const dip = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
   const pubblici = [a.industry, a.country, dip,
@@ -1483,12 +1371,8 @@ function dettaglioAzienda(ref) {
   </div>`);
 }
 
-/* ══ il registro dei consumi: chi paga pretende di vedere dove vanno i
-   crediti — per via, per giorno, evento per evento (04/10/2026) ══ */
 function chiudiUso() { chiudiDialogo("uso"); }
 function _quando(iso) {
-  /* la data completa, col fuso: chi paga non deve indovinare «quando»
-     (04/10/2026) */
   const d = new Date(iso);
   const data = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const ora = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -1514,14 +1398,10 @@ async function apriUso() {
   const d = await r.json();
   const s = d.saldo || {};
   const plur = (n, sing, plu) => `${(+n).toLocaleString("en-US")} ${+n === 1 ? sing : (plu || sing + "s")}`;
-  /* le azioni, dette come le direbbe un umano */
   const AZIONE_LABEL = { "company unlock": "Company Profile Unlocked",
                          "posting unlock": "Job Posting Unlocked",
                          "daily export": "Daily export downloaded" };
   const azioneLabel = a => AZIONE_LABEL[a] || (a && a.startsWith("filtered export") ? "Filtered export downloaded" : a);
-  /* i tre saldi in testa: gratis del mese, comprati (non scadono),
-     spesi questo mese — quest'ultimo dal contatore che decide i 429,
-     cosi' il totale quadra anche per i consumi precedenti al registro */
   const ICONE = [
     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
     `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8z"/></svg>`,
@@ -1536,15 +1416,12 @@ async function apriUso() {
         <span class="h-7 w-7 rounded-lg bg-gradient-to-br ${g} grid place-items-center shadow-md ${sh} group-hover:scale-110 transition">${ICONE[i]}</span>
       </div>
       <p class="mt-2 text-[26px] leading-8 font-black tabular-nums bg-gradient-to-r ${g} bg-clip-text text-transparent">${(+v).toLocaleString("en-US")}</p></div>`).join("");
-  /* per via: quanti eventi e quanti crediti per canale */
   const perVia = Object.entries(d.per_via || {}).map(([via, v]) => {
     const [nome, cls] = VIA_STILE[via] || [via, "bg-slate-100 text-slate-500"];
     return `<div class="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-4 py-3 hover:border-slate-200 transition">
       <span class="rounded-lg px-2.5 py-1 text-[11px] font-bold ${cls}">${nome}</span>
       <span class="text-[12.5px] text-slate-500"><b class="text-slate-800 tabular-nums">${(+v.crediti).toLocaleString("en-US")}</b> ${+v.crediti === 1 ? "credit" : "credits"} · ${plur(v.eventi, "event")}</span>
     </div>`; }).join("");
-  /* il mese in barre: TUTTI i 30 giorni, anche quelli a zero — un grafico
-     senza date e senza giorni vuoti non si legge (04/10/2026) */
   const perG = Object.fromEntries((d.per_giorno || []).map(g => [g.giorno, g.crediti]));
   const trenta = [];
   for (let i = 29; i >= 0; i--) {
@@ -1571,7 +1448,6 @@ async function apriUso() {
       <div class="mt-2 flex justify-between text-[10.5px] font-semibold text-slate-400 tabular-nums pl-8">
         <span>${lbl(trenta[0].giorno)}</span><span>${lbl(trenta[15].giorno)}</span><span>${lbl(trenta[29].giorno)}</span>
       </div></div>`;
-  /* gli acquisti: lo storico delle ricariche (migrazione 0070) */
   const acquisti = (d.acquisti || []).map(a => {
     const prezzo = a.importo_cent != null
       ? ` · ${(a.importo_cent / 100).toLocaleString("en-US", { style: "currency", currency: (a.valuta || "EUR") })}`
@@ -1581,8 +1457,6 @@ async function apriUso() {
       <span class="font-semibold">+${(+a.crediti).toLocaleString("en-US")} credits${esc(prezzo)}</span>
       <span class="ml-auto text-slate-400 text-[11.5px] shrink-0 tabular-nums">${_quando(a.at)}</span>
     </div>`; }).join("");
-  /* gli eventi: il titolo leggibile in evidenza, il riferimento tecnico
-     piccolo sotto — mai un UUID come testo principale */
   const eventi = (d.eventi || []).map(e => {
     const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
     const titolo = e.titolo || (e.via === "api" ? null : azioneLabel(e.azione));
@@ -1602,12 +1476,9 @@ async function apriUso() {
       <span class="min-w-0 flex flex-col">${principale}${secondario ? `<span class="text-[11px] text-slate-400 truncate">${esc(secondario)}</span>` : ""}</span>
       <span class="ml-auto font-bold text-slate-600 tabular-nums shrink-0 rounded-md bg-slate-50 px-1.5 py-0.5">−${e.crediti}</span>
     </div>`; }).join("");
-  /* consumi contati ma non dettagliati: API ed export precedenti alla
-     nascita del registro — la nota si mostra solo se la differenza esiste */
   const nonDet = d.non_dettagliati > 0
     ? `<p class="mt-3 text-[11.5px] leading-5 text-slate-400 border-t border-slate-100 pt-3">A further <b class="text-slate-600">${plur(d.non_dettagliati, "credit")}</b> ${+d.non_dettagliati === 1 ? "was" : "were"} spent on API calls and exports before ${new Date(d.registro_dal + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} — included in the totals above; per-event itemization began on that date.</p>`
     : "";
-  /* le aziende sbloccate: i nomi risolti lato server, mai i rif */
   const GRAD = ["from-brand-500 to-mint-500", "from-violet-500 to-pink-500", "from-mint-500 to-brand-600", "from-pink-500 to-violet-500"];
   const sbloccate = (d.rivelazioni || []).map((r, i) =>
     `<div class="flex items-center gap-3 px-3 py-2.5 -mx-3 rounded-xl hover:bg-slate-50 text-[13px] transition">
@@ -1638,7 +1509,6 @@ async function apriUso() {
   </div>`;
 }
 
-/* ══ la guida per chi integra: scenari veri, non documentazione morta ══ */
 const SCENARI = [
  ["Quickstart", "your first call in ten seconds", "Every call carries your key in the X-Api-Key header, never in the URL. This one asks for the postings that mention SAP in Germany:",
 `curl -H "X-Api-Key: nv_your_key" \\
@@ -1709,7 +1579,6 @@ function copiaGuida(btn) {
 disegnaGuida();
 
 
-/* ══ il paese si sceglie da un menu, non si scrive a mano ══ */
 const PAESI = [["Afghanistan", "AF"], ["Aland Islands", "AX"], ["Albania", "AL"], ["Algeria", "DZ"], ["American Samoa", "AS"], ["Andorra", "AD"], ["Angola", "AO"], ["Anguilla", "AI"], ["Antarctica", "AQ"], ["Antigua and Barbuda", "AG"], ["Argentina", "AR"], ["Armenia", "AM"], ["Aruba", "AW"], ["Australia", "AU"], ["Austria", "AT"], ["Azerbaijan", "AZ"], ["Bahamas", "BS"], ["Bahrain", "BH"], ["Bangladesh", "BD"], ["Barbados", "BB"], ["Belarus", "BY"], ["Belgium", "BE"], ["Belize", "BZ"], ["Benin", "BJ"], ["Bermuda", "BM"], ["Bhutan", "BT"], ["Bolivia", "BO"], ["Bonaire, Saint Eustatius and Saba ", "BQ"], ["Bosnia and Herzegovina", "BA"], ["Botswana", "BW"], ["Bouvet Island", "BV"], ["Brazil", "BR"], ["British Indian Ocean Territory", "IO"], ["British Virgin Islands", "VG"], ["Brunei", "BN"], ["Bulgaria", "BG"], ["Burkina Faso", "BF"], ["Burundi", "BI"], ["Cabo Verde", "CV"], ["Cambodia", "KH"], ["Cameroon", "CM"], ["Canada", "CA"], ["Cayman Islands", "KY"], ["Central African Republic", "CF"], ["Chad", "TD"], ["Chile", "CL"], ["China", "CN"], ["Christmas Island", "CX"], ["Cocos Islands", "CC"], ["Colombia", "CO"], ["Comoros", "KM"], ["Cook Islands", "CK"], ["Costa Rica", "CR"], ["Croatia", "HR"], ["Cuba", "CU"], ["Curacao", "CW"], ["Cyprus", "CY"], ["Czechia", "CZ"], ["Democratic Republic of the Congo", "CD"], ["Denmark", "DK"], ["Djibouti", "DJ"], ["Dominica", "DM"], ["Dominican Republic", "DO"], ["Ecuador", "EC"], ["Egypt", "EG"], ["El Salvador", "SV"], ["Equatorial Guinea", "GQ"], ["Eritrea", "ER"], ["Estonia", "EE"], ["Eswatini", "SZ"], ["Ethiopia", "ET"], ["Falkland Islands", "FK"], ["Faroe Islands", "FO"], ["Fiji", "FJ"], ["Finland", "FI"], ["France", "FR"], ["French Guiana", "GF"], ["French Polynesia", "PF"], ["French Southern Territories", "TF"], ["Gabon", "GA"], ["Gambia", "GM"], ["Georgia", "GE"], ["Germany", "DE"], ["Ghana", "GH"], ["Gibraltar", "GI"], ["Greece", "GR"], ["Greenland", "GL"], ["Grenada", "GD"], ["Guadeloupe", "GP"], ["Guam", "GU"], ["Guatemala", "GT"], ["Guernsey", "GG"], ["Guinea", "GN"], ["Guinea-Bissau", "GW"], ["Guyana", "GY"], ["Haiti", "HT"], ["Heard Island and McDonald Islands", "HM"], ["Honduras", "HN"], ["Hong Kong", "HK"], ["Hungary", "HU"], ["Iceland", "IS"], ["India", "IN"], ["Indonesia", "ID"], ["Iran", "IR"], ["Iraq", "IQ"], ["Ireland", "IE"], ["Isle of Man", "IM"], ["Israel", "IL"], ["Italy", "IT"], ["Ivory Coast", "CI"], ["Jamaica", "JM"], ["Japan", "JP"], ["Jersey", "JE"], ["Jordan", "JO"], ["Kazakhstan", "KZ"], ["Kenya", "KE"], ["Kiribati", "KI"], ["Kosovo", "XK"], ["Kuwait", "KW"], ["Kyrgyzstan", "KG"], ["Laos", "LA"], ["Latvia", "LV"], ["Lebanon", "LB"], ["Lesotho", "LS"], ["Liberia", "LR"], ["Libya", "LY"], ["Liechtenstein", "LI"], ["Lithuania", "LT"], ["Luxembourg", "LU"], ["Macao", "MO"], ["Madagascar", "MG"], ["Malawi", "MW"], ["Malaysia", "MY"], ["Maldives", "MV"], ["Mali", "ML"], ["Malta", "MT"], ["Marshall Islands", "MH"], ["Martinique", "MQ"], ["Mauritania", "MR"], ["Mauritius", "MU"], ["Mayotte", "YT"], ["Mexico", "MX"], ["Micronesia", "FM"], ["Moldova", "MD"], ["Monaco", "MC"], ["Mongolia", "MN"], ["Montenegro", "ME"], ["Montserrat", "MS"], ["Morocco", "MA"], ["Mozambique", "MZ"], ["Myanmar", "MM"], ["Namibia", "NA"], ["Nauru", "NR"], ["Nepal", "NP"], ["Netherlands Antilles", "AN"], ["New Caledonia", "NC"], ["New Zealand", "NZ"], ["Nicaragua", "NI"], ["Niger", "NE"], ["Nigeria", "NG"], ["Niue", "NU"], ["Norfolk Island", "NF"], ["North Korea", "KP"], ["North Macedonia", "MK"], ["Northern Mariana Islands", "MP"], ["Norway", "NO"], ["Oman", "OM"], ["Pakistan", "PK"], ["Palau", "PW"], ["Palestinian Territory", "PS"], ["Panama", "PA"], ["Papua New Guinea", "PG"], ["Paraguay", "PY"], ["Peru", "PE"], ["Philippines", "PH"], ["Pitcairn", "PN"], ["Poland", "PL"], ["Portugal", "PT"], ["Puerto Rico", "PR"], ["Qatar", "QA"], ["Republic of the Congo", "CG"], ["Reunion", "RE"], ["Romania", "RO"], ["Russia", "RU"], ["Rwanda", "RW"], ["Saint Barthelemy", "BL"], ["Saint Helena", "SH"], ["Saint Kitts and Nevis", "KN"], ["Saint Lucia", "LC"], ["Saint Martin", "MF"], ["Saint Pierre and Miquelon", "PM"], ["Saint Vincent and the Grenadines", "VC"], ["Samoa", "WS"], ["San Marino", "SM"], ["Sao Tome and Principe", "ST"], ["Saudi Arabia", "SA"], ["Senegal", "SN"], ["Serbia", "RS"], ["Serbia and Montenegro", "CS"], ["Seychelles", "SC"], ["Sierra Leone", "SL"], ["Singapore", "SG"], ["Sint Maarten", "SX"], ["Slovakia", "SK"], ["Slovenia", "SI"], ["Solomon Islands", "SB"], ["Somalia", "SO"], ["South Africa", "ZA"], ["South Georgia and the South Sandwich Islands", "GS"], ["South Korea", "KR"], ["South Sudan", "SS"], ["Spain", "ES"], ["Sri Lanka", "LK"], ["Sudan", "SD"], ["Suriname", "SR"], ["Svalbard and Jan Mayen", "SJ"], ["Sweden", "SE"], ["Switzerland", "CH"], ["Syria", "SY"], ["Taiwan", "TW"], ["Tajikistan", "TJ"], ["Tanzania", "TZ"], ["Thailand", "TH"], ["The Netherlands", "NL"], ["Timor Leste", "TL"], ["Togo", "TG"], ["Tokelau", "TK"], ["Tonga", "TO"], ["Trinidad and Tobago", "TT"], ["Tunisia", "TN"], ["Turkey", "TR"], ["Turkmenistan", "TM"], ["Turks and Caicos Islands", "TC"], ["Tuvalu", "TV"], ["U.S. Virgin Islands", "VI"], ["Uganda", "UG"], ["Ukraine", "UA"], ["United Arab Emirates", "AE"], ["United Kingdom", "GB"], ["United States", "US"], ["United States Minor Outlying Islands", "UM"], ["Uruguay", "UY"], ["Uzbekistan", "UZ"], ["Vanuatu", "VU"], ["Vatican", "VA"], ["Venezuela", "VE"], ["Vietnam", "VN"], ["Wallis and Futuna", "WF"], ["Western Sahara", "EH"], ["Yemen", "YE"], ["Zambia", "ZM"], ["Zimbabwe", "ZW"]];
 const inpP = document.getElementById("f-paese"), listaP = document.getElementById("f-paese-lista");
 let paeseIso = "";
@@ -1759,15 +1628,11 @@ document.addEventListener("click", e => {
   }
 });
 
-/* ══ l'export filtrato: stima prima, download dopo ══ */
 let exStimaTimer = null, exDati = null, exStimaSeq = 0;
 function trentaGiorniFa() {
   const d = new Date(); d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
 }
-/* cosa si scarica: offerte o spine aziende (03/10/2026). Cambiano i
-   filtri sensati (la data non esiste sullo spine), il prezzo unitario
-   e la descrizione del record */
 let exTipoCorrente = "postings";
 function exScegliTipo(t) {
   exTipoCorrente = t;
@@ -1810,8 +1675,6 @@ function filtriExport() {
   return f;
 }
 function euroPer(crediti) {
-  /* il minimo slider che copre il conto: la curva e' crescente, si
-     scansisce e basta */
   for (let e = 25; e <= 2990; e++) if (creditiPerEuro(e) >= crediti) return e;
   return 2990;
 }
@@ -1822,9 +1685,6 @@ async function stimaExport() {
   const ricarica = document.getElementById("ex-ricarica");
   ["ex-righe", "ex-costo", "ex-saldo"].forEach(id =>
     document.getElementById(id).textContent = "…");
-  /* il Download non si DISABILITA: si NASCONDE. Un bottone spento in
-     vista sembra un sito rotto; quando non si puo' scaricare resta solo
-     l'azione giusta (restringi i filtri / ricarica) (03/10/2026) */
   vai.disabled = true; vai.classList.add("hidden");
   ricarica.classList.add("hidden"); avviso.classList.add("hidden");
   let r;
@@ -1909,7 +1769,7 @@ async function scaricaExportFiltrato() {
     return;
   }
   if (r.status === 429) {
-    await stimaExport();   // mostra lo stato «crediti insufficienti»
+    await stimaExport();
     btn.textContent = "Download →";
     return;
   }
@@ -1929,10 +1789,7 @@ async function scaricaExportFiltrato() {
   await carica();
 }
 
-/* ══ avvio ══ */
 (async () => {
-  // il numero in testa all'esploratore e' il VIVO, lo stesso del cruscotto;
-  // la striscia-eroe prende dalla stessa fonte il polso dell'indice
   fetch(API + "/v1/demo/stats", { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(s => {

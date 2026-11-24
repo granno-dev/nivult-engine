@@ -18,8 +18,8 @@
     {
       "slug": "jboardio",
       "name": "JBoard",
-      "native_backfill": "Built-in backfill via Adzuna and Indeed integrations is available on paid plans, alongside a web page scraper that reads employer pages with Google Jobs structured data. XML/JSON import and API access sit on higher tiers.",
-      "feed_formats": ["XML import", "JSON import", "API (upper tiers)", "Adzuna/Indeed backfill", "Web scraper"],
+      "native_backfill": "Built-in backfill via an Indeed integration is available on paid plans, alongside a web page scraper that reads employer pages with Google Jobs structured data. XML/JSON import and API access sit on higher tiers.",
+      "feed_formats": ["XML import", "JSON import", "API (upper tiers)", "Indeed backfill", "Web scraper"],
       "angle": "The no-code board builder with aggregator backfill on tap from the entry plans."
     },
     {

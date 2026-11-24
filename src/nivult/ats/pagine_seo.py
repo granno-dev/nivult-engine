@@ -469,10 +469,6 @@ def _testa(title: str, description: str, canonical: str,
         f'{json.dumps(b if "@context" in b else {"@context": "https://schema.org", **b}, ensure_ascii=False, indent=1)}\n</script>'
         for b in json_ld)
     return f"""<!doctype html>
-<!-- Pagina generata da nivult.ats.pagine_seo: i numeri sono misurati sul
-     database ATS al momento del giro, il copy editoriale viene da
-     dati/seo/. Non editare a mano: il prossimo giro sovrascrive.
-     Convenzione della vetrina: mai em dash nel copy. -->
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">

@@ -1,9 +1,4 @@
 <!doctype html>
-<!-- Nivult B2B showcase, v6 (26/09/2026). Single file, Tailwind via CDN.
-     Stripe-inspired: floating animated cards over a live gradient mesh,
-     count-up stats, a ticking changes feed, real ATS logos served locally.
-     Copy rewritten for trust and conversion. Every number is measured on
-     the latest daily export, never invented. No em dashes in the copy. -->
 <html lang="en" class="scroll-smooth">
 <head>
 <meta charset="utf-8">
@@ -51,10 +46,6 @@ tailwind.config = {
 .codebox::-webkit-scrollbar-track { background: transparent; }
 .codebox::-webkit-scrollbar-thumb { background: #33415c; border-radius: 99px; }
 .codebox::-webkit-scrollbar-thumb:hover { background: #4a5b7a; }
-/* 10/10/2026: su mobile le due card JSON allargavano TUTTA la pagina
-   (scrollW 1692px su un telefono da 393): il pre e' figlio flex e di
-   default non si restringe sotto la larghezza del contenuto. min-w-0 lo
-   sblocca: il JSON scorre dentro la card, la pagina resta larga giusta. */
 .codebox { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* neural canvas sits behind the hero, never above the text */
 #neural { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -103,10 +94,8 @@ tailwind.config = {
 .in .underline-draw::after { right: 0; }
 /* faint dot grid behind quiet sections, so the paper is not flat */
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
-/* i loghi della marquee: a riposo in grigio, al tocco a colori */
 #marquee img { filter: grayscale(1) opacity(.72); transition: filter .35s; }
 #marquee .ats-logo:hover img { filter: none; }
-/* chi chiede meno moto lo ottiene: niente drift, tick, fluttuazioni, mesh */
 @media (prefers-reduced-motion: reduce) {
   .marquee-track, .tick-track, .float-a, .float-b, .float-c, .mesh-a, .mesh-b,
   .live-dot, .spinner { animation: none !important; }
@@ -179,8 +168,6 @@ tailwind.config = {
         <span><span class="text-mint-600 font-bold mr-1.5">✓</span>No seat minimums</span>
       </div>
 
-      <!-- la prova su mobile: le card fluttuanti restano ai desktop,
-           qui una sola, ferma, con la stessa merce -->
       <div class="lg:hidden mt-8 rounded-2xl border border-slate-900/10 bg-slate-950 p-5 text-slate-100 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <span class="text-[10px] font-bold tracking-[0.16em] uppercase text-slate-500">Company record</span>
@@ -436,7 +423,6 @@ tailwind.config = {
       </div>
     </div>
 
-    <!-- live demo: compatta, interroga l'indice vero via /v1/demo -->
     <div class="reveal mt-12 rounded-2xl border border-slate-900/10 bg-white overflow-hidden shadow-xl shadow-slate-900/10">
       <div class="flex items-center gap-4 border-b border-slate-100 px-6 py-4 bg-gradient-to-r from-brand-50/60 via-white to-mint-500/5">
         <div class="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center shadow-lg shadow-brand-500/25">
@@ -487,7 +473,6 @@ tailwind.config = {
       <span class="text-[11.5px] text-slate-400">Dedicated contact_email and recruiter fields are excluded from API responses and exports.</span>
     </div>
     <div class="mt-6 grid lg:grid-cols-2 gap-5 items-stretch">
-      <!-- aziende a sinistra: il prodotto sono loro -->
       <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm flex flex-col">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-mint-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-mint-500 to-brand-400 grid place-items-center shadow-md shadow-mint-500/25">
@@ -502,7 +487,6 @@ tailwind.config = {
           <table class="w-full text-[15px]"><tbody id="tab-copertura-az" class="divide-y divide-slate-100"></tbody></table>
         </div>
       </div>
-      <!-- offerte a destra -->
       <div class="overflow-hidden rounded-2xl border border-slate-900/5 bg-white shadow-sm flex flex-col">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-brand-500/10 to-transparent">
           <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500 grid place-items-center shadow-md shadow-brand-500/25">
@@ -605,7 +589,6 @@ tailwind.config = {
   </div>
 </section>
 
-<!-- ══ Pricing: slider volume → prezzo unitario che scende ══ -->
 <section id="pricing" class="py-20 border-t border-slate-900/5">
   <div class="max-w-7xl mx-auto px-6">
     <div class="reveal text-center max-w-3xl mx-auto">
@@ -695,7 +678,6 @@ tailwind.config = {
   </div>
 </section>
 
-<!-- ══ FAQ: le quattro domande che arrivano sempre ══ -->
 <section class="py-20 border-t border-slate-900/5 dotgrid">
   <div class="max-w-5xl mx-auto px-6">
     <p class="reveal text-center text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Before you ask</p>
@@ -862,8 +844,6 @@ tailwind.config = {
   <button onclick="apriModale()" class="w-full rounded-xl bg-brand-500 py-3.5 font-bold text-white shadow-lg shadow-brand-500/30">Get a trial key →</button>
 </div>
 
-<!-- pill "Talk with us": flottante in basso a destra, appare dopo l'hero
-     e porta alla prenotazione della call (11/10/2026) -->
 <a href="booking.html" id="pill-booking"
    class="hidden sm:flex fixed bottom-6 right-6 z-50 items-center gap-2.5 rounded-full bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 bg-[length:180%_100%] bg-left hover:bg-right px-6 py-3.5 font-bold text-white text-[15px] shadow-2xl shadow-brand-500/40 transition-all duration-500 hover:-translate-y-1 opacity-0 translate-y-4 pointer-events-none">
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
@@ -871,7 +851,6 @@ tailwind.config = {
 </a>
 
 <script>
-/* ══ scroll reveal; i contatori restano finali anche nel rendering Google ══ */
 const io=new IntersectionObserver(es=>es.forEach(e=>{
   if(!e.isIntersecting)return;
   e.target.classList.add('in');
@@ -919,7 +898,6 @@ const mq=document.getElementById('marquee');
   mq.appendChild(el);
 });
 
-/* ══ changes feed: righe reali di forma, il tick e' un loop CSS ══ */
 const EVENTI=[
  ["NEW","Supply Chain Analyst, SAP · Rotterdam","mint"],
  ["UPDATED","Registered Nurse, EPIC · Austin","brand"],
@@ -939,10 +917,6 @@ const badge={mint:'bg-mint-500/15 text-mint-400',brand:'bg-brand-500/15 text-bra
   tt.appendChild(d);
 });
 
-/* ══ live demo: interroga l'indice vero via /v1/demo/tecnologie;
-      se l'API non risponde (es. pagina offline), ripiega sul campione
-      embedded di 12 aziende reali. Lo stato della fonte si dichiara
-      in alto a destra nella card. ══ */
 const API_DEMO="https://api.nivult.com/v1/demo/tecnologie";
 const AZIENDE=[
  {nome:"RTX",dominio:"rtx.com",size:"10001+",paese:"US",tecnologie:["Python","SAP","C++","Excel"]},
@@ -959,8 +933,6 @@ const AZIENDE=[
  {nome:"Danone",dominio:"danone.com",size:"10001+",paese:"FR",tecnologie:["SAP","Excel","Power BI"]}
 ];
 const SUGS=["SAP","Python","Excel","HACCP","COBOL","EPIC","TIG welding","C++"];
-/* tab «Postings»: offerte vere viste nell'indice il 28/09/2026, embedded —
-   la demo deve funzionare anche a rete spenta */
 const OFFERTE=[
  {t:"Data Engineer",a:"Danone",dove:"Paris · FR",rem:"hybrid",tec:["Python","Snowflake","dbt","Airflow"]},
  {t:"PR and Marketing Executive",a:"Platform Media",dove:"London · GB",rem:"hybrid",tec:["Instagram","LinkedIn"]},
@@ -1011,8 +983,6 @@ async function mostraLive(f){
     ris.innerHTML=`<div class="py-6 text-center text-sm text-slate-500">No company found for «${f}». Try a broader term.</div>`;
     return;
   }
-  /* la merce non si regala: due esempi chiari, il resto sfocato, e il
-     numero esatto non si dice (26/09/2026, decisione di Nivult) */
   const chiare=d.data.map(a=>riga({nome:a.company,dominio:null,paese:a.country||'',size:null,
       tecnologie:(a.technologies||[]).slice(0,5)})).join('');
   const sfocate = d.altre ? `
@@ -1050,7 +1020,6 @@ function mostraOfferte(f){
   ris.innerHTML=trovate.length?chiare+sfocata
     :`<div class="py-6 text-center text-sm text-slate-500">No match in this sample. The full index holds millions of postings.</div>`;
 }
-/* i due tab della demo: aziende (live) e offerte (campione) */
 let modoDemo="tec";
 const tabTec=document.getElementById('tab-tec'),tabOff=document.getElementById('tab-off');
 function dipingeTab(){
@@ -1105,10 +1074,6 @@ function copiaJson(id,btn){
     btn.textContent='Copied ✓';setTimeout(()=>btn.textContent='Copy',1600);});
 }
 
-/* ══ per-field coverage: numeri vivi dall'endpoint /v1/demo/stats;
-      sotto, il ripiego embedded. Il colore SEGUE il valore: pieno
-      (blu-menta), in riempimento (viola-blu), buco dichiarato
-      (ambra-rosa) — la mappa dei buchi e' il punto, non la vergogna. ══ */
 const NOMI_COP={category:"Job family",management_level:"Management level",remote:"Remote policy",
 description:"Full text",language:"Language",employment_type:"Contract type",seniority:"Seniority",
 country:"Country",salary_estimate:"Salary, modelled",state:"State / region",geo:"Coordinates",
@@ -1123,17 +1088,12 @@ legal_name:"Legal name",legal_form:"Legal form",registration_id:"Registration nu
 founded:"Founded",headquarters:"Headquarters",description:"Description",
 technologies:"Technology stack",top_skills:"Top skills",locations:"Locations",
 external_urls:"External profiles",lei:"LEI",languages:"Languages",keywords:"Keywords"};
-/* misurato sull'export di oggi: il ripiego se l'endpoint tace. Il paese
-   al 6,9% e' la foto di PRIMA del backfill PDL di ieri sera: domani il
-   numero vivo salta, e la pagina lo racconta da sola. */
 const copAzFallback=[["languages",94.3],["headquarters",94.0],["locations",93.3],["technologies",80.4],["country",77.0],["top_skills",75.4],["domain",73.9],["industry",70.1],["website",67.1],["size_range",58.1],["founded",47.9],["description",37.6],["employees",12.7],["legal_name",8.2],["registration_id",8.2],["legal_form",8.0],["external_urls",4.0],["lei",0.4]];
 const tb=document.getElementById('tab-copertura');
 const tbAz=document.getElementById('tab-copertura-az');
 function fasciaColore(v){
   if(v>=70)return["#3b6ef6","#0fbf9a","bg-mint-500/10 text-mint-600","Solid coverage"];
   if(v>=30)return["#8b5cf6","#3b6ef6","bg-brand-50 text-brand-600","Filling in"];
-  /* il buco resta dichiarato (e' il patto), ma in toni quieti:
-     la percentuale e' il dato, non il semaforo (28/09/2026) */
   return["#cbd5e1","#94a3b8","bg-slate-100 text-slate-500","Declared gap"];
 }
 function disegnaCopertura(righe, tbody, nomi){
@@ -1145,7 +1105,6 @@ function disegnaCopertura(righe, tbody, nomi){
     if(fascia!==fasciaPre){
       fasciaPre=fascia;
       const th=document.createElement('tr');
-      /* l'intestazione di gruppo resta in cima mentre il panello scorre */
       th.innerHTML=`<td colspan="3" class="sticky top-0 z-10 bg-white px-6 pt-5 pb-2 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400 shadow-[0_1px_0_rgba(0,0,0,0.04)]">${fascia}</td>`;
       tbody.appendChild(th);
     }
@@ -1166,16 +1125,9 @@ function animaCopertura(){covVista=true;
 new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting&&!covVista)animaCopertura();}),{threshold:.1})
   .observe(document.querySelector('#coverage'));
 
-/* ══ copertura viva, contatori FISSI (10/10/2026) ══
-   Nivult: «niente numeri reali con index giornaliero, mettiamo numeri
-   statici tondi con more than». I contatori sono embedded e non si muovono
-   piu'; dall'endpoint pubblico arriva solo la COPERTURA per campo, che
-   non e' un numero da marketing ma la mappa dei fill-rate — quella resta
-   viva perche' i compratori seri la controllano. */
 fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000),cache:"no-store"})
  .then(r=>r.ok?r.json():Promise.reject())
  .then(s=>{
-   /* la copertura viva: il manifest del giorno, ordinato per valore */
    let toc=false;
    if(s.copertura&&typeof s.copertura==="object"){
      const righe=Object.entries(s.copertura)
@@ -1190,22 +1142,17 @@ fetch(API_DEMO.replace("/tecnologie","/stats"),{signal:AbortSignal.timeout(5000)
      if(righe.length){disegnaCopertura(righe,tbAz,NOMI_COP_AZ);toc=true;}
    }
    if(toc&&covVista)animaCopertura();
- }).catch(()=>{/* il ripiego sono i numeri embedded */});
+ }).catch(()=>{});
 
-/* ══ pricing: la curva dei volumi, ancorata ai prezzi misurati del
-      mercato (ricerca del 27/09/2026: TheirStack 32,7$/1K e Coresignal
-      19,6$/1K all'ingresso; noi entriamo a 4,9€/1K). Il prezzo si
-      interpola log-log fra gli ancoraggi: la curva e' liscia e il
-      prezzo unitario scende sempre. ══ */
 const ANCORE=[[10000,49],[25000,89],[50000,149],[100000,229],[250000,399],
               [500000,599],[1000000,899],[2500000,1790],[5000000,2990]];
-const UNIT_ENTRATA=ANCORE[0][1]/(ANCORE[0][0]/1000);   // 4,90 €/1K
+const UNIT_ENTRATA=ANCORE[0][1]/(ANCORE[0][0]/1000);
 const sl=document.getElementById('pz-slider');
-function creditiDi(p){                       // slider log-uniforme 10K..5M
+function creditiDi(p){
   const lo=Math.log10(10000),hi=Math.log10(5000000);
   return Math.round(Math.pow(10,lo+(hi-lo)*p)/1000)*1000;
 }
-function prezzoDi(c){                        // interpola log-log fra ancore
+function prezzoDi(c){
   if(c<=ANCORE[0][0])return ANCORE[0][1];
   for(let i=1;i<ANCORE.length;i++){
     const[c1,p1]=ANCORE[i-1],[c2,p2]=ANCORE[i];
@@ -1245,8 +1192,6 @@ document.getElementById('hamburger').onclick=()=>{
 document.querySelectorAll('#mobile-menu a').forEach(a=>a.onclick=()=>
   document.getElementById('mobile-menu').classList.add('hidden'));
 
-/* ══ pill "Talk with us": segue lo scroll, porta a /booking (11/10/2026).
-   Su mobile non c'e': laggiu' il CTA sticky occupa gia' il fondo. ══ */
 const pill=document.getElementById('pill-booking');
 if(pill){
   const aggiornaPill=()=>{
