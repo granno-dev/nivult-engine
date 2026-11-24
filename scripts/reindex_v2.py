@@ -7,6 +7,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -34,6 +35,20 @@ MAX_UUID = (1 << 128) - 1
 STATE_LOCK = threading.RLock()
 
 
+def _uuid(valore) -> uuid.UUID:
+    return valore if isinstance(valore, uuid.UUID) else uuid.UUID(str(valore))
+
+
+def _normalizza_stato(stato: dict) -> dict:
+    stato["last_id"] = _uuid(stato["last_id"])
+    if stato.get("completed_prefix_until") is not None:
+        stato["completed_prefix_until"] = _uuid(stato["completed_prefix_until"])
+    for worker in stato.get("workers", []):
+        for campo in ("start", "end", "cursor"):
+            worker[campo] = _uuid(worker[campo])
+    return stato
+
+
 def _save(stato: dict) -> None:
     with STATE_LOCK:
         STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -42,8 +57,8 @@ def _save(stato: dict) -> None:
         os.replace(tmp, STATE)
 
 
-def _attendi() -> None:
-    while True:
+def _attendi(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
         try:
             prima = Path("/proc/pressure/io").read_text().splitlines()[0].split()
             io = float(dict(campo.split("=") for campo in prima[1:])["avg10"])
@@ -58,14 +73,16 @@ def _attendi() -> None:
         if io <= 35.0 and disponibili >= 4096:
             return
         print(f"throttle: io={io:.1f}% MemAvailable={disponibili}MiB", flush=True)
-        time.sleep(10)
+        stop_event.wait(10)
 
 
-def _bulk(client: httpx.Client, documenti: list[dict]) -> int:
+def _bulk(client: httpx.Client, documenti: list[dict], stop_event: threading.Event) -> int:
     if not documenti:
         return 0
     linee = []
     for doc in documenti:
+        doc = dict(doc)
+        doc["id"] = str(_uuid(doc["id"]))
         linee.append(json.dumps({"index": {"_index": INDEX, "_id": doc["id"]}}))
         linee.append(json.dumps(doc, ensure_ascii=False, separators=(",", ":"), default=str))
     for tentativo in range(7):
@@ -77,7 +94,8 @@ def _bulk(client: httpx.Client, documenti: list[dict]) -> int:
                 r.raise_for_status()
             attesa = min(2 ** tentativo, 30)
             print(f"HTTP 429 OpenSearch: backoff {attesa}s", flush=True)
-            time.sleep(attesa)
+            if stop_event.wait(attesa):
+                raise RuntimeError("bulk interrotto durante il backoff 429")
             continue
         r.raise_for_status()
         esito = r.json()
@@ -146,77 +164,84 @@ def _verifica(client: httpx.Client) -> None:
     print("mini-test ignored", _ignored(client), flush=True)
 
 
-def _query_batch(conn, inizio: str, fine: str, limite: int):
+def _query_batch(conn, inizio: uuid.UUID, fine: uuid.UUID, limite: int):
     sql = f"""WITH batch AS MATERIALIZED (
         SELECT j.* FROM ats_jobs j
          WHERE {_CANONICO}
            AND j.id > %(inizio)s::uuid AND j.id <= %(fine)s::uuid
          ORDER BY j.id LIMIT {limite})
         SELECT {vivo._COLONNE.replace('FROM ats_jobs j', 'FROM batch j')}"""
-    return conn.execute(sql, {"inizio": inizio, "fine": fine}).fetchall()
+    return conn.execute(sql, {"inizio": _uuid(inizio), "fine": _uuid(fine)}).fetchall()
 
 
-def _worker(stato: dict, indice: int, inizio_tempo: float, massimo: int | None = None,
-            batch_size: int = BATCH) -> None:
-    with httpx.Client(base_url=URL, timeout=httpx.Timeout(30.0, connect=3.0),
-                      limits=httpx.Limits(max_connections=4, max_keepalive_connections=4)) as client, \
-            psycopg.connect(vivo._DSN, autocommit=True, row_factory=dict_row,
-                            connect_timeout=3) as conn:
-        conn.execute("SET random_page_cost = 1.1")
-        conn.execute("SET effective_io_concurrency = 200")
-        conn.execute("SET max_parallel_workers_per_gather = 0")
-        conn.execute("SET enable_mergejoin = off")
-        conn.execute("SET statement_timeout = '60s'")
-        while not stato["workers"][indice]["done"]:
-            _attendi()
-            corrente = stato["workers"][indice]
-            righe = _query_batch(conn, corrente["cursor"], corrente["end"], batch_size)
-            if not righe:
-                with STATE_LOCK:
-                    corrente["done"] = True
-                    _save(stato)
-                break
-            nuovo_cursor = righe[-1]["id"]
-            documenti = list(_documenti(righe).values())
-            errori = _bulk(client, documenti)
-            with STATE_LOCK:
-                corrente["cursor"] = nuovo_cursor
-                corrente["indexed"] = corrente.get("indexed", 0) + len(documenti)
-                corrente["errors"] = corrente.get("errors", 0) + errori
-                stato["indexed"] += len(documenti)
-                stato["errors"] += errori
-                stato["last_id"] = min(w["cursor"] for w in stato["workers"])
-                stato["duration_s"] = round(time.monotonic() - inizio_tempo, 1)
-                _save(stato)
-                velocita = ((stato["indexed"] - stato["run_indexed_start"])
-                            / max(time.monotonic() - inizio_tempo, 0.001))
-                print(f"worker={indice} indexed={stato['indexed']} errors={stato['errors']} "
-                      f"cursor={corrente['cursor']} aggregate_rate={velocita:.1f}/s", flush=True)
-                if massimo and stato["indexed"] >= massimo:
-                    for worker in stato["workers"]:
-                        worker["done"] = True
-                    _save(stato)
+def _worker(stato: dict, indice: int, inizio_tempo: float, stop_event: threading.Event,
+            massimo: int | None = None, batch_size: int = BATCH) -> None:
+    try:
+        with httpx.Client(base_url=URL, timeout=httpx.Timeout(30.0, connect=3.0),
+                          limits=httpx.Limits(max_connections=4, max_keepalive_connections=4)) as client, \
+                psycopg.connect(vivo._DSN, autocommit=True, row_factory=dict_row,
+                                connect_timeout=3) as conn:
+            conn.execute("SET random_page_cost = 1.1")
+            conn.execute("SET effective_io_concurrency = 200")
+            conn.execute("SET max_parallel_workers_per_gather = 0")
+            conn.execute("SET enable_mergejoin = off")
+            conn.execute("SET statement_timeout = '60s'")
+            while not stop_event.is_set() and not stato["workers"][indice]["done"]:
+                _attendi(stop_event)
+                if stop_event.is_set():
                     break
+                corrente = stato["workers"][indice]
+                righe = _query_batch(conn, corrente["cursor"], corrente["end"], batch_size)
+                if not righe:
+                    with STATE_LOCK:
+                        corrente["done"] = True
+                        _save(stato)
+                    break
+                nuovo_cursor = _uuid(righe[-1]["id"])
+                documenti = list(_documenti(righe).values())
+                errori = _bulk(client, documenti, stop_event)
+                with STATE_LOCK:
+                    corrente["cursor"] = nuovo_cursor
+                    corrente["indexed"] = corrente.get("indexed", 0) + len(documenti)
+                    corrente["errors"] = corrente.get("errors", 0) + errori
+                    stato["indexed"] += len(documenti)
+                    stato["errors"] += errori
+                    stato["last_id"] = min(_uuid(w["cursor"]) for w in stato["workers"])
+                    stato["duration_s"] = round(time.monotonic() - inizio_tempo, 1)
+                    _save(stato)
+                    velocita = ((stato["indexed"] - stato["run_indexed_start"])
+                                / max(time.monotonic() - inizio_tempo, 0.001))
+                    print(f"worker={indice} indexed={stato['indexed']} errors={stato['errors']} "
+                          f"cursor={corrente['cursor']} aggregate_rate={velocita:.1f}/s", flush=True)
+                    if massimo and stato["indexed"] >= massimo:
+                        for worker in stato["workers"]:
+                            worker["done"] = True
+                        _save(stato)
+                        break
+    except Exception:
+        traceback.print_exc()
+        stop_event.set()
+        raise
 
 
-def _partizioni(last_id: str) -> list[dict]:
-    inizio = uuid.UUID(last_id).int
+def _partizioni(last_id: uuid.UUID) -> list[dict]:
+    inizio = _uuid(last_id).int
     intervallo = (MAX_UUID - inizio) // WORKERS
     confini = [inizio + intervallo * i for i in range(WORKERS)] + [MAX_UUID]
-    return [{"worker": i, "start": str(uuid.UUID(int=confini[i])),
-             "end": str(uuid.UUID(int=confini[i + 1])),
-             "cursor": str(uuid.UUID(int=confini[i])), "done": False,
+    return [{"worker": i, "start": uuid.UUID(int=confini[i]),
+             "end": uuid.UUID(int=confini[i + 1]),
+             "cursor": uuid.UUID(int=confini[i]), "done": False,
              "indexed": 0, "errors": 0} for i in range(WORKERS)]
 
 
 def _stato_iniziale(resume: bool) -> dict:
     if STATE.exists() and resume:
         stato = json.loads(STATE.read_text())
-        stato["workers"] = stato.get("workers") or _partizioni(stato["last_id"])
-        return stato
+        stato["workers"] = stato.get("workers") or _partizioni(_uuid(stato["last_id"]))
+        return _normalizza_stato(stato)
     with psycopg.connect(vivo._DSN, autocommit=True, connect_timeout=3) as conn:
         t0 = conn.execute("SELECT now()").fetchone()[0].isoformat()
-    stato = {"t0": t0, "last_id": str(uuid.UUID(int=0)), "indexed": 0, "errors": 0,
+    stato = {"t0": t0, "last_id": uuid.UUID(int=0), "indexed": 0, "errors": 0,
              "status": "running", "started_at": time.time()}
     stato["workers"] = _partizioni(stato["last_id"])
     _save(stato)
@@ -231,7 +256,8 @@ def main() -> int:
     args = ap.parse_args()
     stato = _stato_iniziale(args.resume)
     if args.resume and stato.get("last_id"):
-        stato["completed_prefix_until"] = stato["last_id"]
+        stato.setdefault("completed_prefix_until", stato["last_id"])
+        stato["completed_prefix_until"] = _uuid(stato["completed_prefix_until"])
     if args.mini_test:
         with httpx.Client(base_url=URL, timeout=10) as client:
             r = client.delete(INDEX)
@@ -244,12 +270,19 @@ def main() -> int:
         stato["workers"] = stato["workers"][:1]
     inizio = time.monotonic()
     stato["run_indexed_start"] = stato["indexed"]
-    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        futures = [pool.submit(_worker, stato, i, inizio, 1000 if args.mini_test else None,
-                               1000 if args.mini_test else BATCH)
-                   for i in range(len(stato["workers"]))]
-        for future in futures:
-            future.result()
+    stop_event = threading.Event()
+    try:
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            futures = [pool.submit(_worker, stato, i, inizio, stop_event,
+                                   1000 if args.mini_test else None,
+                                   1000 if args.mini_test else BATCH)
+                       for i in range(len(stato["workers"]))]
+            for future in futures:
+                future.result()
+    except Exception:
+        stato["status"] = "failed"
+        _save(stato)
+        raise
     with httpx.Client(base_url=URL, timeout=30) as client:
         if args.mini_test:
             _verifica(client)
