@@ -156,15 +156,21 @@ def _filtri(**coppie) -> dict:
 def jobs(request: Request, country: str | None = None, category: str | None = None,
          ats: str | None = None, seniority: str | None = None,
          remote: str | None = None, language: str | None = None,
-         q: str | None = None, technology: str | None = None,
-         posted_after: str | None = None, dal: str | None = None,
+         q: str | None = None, q_any: str | None = None,
+         title: str | None = None, technology: str | None = None,
+         posted_after: str | None = None, posted_before: str | None = None,
+         dal: str | None = None,
          limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
          cursor: str | None = None, cliente=Depends(_cliente)):
+    """Cerca offerte attive; i filtri keyword accettano valori multipli separati
+    da virgola. ``q`` richiede tutti i termini, ``q_any`` almeno una delle
+    massimo 15 keyword; ``title`` cerca solo nel titolo."""
     risposta = _pagina(
         opensearch.offerte if opensearch.attivo() else vivo.offerte,
         _filtri(country=country, category=category, ats=ats,
                 seniority=seniority, remote=remote, language=language, q=q,
-                technology=technology, dal=posted_after or dal),
+                q_any=q_any, title=title, technology=technology,
+                dal=posted_after or dal, posted_before=posted_before),
         cursor, _limite_per_tier(cliente, limit))
     _addebita(request, cliente)
     return risposta

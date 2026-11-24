@@ -60,6 +60,19 @@ def attivo() -> bool:
     return os.environ.get("API_OPENSEARCH_JOBS", "0").lower() in ("1", "true", "yes")
 
 
+def _keyword(campo: str, valore) -> dict:
+    valori = [v.strip().lower() for v in str(valore).split(",") if v.strip()]
+    if len(valori) == 1:
+        return {"term": {campo: valori[0]}}
+    return {"terms": {campo: valori}}
+
+
+def _testo(keyword: str) -> dict:
+    return {"multi_match": {
+        "query": keyword, "fields": ["title^2", "description"],
+        "operator": "and", "type": "best_fields"}}
+
+
 def _query(filtri: dict) -> dict:
     bool_query = {"filter": []}
     for campo in ("country", "category", "ats", "seniority", "language", "remote"):
@@ -67,17 +80,27 @@ def _query(filtri: dict) -> dict:
             valore = filtri[campo]
             if campo == "remote" and isinstance(valore, bool):
                 valore = "remote" if valore else "onsite"
-            bool_query["filter"].append({"term": {campo: str(valore).lower()}})
+            bool_query["filter"].append(_keyword(campo, valore))
     if filtri.get("technology"):
-        bool_query["filter"].append(
-            {"term": {"technologies": str(filtri["technology"]).lower()}})
+        bool_query["filter"].append(_keyword("technologies", filtri["technology"]))
     if filtri.get("dal"):
         bool_query["filter"].append(
             {"range": {"posted_at": {"gte": _norm_ts(str(filtri["dal"]))}}})
+    if filtri.get("posted_before"):
+        bool_query["filter"].append(
+            {"range": {"posted_at": {"lt": _norm_ts(str(filtri["posted_before"]))}}})
     if filtri.get("q"):
-        bool_query["must"] = [{"multi_match": {
-            "query": str(filtri["q"]), "fields": ["title^2", "description"],
-            "operator": "and", "type": "best_fields"}}]
+        bool_query.setdefault("must", []).append(_testo(str(filtri["q"])))
+    if filtri.get("title"):
+        bool_query.setdefault("must", []).append({"match": {"title": {
+            "query": str(filtri["title"]), "operator": "and"}}})
+    if filtri.get("q_any"):
+        keywords = [v.strip() for v in str(filtri["q_any"]).split(",") if v.strip()]
+        if len(keywords) > 15:
+            raise ValueError("q_any accepts at most 15 comma-separated keywords")
+        if keywords:
+            bool_query["should"] = [_testo(keyword) for keyword in keywords]
+            bool_query["minimum_should_match"] = 1
     return {"bool": bool_query}
 
 
