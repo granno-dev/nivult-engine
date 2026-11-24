@@ -918,7 +918,7 @@ def _main() -> int:
         conn.commit()
     if migrate.main(["up", "--target", "81"]) != 0:
         return 1
-    if migrate.main(["up"]) != 0:
+    if migrate.main(["up", "--target", "92"]) != 0:
         return 1
 
     tests = [

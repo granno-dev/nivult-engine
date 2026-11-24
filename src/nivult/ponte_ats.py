@@ -180,9 +180,17 @@ def _idonee(cur_ats: psycopg.Cursor, coppie: list[tuple[str, str]],
                j.seniority, j.remote, j.skills, j.lang,
                od.valid_through,
                c.family,
-               COALESCE(co.company_name,
-                        j.raw->'company'->>'name',
-                        j.raw->>'Company_Name'),
+               CASE WHEN co.source_type = 'aggregator'
+                    THEN NULLIF(btrim(j.raw->'company'->>'name'), '')
+                    ELSE COALESCE(NULLIF(btrim(co.company_name), ''),
+                                  NULLIF(btrim(j.raw->'company'->>'name'), ''),
+                                  NULLIF(btrim(j.raw->'hiringOrganization'->>'name'), ''),
+                                  NULLIF(btrim(j.raw->'_jobposting'->'hiringOrganization'->>'name'), ''),
+                                  NULLIF(btrim(j.raw->'employer'->>'name'), ''),
+                                  NULLIF(btrim(j.raw->'entreprise'->>'nom'), ''),
+                                  NULLIF(btrim(j.raw->>'firma'), ''),
+                                  NULLIF(btrim(j.raw->>'company_name'), ''),
+                                  NULLIF(btrim(j.raw->>'Company_Name'), '')) END,
                -- Il dominio VERO dell'azienda e il suo logo curato: senza,
                -- domain_derived puntava alla lavagnetta ATS (helplavoro.it)
                -- e le card mostravano il favicon della piattaforma, non il

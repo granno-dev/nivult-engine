@@ -40,7 +40,8 @@ def main() -> int:
                 CREATE TABLE ats_jobs (
                   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                   platform_id text NOT NULL,
-                  slug text NOT NULL);
+                  slug text NOT NULL,
+                  expired_at timestamptz);
                 CREATE TABLE ats_jobs_search_outbox (
                   job_id uuid PRIMARY KEY,
                   op text NOT NULL,
@@ -57,25 +58,44 @@ def main() -> int:
                   RETURN coalesce(NEW, OLD);
                 END;
                 $$;
+                CREATE FUNCTION ats_tocca_azienda_collegata()
+                RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RETURN coalesce(NEW, OLD); END;
+                $$;
             """)
             cur.execute((ROOT / "migrations/0093_opensearch_azienda_noop.sql").read_text())
-            cur.execute("INSERT INTO ats_jobs(platform_id, slug) VALUES ('p', 's'), ('p', 's')")
+            cur.execute((ROOT / "migrations/0094_opensearch_aziende_attive_source_type.sql").read_text())
+            cur.execute((ROOT / "migrations/0095_opensearch_azienda_insert_null.sql").read_text())
+            cur.execute((ROOT / "migrations/0097_delta_azienda_no_insert.sql").read_text())
+            cur.execute("INSERT INTO ats_jobs(platform_id, slug, expired_at) "
+                        "VALUES ('p', 's', NULL), ('p', 's', NULL), ('p', 's', now())")
             cur.execute("INSERT INTO ats_companies(platform_id, slug, company_name) "
                         "VALUES ('p', 's', 'Nome')")
-            check("INSERT azienda accoda le offerte", cur.execute(
+            check("INSERT azienda accoda solo le attive", cur.execute(
+                "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 2)
+            cur.execute("INSERT INTO ats_companies(platform_id, slug, company_name) "
+                        "VALUES ('p', 'null', NULL)")
+            check("INSERT azienda senza nome non accoda", cur.execute(
                 "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 2)
             cur.execute("DELETE FROM ats_jobs_search_outbox")
             cur.execute("UPDATE ats_companies SET company_name='Nome' "
                         "WHERE platform_id='p' AND slug='s'")
             check("UPDATE a valore identico non accoda", cur.execute(
                 "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 0)
+            cur.execute("UPDATE ats_companies SET source_type='aggregator' "
+                        "WHERE platform_id='p' AND slug='s'")
+            check("source_type non accoda", cur.execute(
+                "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 0)
+            check("source_type ammette aggregator", cur.execute(
+                "SELECT source_type FROM ats_companies WHERE platform_id='p' AND slug='s'"
+                ).fetchone()[0], "aggregator")
             cur.execute("UPDATE ats_companies SET company_name='Nuovo nome' "
                         "WHERE platform_id='p' AND slug='s'")
-            check("UPDATE a valore cambiato accoda", cur.execute(
+            check("UPDATE company_name accoda solo le attive", cur.execute(
                 "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 2)
             cur.execute("DELETE FROM ats_jobs_search_outbox")
             cur.execute("DELETE FROM ats_companies WHERE platform_id='p' AND slug='s'")
-            check("DELETE azienda accoda", cur.execute(
+            check("DELETE azienda accoda solo le attive", cur.execute(
                 "SELECT count(*) FROM ats_jobs_search_outbox").fetchone()[0], 2)
     finally:
         with psycopg.connect(ADMIN, autocommit=True) as admin:

@@ -143,12 +143,14 @@ def censimento(dsn: str, crawl: str | None, da: int, prova: bool,
                         log.warning("%s: tetto di %d nuove raggiunto",
                                     pid, limite_nuove)
                         break
+                    from .ukg_nomi import nome_da_slug
+
                     r = conn.execute(
                         "INSERT INTO ats_companies (platform_id, slug,"
                         " company_name, discovered_from) "
                         "VALUES (%s, %s, %s, 'cc_indice') "
                         "ON CONFLICT (platform_id, slug) DO NOTHING",
-                        (pid, s, s.replace("-", " ").title()))
+                        (pid, s, nome_da_slug(s)))
                     nuove += r.rowcount
             stats["slug_per_piattaforma"][pid] = {
                 "trovati": len(trovati), "nuovi": nuove}

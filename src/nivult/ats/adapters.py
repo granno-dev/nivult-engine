@@ -4671,6 +4671,11 @@ class Ukg(BaseAdapter):
     """
     platform_id = "ukg"
 
+    def metadata(self, slug: str) -> dict:
+        from .ukg_nomi import leggi_board
+
+        return leggi_board(self.client, slug)
+
     def jobs(self, slug: str) -> list[AtsJob]:
         base = f"https://recruiting.ultipro.com/{slug}"
         out: list[AtsJob] = []

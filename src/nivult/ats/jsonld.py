@@ -183,6 +183,8 @@ def trova_sorgente(client: httpx.Client, dominio: str) -> dict:
 
 
 def scopri(dsn: str, limite: int = 150, thread: int = 8, paese: str | None = None) -> dict:
+    from .source_type import classifica_cardinalita, da_blocklist
+
     stats = {"provati": 0, "trovati": 0, "annunci_stimati": 0}
     with psycopg.connect(dsn, autocommit=True) as db:
         db.execute("""INSERT INTO ats_platforms (id, name, is_active, api_type, notes)
@@ -212,15 +214,23 @@ def scopri(dsn: str, limite: int = 150, thread: int = 8, paese: str | None = Non
                 stats["annunci_stimati"] += e["candidati"]
                 nome, ctry = db.execute("SELECT company_name, country FROM company_domains WHERE domain=%s",
                                         (e["dominio"],)).fetchone()
-                db.execute("""INSERT INTO ats_companies (platform_id, slug, company_name, country, discovered_from, sorgente_url)
-                              VALUES ('jsonld', %s, %s, %s, 'jsonld', %s)
+                source_type = "aggregator" if da_blocklist(e["dominio"]) else "direct"
+                db.execute("""INSERT INTO ats_companies (platform_id, slug, company_name, country,
+                                  discovered_from, sorgente_url, source_type)
+                              VALUES ('jsonld', %s, %s, %s, 'jsonld', %s, %s)
                               ON CONFLICT (platform_id, slug) DO UPDATE SET sorgente_url = EXCLUDED.sorgente_url,
-                                company_name = COALESCE(ats_companies.company_name, EXCLUDED.company_name)""",
-                           (e["dominio"], nome if nome and not nome.startswith("Q") else None, ctry, e["sorgente"]))
+                                company_name = COALESCE(ats_companies.company_name, EXCLUDED.company_name),
+                                source_type = CASE WHEN ats_companies.source_type <> 'direct'
+                                                   THEN ats_companies.source_type
+                                                   ELSE EXCLUDED.source_type END""",
+                           (e["dominio"], nome if nome and not nome.startswith("Q") else None,
+                            ctry, e["sorgente"], source_type))
                 db.execute("UPDATE company_domains SET status='jsonld', careers_url=%s, careers_kind='jsonld' WHERE domain=%s",
                            (e["sorgente"], e["dominio"]))
                 log.info("  %s: %s (%s), ~%d annunci, es. %r", e["dominio"], e["tipo"], e["sorgente"][:70],
                          e["candidati"], e.get("esempio"))
+    with psycopg.connect(dsn, autocommit=True) as db:
+        stats["classificazione"] = classifica_cardinalita(db, solo_recenti=True)
     return stats
 
 

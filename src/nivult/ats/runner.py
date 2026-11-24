@@ -405,8 +405,9 @@ def scrape(dsn: str, piattaforma: str | None = None,
              "fallite": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
-                   "       ac.wd_server, ac.wd_instance, ac.pub_key, ac.sorgente_url "
+            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, ac.site_domain, "
+                   "       ac.company_name_source, ac.wd_server, ac.wd_instance, "
+                   "       ac.pub_key, ac.sorgente_url "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -479,8 +480,35 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         jobs = adapter.jobs(az["slug"], az["pub_key"])
                     elif az["platform_id"] == "jsonld":
                         jobs = adapter.jobs(az["slug"], az.get("sorgente_url"))
+                    elif az["platform_id"] == "ukg":
+                        from .ukg_nomi import nome_sporco
+
+                        jobs = adapter.jobs(az["slug"])
+                        if nome_sporco(az.get("company_name")) or not az.get("site_domain"):
+                            az["_ukg_meta"] = adapter.metadata(az["slug"])
                     else:
                         jobs = adapter.jobs(az["slug"])
+                    if az["platform_id"] != "ukg" and not (az.get("company_name") or "").strip():
+                        from .company_names import board_url, nome_da_html, nome_unico
+
+                        nome = nome_unico([j.raw for j in jobs])
+                        fonte = "raw" if nome else None
+                        if not nome and not az.get("company_name_source"):
+                            url = board_url(az["platform_id"], az["slug"])
+                            if az["platform_id"] == "workday" and az.get("wd_server"):
+                                url = (f"https://{az['slug']}.{az['wd_server']}.myworkdayjobs.com/"
+                                       f"{az.get('wd_instance') or ''}")
+                            if url:
+                                try:
+                                    r = adapter.client.get(url)
+                                    if r.status_code == 200:
+                                        nome = nome_da_html(r.text)
+                                        fonte = "board" if nome else "unresolved"
+                                except Exception:  # noqa: BLE001
+                                    pass
+                        if nome or fonte == "unresolved":
+                            az["_company_meta"] = {"company_name": nome,
+                                                   "company_name_source": fonte}
                     return az, jobs, (adapter.ultima_pagina if not jobs else None), adapter.lettura_parziale
             except LetturaFallita as exc:
                 if exc.status == 429:
@@ -515,6 +543,25 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     conn.commit()
                     stats["fallite"] = stats.get("fallite", 0) + 1
                     continue
+                if az.get("_ukg_meta"):
+                    meta = az["_ukg_meta"]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE ats_companies SET company_name=%s, "
+                            "site_domain=COALESCE(site_domain,%s) "
+                            "WHERE platform_id=%s AND slug=%s",
+                            (meta["company_name"], meta["site_domain"],
+                             az["platform_id"], az["slug"]))
+                    conn.commit()
+                if az.get("_company_meta"):
+                    meta = az["_company_meta"]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE ats_companies SET company_name=%s, "
+                            "company_name_source=%s WHERE platform_id=%s AND slug=%s",
+                            (meta["company_name"], meta["company_name_source"],
+                             az["platform_id"], az["slug"]))
+                    conn.commit()
                 stats["aziende"] += 1
 
                 if not jobs:

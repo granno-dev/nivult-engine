@@ -29,6 +29,7 @@ import re
 import psycopg
 
 from nivult.ats.aziende_dettagli import dipendenti
+from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
 
 log = logging.getLogger("nivult.ats.esporta")
@@ -39,7 +40,7 @@ _DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'conte
 
 _ATTIVE_SELECT = f"""
     SELECT j.id, j.title, j.platform_id, j.slug,
-           COALESCE(co.company_name, j.raw->'company'->>'name'),
+           {COMPANY_SQL},
            j.url, j.country, j.city, j.location, j.lang,
            j.seniority, j.remote, j.skills,
            j.salary_min, j.salary_max, j.salary_currency,
@@ -54,7 +55,8 @@ _ATTIVE_SELECT = f"""
            d.benefits, d.salary_text, d.valid_through, d.state,
            d.postal_code, d.latitude, d.longitude, d.geo_da,
            d.applicants_count, d.is_easy_apply,
-           fo.job_sources, j.content_updated_at
+           fo.job_sources, j.content_updated_at,
+           {SOURCE_TYPE_SQL} AS source_type
       FROM ats_jobs j
       LEFT JOIN ats_companies co
              ON co.platform_id = j.platform_id AND co.slug = j.slug
@@ -198,6 +200,7 @@ def _riga_attiva(r, bench: dict) -> dict:
         "is_easy_apply": True if easy else None,
         "job_sources": list(fonti or []),
         "updated_at": r[49] if len(r) > 49 else None,
+        "source_type": r[50] if len(r) > 50 else "direct",
     }
 
 
@@ -608,11 +611,11 @@ def flusso(dsn: str) -> dict:
             cur.itersize = 2000
             cur.execute(f"""
                 SELECT j.id, j.title, j.platform_id, j.slug,
-                       COALESCE(co.company_name, j.raw->'company'->>'name'),
+                       {COMPANY_SQL},
                        j.url, j.country, j.city, j.lang, j.seniority,
                        j.remote, j.skills, j.salary_min, j.salary_max,
                        j.salary_currency, j.posted_at, j.created_at,
-                       {_DESCR}
+                       {_DESCR}, {SOURCE_TYPE_SQL}
                   FROM ats_jobs j
                   LEFT JOIN ats_companies co
                          ON co.platform_id = j.platform_id
@@ -630,7 +633,7 @@ def flusso(dsn: str) -> dict:
                     salary_min=float(r[12]) if r[12] is not None else None,
                     salary_max=float(r[13]) if r[13] is not None else None,
                     salary_currency=r[14], posted_at=r[15],
-                    first_seen=r[16], description=r[17]))
+                    first_seen=r[16], description=r[17], source_type=r[18]))
                 stats["nuove"] += 1
         with conn.cursor(name="fl_aggiornate") as cur:
             cur.itersize = 2000

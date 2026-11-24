@@ -273,12 +273,14 @@ def scopri(dsn: str, piattaforme: list[str] | None, limite_nuove: int,
                     log.info("%s: tetto di %d nuove raggiunto",
                              pid, limite_nuove)
                     break
+                from .ukg_nomi import nome_da_slug
+
                 r = conn.execute(
                     "INSERT INTO ats_companies (platform_id, slug, "
                     " company_name, discovered_from) "
                     "VALUES (%s, %s, %s, 'archivio') "
                     "ON CONFLICT (platform_id, slug) DO NOTHING",
-                    (pid, s, s.replace("-", " ").title()))
+                    (pid, s, nome_da_slug(s)))
                 nuove += r.rowcount
             conn.commit()
             esito["nuove"] += nuove

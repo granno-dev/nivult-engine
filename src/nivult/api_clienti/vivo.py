@@ -32,6 +32,7 @@ import psycopg_pool
 from psycopg.rows import dict_row
 
 from nivult.ats.esporta import _skills_pulite
+from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
 
 from .dati import (_cursore, _iso, _leggi_cursore, _like, _norm_ts)
@@ -228,6 +229,7 @@ def _riga_export(j: dict) -> dict:
     riga = {
         "id": str(j["id"]), "title": j["title"], "ats": j["platform_id"],
         "company_slug": j["slug"], "company": j["company"], "url": j["url"],
+        "source_type": j.get("source_type") or "direct",
         "country": j["country"], "city": j["city"], "location": j["location"],
         "language": j["lang"], "seniority": j["seniority"],
         "remote": j["remote"], "skills": _skills_pulite(j["skills"]),
@@ -265,7 +267,8 @@ def _riga_export(j: dict) -> dict:
 
 _COLONNE = f"""
     j.id, j.title, j.platform_id, j.slug,
-    COALESCE(co.company_name, j.raw->'company'->>'name') AS company,
+    {COMPANY_SQL} AS company,
+    {SOURCE_TYPE_SQL} AS source_type,
     j.url, j.country, j.city, j.location, j.lang, j.seniority, j.remote,
     j.skills, j.salary_min, j.salary_max, j.salary_currency, j.posted_at,
     COALESCE(j.created_at, j.posted_at, j.fetched_at) AS first_seen,
