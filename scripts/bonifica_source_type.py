@@ -20,7 +20,7 @@ def main() -> int:
         print("tenant pubblici inseriti", classifica_pubblici(conn), flush=True)
         print("cardinalita", classifica_cardinalita(conn), flush=True)
         for r in conn.execute("""
-            SELECT co.source_type,count(*)::bigint AS tenant,
+            SELECT co.source_type,count(DISTINCT (co.platform_id,co.slug))::bigint AS tenant,
                    count(j.id) FILTER (WHERE j.expired_at IS NULL)::bigint AS attive
               FROM ats_companies co
               LEFT JOIN ats_jobs j ON j.platform_id=co.platform_id AND j.slug=co.slug
