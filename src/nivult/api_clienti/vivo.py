@@ -230,9 +230,11 @@ def _riga_export(j: dict) -> dict:
         "id": str(j["id"]), "title": j["title"], "ats": j["platform_id"],
         "company_slug": j["slug"], "company": j["company"], "url": j["url"],
         "source_type": j.get("source_type") or "direct",
+        "company_domain": j.get("company_domain"),
         "country": j["country"], "city": j["city"], "location": j["location"],
         "language": j["lang"], "seniority": j["seniority"],
         "remote": j["remote"], "skills": _skills_pulite(j["skills"]),
+        "has_salary": j["salary_min"] is not None or j["salary_max"] is not None,
         "salary_min": (float(j["salary_min"])
                        if j["salary_min"] is not None else None),
         "salary_max": (float(j["salary_max"])
@@ -269,6 +271,7 @@ _COLONNE = f"""
     j.id, j.title, j.platform_id, j.slug,
     {COMPANY_SQL} AS company,
     {SOURCE_TYPE_SQL} AS source_type,
+    NULLIF(ltrim(co.site_domain, ''''), '') AS company_domain,
     j.url, j.country, j.city, j.location, j.lang, j.seniority, j.remote,
     j.skills, j.salary_min, j.salary_max, j.salary_currency, j.posted_at,
     COALESCE(j.created_at, j.posted_at, j.fetched_at) AS first_seen,
