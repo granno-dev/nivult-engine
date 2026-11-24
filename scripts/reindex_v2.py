@@ -188,7 +188,8 @@ def _worker(stato: dict, indice: int, inizio_tempo: float, massimo: int | None =
                 stato["last_id"] = min(w["cursor"] for w in stato["workers"])
                 stato["duration_s"] = round(time.monotonic() - inizio_tempo, 1)
                 _save(stato)
-                velocita = stato["indexed"] / max(time.monotonic() - inizio_tempo, 0.001)
+                velocita = ((stato["indexed"] - stato["run_indexed_start"])
+                            / max(time.monotonic() - inizio_tempo, 0.001))
                 print(f"worker={indice} indexed={stato['indexed']} errors={stato['errors']} "
                       f"cursor={corrente['cursor']} aggregate_rate={velocita:.1f}/s", flush=True)
                 if massimo and stato["indexed"] >= massimo:
@@ -242,6 +243,7 @@ def main() -> int:
         stato["errors"] = 0
         stato["workers"] = stato["workers"][:1]
     inizio = time.monotonic()
+    stato["run_indexed_start"] = stato["indexed"]
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         futures = [pool.submit(_worker, stato, i, inizio, 1000 if args.mini_test else None,
                                1000 if args.mini_test else BATCH)
