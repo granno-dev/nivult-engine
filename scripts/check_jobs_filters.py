@@ -42,6 +42,21 @@ def test_query() -> None:
     check("technology multiplo usa technologies",
           opensearch._query({"technology": "SAP, Teamcenter"})["bool"]["filter"],
           [{"terms": {"technologies": ["sap", "teamcenter"]}}])
+    check("exclude_ats singolo usa must_not",
+          opensearch._query({"exclude_ats": " JSONLD "})["bool"]["must_not"],
+          [{"term": {"ats": "jsonld"}}])
+    check("exclude_ats multiplo usa terms",
+          opensearch._query({"exclude_ats": " JSONLD, indeed ,,"})["bool"]["must_not"],
+          [{"terms": {"ats": ["jsonld", "indeed"]}}])
+    conflitto = opensearch._query({"ats": "jsonld", "exclude_ats": "jsonld"})["bool"]
+    check("stesso ATS incluso ed escluso resta contraddittorio",
+          conflitto["filter"] == [{"term": {"ats": "jsonld"}}]
+          and conflitto["must_not"] == [{"term": {"ats": "jsonld"}}])
+    check("exclude_ats vuoto non aggiunge clausole",
+          "must_not" in opensearch._query({"exclude_ats": ""})["bool"], False)
+    check("exclude_ats di sole virgole esclude un insieme vuoto",
+          opensearch._query({"exclude_ats": ",,"})["bool"]["must_not"],
+          [{"terms": {"ats": []}}])
     check("remote booleano retrocompatibile",
           opensearch._query({"remote": True})["bool"]["filter"],
           [{"term": {"remote": "remote"}}])
@@ -134,6 +149,7 @@ def test_live() -> None:
         ("language multipla", {"language": "en,it"}),
         ("technology multipla", {"technology": "SAP,Teamcenter"}),
         ("q_any", {"q_any": "MBSE,SysML"}),
+        ("exclude_ats", {"country": "US", "exclude_ats": "jsonld,indeed"}),
     ]
     for label, filtri in casi:
         try:
@@ -176,6 +192,16 @@ def test_live() -> None:
                                       for k in ("mbse", "sysml")) for r in righe))
     except Exception as exc:  # noqa: BLE001
         FAILED.append(f"live q_any: {exc!r}")
+
+    try:
+        righe, _ = opensearch.offerte(
+            {"country": "US", "q_any": "MBSE,SysML", "exclude_ats": "jsonld"}, None, 10)
+        check("live exclude_ats: pagina da 10 senza jsonld",
+              len(righe) == 10 and all(r["ats"] != "jsonld" for r in righe))
+        check("live ATS sia incluso sia escluso: zero risultati",
+              opensearch.conteggio({"ats": "jsonld", "exclude_ats": "jsonld"}), 0)
+    except Exception as exc:  # noqa: BLE001
+        FAILED.append(f"live exclude_ats: {exc!r}")
 
 
 def main() -> int:

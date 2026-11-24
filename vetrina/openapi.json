@@ -18,6 +18,7 @@
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
           { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. `bundesagentur` is accepted as a public alias for `bundesanstellung` only when used alone." },
+          { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Exclude these source platform slugs; comma-separated values are supported. If the same value appears in ats and exclude_ats, it is excluded." },
           { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Comma-separated values are ORed" },
           { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "Comma-separated values are ORed" },
           { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote,hybrid" }, "description": "remote, hybrid or onsite; comma-separated values are ORed" },

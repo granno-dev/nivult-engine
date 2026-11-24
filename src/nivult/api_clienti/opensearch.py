@@ -83,6 +83,8 @@ def _query(filtri: dict) -> dict:
             bool_query["filter"].append(_keyword(campo, valore))
     if filtri.get("technology"):
         bool_query["filter"].append(_keyword("technologies", filtri["technology"]))
+    if filtri.get("exclude_ats"):
+        bool_query["must_not"] = [_keyword("ats", filtri["exclude_ats"])]
     if filtri.get("dal"):
         bool_query["filter"].append(
             {"range": {"posted_at": {"gte": _norm_ts(str(filtri["dal"]))}}})
