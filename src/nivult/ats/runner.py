@@ -504,8 +504,9 @@ def scrape(dsn: str, piattaforma: str | None = None,
                                     if r.status_code == 200:
                                         nome = nome_da_html(r.text)
                                         fonte = "board" if nome else "unresolved"
-                                except Exception:  # noqa: BLE001
-                                    pass
+                                except Exception as exc:  # noqa: BLE001
+                                    log.debug("metadata azienda non letti %s/%s: %s",
+                                              az["platform_id"], az["slug"], exc)
                         if nome or fonte == "unresolved":
                             az["_company_meta"] = {"company_name": nome,
                                                    "company_name_source": fonte}
