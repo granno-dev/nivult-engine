@@ -104,6 +104,26 @@ def classifica_pubblici(conn) -> int:
     return inseriti
 
 
+def classifica_staffing(conn) -> int:
+    righe = conn.execute(
+        "SELECT j.platform_id,j.slug FROM ats_jobs j "
+        "LEFT JOIN ats_companies co ON co.platform_id=j.platform_id AND co.slug=j.slug "
+        "WHERE j.platform_id = ANY(%s) AND co.slug IS NULL "
+        "GROUP BY j.platform_id,j.slug ORDER BY j.platform_id,j.slug",
+        (sorted(STAFFING_PLATFORMS),)).fetchall()
+    inseriti = 0
+    for inizio in range(0, len(righe), 200):
+        batch = righe[inizio:inizio + 200]
+        attendi(conn)
+        with conn.transaction(), conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO ats_companies(platform_id,slug,company_name,source_type,"
+                "discovered_from) VALUES (%s,%s,NULL,'staffing','source_type') "
+                "ON CONFLICT (platform_id,slug) DO NOTHING", batch)
+            inseriti += cur.rowcount
+    return inseriti
+
+
 _STATS_SQL = r"""
 WITH base AS (
     SELECT j.slug,

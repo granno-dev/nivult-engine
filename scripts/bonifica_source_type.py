@@ -10,7 +10,12 @@ sys.path.insert(0, str(ROOT / "src"))
 import psycopg
 
 from nivult.ats.jsonld import _dsn as ats_database_url
-from nivult.ats.source_type import classifica_base, classifica_cardinalita, classifica_pubblici
+from nivult.ats.source_type import (
+    classifica_base,
+    classifica_cardinalita,
+    classifica_pubblici,
+    classifica_staffing,
+)
 
 
 def main() -> int:
@@ -18,6 +23,7 @@ def main() -> int:
         conn.execute("SET idle_in_transaction_session_timeout = '30s'")
         print("base", classifica_base(conn), flush=True)
         print("tenant pubblici inseriti", classifica_pubblici(conn), flush=True)
+        print("tenant staffing inseriti", classifica_staffing(conn), flush=True)
         print("cardinalita", classifica_cardinalita(conn), flush=True)
         for r in conn.execute("""
             SELECT co.source_type,count(DISTINCT (co.platform_id,co.slug))::bigint AS tenant,

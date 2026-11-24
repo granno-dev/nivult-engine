@@ -18,6 +18,7 @@ from nivult.ats.source_type import (
     classifica_base,
     classifica_cardinalita,
     classifica_pubblici,
+    classifica_staffing,
     da_blocklist,
 )
 
@@ -92,6 +93,7 @@ def main() -> int:
             conn.execute("INSERT INTO ats_jobs(platform_id,slug,raw) "
                          "SELECT 'jsonld','zero.test','{}' FROM generate_series(1,500)")
             conn.execute("INSERT INTO ats_jobs(platform_id,slug) VALUES ('francetravail','ft')")
+            conn.execute("INSERT INTO ats_jobs(platform_id,slug) VALUES ('agenzie','gigroup')")
             base = classifica_base(conn)
             check("classificazione base aggregator", base["aggregator"], 1)
             check("classificazione base staffing", base["staffing"], 2)
@@ -100,6 +102,10 @@ def main() -> int:
             check("tenant pubblico classificato", conn.execute(
                 "SELECT source_type FROM ats_companies WHERE platform_id='francetravail'"
                 ).fetchone()[0], "public_board")
+            check("tenant staffing mancante inserito", classifica_staffing(conn), 1)
+            check("tenant staffing classificato", conn.execute(
+                "SELECT source_type FROM ats_companies WHERE platform_id='agenzie' AND slug='gigroup'"
+                ).fetchone()[0], "staffing")
             card = classifica_cardinalita(conn)
             check("cardinalita promuove tre tenant", card["aggregator"], 3)
             check("tenant sotto soglia resta direct", card["direct"], 1)
