@@ -5,12 +5,15 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
-from collections import deque
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
+import psycopg
+from psycopg.rows import dict_row
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -18,23 +21,25 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from nivult.api_clienti import vivo
 from nivult.ats.jsonld import _dsn
-from opensearch_sync import _documenti, _righe
+from opensearch_sync import _CANONICO, _documenti
 
 vivo._DSN = _dsn()
-
 URL = os.environ.get("OPENSEARCH_URL", "http://127.0.0.1:9200")
 INDEX = "nivult_jobs_v2"
 MAPPING = ROOT / "deploy/opensearch/jobs-index-v2.json"
 STATE = Path("/opt/nivult/state/reindex_v2_state.json")
 BATCH = 1500
 WORKERS = 3
+MAX_UUID = (1 << 128) - 1
+STATE_LOCK = threading.RLock()
 
 
 def _save(stato: dict) -> None:
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(stato, indent=2, default=str) + "\n")
-    os.replace(tmp, STATE)
+    with STATE_LOCK:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = STATE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(stato, indent=2, default=str) + "\n")
+        os.replace(tmp, STATE)
 
 
 def _attendi() -> None:
@@ -63,16 +68,25 @@ def _bulk(client: httpx.Client, documenti: list[dict]) -> int:
     for doc in documenti:
         linee.append(json.dumps({"index": {"_index": INDEX, "_id": doc["id"]}}))
         linee.append(json.dumps(doc, ensure_ascii=False, separators=(",", ":"), default=str))
-    r = client.post("/_bulk", params={"filter_path": "errors,items.*.error"},
-                    content=("\n".join(linee) + "\n").encode(),
-                    headers={"Content-Type": "application/x-ndjson"})
-    r.raise_for_status()
-    esito = r.json()
-    errori = [item for item in esito.get("items", [])
-              for dettaglio in item.values() if "error" in dettaglio]
-    if errori:
-        print("errori documento", json.dumps(errori[:3], default=str)[:3000], flush=True)
-    return len(errori)
+    for tentativo in range(7):
+        r = client.post("/_bulk", params={"filter_path": "errors,items.*.error"},
+                        content=("\n".join(linee) + "\n").encode(),
+                        headers={"Content-Type": "application/x-ndjson"})
+        if r.status_code == 429:
+            if tentativo == 6:
+                r.raise_for_status()
+            attesa = min(2 ** tentativo, 30)
+            print(f"HTTP 429 OpenSearch: backoff {attesa}s", flush=True)
+            time.sleep(attesa)
+            continue
+        r.raise_for_status()
+        esito = r.json()
+        errori = [item for item in esito.get("items", [])
+                  for dettaglio in item.values() if "error" in dettaglio]
+        if errori:
+            print("errori documento", json.dumps(errori[:3], default=str)[:3000], flush=True)
+        return len(errori)
+    raise RuntimeError("bulk OpenSearch fallito dopo 7 tentativi")
 
 
 def _refresh(client: httpx.Client) -> None:
@@ -103,10 +117,9 @@ def _finalizza(client: httpx.Client) -> None:
 
 def _verifica(client: httpx.Client) -> None:
     _refresh(client)
-    atteso = 1000
     totale = _count(client)
-    if totale != atteso:
-        raise RuntimeError(f"mini-test: attesi {atteso} doc, trovati {totale}")
+    if totale != 1000:
+        raise RuntimeError(f"mini-test: attesi 1000 doc, trovati {totale}")
     r = client.get(f"/{INDEX}/_mapping")
     r.raise_for_status()
     proprieta = r.json()[INDEX]["mappings"]["properties"]
@@ -114,7 +127,7 @@ def _verifica(client: httpx.Client) -> None:
              "employment_type", "department", "skills", "has_salary", "salary_min",
              "salary_max", "salary_currency"}
     if not nuovi <= set(proprieta):
-        raise RuntimeError(f"campi mancanti nel mapping: {sorted(nuovi - set(proprieta))}")
+        raise RuntimeError(f"campi mancanti: {sorted(nuovi - set(proprieta))}")
     r = client.post(f"/{INDEX}/_search", json={
         "size": 1, "query": {"exists": {"field": "source_type"}},
         "_source": ["id", "title", "ats", "company", "company_slug", "company_domain",
@@ -133,78 +146,118 @@ def _verifica(client: httpx.Client) -> None:
     print("mini-test ignored", _ignored(client), flush=True)
 
 
+def _query_batch(conn, inizio: str, fine: str, limite: int):
+    sql = f"""WITH batch AS MATERIALIZED (
+        SELECT j.* FROM ats_jobs j
+         WHERE {_CANONICO}
+           AND j.id > %(inizio)s::uuid AND j.id <= %(fine)s::uuid
+         ORDER BY j.id LIMIT {limite})
+        SELECT {vivo._COLONNE.replace('FROM ats_jobs j', 'FROM batch j')}"""
+    return conn.execute(sql, {"inizio": inizio, "fine": fine}).fetchall()
+
+
+def _worker(stato: dict, indice: int, inizio_tempo: float, massimo: int | None = None,
+            batch_size: int = BATCH) -> None:
+    with httpx.Client(base_url=URL, timeout=httpx.Timeout(30.0, connect=3.0),
+                      limits=httpx.Limits(max_connections=4, max_keepalive_connections=4)) as client, \
+            psycopg.connect(vivo._DSN, autocommit=True, row_factory=dict_row,
+                            connect_timeout=3) as conn:
+        conn.execute("SET random_page_cost = 1.1")
+        conn.execute("SET effective_io_concurrency = 200")
+        conn.execute("SET max_parallel_workers_per_gather = 0")
+        conn.execute("SET enable_mergejoin = off")
+        conn.execute("SET statement_timeout = '60s'")
+        while not stato["workers"][indice]["done"]:
+            _attendi()
+            corrente = stato["workers"][indice]
+            righe = _query_batch(conn, corrente["cursor"], corrente["end"], batch_size)
+            if not righe:
+                with STATE_LOCK:
+                    corrente["done"] = True
+                    _save(stato)
+                break
+            nuovo_cursor = righe[-1]["id"]
+            documenti = list(_documenti(righe).values())
+            errori = _bulk(client, documenti)
+            with STATE_LOCK:
+                corrente["cursor"] = nuovo_cursor
+                corrente["indexed"] = corrente.get("indexed", 0) + len(documenti)
+                corrente["errors"] = corrente.get("errors", 0) + errori
+                stato["indexed"] += len(documenti)
+                stato["errors"] += errori
+                stato["last_id"] = min(w["cursor"] for w in stato["workers"])
+                stato["duration_s"] = round(time.monotonic() - inizio_tempo, 1)
+                _save(stato)
+                velocita = stato["indexed"] / max(time.monotonic() - inizio_tempo, 0.001)
+                print(f"worker={indice} indexed={stato['indexed']} errors={stato['errors']} "
+                      f"cursor={corrente['cursor']} aggregate_rate={velocita:.1f}/s", flush=True)
+                if massimo and stato["indexed"] >= massimo:
+                    for worker in stato["workers"]:
+                        worker["done"] = True
+                    _save(stato)
+                    break
+
+
+def _partizioni(last_id: str) -> list[dict]:
+    inizio = uuid.UUID(last_id).int
+    intervallo = (MAX_UUID - inizio) // WORKERS
+    confini = [inizio + intervallo * i for i in range(WORKERS)] + [MAX_UUID]
+    return [{"worker": i, "start": str(uuid.UUID(int=confini[i])),
+             "end": str(uuid.UUID(int=confini[i + 1])),
+             "cursor": str(uuid.UUID(int=confini[i])), "done": False,
+             "indexed": 0, "errors": 0} for i in range(WORKERS)]
+
+
+def _stato_iniziale(resume: bool) -> dict:
+    if STATE.exists() and resume:
+        stato = json.loads(STATE.read_text())
+        stato["workers"] = stato.get("workers") or _partizioni(stato["last_id"])
+        return stato
+    with psycopg.connect(vivo._DSN, autocommit=True, connect_timeout=3) as conn:
+        t0 = conn.execute("SELECT now()").fetchone()[0].isoformat()
+    stato = {"t0": t0, "last_id": str(uuid.UUID(int=0)), "indexed": 0, "errors": 0,
+             "status": "running", "started_at": time.time()}
+    stato["workers"] = _partizioni(stato["last_id"])
+    _save(stato)
+    return stato
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mini-test", action="store_true")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--finalize", action="store_true")
     args = ap.parse_args()
-    massimo = 1000 if args.mini_test else None
-    batch = massimo or BATCH
-    if massimo and not args.finalize:
-        args.finalize = False
-
-    with httpx.Client(base_url=URL, timeout=httpx.Timeout(30.0, connect=3.0),
-                      limits=httpx.Limits(max_connections=8, max_keepalive_connections=8)) as client:
-        if args.mini_test:
+    stato = _stato_iniziale(args.resume)
+    if args.resume and stato.get("last_id"):
+        stato["completed_prefix_until"] = stato["last_id"]
+    if args.mini_test:
+        with httpx.Client(base_url=URL, timeout=10) as client:
             r = client.delete(INDEX)
             if r.status_code not in (200, 404):
                 r.raise_for_status()
             r = client.put(INDEX, json=json.loads(MAPPING.read_text()))
             r.raise_for_status()
-        if STATE.exists() and args.resume:
-            stato = json.loads(STATE.read_text())
-        else:
-            import psycopg
-
-            with psycopg.connect(vivo._DSN, autocommit=True, connect_timeout=3) as conn:
-                t0 = conn.execute("SELECT now()").fetchone()[0].isoformat()
-            stato = {"t0": t0, "last_id": None, "indexed": 0, "errors": 0,
-                     "status": "running", "started_at": time.time()}
-            _save(stato)
-        inizio = time.monotonic()
-        ultimo = stato.get("last_id") if args.resume else None
-        pending = deque()
-        finito = False
-        errori = int(stato.get("errors", 0))
-        indicizzati = int(stato.get("indexed", 0))
-        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            while not finito or pending:
-                while not finito and len(pending) < WORKERS:
-                    _attendi()
-                    righe = _righe(cursore=ultimo, limite=batch)
-                    if not righe:
-                        finito = True
-                        break
-                    ultimo = righe[-1]["id"]
-                    documenti = list(_documenti(righe).values())
-                    if massimo and indicizzati + sum(n for _, n, _ in pending) >= massimo:
-                        finito = True
-                        break
-                    pending.append((ultimo, len(documenti), pool.submit(_bulk, client, documenti)))
-                if not pending:
-                    break
-                ultimo_batch, n, future = pending.popleft()
-                errori += future.result()
-                indicizzati += n
-                stato.update(last_id=ultimo_batch, indexed=indicizzati, errors=errori,
-                             duration_s=round(time.monotonic() - inizio, 1), status="running")
-                _save(stato)
-                velocita = indicizzati / max(time.monotonic() - inizio, 0.001)
-                print(f"indexed={indicizzati} errors={errori} last_id={ultimo_batch} "
-                      f"rate={velocita:.1f}/s", flush=True)
-                if massimo and indicizzati >= massimo:
-                    finito = True
-                    pending.clear()
+        stato["indexed"] = 0
+        stato["errors"] = 0
+        stato["workers"] = stato["workers"][:1]
+    inizio = time.monotonic()
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        futures = [pool.submit(_worker, stato, i, inizio, 1000 if args.mini_test else None,
+                               1000 if args.mini_test else BATCH)
+                   for i in range(len(stato["workers"]))]
+        for future in futures:
+            future.result()
+    with httpx.Client(base_url=URL, timeout=30) as client:
         if args.mini_test:
             _verifica(client)
-            stato.update(status="mini_test_ok", doc_count=_count(client))
-        elif args.finalize:
+            stato["status"] = "mini_test_ok"
+        elif args.finalize and all(w["done"] for w in stato["workers"]):
             _finalizza(client)
-            stato.update(status="complete", doc_count=_count(client),
-                         ignored=_ignored(client), duration_s=round(time.monotonic() - inizio, 1))
-        else:
-            stato.update(status="running", doc_count=_count(client))
+            stato["status"] = "complete"
+        stato["doc_count"] = _count(client)
+        stato["ignored"] = _ignored(client)
+        stato["duration_s"] = round(time.monotonic() - inizio, 1)
         _save(stato)
         print("stato finale", json.dumps(stato, default=str), flush=True)
     return 0
