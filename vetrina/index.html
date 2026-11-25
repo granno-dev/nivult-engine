@@ -141,11 +141,18 @@ tailwind.config = {
 .dotgrid { background-image: radial-gradient(rgba(59,110,246,.10) 1px, transparent 1px); background-size: 22px 22px; }
 #marquee img { filter: grayscale(1) opacity(.72); transition: filter .35s; }
 #marquee .ats-logo:hover img { filter: none; }
+.faq-trigger:focus-visible { outline:2px solid #5e8bff; outline-offset:-2px; }
+.faq-panel { display:grid; grid-template-rows:0fr; opacity:0; transition:grid-template-rows .3s cubic-bezier(.2,.8,.2,1), opacity .25s ease; }
+.faq-panel > div { min-height:0; overflow:hidden; }
+.faq-item.is-open .faq-panel { grid-template-rows:1fr; opacity:1; }
+.faq-icon { transition:transform .25s ease; }
+.faq-item.is-open .faq-icon { transform:rotate(45deg); }
+.faq-item.is-open { border-color:rgba(59,110,246,.28); box-shadow:0 12px 32px rgba(15,23,42,.06); }
 @media (prefers-reduced-motion: reduce) {
   .marquee-track, .tick-track, .float-a, .float-b, .float-c, .mesh-a, .mesh-b,
   .live-dot, .spinner { animation: none !important; }
   .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-  .stat-num { transition: none !important; }
+  .stat-num, .faq-panel, .faq-icon { transition: none !important; }
   html { scroll-behavior: auto; }
 }
 /* soft band of color that separates the stats from the rest */
@@ -771,89 +778,95 @@ tailwind.config = {
   </div>
 </section>
 
-<section class="py-20 border-t border-slate-900/5 dotgrid">
-  <div class="max-w-5xl mx-auto px-6">
+<section id="faq" class="py-20 border-t border-slate-900/5 dotgrid">
+  <div class="max-w-4xl mx-auto px-6">
     <p class="reveal text-center text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Before you ask</p>
     <h2 class="reveal text-4xl font-black tracking-tight text-center mb-4">The four questions every buyer asks</h2>
-    <p class="reveal text-center text-lg text-slate-600 max-w-2xl mx-auto mb-12">Answered the way we would want them answered: in full, with the mechanism named and the number attached.</p>
-    <div class="grid md:grid-cols-2 gap-5">
-
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
-        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">01</span>
-        <div class="relative flex flex-col flex-1">
-          <div class="flex items-center gap-3">
-            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-            </span>
-            <h3 class="font-bold text-lg tracking-tight">What happens when my credits run out?</h3>
-          </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Calls return HTTP 429 until you add credits. The 500-credit trial is one-time and does not renew. Resume immediately with a recurring plan or a one-time top-up.</p>
-          <div class="mt-auto pt-5">
-            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
-              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">You scale up when you choose to, not when a vendor decides for you — and your pipeline stays predictable.</p>
+    <p class="reveal text-center text-lg text-slate-600 max-w-2xl mx-auto mb-10">Answered the way we would want them answered: in full, with the mechanism named and the number attached.</p>
+    <div class="reveal space-y-3">
+      <article class="faq-item overflow-hidden rounded-2xl border border-slate-900/10 bg-white transition-all duration-300">
+        <h3>
+          <button id="faq-trigger-1" type="button" class="faq-trigger flex w-full items-center gap-4 px-5 py-5 text-left sm:px-6" aria-expanded="false" aria-controls="faq-panel-1">
+            <span class="shrink-0 font-mono text-[11px] font-semibold text-slate-400">01</span>
+            <span class="faq-question flex-1 text-[15px] font-bold tracking-tight sm:text-base">What happens when my credits run out?</span>
+            <span class="faq-icon grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-lg font-medium text-slate-500" aria-hidden="true">+</span>
+          </button>
+        </h3>
+        <div id="faq-panel-1" class="faq-panel" role="region" aria-labelledby="faq-trigger-1">
+          <div>
+            <div class="px-5 pb-6 sm:px-6">
+              <p class="faq-answer text-[14.5px] text-slate-600 leading-relaxed">Calls return HTTP 429 until you add credits. The 500-credit trial is one-time and does not renew. Resume immediately with a recurring plan or a one-time top-up.</p>
+              <div class="mt-5 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+                <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+                <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">You scale up when you choose to, not when a vendor decides for you — and your pipeline stays predictable.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </article>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
-        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">02</span>
-        <div class="relative flex flex-col flex-1">
-          <div class="flex items-center gap-3">
-            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            </span>
-            <h3 class="font-bold text-lg tracking-tight">Which formats do you deliver?</h3>
-          </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">A versioned JSON API with cursor pagination for live queries, daily JSONL bulk exports for the full corpus, and a delta feed — new, updated, closed — so your copy of the index stays in sync without re-crawling it.</p>
-          <div class="mt-auto pt-5">
-            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
-              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">One key covers all three. New fields are additive; privacy-driven removals are deliberate and disclosed.</p>
+      <article class="faq-item overflow-hidden rounded-2xl border border-slate-900/10 bg-white transition-all duration-300">
+        <h3>
+          <button id="faq-trigger-2" type="button" class="faq-trigger flex w-full items-center gap-4 px-5 py-5 text-left sm:px-6" aria-expanded="false" aria-controls="faq-panel-2">
+            <span class="shrink-0 font-mono text-[11px] font-semibold text-slate-400">02</span>
+            <span class="faq-question flex-1 text-[15px] font-bold tracking-tight sm:text-base">Which formats do you deliver?</span>
+            <span class="faq-icon grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-lg font-medium text-slate-500" aria-hidden="true">+</span>
+          </button>
+        </h3>
+        <div id="faq-panel-2" class="faq-panel" role="region" aria-labelledby="faq-trigger-2">
+          <div>
+            <div class="px-5 pb-6 sm:px-6">
+              <p class="faq-answer text-[14.5px] text-slate-600 leading-relaxed">A versioned JSON API with cursor pagination for live queries, daily JSONL bulk exports for the full corpus, and a delta feed — new, updated, closed — so your copy of the index stays in sync without re-crawling it.</p>
+              <div class="mt-5 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+                <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+                <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">One key covers all three. New fields are additive; privacy-driven removals are deliberate and disclosed.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </article>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
-        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">03</span>
-        <div class="relative flex flex-col flex-1">
-          <div class="flex items-center gap-3">
-            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
-            </span>
-            <h3 class="font-bold text-lg tracking-tight">How fresh is the data?</h3>
-          </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">The index is rebuilt every morning, directly from the employers' own boards. Closures are verified on the page, never inferred from age.</p>
-          <div class="mt-auto pt-5">
-            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
-              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">A posting marked closed is a posting that is gone — that is the ground truth your risk models can rely on.</p>
+      <article class="faq-item overflow-hidden rounded-2xl border border-slate-900/10 bg-white transition-all duration-300">
+        <h3>
+          <button id="faq-trigger-3" type="button" class="faq-trigger flex w-full items-center gap-4 px-5 py-5 text-left sm:px-6" aria-expanded="false" aria-controls="faq-panel-3">
+            <span class="shrink-0 font-mono text-[11px] font-semibold text-slate-400">03</span>
+            <span class="faq-question flex-1 text-[15px] font-bold tracking-tight sm:text-base">How fresh is the data?</span>
+            <span class="faq-icon grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-lg font-medium text-slate-500" aria-hidden="true">+</span>
+          </button>
+        </h3>
+        <div id="faq-panel-3" class="faq-panel" role="region" aria-labelledby="faq-trigger-3">
+          <div>
+            <div class="px-5 pb-6 sm:px-6">
+              <p class="faq-answer text-[14.5px] text-slate-600 leading-relaxed">The index is rebuilt every morning, directly from the employers' own boards. Closures are verified on the page, never inferred from age.</p>
+              <div class="mt-5 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+                <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+                <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">A posting marked closed is a posting that is gone — that is the ground truth your risk models can rely on.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </article>
 
-      <div class="reveal lift group relative overflow-hidden rounded-3xl border border-slate-900/10 bg-white p-8 shadow-sm transition-all duration-300 hover:shadow-2xl hover:shadow-brand-500/10 hover:border-brand-500/30 flex flex-col">
-        <span class="pointer-events-none absolute -top-7 -right-2 text-[7rem] font-black text-slate-50 select-none transition-colors duration-300 group-hover:text-brand-50">04</span>
-        <div class="relative flex flex-col flex-1">
-          <div class="flex items-center gap-3">
-            <span class="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-brand-500 to-mint-500 grid place-items-center text-white shadow-md shadow-brand-500/25">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83Z"/><circle cx="7" cy="7" r="1.5"/></svg>
-            </span>
-            <h3 class="font-bold text-lg tracking-tight">How does pricing work?</h3>
-          </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily bulk entitlements.</p>
-          <div class="mt-auto pt-5">
-            <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
-              <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">Choose a subscription for recurring volume or a one-time top-up for extra records. Top-ups never change your Delta or Daily bulk entitlements. No seat minimums and no card required for the trial key.</p>
+      <article class="faq-item overflow-hidden rounded-2xl border border-slate-900/10 bg-white transition-all duration-300">
+        <h3>
+          <button id="faq-trigger-4" type="button" class="faq-trigger flex w-full items-center gap-4 px-5 py-5 text-left sm:px-6" aria-expanded="false" aria-controls="faq-panel-4">
+            <span class="shrink-0 font-mono text-[11px] font-semibold text-slate-400">04</span>
+            <span class="faq-question flex-1 text-[15px] font-bold tracking-tight sm:text-base">How does pricing work?</span>
+            <span class="faq-icon grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-lg font-medium text-slate-500" aria-hidden="true">+</span>
+          </button>
+        </h3>
+        <div id="faq-panel-4" class="faq-panel" role="region" aria-labelledby="faq-trigger-4">
+          <div>
+            <div class="px-5 pb-6 sm:px-6">
+              <p class="faq-answer text-[14.5px] text-slate-600 leading-relaxed">Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily bulk entitlements.</p>
+              <div class="mt-5 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
+                <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
+                <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">Choose a subscription for recurring volume or a one-time top-up for extra records. Top-ups never change your Delta or Daily bulk entitlements. No seat minimums and no card required for the trial key.</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
+      </article>
     </div>
   </div>
 </section>
@@ -945,6 +958,22 @@ tailwind.config = {
 </a>
 
 <script>
+const faqItems=[...document.querySelectorAll('.faq-item')];
+faqItems.forEach(item=>{
+  const trigger=item.querySelector('.faq-trigger');
+  trigger.addEventListener('click',()=>{
+    const open=!item.classList.contains('is-open');
+    faqItems.forEach(other=>{
+      other.classList.remove('is-open');
+      other.querySelector('.faq-trigger').setAttribute('aria-expanded','false');
+    });
+    if(open){
+      item.classList.add('is-open');
+      trigger.setAttribute('aria-expanded','true');
+    }
+  });
+});
+
 const io=new IntersectionObserver(es=>es.forEach(e=>{
   if(!e.isIntersecting)return;
   e.target.classList.add('in');
