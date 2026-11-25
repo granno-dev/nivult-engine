@@ -24,6 +24,7 @@ venv/
 .ruff_cache/
 .pytest_cache/
 .DS_Store
+._*
 
 # Tooling locale, non è del progetto.
 .zcode/
