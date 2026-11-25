@@ -33,7 +33,7 @@
           "name": "What happens when my credits run out?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Nothing breaks mid-integration. Calls return a clear 429 (the standard \"too many requests — credit finished\" signal) until you add credits. The trial includes 500 one-time credits and does not renew. Paid subscriptions include a recurring monthly credit allowance, billed monthly or annually with two months free. One-time top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily Bulk entitlements."
+            "text": "Calls return HTTP 429 until you add credits. The 500-credit trial is one-time and does not renew. Resume immediately with a recurring plan or a one-time top-up."
           }
         },
         {
@@ -57,7 +57,7 @@
           "name": "How does pricing work?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily Bulk entitlements."
+            "text": "Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily bulk entitlements."
           }
         }
       ]
@@ -166,7 +166,7 @@ tailwind.config = {
       <a href="#coverage" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
       <a href="#api" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">API</a>
       <a href="#pricing" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Pricing</a>
-      <a href="/ats/" class="text-sm font-semibold text-brand-600 hover:text-brand-700 transition">ATS coverage</a>
+      <a href="/ats/" class="text-sm font-semibold text-slate-500 hover:text-slate-900 transition">ATS coverage</a>
     </div>
     <div class="flex-1"></div>
     <button id="hamburger" class="sm:hidden p-2 -mr-2 text-slate-700" aria-label="Menu">
@@ -181,7 +181,7 @@ tailwind.config = {
     <a href="#coverage" class="text-sm font-semibold text-slate-600">Coverage</a>
     <a href="#api" class="text-sm font-semibold text-slate-600">API</a>
     <a href="#pricing" class="text-sm font-semibold text-slate-600">Pricing</a>
-    <a href="/ats/" class="text-sm font-semibold text-brand-600">ATS coverage</a>
+    <a href="/ats/" class="text-sm font-semibold text-slate-600">ATS coverage</a>
     <a href="/account" class="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-white text-center">Get a trial key</a>
   </div>
 </nav>
@@ -413,7 +413,7 @@ tailwind.config = {
           </div>
           <div>
             <h3 class="text-lg font-bold tracking-tight">The company record</h3>
-            <p class="mt-0.5 text-[13px] font-semibold text-brand-600">40+ fields · keyed by ATS + employer slug</p>
+            <p class="mt-0.5 text-[13px] font-semibold text-brand-600">25+ fields · keyed by ATS + employer slug</p>
           </div>
         </div>
         <p class="mt-3 text-[15px] text-slate-600 leading-relaxed">Industry with its registry source, size band, headquarters, legal identity, and the technology stack as it evolves month over month.</p>
@@ -658,7 +658,7 @@ tailwind.config = {
     <div class="reveal text-center max-w-3xl mx-auto">
       <p class="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600 mb-3">Pricing</p>
       <h2 class="text-4xl font-black tracking-tight">Pay for results, <span class="accent underline-draw">not requests</span></h2>
-      <p class="mt-4 text-lg text-slate-600"><b>1 credit = 1 job record</b> · <b>3 credits = 1 company record</b> · <b>0 credits for empty results or errors</b>.</p>
+      <p class="mt-4 text-lg text-slate-600">1 credit = 1 job · 3 credits = 1 company · 0 credits on empty results or errors</p>
       <div class="mt-7 inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Billing interval">
         <button id="billing-month" type="button" aria-pressed="true" onclick="setBillingInterval('month')" class="rounded-lg bg-white px-5 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition">Monthly</button>
         <button id="billing-year" type="button" aria-pressed="false" onclick="setBillingInterval('year')" class="rounded-lg px-5 py-2.5 text-[13px] font-bold text-slate-500 transition">Annual (2 months free)</button>
@@ -666,23 +666,24 @@ tailwind.config = {
     </div>
 
     <div class="reveal mt-10 grid md:grid-cols-2 xl:grid-cols-4 gap-5 items-stretch">
-      <article data-plan-card data-month="49" data-year="490" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+      <article data-plan-card data-month="49" data-year="490" data-credits="15000" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
         <h3 class="text-xl font-black tracking-tight">Starter</h3>
         <p class="mt-2 text-[13px] font-semibold text-brand-600">15,000 credits / month</p>
         <div class="mt-6 flex items-baseline gap-1"><span data-price class="text-4xl font-black tracking-tight tabular-nums">€49</span><span data-price-suffix class="text-[13px] font-semibold text-slate-400">/ month</span></div>
+        <p data-unit-price class="mt-2 text-[13px] font-semibold text-slate-500">€3.27 / 1K credits</p>
         <p data-billing-note class="mt-1 text-[12px] text-slate-400">Billed monthly · excl. VAT</p>
         <ul class="mt-6 space-y-3 text-[13.5px] text-slate-600 flex-1">
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Full API access</li>
-          <li><span class="text-mint-600 font-bold mr-2">✓</span>Pay-per-result metering</li>
         </ul>
         <a href="/account#plans" class="mt-7 rounded-xl border border-brand-200 bg-brand-50 px-5 py-3 text-center text-[13px] font-bold text-brand-700 hover:bg-brand-100 transition">Choose Starter →</a>
       </article>
 
-      <article data-plan-card data-month="149" data-year="1490" class="lift relative rounded-3xl border-2 border-brand-500 bg-white p-7 shadow-xl shadow-brand-500/15 flex flex-col">
+      <article data-plan-card data-month="149" data-year="1490" data-credits="100000" class="lift relative rounded-3xl border-2 border-brand-500 bg-white p-7 shadow-xl shadow-brand-500/15 flex flex-col">
         <span class="absolute -top-3 right-5 rounded-full bg-brand-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">Most popular</span>
         <h3 class="text-xl font-black tracking-tight">Growth</h3>
         <p class="mt-2 text-[13px] font-semibold text-brand-600">100,000 credits / month</p>
         <div class="mt-6 flex items-baseline gap-1"><span data-price class="text-4xl font-black tracking-tight tabular-nums">€149</span><span data-price-suffix class="text-[13px] font-semibold text-slate-400">/ month</span></div>
+        <p data-unit-price class="mt-2 text-[13px] font-semibold text-slate-500">€1.49 / 1K credits</p>
         <p data-billing-note class="mt-1 text-[12px] text-slate-400">Billed monthly · excl. VAT</p>
         <ul class="mt-6 space-y-3 text-[13.5px] text-slate-600 flex-1">
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Full API access</li>
@@ -691,28 +692,30 @@ tailwind.config = {
         <a href="/account#plans" class="mt-7 rounded-xl bg-brand-500 px-5 py-3 text-center text-[13px] font-bold text-white hover:bg-brand-600 shadow-lg shadow-brand-500/25 transition">Choose Growth →</a>
       </article>
 
-      <article data-plan-card data-month="449" data-year="4490" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+      <article data-plan-card data-month="449" data-year="4490" data-credits="500000" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
         <h3 class="text-xl font-black tracking-tight">Scale</h3>
         <p class="mt-2 text-[13px] font-semibold text-brand-600">500,000 credits / month</p>
         <div class="mt-6 flex items-baseline gap-1"><span data-price class="text-4xl font-black tracking-tight tabular-nums">€449</span><span data-price-suffix class="text-[13px] font-semibold text-slate-400">/ month</span></div>
+        <p data-unit-price class="mt-2 text-[13px] font-semibold text-slate-500">€0.90 / 1K credits</p>
         <p data-billing-note class="mt-1 text-[12px] text-slate-400">Billed monthly · excl. VAT</p>
         <ul class="mt-6 space-y-3 text-[13.5px] text-slate-600 flex-1">
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Full API access</li>
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Delta feed</li>
-          <li><span class="text-mint-600 font-bold mr-2">✓</span>Daily Bulk export</li>
+          <li><span class="text-mint-600 font-bold mr-2">✓</span>Daily bulk export</li>
         </ul>
         <a href="/account#plans" class="mt-7 rounded-xl border border-brand-200 bg-brand-50 px-5 py-3 text-center text-[13px] font-bold text-brand-700 hover:bg-brand-100 transition">Choose Scale →</a>
       </article>
 
-      <article data-plan-card data-month="899" data-year="8990" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
+      <article data-plan-card data-month="899" data-year="8990" data-credits="1500000" class="lift rounded-3xl border border-slate-900/10 bg-white p-7 shadow-sm flex flex-col">
         <h3 class="text-xl font-black tracking-tight">Business</h3>
         <p class="mt-2 text-[13px] font-semibold text-brand-600">1,500,000 credits / month</p>
         <div class="mt-6 flex items-baseline gap-1"><span data-price class="text-4xl font-black tracking-tight tabular-nums">€899</span><span data-price-suffix class="text-[13px] font-semibold text-slate-400">/ month</span></div>
+        <p data-unit-price class="mt-2 text-[13px] font-semibold text-slate-500">€0.60 / 1K credits</p>
         <p data-billing-note class="mt-1 text-[12px] text-slate-400">Billed monthly · excl. VAT</p>
         <ul class="mt-6 space-y-3 text-[13.5px] text-slate-600 flex-1">
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Full API access</li>
           <li><span class="text-mint-600 font-bold mr-2">✓</span>Delta feed</li>
-          <li><span class="text-mint-600 font-bold mr-2">✓</span>Daily Bulk export</li>
+          <li><span class="text-mint-600 font-bold mr-2">✓</span>Daily bulk export</li>
         </ul>
         <a href="/account#plans" class="mt-7 rounded-xl border border-brand-200 bg-brand-50 px-5 py-3 text-center text-[13px] font-bold text-brand-700 hover:bg-brand-100 transition">Choose Business →</a>
       </article>
@@ -722,7 +725,7 @@ tailwind.config = {
       <div class="lg:flex-1">
         <p class="text-[11px] font-bold uppercase tracking-[0.14em] text-mint-400">Enterprise</p>
         <h3 class="mt-2 text-2xl font-black tracking-tight">5M+ credits / month · Custom</h3>
-        <p class="mt-3 text-[14px] text-slate-400">API, Delta and Daily Bulk, plus Historical backfill and resale/redistribution rights under a custom license.</p>
+        <p class="mt-3 text-[14px] text-slate-400">API, Delta and Daily bulk, plus Historical backfill and resale/redistribution rights under a custom license.</p>
       </div>
       <a href="/booking" class="rounded-xl bg-white px-7 py-3.5 text-center text-[13px] font-bold text-slate-900 hover:scale-[1.02] transition shrink-0">Talk to us →</a>
     </div>
@@ -731,7 +734,7 @@ tailwind.config = {
       <div><b class="text-[15px]">Start with 500 one-time trial credits</b><p class="mt-1 text-[13px] text-slate-500">Free, no card required. The trial does not renew.</p></div>
       <button onclick="apriModale()" class="rounded-xl bg-mint-500 px-6 py-3 text-[13px] font-bold text-white hover:bg-mint-600 transition">Get a trial key →</button>
     </div>
-    <p class="reveal mt-5 text-center text-[13px] text-slate-500 max-w-3xl mx-auto">Need more credits? One-time top-ups cost <b>€4.00 per 1,000 credits</b>, with a <b>€40 minimum</b>. They never expire and do not unlock Delta or Daily Bulk entitlements.</p>
+    <p class="reveal mt-5 text-center text-[13px] text-slate-500 max-w-3xl mx-auto">Need more credits? One-time top-ups cost <b>€4.00 per 1,000 credits</b>, with a <b>€40 minimum</b>. They never expire and do not unlock Delta or Daily bulk entitlements.</p>
 
     <div class="reveal mt-8 max-w-3xl mx-auto grid sm:grid-cols-3 gap-4">
       <div class="lift rounded-2xl border border-slate-900/5 bg-white p-6 text-left">
@@ -751,7 +754,7 @@ tailwind.config = {
           </div>
           <span class="rounded-lg bg-brand-50 text-brand-600 px-2 py-1 text-[10.5px] font-black">SCALE · 500K+</span>
         </div>
-        <b class="mt-4 block text-[15px] font-bold tracking-tight">Daily Bulk export</b>
+        <b class="mt-4 block text-[15px] font-bold tracking-tight">Daily bulk export</b>
         <p class="mt-1.5 text-[13px] text-slate-500 leading-relaxed">Full daily JSONL snapshot, licensed for your active plan.</p>
       </div>
       <div class="lift rounded-2xl border border-slate-900/5 bg-white p-6 text-left">
@@ -765,8 +768,6 @@ tailwind.config = {
         <p class="mt-1.5 text-[13px] text-slate-500 leading-relaxed">Custom historical delivery, including more than 3.6M closures for trend analysis. Contact us to define scope and availability.</p>
       </div>
     </div>
-    <p class="reveal mt-5 text-center text-[12.5px] text-slate-500 max-w-3xl mx-auto">Standard plans cover internal analytics and powering your product. Raw dataset redistribution or resale requires an Enterprise license.</p>
-    <p class="reveal mt-8 text-center text-[13px] text-slate-400 max-w-xl mx-auto">New fields are additive and existing names stay stable. Privacy-driven removals are deliberate and disclosed.</p>
   </div>
 </section>
 
@@ -786,7 +787,7 @@ tailwind.config = {
             </span>
             <h3 class="font-bold text-lg tracking-tight">What happens when my credits run out?</h3>
           </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Nothing breaks mid-integration. Calls return a clear 429 (the standard "too many requests — credit finished" signal) until you add credits. The trial includes 500 one-time credits and does not renew. Paid subscriptions include a recurring monthly credit allowance, billed monthly or annually with two months free. One-time top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily Bulk entitlements.</p>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Calls return HTTP 429 until you add credits. The 500-credit trial is one-time and does not renew. Resume immediately with a recurring plan or a one-time top-up.</p>
           <div class="mt-auto pt-5">
             <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
               <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
@@ -843,11 +844,11 @@ tailwind.config = {
             </span>
             <h3 class="font-bold text-lg tracking-tight">How does pricing work?</h3>
           </div>
-          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily Bulk entitlements.</p>
+          <p class="mt-4 text-[14.5px] text-slate-600 leading-relaxed">Pricing is pay per result: 1 credit = 1 job record, 3 credits = 1 company record, and 0 credits for empty results or errors. Start with 500 one-time trial credits, no card required. Starter, Growth, Scale and Business subscriptions renew monthly or annually; annual billing includes two months free. Top-ups cost €4.00 per 1,000 credits with a €40 minimum, never expire, and do not unlock Delta or Daily bulk entitlements.</p>
           <div class="mt-auto pt-5">
             <div class="rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-brand-50/50 px-4 py-3">
               <span class="text-[10px] font-black uppercase tracking-[0.14em] text-mint-600">In practice</span>
-              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">Choose a subscription for recurring volume or a one-time top-up for extra records. Top-ups never change your Delta or Daily Bulk entitlements. No seat minimums and no card required for the trial key.</p>
+              <p class="mt-1 text-[13px] text-slate-500 leading-relaxed">Choose a subscription for recurring volume or a one-time top-up for extra records. Top-ups never change your Delta or Daily bulk entitlements. No seat minimums and no card required for the trial key.</p>
             </div>
           </div>
         </div>
@@ -878,7 +879,7 @@ tailwind.config = {
         </div>
         <div class="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[13px] text-slate-400">
           <span><span class="text-mint-400 font-bold mr-1.5">✓</span>No credit card required</span>
-          <span><span class="text-mint-400 font-bold mr-1.5">✓</span>Instant sandbox access</span>
+          <span><span class="text-mint-400 font-bold mr-1.5">✓</span>Live index access</span>
           <span><span class="text-mint-400 font-bold mr-1.5">✓</span>Answer within one business day</span>
         </div>
       </div>
@@ -1147,10 +1148,10 @@ const azienda={company:"Danone",domain:"danone.com",industry:"Food & Beverage",i
   headquarters:{city:"Paris",country:"FR",source:"sirene"},legal_name:"DANONE SA",legal_form:"société anonyme",
   founded:"1919-01-01",founded_source:"pdl (year only)",active_jobs:980,
   technologies:[{technology:"SAP",active_jobs:41,first_verified_at:"2026-03-02",last_verified_at:"2026-11-20"},{technology:"Excel",active_jobs:38}]};
-const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",country:"FR",city:"Paris",
+const offerta={title:"Data Engineer",ats:"greenhouse",company_slug:"danone",company:"Danone",company_domain:"danone.com",source_type:"direct",country:"FR",city:"Paris",
   seniority:"mid",employment_type:"full_time",remote:"hybrid",language:"fr",category:"Data & Analytics",
   description:"Vous concevez et industrialisez les pipelines de données du groupe: ingestion Snowflake, transformations dbt, orchestration Airflow. Vous travaillez avec les équipes data science et finance.",
-  salary_is_estimate:true,salary_estimate_min:42000,salary_estimate_median:49000,salary_estimate_max:56000,
+  has_salary:false,salary_is_estimate:true,salary_estimate_min:42000,salary_estimate_median:49000,salary_estimate_max:56000,
   salary_estimate_currency:"EUR",salary_estimate_basis:"Nivult benchmark: illustrative example",
   technologies:["Python","Snowflake","dbt","Airflow"],posted_at:"2026-09-21T09:00:00+00:00",
   job_sources:[{id:"6c2c38de-7bb4-4f1e-b72b-92df9a0d06f1",ats:"lever",company_slug:"danone",url:"https://jobs.lever.co/danone/example",posted_at:"2026-09-21T09:00:00+00:00",status:"active"}]};
@@ -1214,7 +1215,7 @@ function disegnaCopertura(righe, tbody, nomi){
         <div class="font-semibold text-slate-800 text-[12.5px] sm:text-[14.5px] leading-tight">${umano}</div>
         <div class="font-mono text-[10px] sm:text-[11px] text-slate-400 mt-0.5 truncate">${tecnico}</div></td>
       <td class="px-2 sm:px-6 py-3 w-[42%]"><div class="h-2.5 rounded-full bg-slate-100 overflow-hidden"><div class="cov-bar h-full rounded-full" data-v="${v}" style="width:0;background:linear-gradient(90deg,${c1},${c2});transition:width 1.1s cubic-bezier(.2,.8,.2,1) ${i*70}ms"></div></div></td>
-      <td class="px-6 py-3 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${v}%</span></td>`;
+      <td class="px-6 py-3 text-right"><span class="rounded-lg px-2.5 py-1 text-[12.5px] font-black tabular-nums ${pill}">${Number(v).toFixed(1)}%</span></td>`;
     tbody.appendChild(tr);});
 }
 disegnaCopertura(copFallback, tb, NOMI_COP);
@@ -1236,8 +1237,11 @@ function setBillingInterval(interval){
   }
   document.querySelectorAll('[data-plan-card]').forEach(card=>{
     const prezzo=Number(card.dataset[annual?'year':'month']);
+    const credits=Number(card.dataset.credits);
+    const unitPrice=(annual?prezzo/12:prezzo)/credits*1000;
     card.querySelector('[data-price]').textContent='€'+prezzo.toLocaleString('en-US');
     card.querySelector('[data-price-suffix]').textContent=annual?'/ year':'/ month';
+    card.querySelector('[data-unit-price]').textContent='€'+unitPrice.toFixed(2)+' / 1K credits';
     card.querySelector('[data-billing-note]').textContent=annual
       ?'Billed annually · 2 months free · excl. VAT':'Billed monthly · excl. VAT';
   });
