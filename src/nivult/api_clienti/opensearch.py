@@ -5,6 +5,7 @@ import binascii
 import datetime as dt
 import json
 import os
+import re
 from contextlib import contextmanager
 
 import httpx
@@ -67,10 +68,18 @@ def _keyword(campo: str, valore) -> dict:
     return {"terms": {campo: valori}}
 
 
+SOURCE_TYPES = frozenset({"direct", "aggregator", "staffing", "public_board"})
+
+
 def _testo(keyword: str) -> dict:
     return {"multi_match": {
         "query": keyword, "fields": ["title^2", "description"],
         "operator": "and", "type": "best_fields"}}
+
+
+def _dominio(valore: str) -> str:
+    v = re.sub(r"^https?://", "", str(valore).strip().lower())
+    return v.removeprefix("www.").split("/", 1)[0]
 
 
 def _query(filtri: dict) -> dict:
@@ -83,6 +92,26 @@ def _query(filtri: dict) -> dict:
             bool_query["filter"].append(_keyword(campo, valore))
     if filtri.get("technology"):
         bool_query["filter"].append(_keyword("technologies", filtri["technology"]))
+    for campo in ("source_type", "company_slug", "city", "state", "employment_type",
+                  "department", "skills", "salary_currency"):
+        if filtri.get(campo) is not None:
+            bool_query["filter"].append(_keyword(campo, filtri[campo]))
+    if filtri.get("company_domain") is not None:
+        valori = [_dominio(v) for v in str(filtri["company_domain"]).split(",")
+                  if _dominio(v)]
+        if valori:
+            bool_query["filter"].append(_keyword("company_domain", ",".join(valori)))
+    if filtri.get("company"):
+        bool_query.setdefault("must", []).append({"match": {"company": {
+            "query": str(filtri["company"]), "operator": "and"}}})
+    if filtri.get("has_salary") is not None:
+        bool_query["filter"].append({"term": {"has_salary": bool(filtri["has_salary"])}})
+    if filtri.get("salary_min") is not None:
+        bool_query["filter"].append(
+            {"range": {"salary_min": {"gte": float(filtri["salary_min"])}}})
+    if filtri.get("salary_max") is not None:
+        bool_query["filter"].append(
+            {"range": {"salary_max": {"lte": float(filtri["salary_max"])}}})
     if filtri.get("exclude_ats"):
         bool_query["must_not"] = [_keyword("ats", filtri["exclude_ats"])]
     if filtri.get("dal"):

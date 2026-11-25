@@ -13,7 +13,7 @@
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. Unknown query parameters are ignored. Unknown filter values normally produce an empty page rather than a validation error.",
+        "description": "Active postings with keyset pagination. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. v2 adds source_type, employer, domain, location, salary and skills filters with validation without charging invalid requests. Unknown query parameters are ignored.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
@@ -28,6 +28,19 @@
           { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to the job title; all terms are required (AND)" },
           { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
           { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-11-24T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
+          { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR" },
+          { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Full-text match on employer name" },
+          { "name": "company_slug", "in": "query", "schema": { "type": "string" }, "description": "Employer/source slug; comma-separated OR" },
+          { "name": "company_domain", "in": "query", "schema": { "type": "string", "example": "dixonvalve.com" }, "description": "Employer domain; scheme, www and path are removed; comma-separated OR" },
+          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "City; comma-separated OR" },
+          { "name": "state", "in": "query", "schema": { "type": "string" }, "description": "State/region; comma-separated OR" },
+          { "name": "employment_type", "in": "query", "schema": { "type": "string" }, "description": "Employment type; comma-separated OR" },
+          { "name": "department", "in": "query", "schema": { "type": "string" }, "description": "Department; comma-separated OR" },
+          { "name": "skills", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML" }, "description": "Skills; comma-separated OR" },
+          { "name": "salary_currency", "in": "query", "schema": { "type": "string", "example": "usd" }, "description": "Salary currency; comma-separated OR" },
+          { "name": "has_salary", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Whether salary_min or salary_max is present" },
+          { "name": "salary_min", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range lower bound on the observed salary_min field" },
+          { "name": "salary_max", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range upper bound on the observed salary_max field" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],

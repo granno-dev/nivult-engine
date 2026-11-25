@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import math
 import os
 import re
 import time
@@ -152,25 +153,67 @@ def _filtri(**coppie) -> dict:
     return {k: v for k, v in coppie.items() if v is not None}
 
 
+def _numero_salario(valore: str | None, campo: str) -> float | None:
+    if valore is None:
+        return None
+    try:
+        numero = float(valore)
+    except ValueError:
+        raise HTTPException(400, f"{campo} must be a number")
+    if not math.isfinite(numero) or numero < 0:
+        raise HTTPException(400, f"{campo} must be finite and non-negative")
+    return numero
+
+
+def _valida_jobs_v2(source_type: str | None, has_salary: str | None,
+                    salary_min: str | None, salary_max: str | None) -> tuple[float | None, float | None]:
+    if source_type:
+        valori = [v.strip().lower() for v in source_type.split(",") if v.strip()]
+        if any(v not in opensearch.SOURCE_TYPES for v in valori):
+            raise HTTPException(400, "source_type must use direct, aggregator, "
+                                     "staffing or public_board")
+    if has_salary is not None and has_salary.strip().lower() not in ("true", "false"):
+        raise HTTPException(400, "has_salary must be true or false")
+    minimo = _numero_salario(salary_min, "salary_min")
+    massimo = _numero_salario(salary_max, "salary_max")
+    if minimo is not None and massimo is not None and minimo > massimo:
+        raise HTTPException(400, "salary_min cannot exceed salary_max")
+    return minimo, massimo
+
+
 @router.get("/jobs")
 def jobs(request: Request, country: str | None = None, category: str | None = None,
          ats: str | None = None, exclude_ats: str | None = None,
          seniority: str | None = None, remote: str | None = None,
          language: str | None = None, q: str | None = None, q_any: str | None = None,
          title: str | None = None, technology: str | None = None,
-         posted_after: str | None = None, posted_before: str | None = None,
-         dal: str | None = None,
+         source_type: str | None = None, company: str | None = None,
+         company_slug: str | None = None, company_domain: str | None = None,
+         city: str | None = None, state: str | None = None,
+         employment_type: str | None = None, department: str | None = None,
+         skills: str | None = None, salary_currency: str | None = None,
+         has_salary: str | None = None, salary_min: str | None = None,
+         salary_max: str | None = None, posted_after: str | None = None,
+         posted_before: str | None = None, dal: str | None = None,
          limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
          cursor: str | None = None, cliente=Depends(_cliente)):
     """Cerca offerte attive; i filtri keyword accettano valori multipli separati
     da virgola. ``exclude_ats`` esclude le sorgenti indicate. ``q`` richiede
     tutti i termini, ``q_any`` almeno una delle massimo 15 keyword; ``title``
-    cerca solo nel titolo."""
+    cerca solo nel titolo. I filtri v2 coprono datore, dominio, luogo, salario
+    e ``source_type``, con validazione senza addebito."""
+    minimo, massimo = _valida_jobs_v2(source_type, has_salary, salary_min, salary_max)
     risposta = _pagina(
         opensearch.offerte if opensearch.attivo() else vivo.offerte,
         _filtri(country=country, category=category, ats=ats, exclude_ats=exclude_ats,
                 seniority=seniority, remote=remote, language=language, q=q,
-                q_any=q_any, title=title, technology=technology,
+                q_any=q_any, title=title, technology=technology, source_type=source_type,
+                company=company, company_slug=company_slug, company_domain=company_domain,
+                city=city, state=state, employment_type=employment_type,
+                department=department, skills=skills, salary_currency=salary_currency,
+                has_salary=(has_salary.strip().lower() == "true"
+                            if has_salary is not None else None),
+                salary_min=minimo, salary_max=massimo,
                 dal=posted_after or dal, posted_before=posted_before),
         cursor, _limite_per_tier(cliente, limit))
     _addebita(request, cliente)
