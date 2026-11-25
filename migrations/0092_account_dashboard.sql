@@ -1,0 +1,1 @@
+ALTER TABLE api_chiavi ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;

@@ -5,9 +5,10 @@ Per gli account del portale quota e consumo sono account-level: il volume e'
 il massimo di TUTTE le chiavi, revocate comprese, e il consumo del mese e' la
 somma di TUTTE le chiavi. Ogni mutazione passa dal lock della riga ``users``,
 cosi' creazione, revoca, reveal, export e chiamate API non possono scavallarsi.
-Si spende prima la franchigia mensile e poi ``users.crediti_extra``; addebito
-e registro ``portale_uso`` committano insieme. Le chiavi interne ``NULL``
-conservano invece quota e lock sulla singola chiave.
+Si spende prima la quota mensile e poi ``users.crediti_extra``; addebito
+e registro ``portale_uso`` committano insieme. Il reset mensile vale solo
+per le subscription Creem attive, anche annuali; il trial non si rinnova.
+Le chiavi interne ``NULL`` conservano quota e lock sulla singola chiave.
 
     python -m nivult.api_clienti.chiavi nuova --etichetta "cliente X" --crediti 10000
     python -m nivult.api_clienti.chiavi lista
@@ -23,7 +24,7 @@ import re
 import secrets
 import sys
 from contextlib import contextmanager
-from datetime import date
+from datetime import UTC, date, datetime
 
 import psycopg
 import psycopg_pool
@@ -106,13 +107,27 @@ def _mese() -> date:
     return date.today().replace(day=1)
 
 
+def _reset_abbonamento(status: str, subscription_id, period_end) -> bool:
+    if not subscription_id or status not in ("active", "scheduled_cancel"):
+        return False
+    if status == "scheduled_cancel" and period_end:
+        if isinstance(period_end, str):
+            period_end = datetime.fromisoformat(period_end.replace("Z", "+00:00"))
+        if period_end.tzinfo is None:
+            period_end = period_end.replace(tzinfo=UTC)
+        return period_end > datetime.now(UTC)
+    return True
+
+
 def _leggi(key_hash: str) -> dict | None:
     with connessione() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT k.id::text, k.label, k.crediti_mensili, k.usati_mese, "
             "       k.mese_uso, k.user_id::text, "
             "       (SELECT max(k2.crediti_mensili) FROM api_chiavi k2 "
-            "        WHERE k2.user_id = k.user_id) AS monthly_tier "
+            "        WHERE k2.user_id = k.user_id) AS monthly_tier, "
+            "       u.subscription_status, u.subscription_plan, u.subscription_interval, "
+            "       u.current_period_end, u.creem_customer_id, u.creem_subscription_id "
             "FROM api_chiavi k LEFT JOIN users u ON u.id = k.user_id "
             "WHERE k.key_hash = %s AND k.revoked_at IS NULL "
             "  AND (k.user_id IS NULL OR u.status = 'active')",
@@ -122,7 +137,10 @@ def _leggi(key_hash: str) -> dict | None:
         return None
     return {"id": r[0], "label": r[1], "crediti_mensili": r[2],
             "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5],
-            "monthly_tier": int(r[6]) if r[6] is not None else int(r[2])}
+            "monthly_tier": int(r[6]) if r[6] is not None else int(r[2]),
+            "subscription_status": r[7], "subscription_plan": r[8],
+            "subscription_interval": r[9], "current_period_end": r[10],
+            "creem_customer_id": r[11], "creem_subscription_id": r[12]}
 
 
 def verifica(chiave: str) -> dict:
@@ -146,11 +164,12 @@ def _registra_uso_cur(cur, user_id: str, via: str, azione: str,
         (user_id, via, azione, (dettaglio or "")[:300], crediti))
 
 
-def _riepilogo_da_righe(righe: list[dict], extra: int) -> dict:
+def _riepilogo_da_righe(righe: list[dict], extra: int,
+                        resetta_mensile: bool = False) -> dict:
     mese = _mese()
     quota = max((int(r["crediti_mensili"]) for r in righe), default=0)
     usati = sum(int(r["usati_mese"]) for r in righe
-                if _come_data(r["mese_uso"]) >= mese)
+                if resetta_mensile is False or _come_data(r["mese_uso"]) >= mese)
     mensili = max(0, quota - usati)
     return {"crediti_mensili": quota, "usati": usati,
             "crediti_extra": extra, "residui_mensili": mensili,
@@ -159,7 +178,8 @@ def _riepilogo_da_righe(righe: list[dict], extra: int) -> dict:
 
 def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
                         dettaglio: str | None, chiave_id: str | None = None,
-                        extra: int | None = None) -> dict | None:
+                        extra: int | None = None,
+                        resetta_mensile: bool = False) -> dict | None:
     """Il chiamante tiene gia' il lock FOR UPDATE sulla riga users."""
     cur.execute(
         "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, revoked_at "
@@ -185,7 +205,7 @@ def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
         if ru is None:
             return None
         extra = int(ru[0])
-    prima = _riepilogo_da_righe(righe, extra)
+    prima = _riepilogo_da_righe(righe, extra, resetta_mensile)
     dal_mese = min(n, prima["residui_mensili"])
     dall_extra = n - dal_mese
     if dall_extra > extra:
@@ -196,10 +216,11 @@ def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
     mese = prima["mese_uso"]
     cur.execute(
         "UPDATE api_chiavi SET "
-        "  usati_mese = CASE WHEN mese_uso < %s THEN %s ELSE usati_mese + %s END, "
+        "  usati_mese = CASE WHEN mese_uso < %s AND %s::boolean "
+        "                 THEN %s ELSE usati_mese + %s END, "
         "  mese_uso = %s, last_used_at = now() "
         "WHERE id = %s AND revoked_at IS NULL",
-        (mese, dal_mese, dal_mese, mese, target["id"]))
+        (mese, resetta_mensile, dal_mese, dal_mese, mese, target["id"]))
     if cur.rowcount != 1:
         raise ChiaveInvalida()
     if dall_extra:
@@ -210,7 +231,7 @@ def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
             raise ContatoreNonDisponibile("saldo extra cambiato durante l'addebito")
     _registra_uso_cur(cur, user_id, via, azione, dettaglio, n)
 
-    usati_chiave = (dal_mese if _come_data(target["mese_uso"]) < mese
+    usati_chiave = (dal_mese if resetta_mensile and _come_data(target["mese_uso"]) < mese
                     else int(target["usati_mese"]) + dal_mese)
     return {"id": target["id"], "label": target["label"], "user_id": user_id,
             "crediti_mensili": prima["crediti_mensili"],
@@ -225,20 +246,25 @@ def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
 
 
 def _addebita_chiave_db(chiave_id: str, via: str, azione: str,
-                        dettaglio: str | None) -> dict:
+                        dettaglio: str | None, crediti: int) -> dict:
+    if isinstance(crediti, bool) or not isinstance(crediti, int) or crediti < 0:
+        raise ValueError("numero crediti non valido")
     with connessione() as conn, conn.cursor() as cur:
         cur.execute("SET LOCAL lock_timeout = '2s'")
         cur.execute(
-            "SELECT k.user_id::text, u.status, u.crediti_extra "
+            "SELECT k.user_id::text, u.status, u.crediti_extra, "
+            "       u.subscription_status, u.creem_subscription_id, u.current_period_end "
             "FROM api_chiavi k JOIN users u ON u.id = k.user_id "
             "WHERE k.id = %s FOR UPDATE OF u", (chiave_id,))
         r = cur.fetchone()
         if r is not None:
-            user_id, status, extra = r
+            user_id, status, extra, subscription_status, subscription_id, period_end = r
             if status != "active":
                 raise ChiaveInvalida()
+            resetta = _reset_abbonamento(subscription_status, subscription_id, period_end)
             rec = _spendi_account_cur(
-                cur, user_id, 1, via, azione, dettaglio, chiave_id, extra=extra)
+                cur, user_id, crediti, via, azione, dettaglio, chiave_id,
+                extra=extra, resetta_mensile=resetta)
             if rec is None:
                 raise CreditiEsauriti(0, _mese())
             return rec
@@ -252,11 +278,11 @@ def _addebita_chiave_db(chiave_id: str, via: str, azione: str,
             raise ChiaveInvalida()
         mese = _mese()
         usati = 0 if _come_data(r[4]) < mese else int(r[3])
-        if usati >= int(r[2]):
+        if usati + crediti > int(r[2]):
             raise CreditiEsauriti(int(r[2]), mese)
         cur.execute(
             "UPDATE api_chiavi SET usati_mese = %s, mese_uso = %s, last_used_at = now() "
-            "WHERE id = %s RETURNING usati_mese", (usati + 1, mese, chiave_id))
+            "WHERE id = %s RETURNING usati_mese", (usati + crediti, mese, chiave_id))
         dopo = cur.fetchone()[0]
         return {"id": r[0], "label": r[1], "user_id": None,
                 "crediti_mensili": int(r[2]), "usati_mese": dopo, "usati": dopo,
@@ -266,10 +292,10 @@ def _addebita_chiave_db(chiave_id: str, via: str, azione: str,
 
 
 def addebita_chiave(chiave_id: str, via: str = "api", azione: str = "api call",
-                    dettaglio: str | None = None) -> dict:
-    """Spende un credito e scrive il registro nello stesso commit."""
+                    dettaglio: str | None = None, crediti: int = 1) -> dict:
+    """Spende N crediti e scrive il registro nello stesso commit."""
     try:
-        return _addebita_chiave_db(chiave_id, via, azione, dettaglio)
+        return _addebita_chiave_db(chiave_id, via, azione, dettaglio, crediti)
     except (ChiaveInvalida, CreditiEsauriti, ContatoreNonDisponibile):
         raise
     except (psycopg.errors.LockNotAvailable, psycopg_pool.PoolTimeout) as exc:
@@ -349,16 +375,18 @@ def _riga_chiave(r, account: dict | None = None) -> dict:
 
 
 def _riepilogo_cur(cur, user_id: str) -> dict:
-    cur.execute("SELECT crediti_extra FROM users WHERE id = %s", (user_id,))
+    cur.execute("SELECT crediti_extra, subscription_status, creem_subscription_id, "
+                "       current_period_end FROM users WHERE id = %s", (user_id,))
     ru = cur.fetchone()
     extra = int(ru[0]) if ru else 0
+    resetta = _reset_abbonamento(ru[1], ru[2], ru[3]) if ru else False
     cur.execute(
         "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, revoked_at "
         "FROM api_chiavi WHERE user_id = %s", (user_id,))
     righe = [{"id": r[0], "label": r[1], "crediti_mensili": r[2],
               "usati_mese": r[3], "mese_uso": r[4], "revoked_at": r[5]}
              for r in cur.fetchall()]
-    return _riepilogo_da_righe(righe, extra)
+    return _riepilogo_da_righe(righe, extra, resetta)
 
 
 def riepilogo_per_utente(user_id: str) -> dict:
@@ -388,7 +416,7 @@ def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
         cur.execute(
             "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id, "
             "  key_tail) VALUES (%s, %s, %s, %s, %s)",
-            (_hash(chiave), "Main key (trial)", 1000, user_id, chiave[-6:]))
+            (_hash(chiave), "Main key (trial)", 500, user_id, chiave[-6:]))
         return [], chiave
 
 
@@ -469,7 +497,8 @@ def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
     azione = "posting unlock" if tipo == "job" else "company unlock"
     try:
         with connessione() as conn, conn.cursor() as cur:
-            cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end"
+                "FROM users WHERE id = %s FOR UPDATE", (user_id,))
             ru = cur.fetchone()
             if ru is None:
                 return "senza_crediti"
@@ -481,7 +510,9 @@ def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
                 (user_id, tipo, riferimento))
             if cur.fetchone():
                 return "gratis"
-            rec = _spendi_account_cur(cur, user_id, 1, "portale", azione, riferimento)
+            rec = _spendi_account_cur(
+                cur, user_id, 1, "portale", azione, riferimento,
+                resetta_mensile=_reset_abbonamento(ru[1], ru[2], ru[3]))
             if rec is None:
                 return "senza_crediti"
             cur.execute(
@@ -528,11 +559,15 @@ def spendi_n_per_utente(user_id: str, n: int, via: str = "export",
         return True
     try:
         with connessione() as conn, conn.cursor() as cur:
-            cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end"
+                        "FROM users WHERE id = %s FOR UPDATE", (user_id,))
             ru = cur.fetchone()
             if ru is None or ru[0] != "active":
                 return False
-            return _spendi_account_cur(cur, user_id, n, via, azione, dettaglio) is not None
+            return _spendi_account_cur(
+                cur, user_id, n, via, azione, dettaglio,
+                resetta_mensile=_reset_abbonamento(ru[1], ru[2], ru[3])
+            ) is not None
     except ChiaveInvalida:
         return False
     except Exception as exc:  # noqa: BLE001
@@ -543,6 +578,35 @@ def spendi_n_per_utente(user_id: str, n: int, via: str = "export",
 
 def saldo_per_utente(user_id: str) -> int:
     return int(riepilogo_per_utente(user_id)["saldo"])
+
+
+def saldo_per_chiave(chiave_id: str) -> int:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SELECT user_id::text, crediti_mensili, usati_mese, mese_uso "
+                    "FROM api_chiavi WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
+        riga = cur.fetchone()
+        if riga is None:
+            raise ChiaveInvalida()
+        if riga[0]:
+            return int(_riepilogo_cur(cur, riga[0])["saldo"])
+        mese = _mese()
+        usati = 0 if _come_data(riga[3]) < mese else int(riga[2])
+        return max(0, int(riga[1]) - usati)
+
+
+def abbonamento_per_utente(user_id: str) -> dict:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT subscription_plan, subscription_interval, subscription_status, "
+            "       current_period_end, creem_customer_id, creem_subscription_id "
+            "FROM users WHERE id = %s", (user_id,))
+        r = cur.fetchone()
+    if r is None:
+        raise ChiaveInvalida()
+    return {"subscription_plan": r[0], "subscription_interval": r[1],
+            "subscription_status": r[2],
+            "current_period_end": r[3].isoformat() if r[3] else None,
+            "creem_customer_id": r[4], "creem_subscription_id": r[5]}
 
 
 def extra_per_utente(user_id: str) -> int:

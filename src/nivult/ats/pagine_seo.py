@@ -817,7 +817,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
       <a href="/account" class="rounded-xl bg-brand-500 hover:bg-brand-600 transition px-6 py-3 font-bold text-white shadow-lg shadow-brand-500/25">Get a free API key →</a>
       <a href="{SITO}/booking" class="rounded-xl border border-slate-900/15 px-6 py-3 font-bold text-slate-700 hover:border-brand-500/60 hover:bg-white/60 transition">Book a call</a>
     </div>
-    <p class="mt-3 text-[13px] text-slate-400 font-medium">1,000 free monthly credits · no credit card required · <a href="https://api.nivult.com/v1/demo/sample-export?type=jobs" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
+    <p class="mt-3 text-[13px] text-slate-400 font-medium">500 free trial credits · no credit card required · <a href="https://api.nivult.com/v1/demo/sample-export?type=jobs" class="text-brand-600 font-semibold hover:underline">Download free sample</a></p>
     <p class="mt-5 text-[12px] text-slate-400"><a href="{apify}" rel="noopener nofollow" class="hover:text-slate-600 hover:underline">Also available on Apify</a></p>
   </div>
 </section>""")

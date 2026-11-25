@@ -3,7 +3,7 @@
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
     "version": "1.0.0",
-    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
+    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Metering is pay per result: jobs and changes cost 1 credit per returned record, companies cost 3 credits per returned record, and empty results or errors cost 0 credits. For direct accounts, the effective page limit is capped by the available balance and per-record cost. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://api.nivult.com" }],
@@ -13,7 +13,7 @@
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. v2 adds source_type, employer, domain, location, salary and skills filters with validation without charging invalid requests. Unknown query parameters are ignored.",
+        "description": "Active postings with keyset pagination. Each returned job record costs 1 credit; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 1 credit per record. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. v2 adds source_type, employer, domain, location, salary and skills filters with validation without charging invalid requests. Unknown query parameters are ignored.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
@@ -58,7 +58,7 @@
       "get": {
         "summary": "Search company records",
         "operationId": "companies",
-        "description": "Company records keyed by ATS + company_slug. q searches the company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
+        "description": "Company records keyed by ATS + company_slug. Each returned company record costs 3 credits; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 3 credits per record. q searches the company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
           { "name": "industry", "in": "query", "schema": { "type": "string" }, "description": "Exact industry value" },
@@ -83,6 +83,7 @@
       "get": {
         "summary": "Get one company record",
         "operationId": "companyDetail",
+        "description": "Returns one company record for 3 credits. A missing company and all other errors cost 0 credits.",
         "parameters": [
           { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier" },
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Employer slug within that ATS" }
@@ -100,7 +101,7 @@
       "get": {
         "summary": "Delta feed: new, updated and closed events",
         "operationId": "changes",
-        "description": "Delta history is retained for seven days. Direct keys require an account monthly tier of at least 200,000 credits; top-ups do not raise this entitlement. RapidAPI plans bypass the direct-account tier check. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
+        "description": "Delta history is retained for seven days. Each returned change record costs 1 credit; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 1 credit per record. Direct keys require an active Growth subscription or higher with at least 100,000 credits/month; top-ups do not raise this entitlement. RapidAPI plans bypass the direct-account tier check. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
         "parameters": [
           { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp within retained history" },
           { "$ref": "#/components/parameters/PageLimit" },
@@ -110,7 +111,7 @@
           "200": { "description": "A page of events", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePage" } } } },
           "400": { "description": "Missing/malformed since, invalid cursor, or expired retention window; retention errors require resync", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/ErrorResponse" }, { "$ref": "#/components/schemas/DeltaRetentionResponse" }] } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "Direct account below the 200,000 credits/month delta tier" },
+          "403": { "description": "No active Growth-or-higher subscription with at least 100,000 credits/month" },
           "422": { "$ref": "#/components/responses/ValidationError" },
           "429": { "$ref": "#/components/responses/CreditsExhausted" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -121,10 +122,11 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 50,000-credit bulk-file tier, but it is authenticated and metered.",
+        "description": "Returns metadata for the latest available export. The manifest and file downloads require an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not raise this entitlement.",
         "responses": {
           "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month" },
           "429": { "$ref": "#/components/responses/CreditsExhausted" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
@@ -134,12 +136,12 @@
       "get": {
         "summary": "Download the latest available bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 50,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
+        "description": "Downloads offerte or aziende as JSONL gzip. Daily Bulk requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups add spendable credits but do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
         "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
           "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "Bulk tier missing, or RapidAPI channel" },
+          "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month, or RapidAPI channel" },
           "404": { "description": "Unknown export name or no export available" },
           "429": { "$ref": "#/components/responses/CreditsExhausted" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -163,7 +165,7 @@
       "get": {
         "summary": "Get current credit usage",
         "operationId": "usage",
-        "description": "Direct-account usage is shared across keys, including revoked keys. Monthly allowance is spent before purchased credits. This endpoint itself consumes one credit and returns 429 at a zero balance. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
+        "description": "Direct-account usage is shared across keys, including revoked keys. The recurring plan allowance or one-time trial allowance is spent before purchased credits. Purchased top-ups never expire and do not unlock Delta or Daily Bulk entitlements. This endpoint itself consumes one credit and returns 429 at a zero balance. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
         "responses": {
           "200": { "description": "Direct usage or RapidAPI channel note", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Usage" }, { "$ref": "#/components/schemas/RapidApiUsage" }] } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
@@ -178,14 +180,14 @@
       "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key. RapidAPI users authenticate through the RapidAPI proxy instead." }
     },
     "parameters": {
-      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
+      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 }, "description": "Requested page size. For direct accounts, the effective limit is also capped by the available credit balance divided by the per-record cost: 1 credit for jobs/changes and 3 for companies. Empty results and errors cost 0 credits." },
       "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
     },
     "responses": {
       "BadRequest": { "description": "Invalid date or cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
-      "CreditsExhausted": { "description": "Monthly and purchased credits exhausted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
+      "CreditsExhausted": { "description": "Insufficient credits for one result, or plan/trial and purchased credits exhausted; no credits are charged for the error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
       "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; the response is JSON and no credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
     },
     "schemas": {

@@ -1787,8 +1787,7 @@ def create_app() -> FastAPI:
     # ── il portale clienti B2B: le chiavi API dell'utente (27/09/2026) ──
     # Self-service: il cliente crea e revoca da solo. La chiave in chiaro
     # esce UNA volta, alla creazione; in tabella resta lo sha256. Al primo
-    # accesso nasce la chiave trial da 1.000 crediti/mese — la promessa
-    # della landing ("first 1,000 credits free").
+    # accesso nasce la chiave trial da 500 crediti una tantum, senza rinnovo.
     from nivult.api_clienti import chiavi as _chiavi
 
     @app.exception_handler(_chiavi.ContatoreNonDisponibile)
@@ -1815,7 +1814,8 @@ def create_app() -> FastAPI:
                         "WHERE user_id = %s AND via = 'api')", (uid,))
             prima_chiamata = cur.fetchone()[0]
         base = {"extra": extra, "saldo": saldo, "rivelazioni": rivelazioni,
-                "prima_chiamata_fatta": prima_chiamata}
+                "prima_chiamata_fatta": prima_chiamata,
+                "abbonamento": _chiavi.abbonamento_per_utente(uid)}
         if lista:
             return {"chiavi": lista, **base}
         # primo accesso: la chiave trial SI MOSTRA in chiaro questa
@@ -1833,7 +1833,7 @@ def create_app() -> FastAPI:
             corpo = {}
         etichetta = str((corpo or {}).get("etichetta") or "").strip()[:80] \
             or "Portal key"
-        chiave, chiave_id = _chiavi.nuova(etichetta, 1000, user_id=uid)
+        chiave, chiave_id = _chiavi.nuova(etichetta, 500, user_id=uid)
         return {"chiave": chiave, "id": chiave_id,
                 "nota": "la chiave si vede solo ora: conservala tu"}
 
@@ -2042,11 +2042,8 @@ def create_app() -> FastAPI:
 
     # ── l'export filtrato del portale: stima il costo, poi scarica ──
     # Il prezzo (28/09/2026): 1 credito ogni 10 righe, per eccesso.
-    # La taratura e' il piano gratis: 1.000 crediti/mese non devono
-    # comprare la fetta massima — a 1/10 il gratis assaggia (10.000
-    # righe), chi vuole di piu' paga. Prima 1/10.000 (il dataset intero
-    # a 292 crediti, svenduto), poi 1/100 (il gratis portava via il
-    # massimo consentito ogni mese).
+    # La taratura e' il trial da 500 crediti una tantum: non deve
+    # comprare la fetta massima; chi vuole di piu' paga.
     EXPORT_RIGHE_PER_CREDITO = 10
     # le aziende valgono di piu': 1 credito a record, come il reveal
     # singolo (03/10/2026)
@@ -2303,12 +2300,31 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        volume = (corpo or {}).get("volume") or 0
-        # Il prezzo e i limiti sono validati dal modulo billing, mai dal client.
+        piano = (corpo or {}).get("plan")
+        intervallo = (corpo or {}).get("interval") or "month"
         with conn.cursor() as cur:
-            cur.execute("SELECT email FROM users WHERE id = %s", (uid,))
+            cur.execute("SELECT email, creem_subscription_id, subscription_status, "
+                        "subscription_plan, subscription_interval "
+                        "FROM users WHERE id = %s", (uid,))
             riga = cur.fetchone()
         try:
+            if piano:
+                subscription_id = riga[1] if riga else None
+                attiva = (bool(subscription_id) and riga[2]
+                          in ("active", "scheduled_cancel"))
+                if attiva and riga[3] == piano and riga[4] == intervallo:
+                    return {"already_active": True}
+                if attiva:
+                    await run_in_threadpool(
+                        _billing.upgrade_abbonamento, subscription_id, piano, intervallo)
+                    return {"upgraded": True}
+                url = await run_in_threadpool(
+                    _billing.checkout_abbonamento, uid, riga[0] if riga else "",
+                    piano, intervallo,
+                    os.environ.get("SITE_URL", "").rstrip("/") + "/account?pagato=1",
+                    os.environ.get("SITE_URL", "").rstrip("/") + "/account")
+                return {"checkout_url": url}
+            volume = (corpo or {}).get("volume") or 0
             url = await run_in_threadpool(
                 _billing.checkout, uid, riga[0] if riga else "", volume,
                 success_url=os.environ.get("SITE_URL", "").rstrip("/")
@@ -2319,6 +2335,20 @@ def create_app() -> FastAPI:
             raise HTTPException(503, "checkout is not live yet — "
                                 "write to hello@nivult.com")
         return {"checkout_url": url}
+
+    @app.post("/me/billing-portal")
+    async def billing_portal(uid: str = Depends(utente), conn=Depends(connessione)):
+        with conn.cursor() as cur:
+            cur.execute("SELECT creem_customer_id FROM users WHERE id = %s", (uid,))
+            riga = cur.fetchone()
+        customer_id = riga[0] if riga else None
+        if not customer_id:
+            raise HTTPException(404, "no billing customer is linked to this account")
+        try:
+            url = await run_in_threadpool(_billing.customer_portal, customer_id)
+        except _billing.BillingNonPronto:
+            raise HTTPException(503, "customer portal temporarily unavailable")
+        return {"customer_portal_link": url}
 
     @app.post("/webhooks/creem")
     async def webhook_creem(request: Request):

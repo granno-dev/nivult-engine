@@ -1,4 +1,4 @@
-"""Billing B2B su Creem: checkout one-time, ricariche e storni.
+"""Billing B2B Creem: abbonamenti, top-up, upgrade, storni e webhook.
 
 Il prezzo e il volume sono decisi dal server. I webhook sono verificati con
 HMAC-SHA256 e applicati in UNA transazione: evento, saldo e storico committano
@@ -17,6 +17,7 @@ import math
 import os
 import secrets
 import uuid
+from datetime import datetime
 
 import httpx
 import psycopg
@@ -25,12 +26,19 @@ from fastapi import HTTPException
 log = logging.getLogger("nivult.api_clienti.billing")
 
 BASE = "https://api.creem.io/v1"
-ANCORA = [(10_000, 49), (25_000, 89), (50_000, 149), (100_000, 229),
-          (250_000, 399), (500_000, 599), (1_000_000, 899),
-          (2_500_000, 1_790), (5_000_000, 2_990)]
-MINIMO_EURO = 25
-EVENTI_PAGAMENTO = {"checkout.completed", "subscription.paid"}
+PIANI = {
+    "starter": {"crediti": 15_000, "month": 4_900, "year": 49_000},
+    "growth": {"crediti": 100_000, "month": 14_900, "year": 149_000},
+    "scale": {"crediti": 500_000, "month": 44_900, "year": 449_000},
+    "business": {"crediti": 1_500_000, "month": 89_900, "year": 899_000},
+}
+EVENTI_PAGAMENTO = {"checkout.completed"}
 EVENTI_STORNO = {"refund.created", "dispute.created"}
+EVENTI_SUB_ATTIVI = {"subscription.active", "subscription.paid", "subscription.update"}
+EVENTI_SUB_REVOCA = {
+    "subscription.canceled": "canceled", "subscription.expired": "expired",
+    "subscription.paused": "paused", "subscription.unpaid": "unpaid",
+}
 
 
 class BillingNonPronto(Exception):
@@ -43,20 +51,7 @@ class EventoNonApplicabile(HTTPException):
 
 
 def euro_per_crediti(crediti: int) -> int:
-    c = max(100, min(int(crediti), ANCORA[-1][0]))
-    for c2, p2 in ANCORA:
-        if c == c2:
-            return max(MINIMO_EURO, p2)
-    if c <= ANCORA[0][0]:
-        e = c / ANCORA[0][0] * ANCORA[0][1]
-    else:
-        e = ANCORA[-1][1]
-        for (c1, p1), (c2, p2) in zip(ANCORA, ANCORA[1:]):
-            if c <= c2:
-                t = (math.log(c) - math.log(c1)) / (math.log(c2) - math.log(c1))
-                e = math.exp(math.log(p1) + t * (math.log(p2) - math.log(p1)))
-                break
-    return max(MINIMO_EURO, math.ceil(e))
+    return max(40, math.ceil(int(crediti) / 1000 * 4))
 
 
 def _env(nome: str) -> str:
@@ -89,6 +84,38 @@ def _prodotto() -> str:
     raise BillingNonPronto("CREEM_PRODOTTO")
 
 
+def _mappa_abbonamenti() -> dict[str, str]:
+    try:
+        mappa = json.loads(_env("CREEM_PRODOTTI_ABBONAMENTI"))
+    except json.JSONDecodeError as exc:
+        raise BillingNonPronto("CREEM_PRODOTTI_ABBONAMENTI") from exc
+    if not isinstance(mappa, dict):
+        raise BillingNonPronto("CREEM_PRODOTTI_ABBONAMENTI non e' una mappa")
+    return {str(k): str(v) for k, v in mappa.items()}
+
+
+def _prodotto_abbonamento(piano: str, intervallo: str) -> str:
+    if piano not in PIANI or intervallo not in ("month", "year"):
+        raise HTTPException(400, "unknown plan or billing interval")
+    chiave = f"{piano}:{intervallo}"
+    try:
+        return _mappa_abbonamenti()[chiave]
+    except KeyError as exc:
+        raise BillingNonPronto(chiave) from exc
+
+
+def _piano_da_prodotto(dati: dict) -> tuple[str, str]:
+    prodotto = dati.get("product") or {}
+    if not isinstance(prodotto, dict):
+        prodotto = {}
+    product_id = str(dati.get("product_id") or prodotto.get("id") or "")
+    for chiave, valore in _mappa_abbonamenti().items():
+        if valore == product_id:
+            piano, intervallo = chiave.split(":", 1)
+            return piano, intervallo
+    raise EventoNonApplicabile("subscription product non configurato")
+
+
 def volumi() -> list[int]:
     try:
         return sorted(int(v) for v in _prodotti())
@@ -107,8 +134,8 @@ def _volume(v) -> int:
         raise EventoNonApplicabile("volume crediti non valido")
     if str(v).strip() != str(volume) and not isinstance(v, int):
         raise EventoNonApplicabile("volume crediti non valido")
-    if not 100 <= volume <= 5_000_000:
-        raise EventoNonApplicabile("volume crediti fuori dalla curva vendibile")
+    if not 10_000 <= volume <= 5_000_000:
+        raise EventoNonApplicabile("top-up volume must be between 10,000 and 5,000,000")
     return volume
 
 
@@ -133,8 +160,8 @@ def checkout(user_id: str, email: str, volume: int,
                        json={"product_id": _prodotto(), "request_id": request_id,
                              "custom_price": euro * 100, "units": 1,
                              "success_url": success_url,
-                             "metadata": {"user_id": user_id, "volume": volume,
-                                          "euro": euro},
+                             "metadata": {"user_id": user_id, "kind": "topup",
+                                          "volume": volume, "euro": euro},
                              "customer": {"email": email}})
     except httpx.HTTPError as exc:
         log.warning("creem checkout non raggiungibile: %s", type(exc).__name__)
@@ -148,6 +175,55 @@ def checkout(user_id: str, email: str, volume: int,
         raise BillingNonPronto("checkout con risposta non JSON") from exc
     if not isinstance(url, str) or not url.startswith("https://"):
         raise BillingNonPronto("checkout senza URL valido")
+    return url
+
+
+def _creem_request(method: str, path: str, payload: dict) -> dict:
+    try:
+        r = httpx.request(method, BASE + path, timeout=20,
+                          headers={"x-api-key": _env("CREEM_API_KEY")}, json=payload)
+    except httpx.HTTPError as exc:
+        raise BillingNonPronto("creem non raggiungibile") from exc
+    if not 200 <= r.status_code < 300:
+        log.warning("creem API fallita: %s %s", r.status_code, r.text[:200])
+        raise BillingNonPronto(f"creem {r.status_code}")
+    try:
+        return r.json()
+    except ValueError as exc:
+        raise BillingNonPronto("risposta Creem non JSON") from exc
+
+
+def checkout_abbonamento(user_id: str, email: str, piano: str, intervallo: str,
+                         success_url: str, cancel_url: str) -> str:
+    product_id = _prodotto_abbonamento(piano, intervallo)
+    request_id = "nivult-abbonamento-" + secrets.token_urlsafe(18)
+    risposta = _creem_request("POST", "/checkouts", {
+        "product_id": product_id, "request_id": request_id,
+        "success_url": success_url, "cancel_url": cancel_url,
+        "metadata": {"user_id": user_id, "kind": "subscription",
+                     "subscription_plan": piano, "subscription_interval": intervallo},
+        "customer": {"email": email}})
+    url = risposta.get("checkout_url")
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise BillingNonPronto("checkout senza URL valido")
+    return url
+
+
+def upgrade_abbonamento(subscription_id: str, piano: str, intervallo: str) -> dict:
+    if not subscription_id:
+        raise BillingNonPronto("subscription mancante")
+    return _creem_request("POST", f"/subscriptions/{subscription_id}/upgrade",
+                          {"product_id": _prodotto_abbonamento(piano, intervallo)})
+
+
+def customer_portal(customer_id: str) -> str:
+    if not customer_id:
+        raise BillingNonPronto("customer mancante")
+    risposta = _creem_request("POST", "/customers/billing",
+                              {"customer_id": customer_id})
+    url = risposta.get("customer_portal_link")
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise BillingNonPronto("customer portal senza URL valido")
     return url
 
 
@@ -208,7 +284,8 @@ def _audit(cur, user_id: str, azione: str, dettaglio: dict) -> None:
     cur.execute(
         "INSERT INTO portale_uso (user_id, via, azione, dettaglio, crediti) "
         "VALUES (%s, 'billing', %s, %s, 0)",
-        (user_id, azione, json.dumps(dettaglio, separators=(",", ":"), sort_keys=True)))
+        (user_id, azione, json.dumps(dettaglio, separators=(",", ":"),
+                                  sort_keys=True, default=str)))
 
 
 def _importo_valuta(dati: dict, storno: bool = False) -> tuple[int | None, str | None]:
@@ -336,13 +413,139 @@ def _storna(cur, evento: dict, dati: dict) -> str:
     return f"rimborso applicato ({revocati} crediti revocati)"
 
 
+def _timestamp(valore):
+    if not valore:
+        return None
+    try:
+        return datetime.fromisoformat(str(valore).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise EventoNonApplicabile("data subscription non valida") from exc
+
+
+def _dati_subscription(dati: dict) -> dict:
+    subscription_id = str(dati.get("id") or "").strip()
+    if not subscription_id:
+        raise EventoNonApplicabile("subscription id mancante")
+    customer = _dict(dati.get("customer"), "subscription customer")
+    customer_id = str(customer.get("id") or "").strip()
+    if not customer_id:
+        raise EventoNonApplicabile("customer id mancante")
+    metadata = dati.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    user_id = metadata.get("user_id")
+    last_transaction = dati.get("last_transaction") or {}
+    if not isinstance(last_transaction, dict):
+        last_transaction = {}
+    transaction_id = (dati.get("last_transaction_id") or last_transaction.get("id"))
+    start_raw = (dati.get("current_period_start_date")
+                 or dati.get("current_period_start"))
+    end_raw = dati.get("current_period_end_date") or dati.get("current_period_end")
+    return {
+        "subscription_id": subscription_id, "customer_id": customer_id,
+        "user_id": _user_id(user_id) if user_id else None,
+        "transaction_id": str(transaction_id) if transaction_id else None,
+        "period_start": _timestamp(start_raw), "period_end": _timestamp(end_raw),
+        "state_key": str(transaction_id or start_raw or end_raw or "initial"),
+    }
+
+
+def _utente_subscription(cur, refs: dict) -> str:
+    user_id = refs.get("user_id")
+    if not user_id:
+        cur.execute("SELECT id::text FROM users WHERE creem_customer_id = %s",
+                    (refs["customer_id"],))
+        riga = cur.fetchone()
+        if riga is None:
+            raise EventoNonApplicabile("utente non trovato per subscription")
+        user_id = riga[0]
+    _lock_utente(cur, user_id)
+    return user_id
+
+
+def _quota_subscription(cur, user_id: str, crediti: int, reset: bool) -> None:
+    if reset:
+        cur.execute("UPDATE api_chiavi SET crediti_mensili = %s, usati_mese = 0, "
+                    "mese_uso = CURRENT_DATE WHERE user_id = %s", (crediti, user_id))
+    else:
+        cur.execute("UPDATE api_chiavi SET crediti_mensili = %s WHERE user_id = %s",
+                    (crediti, user_id))
+
+
+def _attiva_subscription(cur, evento: dict, dati: dict) -> str:
+    piano, intervallo = _piano_da_prodotto(dati)
+    refs = _dati_subscription(dati)
+    user_id = _utente_subscription(cur, refs)
+    cur.execute("SELECT creem_period_start FROM users WHERE id = %s", (user_id,))
+    precedente = cur.fetchone()[0]
+    cur.execute("INSERT INTO creem_subscription_eventi "
+                "(subscription_id, state_key, event_id) VALUES (%s, %s, %s) "
+                "ON CONFLICT DO NOTHING RETURNING event_id",
+                (refs["subscription_id"], refs["state_key"], evento["id"]))
+    nuovo_stato = cur.fetchone() is not None
+    cambio_periodo = (precedente is None or
+                      (refs["period_start"] is not None
+                       and refs["period_start"] != precedente))
+    cur.execute(
+        "UPDATE users SET subscription_status = 'active', subscription_plan = %s, "
+        "subscription_interval = %s, current_period_end = COALESCE(%s, current_period_end), "
+        "creem_customer_id = %s, creem_subscription_id = %s, "
+        "creem_period_start = COALESCE(%s, creem_period_start), "
+        "creem_last_transaction_id = COALESCE(%s, creem_last_transaction_id) "
+        "WHERE id = %s",
+        (piano, intervallo, refs["period_end"], refs["customer_id"],
+         refs["subscription_id"], refs["period_start"], refs["transaction_id"], user_id))
+    _quota_subscription(cur, user_id, PIANI[piano]["crediti"],
+                        reset=nuovo_stato and cambio_periodo)
+    _audit(cur, user_id, "subscription-attiva",
+           {"subscription_id": refs["subscription_id"], "state_key": refs["state_key"],
+            "plan": piano, "interval": intervallo,
+            "reset": nuovo_stato and cambio_periodo})
+    return "subscription attiva"
+
+
+def _scheduled_cancel_subscription(cur, dati: dict) -> str:
+    refs = _dati_subscription(dati)
+    user_id = _utente_subscription(cur, refs)
+    cur.execute("UPDATE users SET subscription_status = 'scheduled_cancel', "
+                "current_period_end = COALESCE(%s, current_period_end), "
+                "creem_customer_id = %s, creem_subscription_id = %s WHERE id = %s",
+                (refs["period_end"], refs["customer_id"], refs["subscription_id"], user_id))
+    _audit(cur, user_id, "subscription-scheduled-cancel",
+           {"subscription_id": refs["subscription_id"],
+            "current_period_end": refs["period_end"]})
+    return "cancellazione programmata"
+
+
+def _revoca_subscription(cur, dati: dict, stato: str) -> str:
+    refs = _dati_subscription(dati)
+    user_id = _utente_subscription(cur, refs)
+    cur.execute("UPDATE users SET subscription_status = %s, "
+                "current_period_end = COALESCE(%s, current_period_end), "
+                "creem_customer_id = %s, creem_subscription_id = %s WHERE id = %s",
+                (stato, refs["period_end"], refs["customer_id"],
+                 refs["subscription_id"], user_id))
+    cur.execute("UPDATE api_chiavi SET crediti_mensili = 0 WHERE user_id = %s",
+                (user_id,))
+    _audit(cur, user_id, "subscription-revoca",
+           {"subscription_id": refs["subscription_id"], "status": stato})
+    return "subscription revocata"
+
+
 def applica_pagamento(dsn: str, evento: dict) -> str:
     """Applica un evento Creem; duplicati e retry non duplicano mai gli effetti."""
     if not isinstance(evento, dict):
         raise EventoNonApplicabile("evento non e' un oggetto JSON")
     tipo = str(evento.get("eventType") or evento.get("type") or "")
-    if tipo not in EVENTI_PAGAMENTO | EVENTI_STORNO:
+    eventi = (EVENTI_PAGAMENTO | EVENTI_STORNO | EVENTI_SUB_ATTIVI
+              | set(EVENTI_SUB_REVOCA) | {"subscription.scheduled_cancel"})
+    if tipo not in eventi:
         return "ignorato"
+    dati = _dict(evento.get("object"), "object evento")
+    metadata = dati.get("metadata") or {}
+    if (tipo == "checkout.completed" and isinstance(metadata, dict)
+            and metadata.get("kind") == "subscription"):
+        return "ignorato-abbonamento"
     eid = str(evento.get("id") or "").strip()
     if not eid:
         raise EventoNonApplicabile("event id mancante")
@@ -355,13 +558,20 @@ def applica_pagamento(dsn: str, evento: dict) -> str:
                         "ON CONFLICT DO NOTHING RETURNING id", (eid,))
             if cur.fetchone() is None:
                 return "duplicato"
-            dati = _dict(evento.get("object"), "object evento")
             if tipo in EVENTI_PAGAMENTO:
                 return _accredita(cur, evento, dati)
+            if tipo in EVENTI_SUB_ATTIVI:
+                return _attiva_subscription(cur, evento, dati)
+            if tipo == "subscription.scheduled_cancel":
+                return _scheduled_cancel_subscription(cur, dati)
+            if tipo in EVENTI_SUB_REVOCA:
+                return _revoca_subscription(cur, dati, EVENTI_SUB_REVOCA[tipo])
             return _storna(cur, evento, dati)
     except EventoNonApplicabile as exc:
         log.warning("creem evento %s (%s) da riconciliare: %s", eid, tipo, exc.detail)
         raise
+    except BillingNonPronto as exc:
+        raise HTTPException(503, "configurazione billing non disponibile") from exc
     except psycopg.Error as exc:
         log.warning("creem evento %s (%s) non committato: %s",
                     eid, tipo, type(exc).__name__)

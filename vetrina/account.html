@@ -94,7 +94,7 @@ body.modale-aperto { overflow: hidden; }
       <p class="text-[12px] font-black uppercase tracking-[0.14em] text-brand-600">Your data workspace</p>
       <h2 class="mt-4 text-4xl font-black tracking-tight leading-tight">From sign-in to your first API call in minutes.</h2>
       <div class="mt-8 grid gap-5">
-        <div><b class="text-[16px]">1,000 free credits every month</b><p class="mt-1 text-[14px] text-slate-500">Test real queries against the live index before buying anything.</p></div>
+        <div><b class="text-[16px]">500 one-time trial credits</b><p class="mt-1 text-[14px] text-slate-500">Test real queries against the live index before buying anything. Free, no card required.</p></div>
         <div><b class="text-[16px]">No password to forget</b><p class="mt-1 text-[14px] text-slate-500">Use Google, Microsoft, GitHub or a single-use email link.</p></div>
         <div><b class="text-[16px]">Your keys stay under your control</b><p class="mt-1 text-[14px] text-slate-500">Create, copy and revoke access whenever you need.</p></div>
       </div>
@@ -103,7 +103,7 @@ body.modale-aperto { overflow: hidden; }
       <div class="h-1.5 bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500"></div>
       <div class="p-8">
         <h1 class="text-2xl font-black tracking-tight">Your account</h1>
-        <p class="mt-2 text-sm text-slate-500">One account for the API, the exports and the credits. Your first 1,000 credits every month are free.</p>
+        <p class="mt-2 text-sm text-slate-500">One account for the API, the exports and the credits. Start with 500 one-time trial credits, free with no card required.</p>
 
         <div class="mt-6 grid gap-2.5">
           <button onclick="oauth('google')" class="flex items-center rounded-xl border border-slate-200 bg-white hover:border-brand-500/60 hover:bg-brand-50/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 transition-all px-4 py-3 text-[14.5px] font-bold text-slate-700"><span class="ml-1 mr-3 h-5 w-5 grid place-items-center shrink-0"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg></span>
@@ -228,7 +228,7 @@ body.modale-aperto { overflow: hidden; }
           </div>
           <div>
             <h2 class="text-[15px] font-bold tracking-tight">Credits</h2>
-            <p class="text-[11.5px] font-semibold text-violet-600">free monthly allowance · purchased credits never expire</p>
+            <p class="text-[11.5px] font-semibold text-violet-600">plan or trial allowance · purchased credits never expire</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col">
@@ -240,10 +240,10 @@ body.modale-aperto { overflow: hidden; }
             <div id="uso-barra" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-pink-500 transition-all duration-700" style="width:0"></div>
           </div>
           <div class="mt-4 flex items-center gap-2 text-[12px] flex-wrap">
-            <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">1,000 free every month</span>
+            <span id="uso-liberi" class="rounded-md bg-slate-100 text-slate-600 px-2 py-1 font-bold">500 one-time trial credits</span>
             <span id="uso-acquistati" class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-1 font-bold"></span>
           </div>
-          <p class="mt-3 text-[12px] text-slate-400">The bar shows this month's free allowance, which renews on the 1st. Purchased credits are spent only once the allowance runs out, and never expire.</p>
+          <p class="mt-3 text-[12px] text-slate-400">Subscription allowances recur with the selected plan; the 500-credit trial is one-time. Purchased credits are spent after the plan or trial allowance runs out, and never expire.</p>
           <div class="mt-auto pt-4">
             <button onclick="apriUso()" class="w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3.5 text-[12.5px] font-bold text-violet-600 hover:bg-violet-100 hover:border-violet-300 transition flex items-center justify-center gap-2">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
@@ -260,22 +260,22 @@ body.modale-aperto { overflow: hidden; }
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/><circle cx="12" cy="12" r="4"/></svg>
           </div>
           <div>
-            <h2 class="text-[15px] font-bold tracking-tight">Buy credits</h2>
-            <p class="text-[11.5px] font-semibold text-mint-600">one-time purchase · volume discounts apply</p>
+            <h2 class="text-[15px] font-bold tracking-tight">Top up credits</h2>
+            <p class="text-[11.5px] font-semibold text-mint-600">one-time purchase · €4.00 per 1,000 credits</p>
           </div>
         </div>
         <div class="p-6 flex-1 flex flex-col">
           <div class="flex items-center justify-between">
-            <span id="buy-euro" class="text-xl font-black tabular-nums">€229</span>
+            <span id="buy-euro" class="text-xl font-black tabular-nums">€400</span>
             <span class="text-right">
               <span id="buy-vol" class="text-lg font-black tabular-nums bg-gradient-to-r from-brand-500 to-mint-500 bg-clip-text text-transparent">100,000</span>
               <span class="block text-[11px] text-slate-400">credits</span>
             </span>
           </div>
-          <input id="buy-slider" type="range" min="25" max="2990" value="229" class="pz-slider mt-4 w-full" aria-label="Amount in euros">
-          <div class="mt-2 flex justify-between text-[11px] text-slate-400 font-semibold"><span>€25</span><span id="buy-unit">€2.29 per 1,000 calls</span><span>€2,990</span></div>
+          <input id="buy-slider" type="range" min="10000" max="5000000" step="1000" value="100000" class="pz-slider mt-4 w-full" aria-label="Top-up credits">
+          <div class="mt-2 flex justify-between gap-2 text-[11px] text-slate-400 font-semibold"><span>€40 minimum</span><span id="buy-unit">€4.00 per 1,000 credits</span></div>
           <p class="mt-1 text-[10.5px] text-slate-400 text-right">All prices exclude VAT.</p>
-          <p class="mt-5 text-[12px] leading-5 text-slate-400">A one-time purchase — no subscription, nothing renews. The credits land on your balance as soon as the payment clears and <b class="text-slate-500">never expire</b>: they are spent only after your free monthly allowance runs out, and every single one is itemized under <b class="text-slate-500">View credit usage</b>.</p>
+          <p class="mt-5 text-[12px] leading-5 text-slate-400">A one-time purchase — no subscription, nothing renews. Credits land on your balance as soon as payment clears and <b class="text-slate-500">never expire</b>. Top-ups do not unlock Delta or Daily Bulk entitlements. Every credit is itemized under <b class="text-slate-500">View credit usage</b>.</p>
           <div class="mt-auto pt-5">
             <button id="buy-btn" onclick="compra()" class="w-full rounded-xl bg-gradient-to-r from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-mint-500/35 hover:-translate-y-px transition flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/></svg>Continue to secure checkout →</button>
             <p id="buy-nota" class="hidden mt-3 text-[12px] text-slate-400 text-center"></p>
@@ -284,18 +284,61 @@ body.modale-aperto { overflow: hidden; }
       </div>
     </div>
 
+    <section id="plans" aria-labelledby="plans-title" class="mt-8 rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
+      <div class="flex items-start justify-between gap-5 flex-wrap">
+        <div><h2 id="plans-title" class="text-[16px] font-black">Choose your plan</h2><p class="mt-1 text-[12.5px] text-slate-500">1 credit = 1 job record · 3 credits = 1 company record · 0 credits for empty results or errors.</p></div>
+        <div class="inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Billing interval">
+          <button id="billing-month" type="button" aria-pressed="true" onclick="setBillingInterval('month')" class="rounded-lg bg-white px-4 py-2 text-[12px] font-bold text-slate-900 shadow-sm transition">Monthly</button>
+          <button id="billing-year" type="button" aria-pressed="false" onclick="setBillingInterval('year')" class="rounded-lg px-4 py-2 text-[12px] font-bold text-slate-500 transition">Annual (2 months free)</button>
+        </div>
+      </div>
+      <div class="mt-6 grid md:grid-cols-2 xl:grid-cols-4 gap-4 items-stretch">
+        <article data-plan-card data-month="49" data-year="490" class="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col">
+          <h3 class="text-lg font-black">Starter</h3><p class="mt-1 text-[12px] font-semibold text-brand-600">15,000 credits / month</p>
+          <div class="mt-5 flex items-baseline gap-1"><span data-price class="text-3xl font-black tabular-nums">€49</span><span data-price-suffix class="text-[12px] text-slate-400">/ month</span></div>
+          <p data-billing-note class="mt-1 text-[11px] text-slate-400">Billed monthly · excl. VAT</p>
+          <ul class="mt-5 space-y-2 text-[12.5px] text-slate-600 flex-1"><li>✓ Full API access</li><li>✓ Pay-per-result metering</li></ul>
+          <button type="button" onclick="scegliPiano('starter', this)" class="plan-checkout mt-6 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-[12px] font-bold text-brand-700 hover:bg-brand-100 transition disabled:opacity-50">Choose Starter →</button>
+        </article>
+        <article data-plan-card data-month="149" data-year="1490" class="relative rounded-2xl border-2 border-brand-500 bg-white p-5 shadow-lg shadow-brand-500/10 flex flex-col">
+          <span class="absolute -top-3 right-4 rounded-full bg-brand-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-white">Most popular</span>
+          <h3 class="text-lg font-black">Growth</h3><p class="mt-1 text-[12px] font-semibold text-brand-600">100,000 credits / month</p>
+          <div class="mt-5 flex items-baseline gap-1"><span data-price class="text-3xl font-black tabular-nums">€149</span><span data-price-suffix class="text-[12px] text-slate-400">/ month</span></div>
+          <p data-billing-note class="mt-1 text-[11px] text-slate-400">Billed monthly · excl. VAT</p>
+          <ul class="mt-5 space-y-2 text-[12.5px] text-slate-600 flex-1"><li>✓ Full API access</li><li>✓ Delta feed</li></ul>
+          <button type="button" onclick="scegliPiano('growth', this)" class="plan-checkout mt-6 rounded-xl bg-brand-500 px-4 py-2.5 text-[12px] font-bold text-white hover:bg-brand-600 transition disabled:opacity-50">Choose Growth →</button>
+        </article>
+        <article data-plan-card data-month="449" data-year="4490" class="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col">
+          <h3 class="text-lg font-black">Scale</h3><p class="mt-1 text-[12px] font-semibold text-brand-600">500,000 credits / month</p>
+          <div class="mt-5 flex items-baseline gap-1"><span data-price class="text-3xl font-black tabular-nums">€449</span><span data-price-suffix class="text-[12px] text-slate-400">/ month</span></div>
+          <p data-billing-note class="mt-1 text-[11px] text-slate-400">Billed monthly · excl. VAT</p>
+          <ul class="mt-5 space-y-2 text-[12.5px] text-slate-600 flex-1"><li>✓ Full API access</li><li>✓ Delta feed</li><li>✓ Daily Bulk export</li></ul>
+          <button type="button" onclick="scegliPiano('scale', this)" class="plan-checkout mt-6 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-[12px] font-bold text-brand-700 hover:bg-brand-100 transition disabled:opacity-50">Choose Scale →</button>
+        </article>
+        <article data-plan-card data-month="899" data-year="8990" class="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 flex flex-col">
+          <h3 class="text-lg font-black">Business</h3><p class="mt-1 text-[12px] font-semibold text-brand-600">1,500,000 credits / month</p>
+          <div class="mt-5 flex items-baseline gap-1"><span data-price class="text-3xl font-black tabular-nums">€899</span><span data-price-suffix class="text-[12px] text-slate-400">/ month</span></div>
+          <p data-billing-note class="mt-1 text-[11px] text-slate-400">Billed monthly · excl. VAT</p>
+          <ul class="mt-5 space-y-2 text-[12.5px] text-slate-600 flex-1"><li>✓ Full API access</li><li>✓ Delta feed</li><li>✓ Daily Bulk export</li></ul>
+          <button type="button" onclick="scegliPiano('business', this)" class="plan-checkout mt-6 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-[12px] font-bold text-brand-700 hover:bg-brand-100 transition disabled:opacity-50">Choose Business →</button>
+        </article>
+      </div>
+      <div class="mt-5 rounded-xl bg-slate-950 px-5 py-4 flex items-center gap-4 flex-wrap"><p class="text-[12.5px] text-slate-300 flex-1"><b class="text-white">Enterprise · 5M+ credits / month · Custom.</b> Historical backfill and resale/redistribution available.</p><a href="/booking" class="rounded-lg bg-white px-4 py-2 text-[12px] font-bold text-slate-900">Talk to us →</a></div>
+    </section>
+
     <section id="current-access" aria-labelledby="access-title" class="mt-8 rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
+      <div id="subscription-cancel-banner" class="hidden mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] text-amber-800"><b>Subscription cancellation scheduled.</b> <span id="subscription-cancel-date"></span></div>
       <div class="flex items-start justify-between gap-4 flex-wrap">
-        <div><h2 id="access-title" class="text-[16px] font-black">Current access</h2><p class="mt-1 text-[12.5px] text-slate-500">Your monthly tier is separate from one-time credit top-ups.</p></div>
-        <div class="text-right"><span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">monthly volume</span><b id="access-volume" class="text-xl tabular-nums">—</b></div>
+        <div><h2 id="access-title" class="text-[16px] font-black">Current access</h2><p id="subscription-summary" class="mt-1 text-[12.5px] text-slate-500">One-time trial · no active subscription</p><p id="subscription-period" class="mt-1 text-[12px] text-slate-400"></p></div>
+        <div class="flex items-center gap-4 flex-wrap"><button id="manage-subscription" type="button" onclick="manageSubscription()" class="hidden rounded-lg border border-slate-200 px-4 py-2 text-[12px] font-bold text-slate-600 hover:border-brand-300 hover:text-brand-700 transition disabled:opacity-50">Manage subscription</button><div class="text-right"><span class="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">plan allowance</span><b id="access-volume" class="text-xl tabular-nums">—</b></div></div>
       </div>
       <div class="mt-5 grid sm:grid-cols-3 gap-3">
-        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Daily bulk export</b><p id="access-bulk" class="mt-1 text-[12px] text-slate-500">Requires 500,000 credits/month</p></div>
-        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Delta feed</b><p id="access-delta" class="mt-1 text-[12px] text-slate-500">Requires 200,000 credits/month</p></div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Daily Bulk export</b><p id="access-bulk" class="mt-1 text-[12px] text-slate-500">Requires an active Scale subscription · 500,000 credits/month</p></div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Delta feed</b><p id="access-delta" class="mt-1 text-[12px] text-slate-500">Requires an active Growth subscription · 100,000 credits/month</p></div>
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Historical backfill</b><p id="access-history" class="mt-1 text-[12px] text-slate-500">Available on request</p></div>
       </div>
       <div class="mt-5 rounded-xl bg-brand-50 border border-brand-100 px-4 py-3 flex items-center gap-4 flex-wrap">
-        <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Need more credits for API calls or filtered downloads? Choose the amount and check out yourself. Top-ups do not change the monthly feed entitlements above.</p>
+        <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Need more credits? Top up at €4.00 per 1,000 credits, with a €40 minimum. Top-ups never expire and do not change Delta or Daily Bulk entitlements.</p>
         <button type="button" onclick="vaiAiCrediti()" class="w-full sm:w-auto text-center whitespace-nowrap rounded-lg bg-brand-500 px-4 py-2 text-[12px] font-bold text-white">Choose credits →</button>
       </div>
     </section>
@@ -427,7 +470,7 @@ body.modale-aperto { overflow: hidden; }
           </div>
           <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
             <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-mint-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-mint-500/25">2</div>
-            <div><p class="text-[12.5px] font-bold text-slate-800">See the exact cost</p><p class="text-[11.5px] text-slate-500 mt-0.5">1 credit = 10 postings — shown upfront, never charged twice</p></div>
+            <div><p class="text-[12.5px] font-bold text-slate-800">See the exact cost</p><p class="text-[11.5px] text-slate-500 mt-0.5">1 credit = 1 job record · 3 credits = 1 company record — shown upfront</p></div>
           </div>
           <div class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5 flex items-start gap-3">
             <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-mint-500 to-brand-500 grid place-items-center text-white text-[12px] font-black shrink-0 shadow-sm shadow-brand-500/25">3</div>
@@ -511,7 +554,7 @@ body.modale-aperto { overflow: hidden; }
             <span id="ex-righe" class="text-[15px] font-black tabular-nums text-white">—</span>
           </div>
           <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
-            <span id="ex-prezzo-label" class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">price · 1 credit = 10 postings</span>
+            <span id="ex-prezzo-label" class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">price · 1 credit = 1 job record</span>
             <span id="ex-costo" class="text-[15px] font-black tabular-nums bg-gradient-to-r from-violet-400 to-mint-400 bg-clip-text text-transparent">—</span>
           </div>
           <div class="px-5 py-3.5 flex items-center justify-between gap-3 border-t border-white/10">
@@ -630,8 +673,9 @@ let creditiExtra = 0;
 let rivelazioni = 0;
 let primaChiamataFatta = false;
 let copiaFatta = false;
-let saldoAccount = { crediti_mensili: 1000, usati: 0, residui_mensili: 0,
-                     crediti_extra: 0, saldo: 0 };
+let saldoAccount = { crediti_mensili: 500, usati: 0, residui_mensili: 500,
+                     crediti_extra: 0, saldo: 500 };
+let abbonamento = {};
 async function carica() {
   const me = await (await api("/me")).json();
   const nome = (me.nome || "").trim();
@@ -642,7 +686,16 @@ async function carica() {
   document.getElementById("nav-stato").textContent = nome || me.email;
   const r = await (await api("/me/chiavi")).json();
   chiavi = r.chiavi || [];
-  saldoAccount = r.saldo || saldoAccount;
+  if (r.saldo) {
+    saldoAccount = {
+      crediti_mensili: Number(r.saldo.crediti_mensili ?? r.saldo.monthly_credits ?? 0),
+      usati: Number(r.saldo.usati ?? r.saldo.used ?? 0),
+      residui_mensili: Number(r.saldo.residui_mensili ?? r.saldo.monthly_remaining ?? 0),
+      crediti_extra: Number(r.saldo.crediti_extra ?? r.saldo.purchased_credits ?? 0),
+      saldo: Number(r.saldo.saldo ?? r.saldo.balance ?? 0),
+    };
+  }
+  abbonamento = r.abbonamento || {};
   creditiExtra = saldoAccount.crediti_extra ?? r.extra ?? 0;
   rivelazioni = r.rivelazioni || 0;
   primaChiamataFatta = r.prima_chiamata_fatta === true;
@@ -661,11 +714,30 @@ function aggiornaOnboarding() {
 }
 function disegnaAccesso() {
   const volume = Number(saldoAccount.crediti_mensili || 0);
-  document.getElementById("access-volume").textContent = volume.toLocaleString("en-US") + " credits / month";
-  for (const [id, soglia] of [["access-bulk", 500000], ["access-delta", 200000]]) {
-    document.getElementById(id).textContent = volume >= soglia
-      ? "Included in your current access"
-      : `Not included · requires ${soglia.toLocaleString("en-US")} credits/month`;
+  const attivo = Boolean(abbonamento.creem_subscription_id)
+    && ["active", "scheduled_cancel"].includes(abbonamento.subscription_status);
+  const nomi = { starter: "Starter", growth: "Growth", scale: "Scale", business: "Business" };
+  const piano = nomi[abbonamento.subscription_plan] || "Subscription";
+  document.getElementById("access-volume").textContent = volume.toLocaleString("en-US")
+    + (attivo ? " credits / month" : " one-time trial credits");
+  document.getElementById("subscription-summary").textContent = attivo
+    ? `${piano} · ${abbonamento.subscription_interval === "year" ? "Annual" : "Monthly"} · ${abbonamento.subscription_status === "scheduled_cancel" ? "cancellation scheduled" : "active"}`
+    : "One-time trial · no active subscription";
+  const fine = abbonamento.current_period_end
+    ? new Date(abbonamento.current_period_end).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  document.getElementById("subscription-period").textContent = attivo && fine
+    ? `Current period ends ${fine}` : "";
+  const annulla = abbonamento.subscription_status === "scheduled_cancel";
+  document.getElementById("subscription-cancel-banner").classList.toggle("hidden", !annulla);
+  document.getElementById("subscription-cancel-date").textContent = fine
+    ? `Your current access remains available until ${fine}.`
+    : "Your plan will not renew.";
+  document.getElementById("manage-subscription").classList.toggle("hidden", !abbonamento.creem_customer_id);
+  for (const [id, soglia, pianoMinimo] of [["access-bulk", 500000, "Scale"], ["access-delta", 100000, "Growth"]]) {
+    document.getElementById(id).textContent = attivo && volume >= soglia
+      ? "Included in your current subscription"
+      : `Not included · requires an active ${pianoMinimo} subscription (${soglia.toLocaleString("en-US")} credits/month)`;
   }
   document.getElementById("access-history").textContent = "Available on request";
 }
@@ -694,14 +766,14 @@ function disegna() {
       </div>`;
     }).join("");
   }
-  const max = saldoAccount.crediti_mensili || 1000;
+  const max = saldoAccount.crediti_mensili || 500;
   const usati = saldoAccount.usati || 0;
   const liberi = saldoAccount.residui_mensili ?? Math.max(0, max - usati);
   const disponibili = saldoAccount.saldo ?? (liberi + creditiExtra);
   document.getElementById("uso-val").textContent = disponibili.toLocaleString("en-US");
   document.getElementById("uso-barra").style.width = Math.min(100, Math.round(100 * usati / max)) + "%";
   document.getElementById("uso-liberi").textContent =
-    liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " free left";
+    liberi.toLocaleString("en-US") + " of " + max.toLocaleString("en-US") + " plan/trial credits left";
   const acc = document.getElementById("uso-acquistati");
   acc.textContent = creditiExtra > 0
     ? "💶 +" + creditiExtra.toLocaleString("en-US") + " purchased · never expire"
@@ -874,34 +946,76 @@ function toggleFiltri() {
   document.getElementById("filtri-toggle").textContent = nascosto ? "Show filters" : "Hide filters";
 }
 
-const ANCORE = [[10000, 49], [25000, 89], [50000, 149], [100000, 229], [250000, 399],
-                [500000, 599], [1000000, 899], [2500000, 1790], [5000000, 2990]];
-const bsl = document.getElementById("buy-slider");
-function creditiPerEuro(e) {
-  if (e <= ANCORE[0][1]) return Math.round(e / ANCORE[0][1] * ANCORE[0][0] / 100) * 100;
-  for (let i = 1; i < ANCORE.length; i++) {
-    const [c1, p1] = ANCORE[i - 1], [c2, p2] = ANCORE[i];
-    if (e <= p2) {
-      const t = (Math.log(e) - Math.log(p1)) / (Math.log(p2) - Math.log(p1));
-      return Math.round(Math.exp(Math.log(c1) + t * (Math.log(c2) - Math.log(c1))) / 100) * 100;
-    }
+let billingInterval = "month";
+function setBillingInterval(interval) {
+  billingInterval = interval;
+  const annual = interval === "year";
+  for (const [id, selected] of [["billing-month", !annual], ["billing-year", annual]]) {
+    const btn = document.getElementById(id);
+    btn.setAttribute("aria-pressed", String(selected));
+    btn.className = selected
+      ? "rounded-lg bg-white px-4 py-2 text-[12px] font-bold text-slate-900 shadow-sm transition"
+      : "rounded-lg px-4 py-2 text-[12px] font-bold text-slate-500 transition";
   }
-  return ANCORE[ANCORE.length - 1][0];
+  document.querySelectorAll("[data-plan-card]").forEach(card => {
+    const prezzo = Number(card.dataset[annual ? "year" : "month"]);
+    card.querySelector("[data-price]").textContent = "€" + prezzo.toLocaleString("en-US");
+    card.querySelector("[data-price-suffix]").textContent = annual ? "/ year" : "/ month";
+    card.querySelector("[data-billing-note]").textContent = annual
+      ? "Billed annually · 2 months free · excl. VAT" : "Billed monthly · excl. VAT";
+  });
 }
+setBillingInterval("month");
+async function scegliPiano(plan, btn) {
+  document.querySelectorAll(".plan-checkout").forEach(b => b.disabled = true);
+  try {
+    const r = await api("/me/checkout", {
+      method: "POST", body: JSON.stringify({ plan, interval: billingInterval })
+    });
+    if (!r.ok) { notifica("Plan checkout could not be opened. Retry in a moment.", "errore"); return; }
+    const d = await r.json();
+    if (d.upgraded || d.already_active) {
+      notifica(d.upgraded ? "Your subscription was upgraded." : "This plan and billing interval are already active.");
+      await carica();
+      return;
+    }
+    if (d.checkout_url) { location.href = d.checkout_url; return; }
+    notifica("Plan checkout did not return a checkout URL. Retry.", "errore");
+  } catch (e) {
+    if (e.message !== "401") notifica("Plan checkout could not be opened. Retry.", "errore");
+  } finally {
+    document.querySelectorAll(".plan-checkout").forEach(b => b.disabled = false);
+  }
+}
+async function manageSubscription() {
+  const btn = document.getElementById("manage-subscription");
+  btn.disabled = true;
+  try {
+    const r = await api("/me/billing-portal", { method: "POST" });
+    if (!r.ok) { notifica("The billing portal could not be opened. Retry.", "errore"); return; }
+    const d = await r.json();
+    if (d.customer_portal_link) { location.href = d.customer_portal_link; return; }
+    notifica("The billing portal did not return a valid link. Retry.", "errore");
+  } catch (e) {
+    if (e.message !== "401") notifica("The billing portal could not be opened. Retry.", "errore");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const bsl = document.getElementById("buy-slider");
 function aggiornaBuy() {
-  const e = +bsl.value;
-  const c = creditiPerEuro(e);
+  const c = Number(bsl.value);
+  const e = euroPer(c);
   document.getElementById("buy-euro").textContent = "€" + e.toLocaleString("en-US");
   document.getElementById("buy-vol").textContent = c.toLocaleString("en-US");
-  document.getElementById("buy-unit").textContent =
-    "€" + (e / (c / 1000)).toFixed(2) + " per 1,000 calls";
-  bsl.style.setProperty("--fill", ((e - 25) / (2990 - 25) * 100) + "%");
+  document.getElementById("buy-unit").textContent = "€4.00 per 1,000 credits";
+  bsl.style.setProperty("--fill", ((c - 10000) / (5000000 - 10000) * 100) + "%");
 }
 bsl.addEventListener("input", aggiornaBuy);
 aggiornaBuy();
 async function compra() {
-  const e = +bsl.value;
-  const c = creditiPerEuro(e);
+  const c = Number(bsl.value);
   let r;
   try { r = await api("/me/checkout", { method: "POST", body: JSON.stringify({ volume: c }) }); }
   catch (e) { notifica("Checkout could not be opened. Retry.", "errore"); return; }
@@ -914,7 +1028,8 @@ async function compra() {
   }
   if (!r.ok) { notifica("Checkout could not be opened. Retry in a moment.", "errore"); return; }
   const d = await r.json();
-  location.href = d.checkout_url;
+  if (d.checkout_url) { location.href = d.checkout_url; return; }
+  notifica("Checkout did not return a checkout URL. Retry.", "errore");
 }
 
 let cursore = null, cercaTimer = null, tab = "jobs";
@@ -1533,21 +1648,21 @@ while True:
     cursor = page["next_cursor"]
     if not cursor:
         break`,
-  "One call is one credit, whatever the page size. Fewer, fuller pages cost less."],
- ["Stay in sync", "delta feed · requires a 200,000 credits/month tier", "Use the timestamp of your previous run, within the seven-day retention window. The delta tier is based on monthly volume; one-time top-ups do not unlock it:",
+  "Each returned job record costs 1 credit. Empty results and errors cost 0 credits; the effective page limit is capped by your available balance."],
+ ["Stay in sync", "delta feed · active Growth subscription with 100,000 credits/month", "Use the timestamp of your previous run, within the seven-day retention window. Delta requires an active Growth subscription or higher; one-time top-ups do not unlock it. Each returned change record costs 1 credit:",
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/changes?since=${new Date(Date.now()-3600000).toISOString()}"`,
   "Events are new, updated or closed. Follow next_cursor until null; that cursor paginates this response and is not the since value for the next run. Closure timestamps reflect Nivult's source-checking pipeline."],
- ["Companies", "one record per ATS and employer slug", "Company records include industry and legal identity from public registries where available:",
+ ["Companies", "one record per ATS and employer slug", "Company records include industry and legal identity from public registries where available. Each returned company record costs 3 credits:",
 `curl -H "X-Api-Key: nv_your_key" \\
   "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500"`,
   "Use ats + company_slug as the record key. Provenance is exposed for selected enriched fields, not for every field."],
- ["Limits & errors", "401, 403, 422, 429, 400 and 503", "401: missing or revoked key. 403: monthly tier lacks the required entitlement. 422: parameter validation failed. 429: monthly and purchased credits are exhausted. 400: invalid date, cursor or delta retention window. 503: database unavailable or query timeout, returned as JSON; failed database calls do not spend credits.",
+ ["Limits & errors", "401, 403, 422, 429, 400 and 503", "401: missing or revoked key. 403: the active subscription lacks the required entitlement. 422: parameter validation failed. 429: insufficient credits for one result or an exhausted balance. 400: invalid date, cursor or delta retention window. 503: database unavailable or query timeout. Empty results and errors spend 0 credits.",
 `HTTP/1.1 429
 {
   "detail": {
     "error": "monthly and purchased credits exhausted",
-    "monthly_credits": 1000,
+    "monthly_credits": 500,
     "purchased_credits": 0,
     "usage_month": "2026-09-01"
   }
@@ -1646,7 +1761,7 @@ function exScegliTipo(t) {
     ? "Each row is one company: name, tech stack, locations, size, active postings and 30-day hiring pace."
     : "Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.";
   document.getElementById("ex-prezzo-label").textContent =
-    t === "companies" ? "price · 1 credit = 1 company" : "price · 1 credit = 10 postings";
+    t === "companies" ? "price · 3 credits = 1 company record" : "price · 1 credit = 1 job record";
   stimaExport();
 }
 function apriExport(pre) {
@@ -1676,8 +1791,7 @@ function filtriExport() {
   return f;
 }
 function euroPer(crediti) {
-  for (let e = 25; e <= 2990; e++) if (creditiPerEuro(e) >= crediti) return e;
-  return 2990;
+  return Math.max(40, Math.ceil(crediti / 1000) * 4);
 }
 async function stimaExport() {
   const seq = ++exStimaSeq;
@@ -1747,7 +1861,7 @@ function vaiAllaRicarica() {
   if (exDati) {
     const mancano = exDati.crediti - exDati.saldo;
     const bsl = document.getElementById("buy-slider");
-    bsl.value = euroPer(Math.max(mancano, 1));
+    bsl.value = Math.max(10000, Math.ceil(mancano / 1000) * 1000);
     bsl.dispatchEvent(new Event("input"));
   }
   chiudiExport();

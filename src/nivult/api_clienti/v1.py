@@ -3,8 +3,9 @@
 Il contratto pubblico usa nomi di campi inglesi; le rimozioni privacy sono
 deliberate. L'autenticazione e' separata dall'addebito per non consumare crediti
 su errori del cliente, entitlement mancante, file assente o errori del database.
-L'addebito precede sempre la risposta e un guasto del contatore chiude con 503,
-mai con dati gratuiti.
+Jobs e changes costano un credito per record, companies tre. Il saldo limita
+la pagina prima della query; l'addebito atomico segue solo risposte riuscite.
+Risultati vuoti, errori e guasti del contatore non producono dati gratuiti.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ import math
 import os
 import re
 import time
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import psycopg
@@ -35,7 +36,7 @@ RATE_FREE, BURST_FREE = 2, 5
 RATE_PAGANTI, BURST_PAGANTI = 15, 30
 NOMI_EXPORT = ("offerte", "aziende")
 SOGLIA_BULK = 500_000
-SOGLIA_DELTA = 200_000
+SOGLIA_DELTA = 100_000
 _rate_limiter = RateLimiter()
 
 
@@ -59,6 +60,18 @@ def _e_free(cliente: dict) -> bool:
 
 def _limite_per_tier(cliente: dict, limite: int) -> int:
     return min(limite, LIMITE_FREE if _e_free(cliente) else LIMITE_MASSIMO)
+
+
+def _limite_con_saldo(cliente: dict, limite: int, costo: int) -> int:
+    limite = _limite_per_tier(cliente, limite)
+    if cliente.get("via") == "rapidapi":
+        return limite
+    residui = int(cliente.get("crediti_residui") or 0)
+    if residui < costo:
+        raise HTTPException(429, detail={
+            "error": "insufficient credits for one result",
+            "remaining": residui, "credits_per_record": costo})
+    return min(limite, residui // costo)
 
 
 def _applica_rate_limit(request: Request, cliente: dict) -> None:
@@ -87,21 +100,28 @@ def _cliente(request: Request) -> dict:
     try:
         cliente = dict(chiavi.verifica(chiave))
         _volume_mensile(cliente)
+        cliente["crediti_residui"] = chiavi.saldo_per_chiave(str(cliente["id"]))
         _applica_rate_limit(request, cliente)
         return cliente
     except chiavi.ChiaveInvalida:
         raise HTTPException(401, "invalid or revoked API key")
     except chiavi.ContatoreNonDisponibile:
         raise HTTPException(503, "credit counter temporarily unavailable")
+    except (psycopg.Error, psycopg_pool.PoolTimeout):
+        raise HTTPException(503, "credit counter temporarily unavailable")
 
 
-def _addebita(request: Request, cliente: dict) -> dict:
+def _addebita(request: Request, cliente: dict, risultati: int = 1,
+              costo: int = 1) -> dict:
     if cliente.get("via") == "rapidapi":
         return cliente
+    crediti = max(0, int(risultati)) * costo
+    if crediti == 0:
+        return {**cliente, "addebitati": 0}
     try:
         return chiavi.addebita_chiave(
             str(cliente["id"]), via="api", azione=request.url.path,
-            dettaglio=str(request.url.query)[:200] or None)
+            dettaglio=str(request.url.query)[:200] or None, crediti=crediti)
     except chiavi.ChiaveInvalida:
         raise HTTPException(401, "invalid or revoked API key")
     except chiavi.CreditiEsauriti as e:
@@ -123,9 +143,18 @@ def _risposta_export(percorso: str, nome_file: str) -> StreamingResponse:
 def _richiedi_volume(cliente: dict, minimo: int, prodotto: str) -> None:
     if cliente.get("via") == "rapidapi":
         return
-    if _volume_mensile(cliente) < minimo:
-        raise HTTPException(403, f"{prodotto} requires the {minimo:,} "
-                                 "credits/month tier")
+    stato = cliente.get("subscription_status")
+    attivo = bool(cliente.get("creem_subscription_id")) and stato in ("active", "scheduled_cancel")
+    periodo = cliente.get("current_period_end")
+    if attivo and stato == "scheduled_cancel" and periodo:
+        if isinstance(periodo, str):
+            periodo = datetime.fromisoformat(periodo.replace("Z", "+00:00"))
+        if periodo.tzinfo is None:
+            periodo = periodo.replace(tzinfo=UTC)
+        attivo = periodo > datetime.now(UTC)
+    if not attivo or _volume_mensile(cliente) < minimo:
+        raise HTTPException(403, f"{prodotto} requires an active subscription "
+                                 f"with at least {minimo:,} credits/month")
 
 
 def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
@@ -215,8 +244,8 @@ def jobs(request: Request, country: str | None = None, category: str | None = No
                             if has_salary is not None else None),
                 salary_min=minimo, salary_max=massimo,
                 dal=posted_after or dal, posted_before=posted_before),
-        cursor, _limite_per_tier(cliente, limit))
-    _addebita(request, cliente)
+        cursor, _limite_con_saldo(cliente, limit, 1))
+    _addebita(request, cliente, len(risposta["data"]), 1)
     return risposta
 
 
@@ -231,17 +260,18 @@ def companies(request: Request, country: str | None = None,
         dati.aziende,
         _filtri(country=country, industry=industry, q=q, technology=technology,
                 employees_min=employees_min, employees_max=employees_max),
-        cursor, _limite_per_tier(cliente, limit))
-    _addebita(request, cliente)
+        cursor, _limite_con_saldo(cliente, limit, 3))
+    _addebita(request, cliente, len(risposta["data"]), 3)
     return risposta
 
 
 @router.get("/companies/{piattaforma}/{slug}")
 def company(request: Request, piattaforma: str, slug: str, cliente=Depends(_cliente)):
+    _limite_con_saldo(cliente, 1, 3)
     azienda = dati.azienda(piattaforma, slug)
     if azienda is None:
         raise HTTPException(404, "company not found")
-    _addebita(request, cliente)
+    _addebita(request, cliente, 1, 3)
     return azienda
 
 
@@ -261,17 +291,18 @@ def changes(request: Request, since: str | None = None, cursor: str | None = Non
     _richiedi_volume(cliente, SOGLIA_DELTA, "the delta feed")
     try:
         righe, prossimo = dati.cambiamenti(
-            since.strip(), cursor, _limite_per_tier(cliente, limit))
+            since.strip(), cursor, _limite_con_saldo(cliente, limit, 1))
     except dati.DeltaRetentionError as e:
         raise HTTPException(400, detail=e.as_dict())
     except ValueError as e:
         raise HTTPException(400, str(e))
-    _addebita(request, cliente)
+    _addebita(request, cliente, len(righe), 1)
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
 @router.get("/exports/latest")
 def export_latest(request: Request, cliente=Depends(_cliente)):
+    _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
     stato = dati.stato_export()
     _addebita(request, cliente)
     return stato
@@ -312,11 +343,17 @@ def usage(request: Request, cliente=Depends(_cliente)):
     extra = int(rec.get("crediti_extra") or 0)
     residui_mensili = max(0, mensili - usati)
     saldo = residui_mensili + extra
+    periodo = cliente.get("current_period_end")
     return {"monthly_credits": mensili, "used": usati,
             "remaining": saldo, "usage_month": str(rec["mese_uso"]),
             "monthly_remaining": residui_mensili, "purchased_credits": extra,
             "balance": saldo, "key_credits_used": rec.get("usati_chiave", usati),
-            "account_monthly_credits": mensili}
+            "account_monthly_credits": mensili,
+            "subscription_status": cliente.get("subscription_status"),
+            "subscription_plan": cliente.get("subscription_plan"),
+            "subscription_interval": cliente.get("subscription_interval"),
+            "current_period_end": (periodo.isoformat()
+                                   if hasattr(periodo, "isoformat") else periodo)}
 
 
 _DEMO_RX = re.compile(r"^[A-Za-z0-9 .+#&()/'À-ÿ\-]{2,40}$")
