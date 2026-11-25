@@ -1,28 +1,17 @@
-"""Le chiavi dell'API clienti /v1: creazione, verifica e crediti.
+"""Chiavi API e crediti del portale B2B.
 
-La chiave in chiaro non si conserva mai: in tabella va lo sha256
-esadecimale, come per login_tokens (migrazione 0062). Si stampa UNA VOLTA
-SOLA, qui:
+La chiave in chiaro non si conserva mai: in tabella va lo sha256 esadecimale.
+Per gli account del portale quota e consumo sono account-level: il volume e'
+il massimo di TUTTE le chiavi, revocate comprese, e il consumo del mese e' la
+somma di TUTTE le chiavi. Ogni mutazione passa dal lock della riga ``users``,
+cosi' creazione, revoca, reveal, export e chiamate API non possono scavallarsi.
+Si spende prima la franchigia mensile e poi ``users.crediti_extra``; addebito
+e registro ``portale_uso`` committano insieme. Le chiavi interne ``NULL``
+conservano invece quota e lock sulla singola chiave.
 
     python -m nivult.api_clienti.chiavi nuova --etichetta "cliente X" --crediti 10000
     python -m nivult.api_clienti.chiavi lista
     python -m nivult.api_clienti.chiavi revoca --id <uuid>
-
-DATABASE_URL viene dall'ambiente o da /opt/nivult/.env, come negli altri
-moduli (vedi ats/dettagli.py).
-
-Il giro a ogni richiesta (autentica): hash della chiave -> chiave esistente
-e non revocata -> crediti del MESE CORRENTE residui -> consumo di un
-credito. 401 se manca o non vale, 429 se i crediti sono finiti.
-
-La cache in memoria (TTL 60s) esiste perche' le chiavi sono poche e ogni
-richiesta le riverifica: un minuto di ritardo sulla revoca e' il prezzo
-accettato per non pagare una query a chiamata. La revoca da QUESTO processo
-invalida subito; da un altro processo vale il TTL.
-
-Se l'UPDATE del contatore fallisce la risposta NON si blocca: si logga e
-basta. Il dato serve al cliente prima della contabilita' — ma una chiave
-senza crediti non passa comunque, perche' il controllo e' sulla lettura.
 """
 from __future__ import annotations
 
@@ -33,39 +22,54 @@ import os
 import re
 import secrets
 import sys
-import time
+from contextlib import contextmanager
 from datetime import date
 
 import psycopg
+import psycopg_pool
 
 log = logging.getLogger("nivult.api_clienti.chiavi")
 
-TTL_CACHE = 60  # secondi: vedi il docstring del modulo
-
 
 class ChiaveInvalida(Exception):
-    """Chiave assente, sconosciuta o revocata: dall'esterno e' sempre un 401."""
+    """Chiave assente, revocata o account sospeso: dall'esterno e' un 401."""
 
 
 class CreditiEsauriti(Exception):
-    """Il mese e' finito per questa chiave. Porta i numeri per il 429."""
+    """Franchigia e ricarica finite; porta i numeri per la risposta 429."""
 
-    def __init__(self, crediti_mensili: int, mese_uso) -> None:
-        super().__init__("crediti mensili esauriti")
+    def __init__(self, crediti_mensili: int, mese_uso, crediti_extra: int = 0) -> None:
+        super().__init__("crediti mensili ed extra esauriti")
         self.crediti_mensili = crediti_mensili
         self.mese_uso = mese_uso
+        self.crediti_extra = crediti_extra
 
 
-# hash -> (scadenza monotonic, record). Record: id, label, crediti_mensili,
-# usati_mese, mese_uso. La copia in cache e' quella che autentica incrementa:
-# fra un TTL e l'altro e' lei a far scattare il 429, non il database.
-_cache: dict[str, tuple[float, dict]] = {}
+class ContatoreNonDisponibile(Exception):
+    """Il contatore non ha risposto: il chiamante deve fallire chiuso con 503."""
+
 
 _URL: str | None = None
+_pool: psycopg_pool.ConnectionPool | None = None
+_cache: dict[str, tuple[float, dict]] = {}
+
+
+def configura_pool(pool: psycopg_pool.ConnectionPool | None) -> None:
+    global _pool
+    _pool = pool
+
+
+@contextmanager
+def connessione():
+    if _pool is None:
+        with psycopg.connect(_url()) as conn:
+            yield conn
+        return
+    with _pool.connection() as conn, conn.transaction():
+        yield conn
 
 
 def _url() -> str:
-    """DATABASE_URL dall'ambiente, o dai .env del server come dettagli.py."""
     global _URL
     if _URL:
         return _URL
@@ -93,440 +97,486 @@ def _hash(chiave: str) -> str:
 
 
 def _come_data(v) -> date:
-    """mese_uso e' una date dal database; dal finto del banco puo' essere str."""
     if isinstance(v, date):
         return v
     return date.fromisoformat(str(v)[:10])
 
 
-def _leggi(key_hash: str) -> dict | None:
-    """La riga della chiave, se esiste ed e' attiva. Unica parte che legge il DB.
+def _mese() -> date:
+    return date.today().replace(day=1)
 
-    Le revocate non escono proprio: per il chiamante sono indistinguibili
-    dalle mai esistite, e dall'esterno non si scopre quali chiavi ci sono.
-    """
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+
+def _leggi(key_hash: str) -> dict | None:
+    with connessione() as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, "
-            "       user_id::text "
-            "FROM api_chiavi WHERE key_hash = %s AND revoked_at IS NULL",
+            "SELECT k.id::text, k.label, k.crediti_mensili, k.usati_mese, "
+            "       k.mese_uso, k.user_id::text, "
+            "       (SELECT max(k2.crediti_mensili) FROM api_chiavi k2 "
+            "        WHERE k2.user_id = k.user_id) AS monthly_tier "
+            "FROM api_chiavi k LEFT JOIN users u ON u.id = k.user_id "
+            "WHERE k.key_hash = %s AND k.revoked_at IS NULL "
+            "  AND (k.user_id IS NULL OR u.status = 'active')",
             (key_hash,))
         r = cur.fetchone()
     if not r:
         return None
-    # user_id serve al registro dei consumi (0069): senza, la via «api»
-    # non si scriveva mai — il record non lo portava proprio (04/10/2026).
     return {"id": r[0], "label": r[1], "crediti_mensili": r[2],
-            "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5]}
+            "usati_mese": r[3], "mese_uso": r[4], "user_id": r[5],
+            "monthly_tier": int(r[6]) if r[6] is not None else int(r[2])}
+
+
+def verifica(chiave: str) -> dict:
+    """Autentica senza spendere; l'addebito resta un passaggio separato."""
+    try:
+        rec = _leggi(_hash(chiave))
+    except (psycopg.errors.LockNotAvailable, psycopg_pool.PoolTimeout) as exc:
+        raise ContatoreNonDisponibile("lettura chiave non disponibile") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise ContatoreNonDisponibile("lettura chiave non disponibile") from exc
+    if rec is None:
+        raise ChiaveInvalida()
+    return rec
+
+
+def _registra_uso_cur(cur, user_id: str, via: str, azione: str,
+                      dettaglio: str | None, crediti: int) -> None:
+    cur.execute(
+        "INSERT INTO portale_uso (user_id, via, azione, dettaglio, crediti) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (user_id, via, azione, (dettaglio or "")[:300], crediti))
+
+
+def _riepilogo_da_righe(righe: list[dict], extra: int) -> dict:
+    mese = _mese()
+    quota = max((int(r["crediti_mensili"]) for r in righe), default=0)
+    usati = sum(int(r["usati_mese"]) for r in righe
+                if _come_data(r["mese_uso"]) >= mese)
+    mensili = max(0, quota - usati)
+    return {"crediti_mensili": quota, "usati": usati,
+            "crediti_extra": extra, "residui_mensili": mensili,
+            "saldo": mensili + extra, "mese_uso": mese}
+
+
+def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
+                        dettaglio: str | None, chiave_id: str | None = None,
+                        extra: int | None = None) -> dict | None:
+    """Il chiamante tiene gia' il lock FOR UPDATE sulla riga users."""
+    cur.execute(
+        "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, revoked_at "
+        "FROM api_chiavi WHERE user_id = %s ORDER BY created_at, id FOR UPDATE",
+        (user_id,))
+    righe = [{"id": r[0], "label": r[1], "crediti_mensili": r[2],
+              "usati_mese": r[3], "mese_uso": r[4], "revoked_at": r[5]}
+             for r in cur.fetchall()]
+    target = None
+    if chiave_id is not None:
+        target = next((r for r in righe if r["id"] == str(chiave_id)
+                       and r["revoked_at"] is None), None)
+        if target is None:
+            raise ChiaveInvalida()
+    else:
+        target = next((r for r in righe if r["revoked_at"] is None), None)
+        if target is None:
+            return None
+
+    if extra is None:
+        cur.execute("SELECT crediti_extra FROM users WHERE id = %s", (user_id,))
+        ru = cur.fetchone()
+        if ru is None:
+            return None
+        extra = int(ru[0])
+    prima = _riepilogo_da_righe(righe, extra)
+    dal_mese = min(n, prima["residui_mensili"])
+    dall_extra = n - dal_mese
+    if dall_extra > extra:
+        if chiave_id is not None:
+            raise CreditiEsauriti(prima["crediti_mensili"], prima["mese_uso"], extra)
+        return None
+
+    mese = prima["mese_uso"]
+    cur.execute(
+        "UPDATE api_chiavi SET "
+        "  usati_mese = CASE WHEN mese_uso < %s THEN %s ELSE usati_mese + %s END, "
+        "  mese_uso = %s, last_used_at = now() "
+        "WHERE id = %s AND revoked_at IS NULL",
+        (mese, dal_mese, dal_mese, mese, target["id"]))
+    if cur.rowcount != 1:
+        raise ChiaveInvalida()
+    if dall_extra:
+        cur.execute("UPDATE users SET crediti_extra = crediti_extra - %s "
+                    "WHERE id = %s AND crediti_extra >= %s",
+                    (dall_extra, user_id, dall_extra))
+        if cur.rowcount != 1:
+            raise ContatoreNonDisponibile("saldo extra cambiato durante l'addebito")
+    _registra_uso_cur(cur, user_id, via, azione, dettaglio, n)
+
+    usati_chiave = (dal_mese if _come_data(target["mese_uso"]) < mese
+                    else int(target["usati_mese"]) + dal_mese)
+    return {"id": target["id"], "label": target["label"], "user_id": user_id,
+            "crediti_mensili": prima["crediti_mensili"],
+            "usati_mese": prima["usati"] + dal_mese,
+            "usati": prima["usati"] + dal_mese,
+            "usati_chiave": usati_chiave, "mese_uso": mese,
+            "crediti_extra": extra - dall_extra,
+            "residui_mensili": max(0, prima["crediti_mensili"]
+                                   - prima["usati"] - dal_mese),
+            "saldo": max(0, prima["crediti_mensili"] - prima["usati"] - dal_mese)
+                     + extra - dall_extra}
+
+
+def _addebita_chiave_db(chiave_id: str, via: str, azione: str,
+                        dettaglio: str | None) -> dict:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SET LOCAL lock_timeout = '2s'")
+        cur.execute(
+            "SELECT k.user_id::text, u.status, u.crediti_extra "
+            "FROM api_chiavi k JOIN users u ON u.id = k.user_id "
+            "WHERE k.id = %s FOR UPDATE OF u", (chiave_id,))
+        r = cur.fetchone()
+        if r is not None:
+            user_id, status, extra = r
+            if status != "active":
+                raise ChiaveInvalida()
+            rec = _spendi_account_cur(
+                cur, user_id, 1, via, azione, dettaglio, chiave_id, extra=extra)
+            if rec is None:
+                raise CreditiEsauriti(0, _mese())
+            return rec
+
+        cur.execute(
+            "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso "
+            "FROM api_chiavi WHERE id = %s AND user_id IS NULL "
+            "  AND revoked_at IS NULL FOR UPDATE", (chiave_id,))
+        r = cur.fetchone()
+        if r is None:
+            raise ChiaveInvalida()
+        mese = _mese()
+        usati = 0 if _come_data(r[4]) < mese else int(r[3])
+        if usati >= int(r[2]):
+            raise CreditiEsauriti(int(r[2]), mese)
+        cur.execute(
+            "UPDATE api_chiavi SET usati_mese = %s, mese_uso = %s, last_used_at = now() "
+            "WHERE id = %s RETURNING usati_mese", (usati + 1, mese, chiave_id))
+        dopo = cur.fetchone()[0]
+        return {"id": r[0], "label": r[1], "user_id": None,
+                "crediti_mensili": int(r[2]), "usati_mese": dopo, "usati": dopo,
+                "usati_chiave": dopo, "mese_uso": mese, "crediti_extra": 0,
+                "residui_mensili": max(0, int(r[2]) - dopo),
+                "saldo": max(0, int(r[2]) - dopo)}
+
+
+def addebita_chiave(chiave_id: str, via: str = "api", azione: str = "api call",
+                    dettaglio: str | None = None) -> dict:
+    """Spende un credito e scrive il registro nello stesso commit."""
+    try:
+        return _addebita_chiave_db(chiave_id, via, azione, dettaglio)
+    except (ChiaveInvalida, CreditiEsauriti, ContatoreNonDisponibile):
+        raise
+    except (psycopg.errors.LockNotAvailable, psycopg_pool.PoolTimeout) as exc:
+        raise ContatoreNonDisponibile("addebito non disponibile") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise ContatoreNonDisponibile("addebito non disponibile") from exc
+
+
+def autentica(chiave: str) -> dict:
+    """Compatibilita': autenticazione e un addebito atomico in successione."""
+    rec = verifica(chiave)
+    return addebita_chiave(str(rec["id"]))
 
 
 def _consuma(chiave_id: str) -> int | None:
-    """Un credito in meno, in un'unica istruzione: la transazione e' la riga.
-
-    Il reset mensile e' dentro lo stesso UPDATE: se mese_uso e' di un mese
-    vecchio il contatore riparte da 1, altrimenti sale di 1. E il TETTO e'
-    nello stesso UPDATE (26/09/2026): prima si leggeva il contatore dalla
-    cache del processo e con N worker il cliente riceveva N x crediti.
-
-    28/09/2026: il tetto per le chiavi del PORTALE e' dell'ACCOUNT, non
-    della chiave: la somma degli usati delle chiavi attive dell'utente
-    contro il volume massimo. Senza, N chiavi nuove erano N volte i
-    crediti gratis del mese. Le chiavi interne (user_id NULL) restano col
-    tetto proprio, com'e' sempre stato.
-    Torna il conteggio dopo la scrittura, o None se il tetto e' pieno
-    (o la chiave revocata — il chiamante distingue).
-    """
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE api_chiavi k SET "
-            "  usati_mese = CASE WHEN k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                    THEN 1 ELSE k.usati_mese + 1 END, "
-            "  mese_uso   = date_trunc('month', CURRENT_DATE)::date "
-            "WHERE k.id = %s AND k.revoked_at IS NULL "
-            "  AND ( "
-            "    (k.user_id IS NULL AND (k.mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                            OR k.usati_mese < k.crediti_mensili)) "
-            "    OR (k.user_id IS NOT NULL AND "
-            "        (SELECT coalesce(sum(CASE WHEN o.mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                                  THEN 0 ELSE o.usati_mese END), 0) "
-            "           FROM api_chiavi o "
-            "          WHERE o.user_id = k.user_id AND o.revoked_at IS NULL) "
-            "        < (SELECT max(m.crediti_mensili) FROM api_chiavi m "
-            "            WHERE m.user_id = k.user_id AND m.revoked_at IS NULL)) "
-            "  ) "
-            "RETURNING usati_mese",
-            (chiave_id,))
-        r = cur.fetchone()
-        if r is not None:
-            conn.commit()
-            return r[0]
-        # Tetto mensile pieno: per le chiavi del PORTALE si attinge alla
-        # ricarica (users.crediti_extra, 28/09/2026 — i crediti comprati
-        # non scadono e si spendono solo a franchigia esaurita). Le
-        # chiavi interne (user_id NULL) non entrano nella FROM: per loro
-        # None, come e' sempre stato.
-        cur.execute(
-            "UPDATE users u SET crediti_extra = u.crediti_extra - 1 "
-            "FROM api_chiavi k "
-            "WHERE k.id = %s AND k.user_id = u.id "
-            "  AND k.revoked_at IS NULL AND u.crediti_extra > 0 "
-            "RETURNING u.crediti_extra", (chiave_id,))
-        r2 = cur.fetchone()
-        if r2 is None:
-            conn.commit()
-            return None
-        cur.execute("SELECT usati_mese FROM api_chiavi WHERE id = %s",
-                    (chiave_id,))
-        dopo = cur.fetchone()
-        conn.commit()
-        return dopo[0] if dopo else 0
+    try:
+        return addebita_chiave(chiave_id)["usati_chiave"]
+    except (ChiaveInvalida, CreditiEsauriti):
+        return None
 
 
 def registra_uso(user_id: str | None, via: str, azione: str,
                  dettaglio: str | None = None, crediti: int = 1) -> None:
-    """Una riga nel registro dei consumi (migrazione 0069): chi paga vede
-    DOVE vanno i crediti — la via (api/portale/export), l'azione, il
-    dettaglio. Mai nel percorso critico: un fallimento qui si logga e
-    basta, la risposta al cliente non aspetta la contabilita'."""
+    """Compatibilita' coi vecchi chiamanti: arricchisce, non duplica, l'addebito."""
     if not user_id:
         return
     try:
-        with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+        with connessione() as conn, conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO portale_uso (user_id, via, azione, dettaglio, "
-                "crediti) VALUES (%s, %s, %s, %s, %s)",
-                (user_id, via, azione, (dettaglio or "")[:300], crediti))
-            conn.commit()
-    except Exception as exc:                        # noqa: BLE001
-        log.warning("registro uso non scritto (%s/%s): %s", via, azione, exc)
-
-
-def autentica(chiave: str) -> dict:
-    """Verifica la chiave e consuma un credito. -> il record della chiave.
-
-    Alza ChiaveInvalida (401) o CreditiEsauriti (429): la traduzione in HTTP
-    sta nel router, questo modulo non sa cosa sia FastAPI.
-    """
-    h = _hash(chiave)
-    voce = _cache.get(h)
-    if voce and voce[0] > time.monotonic():
-        rec = voce[1]
-    else:
-        trovato = _leggi(h)
-        if trovato is None:
-            # I fallimenti non si mettono in cache: una chiave appena creata
-            # deve funzionare subito, non fra un TTL.
-            raise ChiaveInvalida()
-        rec = dict(trovato)
-        _cache[h] = (time.monotonic() + TTL_CACHE, rec)
-
-    mese = date.today().replace(day=1)
-    if _come_data(rec["mese_uso"]) < mese:
-        # Reset mensile: il conteggio letto e' di un mese vecchio. Qui si
-        # aggiorna la vista; sul database lo scrive _consuma con lo stesso
-        # criterio, cosi' le due non possono divergere.
-        rec["usati_mese"] = 0
-        rec["mese_uso"] = mese
-    try:
-        dopo = _consuma(rec["id"])
+                "SELECT id FROM portale_uso WHERE user_id = %s AND via = %s "
+                "  AND azione = %s AND coalesce(dettaglio, '') = %s "
+                "  AND crediti = %s AND at > now() - interval '10 seconds' "
+                "ORDER BY at DESC LIMIT 1",
+                (user_id, via, azione, dettaglio or "", crediti))
+            if cur.fetchone():
+                return
+            cur.execute(
+                "SELECT id, azione, coalesce(dettaglio, '') FROM portale_uso "
+                "WHERE user_id = %s AND via = %s AND crediti = %s "
+                "  AND at > now() - interval '10 seconds' ORDER BY id",
+                (user_id, via, crediti))
+            righe = cur.fetchall()
+            pendente = next((r for r in righe if r[1] == "filtered export"
+                             or (r[1] == azione and not r[2])), None)
+            if pendente:
+                cur.execute("UPDATE portale_uso SET azione = %s, dettaglio = %s "
+                            "WHERE id = %s",
+                            (azione, (dettaglio or "")[:300], pendente[0]))
+            elif not righe:
+                _registra_uso_cur(cur, user_id, via, azione, dettaglio, crediti)
     except Exception as exc:  # noqa: BLE001
-        # La risposta parte lo stesso: il dato viene prima della contabilita'.
-        log.warning("conteggio credito fallito per %s: %s", rec.get("id"), exc)
-        dopo = rec["usati_mese"] + 1
-    if dopo is None:
-        # il tetto l'ha detto il DB, atomico: con N worker la risposta e'
-        # la stessa per tutti (26/09/2026)
-        raise CreditiEsauriti(rec["crediti_mensili"], rec["mese_uso"])
-    rec["usati_mese"] = dopo
-    return rec
+        log.warning("registro uso non aggiornato (%s/%s): %s", via, azione, exc)
 
 
 def invalida(chiave_id: str) -> None:
-    """Toglie dalla cache la chiave revocata (stesso processo)."""
     for h, (_, rec) in list(_cache.items()):
         if str(rec.get("id")) == str(chiave_id):
             del _cache[h]
 
 
 def svuota_cache() -> None:
-    """Per il banco e per le prove: la cache e' un'ottimizzazione, non stato."""
     _cache.clear()
 
 
-def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
-    """Le chiavi dell'utente, e se non ne ha nessuna la trial appena
-    creata in chiaro (si vede ORA, mai piu').
+def _riga_chiave(r, account: dict | None = None) -> dict:
+    rec = {"id": r[0], "etichetta": r[1], "creata_il": r[2].isoformat(),
+           "revocata_il": r[3].isoformat() if r[3] else None,
+           "monthly_credits": r[4], "used": r[5],
+           "usage_month": r[6].isoformat(), "coda": r[7],
+           "ultimo_uso": r[8].isoformat() if len(r) > 8 and r[8] else None}
+    if account is not None:
+        rec.update({"account_quota": account["crediti_mensili"],
+                    "account_used": account["usati"],
+                    "account_balance": account["saldo"],
+                    "account_purchased_credits": account["crediti_extra"]})
+    return rec
 
-    La creazione e' serializzata per utente (28/09/2026): due tab
-    aperte sulla stessa registrazione chiedevano /me/chiavi insieme,
-    vedevano entrambe l'elenco vuoto e creavano DUE trial — il
-    banner mostrava una, l'elenco l'altra. Il lock advisory vale per
-    la transazione: la seconda richiesta aspetta la prima e trova la
-    chiave gia' fatta."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
-                    (f"trial-chiave:{user_id}",))
+
+def _riepilogo_cur(cur, user_id: str) -> dict:
+    cur.execute("SELECT crediti_extra FROM users WHERE id = %s", (user_id,))
+    ru = cur.fetchone()
+    extra = int(ru[0]) if ru else 0
+    cur.execute(
+        "SELECT id::text, label, crediti_mensili, usati_mese, mese_uso, revoked_at "
+        "FROM api_chiavi WHERE user_id = %s", (user_id,))
+    righe = [{"id": r[0], "label": r[1], "crediti_mensili": r[2],
+              "usati_mese": r[3], "mese_uso": r[4], "revoked_at": r[5]}
+             for r in cur.fetchall()]
+    return _riepilogo_da_righe(righe, extra)
+
+
+def riepilogo_per_utente(user_id: str) -> dict:
+    with connessione() as conn, conn.cursor() as cur:
+        return _riepilogo_cur(cur, user_id)
+
+
+def volume_per_utente(user_id: str) -> int:
+    """Volume mensile dell'account; le ricariche una tantum non lo aumentano."""
+    return int(riepilogo_per_utente(user_id)["crediti_mensili"])
+
+
+def trial_per_utente(user_id: str) -> tuple[list[dict], str | None]:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (user_id,))
+        if cur.fetchone() is None:
+            return [], None
         cur.execute(
             "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
-            "       usati_mese, mese_uso, key_tail FROM api_chiavi "
+            "       usati_mese, mese_uso, key_tail, last_used_at FROM api_chiavi "
             "WHERE user_id = %s ORDER BY created_at", (user_id,))
         righe = cur.fetchall()
+        account = _riepilogo_cur(cur, user_id)
         if righe:
-            conn.commit()
-            return ([{"id": r[0], "etichetta": r[1],
-                      "creata_il": r[2].isoformat(),
-                      "revocata_il": r[3].isoformat() if r[3] else None,
-                      "crediti_mensili": r[4], "usati_mese": r[5],
-                      "mese_uso": r[6].isoformat(),
-                      "coda": r[7]} for r in righe], None)
+            return [_riga_chiave(r, account) for r in righe], None
         chiave = "nv_" + secrets.token_urlsafe(32)
         cur.execute(
             "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id, "
             "  key_tail) VALUES (%s, %s, %s, %s, %s)",
             (_hash(chiave), "Main key (trial)", 1000, user_id, chiave[-6:]))
-        conn.commit()
-        return ([], chiave)
+        return [], chiave
 
 
 def nuova(etichetta: str, crediti: int, user_id: str | None = None) -> tuple[str, str]:
-    """Crea la chiave e ritorna (chiave in chiaro, id). Si vede ORA, mai piu'.
-
-    Per un utente del portale il volume e' DELL'ACCOUNT: la chiave nuova
-    eredita il volume massimo delle chiavi esistenti (28/09/2026 — prima
-    ogni chiave nasceva con 1.000 crediti suoi: N chiavi = N volte i
-    crediti gratis. Chiuso il giorno in cui l'abbiamo visto)."""
-    if user_id:
-        esistenti = lista_per_utente(user_id)
-        volumi = [r["crediti_mensili"] for r in esistenti if not r["revocata_il"]]
-        crediti = max(volumi) if volumi else crediti
+    if crediti < 0:
+        raise ValueError("crediti negativi")
     chiave = "nv_" + secrets.token_urlsafe(32)
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+    with connessione() as conn, conn.cursor() as cur:
+        if user_id:
+            cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            if cur.fetchone() is None:
+                raise ValueError("utente inesistente")
+            cur.execute("SELECT coalesce(max(crediti_mensili), 0) FROM api_chiavi "
+                        "WHERE user_id = %s", (user_id,))
+            esistente = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM api_chiavi WHERE user_id = %s", (user_id,))
+            if cur.fetchone()[0]:
+                crediti = int(esistente)
         cur.execute(
             "INSERT INTO api_chiavi (key_hash, label, crediti_mensili, user_id, "
             "  key_tail) VALUES (%s, %s, %s, %s, %s) RETURNING id::text",
             (_hash(chiave), etichetta, crediti, user_id, chiave[-6:]))
         chiave_id = cur.fetchone()[0]
-        conn.commit()
     return chiave, chiave_id
 
 
 def lista_per_utente(user_id: str) -> list[dict]:
-    """Le chiavi del cliente, per la dashboard del portale. Mai la chiave."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+    with connessione() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
-            "       usati_mese, mese_uso, key_tail FROM api_chiavi "
+            "       usati_mese, mese_uso, key_tail, last_used_at FROM api_chiavi "
             "WHERE user_id = %s ORDER BY created_at", (user_id,))
-        return [{"id": r[0], "etichetta": r[1],
-                 "creata_il": r[2].isoformat(),
-                 "revocata_il": r[3].isoformat() if r[3] else None,
-                 "crediti_mensili": r[4], "usati_mese": r[5],
-                 "mese_uso": r[6].isoformat(),
-                 "coda": r[7]} for r in cur.fetchall()]
+        righe = cur.fetchall()
+        account = _riepilogo_cur(cur, user_id)
+        return [_riga_chiave(r, account) for r in righe]
 
 
-def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
-    """Revoca logica, solo se la chiave e' di chi chiede."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        try:
-            cur.execute(
-                "UPDATE api_chiavi SET revoked_at = now() "
-                "WHERE id = %s AND user_id = %s AND revoked_at IS NULL",
-                (chiave_id, user_id))
-        except psycopg.errors.InvalidTextRepresentation:
-            return False
-        fatta = cur.rowcount > 0
-        conn.commit()
-    invalida(chiave_id)
+def _revoca(chiave_id: str, user_id: str | None = None) -> bool:
+    try:
+        with connessione() as conn, conn.cursor() as cur:
+            if user_id:
+                cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                if cur.fetchone() is None:
+                    return False
+                cur.execute("UPDATE api_chiavi SET revoked_at = now() "
+                            "WHERE id = %s AND user_id = %s AND revoked_at IS NULL",
+                            (chiave_id, user_id))
+            else:
+                cur.execute("SELECT user_id::text FROM api_chiavi WHERE id = %s", (chiave_id,))
+                r = cur.fetchone()
+                if r is None:
+                    return False
+                if r[0]:
+                    cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (r[0],))
+                    if cur.fetchone() is None:
+                        return False
+                cur.execute("UPDATE api_chiavi SET revoked_at = now() "
+                            "WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
+            fatta = cur.rowcount > 0
+    except psycopg.errors.InvalidTextRepresentation:
+        return False
+    if fatta:
+        invalida(chiave_id)
     return fatta
 
 
-def spendi_per_utente(user_id: str) -> bool:
-    """Un credito dalla prima chiave attiva dell'utente: il reveal del
-    portale paga dallo stesso contatore dell'API (27/09/2026).
-    False se non c'e' una chiave attiva o se sono finiti sia la
-    franchigia del mese sia la ricarica (il tuffo nell'extra lo fa
-    _consuma, 28/09/2026)."""
-    attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
-    if not attive:
-        return False
-    return _consuma(attive[0]["id"]) is not None
+def revoca_per_utente(chiave_id: str, user_id: str) -> bool:
+    return _revoca(chiave_id, user_id)
+
+
+def spendi_per_utente(user_id: str, via: str = "export",
+                      azione: str = "daily export",
+                      dettaglio: str | None = None) -> bool:
+    return spendi_n_per_utente(user_id, 1, via=via, azione=azione, dettaglio=dettaglio)
 
 
 def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
-    """Il reveal che si ricorda: gia' rivelato -> gratis; nuovo -> un
-    credito e la riga che lo ricorda. Torna 'ok', 'gratis' (era gia'
-    suo) o 'senza_crediti'."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT 1 FROM portale_rivelazioni "
-            "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
-            (user_id, tipo, riferimento))
-        if cur.fetchone():
-            return "gratis"
-    if not spendi_per_utente(user_id):
+    azione = "posting unlock" if tipo == "job" else "company unlock"
+    try:
+        with connessione() as conn, conn.cursor() as cur:
+            cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            ru = cur.fetchone()
+            if ru is None:
+                return "senza_crediti"
+            if ru[0] != "active":
+                return "account_sospeso"
+            cur.execute(
+                "SELECT 1 FROM portale_rivelazioni "
+                "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
+                (user_id, tipo, riferimento))
+            if cur.fetchone():
+                return "gratis"
+            rec = _spendi_account_cur(cur, user_id, 1, "portale", azione, riferimento)
+            if rec is None:
+                return "senza_crediti"
+            cur.execute(
+                "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
+                "VALUES (%s, %s, %s)", (user_id, tipo, riferimento))
+            return "ok"
+    except (ChiaveInvalida, CreditiEsauriti):
         return "senza_crediti"
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
-            "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-            (user_id, tipo, riferimento))
-        conn.commit()
-    return "ok"
+    except Exception as exc:  # noqa: BLE001
+        raise ContatoreNonDisponibile("reveal non disponibile") from exc
 
 
 def e_rivelata(user_id: str, tipo: str, riferimento: str) -> bool:
-    """Il dettaglio completo lo vede solo chi ha rivelato."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT 1 FROM portale_rivelazioni "
-            "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
-            (user_id, tipo, riferimento))
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM portale_rivelazioni "
+                    "WHERE user_id = %s AND tipo = %s AND riferimento = %s",
+                    (user_id, tipo, riferimento))
         return cur.fetchone() is not None
 
 
 def conta_rivelazioni(user_id: str) -> int:
-    """Quante rivelazioni ha in cassaforte l'utente: il cruscotto lo
-    mostra («hai rivelato N aziende») — sono crediti spesi che TORNANO,
-    perche' una rivelata non si ripaga mai due volte (28/09/2026)."""
-    with psycopg.connect(_url()) as conn:
-        return conn.execute(
-            "SELECT count(*) FROM portale_rivelazioni WHERE user_id = %s",
-            (user_id,)).fetchone()[0]
+    with connessione() as conn:
+        return conn.execute("SELECT count(*) FROM portale_rivelazioni WHERE user_id = %s",
+                            (user_id,)).fetchone()[0]
 
 
-def rivelate_per_utente(user_id: str, tipo: str,
-                        riferimenti: list[str]) -> set:
-    """Quali di questi riferimenti sono gia' dell'utente (una query sola:
-     il portale la chiama a ogni pagina di risultati)."""
+def rivelate_per_utente(user_id: str, tipo: str, riferimenti: list[str]) -> set:
     if not riferimenti:
         return set()
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT riferimento FROM portale_rivelazioni "
-            "WHERE user_id = %s AND tipo = %s AND riferimento = ANY(%s)",
-            (user_id, tipo, riferimenti))
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SELECT riferimento FROM portale_rivelazioni "
+                    "WHERE user_id = %s AND tipo = %s AND riferimento = ANY(%s)",
+                    (user_id, tipo, riferimenti))
         return {r[0] for r in cur.fetchall()}
 
 
-def spendi_n_per_utente(user_id: str, n: int) -> bool:
-    """N crediti in una volta sola, atomici: l'export filtrato costa
-    righe/10. Prima si consuma la franchigia del mese, poi la ricarica
-    (users.crediti_extra, 28/09/2026). La riga utente presa FOR UPDATE
-    e' il semaforo che tiene insieme i due serbatoi: tutto o niente."""
-    attive = [r for r in lista_per_utente(user_id) if not r["revocata_il"]]
-    if not attive:
-        return False
-    kid = attive[0]["id"]
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute("SELECT crediti_extra FROM users WHERE id = %s "
-                    "FOR UPDATE", (user_id,))
-        ru = cur.fetchone()
-        if ru is None:
-            conn.rollback()
-            return False
-        extra = ru[0]
-        cur.execute(
-            "SELECT coalesce(max(crediti_mensili), 0) FROM api_chiavi "
-            "WHERE user_id = %s AND revoked_at IS NULL", (user_id,))
-        cap = cur.fetchone()[0]
-        cur.execute(
-            "SELECT coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                     THEN 0 ELSE usati_mese END), 0) "
-            "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
-            (user_id,))
-        usati = cur.fetchone()[0]
-        dal_mese = min(n, max(0, cap - usati))
-        dall_extra = n - dal_mese
-        if dall_extra > extra:
-            conn.rollback()
-            return False
-        if dal_mese:
-            cur.execute(
-                "UPDATE api_chiavi SET "
-                "  usati_mese = CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
-                "                    THEN %s ELSE usati_mese + %s END, "
-                "  mese_uso = date_trunc('month', CURRENT_DATE)::date "
-                "WHERE id = %s AND revoked_at IS NULL",
-                (dal_mese, dal_mese, kid))
-        if dall_extra:
-            cur.execute("UPDATE users SET crediti_extra = crediti_extra - %s "
-                        "WHERE id = %s", (dall_extra, user_id))
-        conn.commit()
+def spendi_n_per_utente(user_id: str, n: int, via: str = "export",
+                        azione: str = "filtered export",
+                        dettaglio: str | None = None) -> bool:
+    """Addebito atomico di N crediti, con registro nel medesimo commit."""
+    if isinstance(n, bool) or not isinstance(n, int) or n < 0 or n > 2_000_000_000:
+        raise ValueError("numero crediti non valido")
+    if n == 0:
         return True
+    try:
+        with connessione() as conn, conn.cursor() as cur:
+            cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            ru = cur.fetchone()
+            if ru is None or ru[0] != "active":
+                return False
+            return _spendi_account_cur(cur, user_id, n, via, azione, dettaglio) is not None
+    except ChiaveInvalida:
+        return False
+    except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, ContatoreNonDisponibile):
+            raise
+        raise ContatoreNonDisponibile("addebito account non disponibile") from exc
 
 
 def saldo_per_utente(user_id: str) -> int:
-    """Quanti crediti restano all'ACCOUNT: la franchigia del mese non
-    consumata PIU' la ricarica (users.crediti_extra, che non scade).
-    Il modale dell'export lo mostra prima della spesa (28/09/2026)."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT coalesce(max(crediti_mensili), 0) "
-            "       - coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
-            "                           THEN 0 ELSE usati_mese END), 0) "
-            "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
-            (user_id,))
-        mensile = max(0, cur.fetchone()[0])
-        cur.execute("SELECT crediti_extra FROM users WHERE id = %s",
-                    (user_id,))
-        r = cur.fetchone()
-        return mensile + (r[0] if r else 0)
+    return int(riepilogo_per_utente(user_id)["saldo"])
 
 
 def extra_per_utente(user_id: str) -> int:
-    """La ricarica residua, per la card Credits del portale."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        cur.execute("SELECT crediti_extra FROM users WHERE id = %s",
-                    (user_id,))
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute("SELECT crediti_extra FROM users WHERE id = %s", (user_id,))
         r = cur.fetchone()
-        return r[0] if r else 0
+        return int(r[0]) if r else 0
 
 
 def lista() -> list[dict]:
-    """Le chiavi che esistono. MAI la chiave ne' il suo hash: non servono."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
+    with connessione() as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT id::text, label, created_at, revoked_at, crediti_mensili, "
             "       usati_mese, mese_uso FROM api_chiavi ORDER BY created_at")
-        return [{"id": r[0], "etichetta": r[1],
-                 "creata_il": r[2].isoformat(),
+        return [{"id": r[0], "etichetta": r[1], "creata_il": r[2].isoformat(),
                  "revocata_il": r[3].isoformat() if r[3] else None,
                  "crediti_mensili": r[4], "usati_mese": r[5],
                  "mese_uso": r[6].isoformat()} for r in cur.fetchall()]
 
 
 def revoca(chiave_id: str) -> bool:
-    """Revoca logica: la riga resta come traccia. -> True se esisteva ed era attiva."""
-    with psycopg.connect(_url()) as conn, conn.cursor() as cur:
-        try:
-            cur.execute(
-                "UPDATE api_chiavi SET revoked_at = now() "
-                "WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
-        except psycopg.errors.InvalidTextRepresentation:
-            # un id che non e' un uuid non esiste, non e' un errore del server
-            return False
-        fatta = cur.rowcount > 0
-        conn.commit()
-    invalida(chiave_id)
-    return fatta
+    return _revoca(chiave_id)
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="nivult.api_clienti.chiavi",
-                                 description=__doc__)
+    ap = argparse.ArgumentParser(prog="nivult.api_clienti.chiavi", description=__doc__)
     sub = ap.add_subparsers(dest="comando", required=True)
-
     p_nuova = sub.add_parser("nuova", help="crea una chiave e la stampa UNA VOLTA")
     p_nuova.add_argument("--etichetta", required=True, help="per chi e'")
     p_nuova.add_argument("--crediti", type=int, default=10000,
                          help="crediti al mese (default 10000)")
-
     sub.add_parser("lista", help="le chiavi esistenti (mai le chiavi stesse)")
-
     p_revoca = sub.add_parser("revoca", help="revoca una chiave per id")
     p_revoca.add_argument("--id", required=True)
-
     a = ap.parse_args(argv)
 
     if a.comando == "nuova":
@@ -537,7 +587,6 @@ def main(argv: list[str] | None = None) -> int:
               f"{a.crediti} crediti/mese):\n\n  {chiave}\n\n"
               "Si mostra UNA VOLTA SOLA: in tabella resta solo l'hash sha256.")
         return 0
-
     if a.comando == "lista":
         righe = lista()
         if not righe:
@@ -548,14 +597,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{r['id']}  {stato:<28}  {r['usati_mese']}/{r['crediti_mensili']}"
                   f" nel mese di {r['mese_uso']}  — {r['etichetta']}")
         return 0
-
     if a.comando == "revoca":
         if revoca(a.id):
             print(f"chiave {a.id} revocata.")
             return 0
         print(f"chiave {a.id} inesistente o gia' revocata.", file=sys.stderr)
         return 1
-
     return 2
 
 

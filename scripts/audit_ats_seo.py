@@ -58,6 +58,10 @@ def main() -> int:
         slug = file.parent.name
         slugs.append(slug)
         text = file.read_text(encoding="utf-8")
+        check(not re.search(r"(?<![\d,])1 companies\b", text),
+              f"{slug}: plurale 1 companies nella pagina di dettaglio")
+        if slug in {"arbetsformedlingen", "bundesagentur", "francetravail"}:
+            check("1 public portal" in text, f"{slug}: public portal mancante")
         canonical = f"https://nivult.com/ats/{slug}/"
         check(f'<link rel="canonical" href="{canonical}">' in text,
               f"{slug}: canonical")

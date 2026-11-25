@@ -74,10 +74,10 @@ body.modale-aperto { overflow: hidden; }
 
 <nav class="relative z-10 border-b border-slate-900/5 bg-paper/70 backdrop-blur-xl">
   <div class="max-w-[1400px] mx-auto px-6 sm:px-8 h-16 flex items-center gap-8">
-    <a href="index.html" class="inline-flex items-center"><img src="brand/nivult.svg" alt="Nivult" class="h-6 w-auto"></a>
-    <a href="index.html#data" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Data</a>
-    <a href="index.html#coverage" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
-    <a href="index.html#pricing" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Pricing</a>
+    <a href="/" class="inline-flex items-center"><img src="brand/nivult.svg" alt="Nivult" class="h-6 w-auto"></a>
+    <a href="/#data" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Data</a>
+    <a href="/#coverage" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Coverage</a>
+    <a href="/#pricing" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-900 transition">Pricing</a>
     <div class="flex-1"></div>
     <span id="nav-stato" class="text-sm font-semibold text-slate-500"></span>
   </div>
@@ -292,7 +292,7 @@ body.modale-aperto { overflow: hidden; }
       <div class="mt-5 grid sm:grid-cols-3 gap-3">
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Daily bulk export</b><p id="access-bulk" class="mt-1 text-[12px] text-slate-500">Requires 500,000 credits/month</p></div>
         <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Delta feed</b><p id="access-delta" class="mt-1 text-[12px] text-slate-500">Requires 200,000 credits/month</p></div>
-        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Historical backfill</b><p id="access-history" class="mt-1 text-[12px] text-slate-500">Requires 1,000,000 credits/month</p></div>
+        <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-4"><b class="text-[13px]">Historical backfill</b><p id="access-history" class="mt-1 text-[12px] text-slate-500">Available on request</p></div>
       </div>
       <div class="mt-5 rounded-xl bg-brand-50 border border-brand-100 px-4 py-3 flex items-center gap-4 flex-wrap">
         <p class="basis-full sm:basis-auto text-[12.5px] text-slate-600 flex-1">Need more credits for API calls or filtered downloads? Choose the amount and check out yourself. Top-ups do not change the monthly feed entitlements above.</p>
@@ -533,7 +533,7 @@ body.modale-aperto { overflow: hidden; }
 <footer class="border-t border-slate-900/5 py-8">
   <div class="max-w-7xl mx-auto px-6 flex flex-wrap justify-between gap-4 text-sm text-slate-500">
     <span class="inline-flex items-center gap-2.5"><img src="brand/nivult.svg" alt="Nivult" class="h-4 w-auto"> · hiring and company intelligence</span>
-    <span><a href="terms.html" class="hover:text-brand-600 transition">Terms</a> · <a href="privacy.html" class="hover:text-brand-600 transition">Privacy</a> · <a href="index.html" class="hover:text-brand-600 transition">Back to the site</a> · <a href="mailto:hello@nivult.com" class="hover:text-brand-600 transition">hello@nivult.com</a></span>
+    <span><a href="/terms" class="hover:text-brand-600 transition">Terms</a> · <a href="/privacy" class="hover:text-brand-600 transition">Privacy</a> · <a href="/" class="hover:text-brand-600 transition">Back to the site</a> · <a href="mailto:hello@nivult.com" class="hover:text-brand-600 transition">hello@nivult.com</a></span>
   </div>
 </footer>
 
@@ -662,11 +662,12 @@ function aggiornaOnboarding() {
 function disegnaAccesso() {
   const volume = Number(saldoAccount.crediti_mensili || 0);
   document.getElementById("access-volume").textContent = volume.toLocaleString("en-US") + " credits / month";
-  for (const [id, soglia] of [["access-bulk", 500000], ["access-delta", 200000], ["access-history", 1000000]]) {
+  for (const [id, soglia] of [["access-bulk", 500000], ["access-delta", 200000]]) {
     document.getElementById(id).textContent = volume >= soglia
       ? "Included in your current access"
       : `Not included · requires ${soglia.toLocaleString("en-US")} credits/month`;
   }
+  document.getElementById("access-history").textContent = "Available on request";
 }
 function disegna() {
   const el = document.getElementById("chiavi-lista");

@@ -15,6 +15,7 @@ parte, per costruzione dello schema.
 from __future__ import annotations
 
 import hashlib
+from contextlib import asynccontextmanager
 import json
 import logging
 import ipaddress
@@ -23,17 +24,23 @@ import os
 import secrets
 import socket
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+from urllib.parse import quote
+from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 import psycopg
+import psycopg_pool
 from psycopg import Binary
+from psycopg.rows import dict_row
 from psycopg.types.json import Json
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, HTTPException,
                      Query, Request, Response, UploadFile)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
-                               RedirectResponse)
+                               RedirectResponse, StreamingResponse)
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field
 
@@ -42,6 +49,9 @@ from nivult import crypto, cv, gdpr, ponte_ats, storage
 from nivult.api import cruscotto as cruscotto_mod
 from nivult.api import booking as booking_mod
 from nivult.api_clienti import v1 as api_clienti_v1
+from nivult.api_clienti import chiavi as api_chiavi
+from nivult.api_clienti import opensearch as api_opensearch
+from nivult.api_clienti import vivo as api_vivo
 from nivult.ponte_ats import ats_database_url
 from nivult.config import database_url, load_dotenv
 from nivult.delivery import telegram as telegram_mod
@@ -50,7 +60,9 @@ from nivult.delivery import whatsapp as whatsapp_mod
 # ({'@type', 'value', 'currency'}) e' un dettaglio di archivio — chi lo
 # mostrava grezzo prendeva un oggetto React al posto di una riga di testo.
 from nivult.delivery.email import stipendio as _fmt_stipendio
+from nivult.matching import funnel as funnel_matching
 from nivult.matching.llm import GLM
+from nivult.matching.spiegazioni import evidenze
 from nivult.matching.worker import calcola_slot
 
 # I messaggi che il bot manda durante il collegamento. Non stanno in
@@ -107,11 +119,14 @@ def _benvenuto(locale: str, nome: str | None, frequency: str,
     battesimo = (nome or "").strip().split(" ")[0] if nome else ""
     testo = sagoma.replace("{nome}", f" {battesimo}" if battesimo else "")
     testo = testo.replace("{freq}", freq)
-    # ~Nivult~ nel dialetto del canale: HTML su Telegram, asterischi su
-    # WhatsApp. Il resto del testo non porta markup.
+    prodotto = os.environ.get("PRODUCT_NAME", "Nivult")
     if canale == "telegram":
-        return testo.replace("~Nivult~", "<b>Nivult</b>")
-    return testo.replace("~Nivult~", "*Nivult*")
+        return testo.replace("~Nivult~", f"<b>{prodotto}</b>")
+    return testo.replace("~Nivult~", f"*{prodotto}*")
+
+
+def _marchio(testo: str) -> str:
+    return testo.replace("Nivult", os.environ.get("PRODUCT_NAME", "Nivult"))
 
 
 WA_GIA_COLLEGATO = ("This WhatsApp number is already connected to another "
@@ -152,6 +167,7 @@ class RichiestaLink(BaseModel):
 
 class ConsumoLink(BaseModel):
     token: str
+    native_verifier: str | None = None
 
 
 class FiltriCluster(BaseModel):
@@ -169,8 +185,8 @@ class FiltriCluster(BaseModel):
     employment_types: list[str] = []
     accepted_employer_kinds: list[str] = []
     needs_visa_sponsorship: bool = False
-    min_headcount: int | None = None
-    max_headcount: int | None = None
+    min_headcount: int | None = Field(default=None, ge=0)
+    max_headcount: int | None = Field(default=None, gt=0)
     # Il ruolo a cui punta ("HR Business Partner"). La famiglia decide dove
     # si legge; questo dice cosa si cerca, e va al modello come segnale di
     # punteggio — mai come chiave di ingestione (misurato: per titolo si
@@ -183,6 +199,20 @@ class FiltriCluster(BaseModel):
     # questo testo entra nel prompt di OGNI offerta del cluster, quindi la
     # sua lunghezza si paga moltiplicata per il numero di offerte.
     wants: str | None = Field(default=None, max_length=1000)
+    min_salary_annual: float | None = Field(default=None, gt=0)
+    salary_currency: str | None = Field(default=None, pattern="^[A-Za-z]{3}$")
+    desired_technologies: list[str] = []
+    # La barra minima di score per QUESTA ricerca (slider 50-95 dell'app):
+    # NULL = il default del motore (70). Il worker la scrive in
+    # matches.threshold_used, da cui `passed` e' generata.
+    min_score: int | None = Field(default=None, ge=50, le=95)
+    frequency: Literal["daily", "weekly", "monthly"] | None = None
+    send_weekday: int | None = Field(default=None, ge=1, le=7)
+    send_monthday: int | None = Field(default=None, ge=1, le=28)
+    send_hour_local: int | None = Field(default=None, ge=0, le=23)
+    timezone: str | None = Field(default=None, max_length=100)
+
+    model_config = {"extra": "forbid"}
 
 
 class ProfiloCv(BaseModel):
@@ -231,6 +261,43 @@ class PreferenzeUtente(BaseModel):
     # chat o il numero di qualcun altro e dirottargli addosso i digest.
     # La lingua in cui l'utente legge: email, magic link, motivazioni GLM.
     locale: str | None = Field(default=None, pattern="^[a-z]{2}$")
+
+
+PUSH_TOKEN_PATTERN = r"^(?:ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_\-]+\]$"
+MAX_PUSH_TOKENS_PER_USER = 10
+
+
+class PushTokenRegistrazione(BaseModel):
+    """Il token push Expo di un dispositivo dell'app nativa."""
+    token: str = Field(min_length=10, max_length=200, pattern=PUSH_TOKEN_PATTERN)
+    platform: Literal["ios", "android"]
+
+
+class PushTokenRimozione(BaseModel):
+    token: str = Field(min_length=10, max_length=200, pattern=PUSH_TOKEN_PATTERN)
+
+
+class StatoOfferta(BaseModel):
+    base_version: int = Field(ge=0)
+    salvata: bool
+    scartata: bool
+    motivo_scarto: Literal["company", "target", "salary", "location", "seniority",
+                           "work_arrangement", "skills"] | None = None
+    in_archivio: bool
+    candidatura: Literal["not_started", "applied", "interview", "offer", "rejected"]
+    salvata_il: datetime | None = None
+    scartata_il: datetime | None = None
+    archiviata_il: datetime | None = None
+    applicata_il: datetime | None = None
+    note: str | None = Field(default=None, max_length=10000)
+    prossima_azione: str | None = Field(default=None, max_length=500)
+    prossima_azione_il: datetime | None = None
+
+
+class ColloquioOfferta(BaseModel):
+    inizio: datetime
+    note: str | None = Field(default=None, max_length=10000)
+    promemoria_minuti: int | None = Field(default=None, ge=0, le=43200)
 
 
 def _analizza_cv(conn, testo: str) -> dict:
@@ -371,14 +438,61 @@ def _classifica_ruolo(famiglie: list[str], ruolo: str) -> str | None:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Nivult", version="0.1.0", docs_url=None, redoc_url=None)
+    product_name = os.environ.get("PRODUCT_NAME", "Nivult")
+    service_name = os.environ.get("SERVICE_NAME", "nivult-api")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        account_pool = psycopg_pool.ConnectionPool(
+            database_url(), open=False, min_size=2, max_size=8,
+            kwargs={"connect_timeout": 2,
+                    "options": "-c statement_timeout=5000 "
+                               "-c idle_in_transaction_session_timeout=10000"},
+            timeout=2, max_lifetime=1800, max_idle=300,
+            check=psycopg_pool.ConnectionPool.check_connection)
+        lettura_pool = psycopg_pool.ConnectionPool(
+            os.environ.get("API_LETTURA_DSN", ""), open=False,
+            min_size=0, max_size=4, kwargs={"connect_timeout": 2},
+            timeout=2, max_lifetime=1800, max_idle=300,
+            check=psycopg_pool.ConnectionPool.check_connection)
+        client = httpx.Client(
+            base_url=api_opensearch.URL,
+            timeout=httpx.Timeout(20.0, connect=2.0),
+            limits=httpx.Limits(max_connections=16, max_keepalive_connections=16,
+                                keepalive_expiry=30.0))
+        app.state.account_pool = account_pool
+        app.state.lettura_pool = lettura_pool
+        app.state.opensearch_client = client
+        try:
+            account_pool.open(wait=True, timeout=5)
+            lettura_pool.open(wait=True, timeout=5)
+            api_chiavi.configura_pool(account_pool)
+            api_vivo.configura_pool(lettura_pool)
+            api_opensearch.configura_client(client)
+            yield
+        finally:
+            api_chiavi.configura_pool(None)
+            api_vivo.configura_pool(None)
+            api_opensearch.configura_client(None)
+            client.close()
+            lettura_pool.close()
+            account_pool.close()
+
+    app = FastAPI(title=product_name, version="0.1.0", docs_url=None, redoc_url=None,
+                  lifespan=lifespan)
+    b2b_attivo = os.environ.get(
+        "B2B_ENABLED", "0" if product_name == "Mavult" else "1"
+    ).strip().lower() in ("1", "true", "yes", "on")
+    b2b_prefissi = ("/v1", "/portale", "/me/chiavi", "/me/volumi",
+                    "/me/checkout", "/webhooks/creem", "/booking", "/cruscotto")
+    match_attivo = funnel_matching.match_attivo_sql()
     # Il sito sta su un altro origine per costruzione (Pages statico): senza
     # CORS non parla con noi. Gli origine ammessi stanno in ambiente.
     origini = [o.strip() for o in
                os.environ.get("CORS_ORIGINS", "https://nivult.com").split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware, allow_origins=origini, allow_methods=["*"],
-        allow_headers=["Authorization", "Content-Type"])
+        allow_headers=["Authorization", "Content-Type", "X-Api-Key"])
 
     @app.middleware("http")
     async def intestazioni_sicurezza(request: Request, call_next):
@@ -391,7 +505,10 @@ def create_app() -> FastAPI:
         e potrebbe aggiungerli, ma un default sano non va delegato a una
         configurazione che vive altrove.
         """
-        risposta = await call_next(request)
+        if not b2b_attivo and request.url.path.startswith(b2b_prefissi):
+            risposta = JSONResponse({"detail": "not found"}, status_code=404)
+        else:
+            risposta = await call_next(request)
         risposta.headers.setdefault("X-Content-Type-Options", "nosniff")
         if request.url.path.startswith("/cruscotto"):
             # dati confidenziali: mai dentro un iframe altrui (niente
@@ -424,7 +541,7 @@ def create_app() -> FastAPI:
     @app.get("/")
     def radice():
         # Il controllo che un umano può fare col browser: l'API è viva?
-        return {"servizio": "nivult-api", "stato": "ok"}
+        return {"servizio": service_name, "stato": "ok"}
 
     # Il cruscotto privato: pagina live del motore, dietro OAuth Microsoft
     # murato su UNA sola email (CRUSCOTTO_EMAIL). Niente token nell'URL.
@@ -498,12 +615,11 @@ def create_app() -> FastAPI:
         # non si scopre né se l'indirizzo esiste né quanto è vicino al muro.
         base = percorso = None
         dest = (corpo.redirect or "").strip()
-        if dest:
+        if dest and dest != oauth.NATIVE_CALLBACK and oauth.destinazione_valida(dest):
             from urllib.parse import urlparse
             u = urlparse(dest)
             origine = f"{u.scheme}://{u.netloc}"
-            if origine == oauth.site_url() or u.netloc.startswith("localhost"):
-                base, percorso = origine, u.path or "/verify"
+            base, percorso = origine, u.path or "/verify"
         auth.richiedi_magic_link(
             conn, str(corpo.email),
             ip=_ip(request),
@@ -517,11 +633,22 @@ def create_app() -> FastAPI:
                 conn=Depends(connessione)):
         r = auth.consuma(conn, corpo.token.strip(),
                          ip=_ip(request),
-                         ua=request.headers.get("User-Agent"))
+                         ua=request.headers.get("User-Agent"),
+                         native_verifier=corpo.native_verifier)
         if not r:
             raise HTTPException(401, "link scaduto, già usato o inesistente")
         sessione, uid = r
-        return {"sessione": sessione, "utente": {"id": uid}}
+        # Email e nome subito nella sessione: senza, l'app non sa chi sia
+        # l'utente fino alla prima /me — e un delivery_email vuoto faceva
+        # fallire ogni salvataggio impostazioni con un 422 muto.
+        with conn.cursor() as cur:
+            cur.execute("SELECT email::text, display_name FROM users "
+                        "WHERE id = %s", (uid,))
+            row = cur.fetchone()
+        return {"sessione": sessione,
+                "utente": {"id": uid,
+                           "email": row[0] if row else None,
+                           "nome": row[1] if row else None}}
 
     @app.post("/auth/logout")
     def logout(request: Request, uid: str = Depends(utente),
@@ -530,43 +657,66 @@ def create_app() -> FastAPI:
         auth.revoca_sessione(conn, header[7:].strip())
         return {"esito": "sessione revocata"}
 
-    # ── Accesso con Google e Microsoft ──────────────────────────────────────
+    # ── Accesso OAuth web e app nativa ──────────────────────────────────────
     #
-    # Sono navigazioni di primo livello del browser, non chiamate XHR: qui il
-    # CORS non c'entra nulla, e la risposta è sempre un 302.
-    #
-    # Il giro termina su /verify del sito con un gettone monouso, la stessa
-    # pagina in cui atterra il magic link. Così il token di sessione non entra
-    # mai in una URL, e il sito non guadagna una rotta.
+    # Il giro web termina su /verify o su una pagina B2B dello stesso sito;
+    # quello nativo sul solo deep link esatto. In URL viaggia sempre soltanto
+    # un gettone monouso, mai il token di sessione.
 
     def _al_sito(percorso: str) -> RedirectResponse:
         return RedirectResponse(f"{oauth.site_url()}{percorso}", status_code=302)
+
+    def _alla_destinazione(destinazione: str, **parametri: str) -> RedirectResponse:
+        from urllib.parse import urlencode
+        sep = "&" if "?" in destinazione else "?"
+        return RedirectResponse(f"{destinazione}{sep}{urlencode(parametri)}",
+                                status_code=302)
+
+    def _errore_nativo(contesto, codice: str) -> RedirectResponse | None:
+        if contesto and oauth.callback_nativa(contesto[0]):
+            return _alla_destinazione(
+                contesto[0], error=codice, native_state=contesto[1])
+        return None
 
     @app.get("/auth/oauth/{provider}/start")
     def oauth_start(provider: str, request: Request, conn=Depends(connessione)):
         # Rotta non autenticata che scrive una riga: le righe sono minuscole,
         # vivono dieci minuti, e ogni passaggio pota le scadute. Se un giorno
         # servisse un freno, va messo qui.
-        # `dest`: dove atterrare a fine giro (il portale B2B non e' /verify).
-        # Solo nostre origini: mai un redirect aperto verso fuori.
-        dest = (request.query_params.get("dest") or "").strip()
-        if dest and not (dest.startswith(oauth.site_url())
-                         or dest.startswith("http://localhost")):
-            dest = ""
+        dest = request.query_params.get("dest") or ""
+        native_state = request.query_params.get("native_state")
+        native_challenge = request.query_params.get("native_challenge")
+        destinazione = dest or None
+        if dest and not oauth.destinazione_valida(dest):
+            raise HTTPException(400, "destinazione OAuth non valida")
+        if not oauth.parametri_nativi_validi(
+                destinazione, native_state, native_challenge):
+            raise HTTPException(400, "parametri OAuth nativi non validi")
         try:
             return RedirectResponse(
-                oauth.inizia(conn, provider, destinazione=dest or None),
+                oauth.inizia(conn, provider, destinazione=destinazione,
+                             native_state=native_state,
+                             native_challenge=native_challenge),
                 status_code=302)
         except oauth.OAuthError as e:
+            if oauth.callback_nativa(destinazione):
+                return _alla_destinazione(
+                    destinazione, error=e.codice, native_state=native_state)
             return _al_sito(f"/login?errore={e.codice}")
 
     @app.get("/auth/oauth/{provider}/callback")
     def oauth_callback(provider: str, code: str = "", state: str = "",
                        error: str = "", conn=Depends(connessione)):
         if error:
-            # L'utente ha annullato sulla schermata del provider: non è un
-            # guasto, si torna al login senza drammi.
+            # La destinazione arriva soltanto dal flusso validato allo start:
+            # un eventuale `dest` sul callback viene ignorato.
+            contesto = oauth.annulla(conn, provider, state)
+            nativo = _errore_nativo(contesto, error[:128])
+            if nativo:
+                return nativo
             return _al_sito("/login?errore=accesso_annullato")
+
+        contesto = oauth.contesto(conn, provider, state)
         try:
             gettone, destinazione = oauth.concludi(conn, provider, code, state)
         except oauth.OAuthError as e:
@@ -574,12 +724,86 @@ def create_app() -> FastAPI:
             # un guasto: anche a log, cosi' un login OAuth che fallisce si
             # diagnostica senza ricostruirlo dal browser.
             log.warning("oauth callback %s fallita: %s", provider, e.codice)
+            nativo = _errore_nativo(contesto, e.codice)
+            if nativo:
+                return nativo
             return _al_sito(f"/login?errore={e.codice}")
+        if gettone is None:
+            if destinazione:
+                return _alla_destinazione(destinazione, collegato="1")
+            return _al_sito("/account?collegato=1")
+        if oauth.callback_nativa(destinazione):
+            if not contesto or contesto[0] != destinazione:
+                log.error("contesto nativo assente dopo il consumo dello state")
+                return _al_sito("/login?errore=contesto_nativo_assente")
+            return _alla_destinazione(
+                destinazione, token=gettone, native_state=contesto[1])
         if destinazione:
-            sep = "&" if "?" in destinazione else "?"
-            return RedirectResponse(f"{destinazione}{sep}token={gettone}",
-                                    status_code=302)
+            return _alla_destinazione(destinazione, token=gettone)
         return _al_sito(f"/verify?token={gettone}")
+
+    @app.post("/me/oauth/microsoft/collega")
+    def collega_microsoft(uid: str = Depends(utente), conn=Depends(connessione)):
+        try:
+            url = oauth.inizia(
+                conn, "microsoft",
+                destinazione=f"{oauth.site_url()}/account",
+                link_user_id=uid)
+        except oauth.OAuthError as e:
+            raise HTTPException(400, e.messaggio)
+        return {"url": url}
+
+    @app.get("/me/sicurezza")
+    def sicurezza_utente(request: Request, uid: str = Depends(utente),
+                         conn=Depends(connessione)):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT provider, link_method, last_login_at FROM oauth_identities "
+                "WHERE user_id = %s AND revoked_at IS NULL ORDER BY provider", (uid,))
+            provider = [{"provider": r[0], "metodo": r[1],
+                         "ultimo_accesso": r[2].isoformat() if r[2] else None}
+                        for r in cur.fetchall()]
+            cur.execute(
+                "SELECT id::text, created_at, last_seen_at, expires_at, origin, token_hash "
+                "FROM sessions WHERE user_id = %s AND revoked_at IS NULL "
+                "AND expires_at > now() ORDER BY created_at DESC", (uid,))
+            corrente = auth._sha256(request.headers["Authorization"][7:].strip())
+            sessioni = [{"id": r[0], "creata_il": r[1].isoformat(),
+                         "ultimo_uso": (r[2] or r[1]).isoformat(),
+                         "scade_il": r[3].isoformat(), "origine": r[4],
+                         "corrente": r[5] == corrente}
+                        for r in cur.fetchall()]
+        return JSONResponse({"provider": provider, "sessioni": sessioni},
+                            headers={"Cache-Control": "no-store"})
+
+    @app.delete("/me/sessioni/{session_id}")
+    def revoca_sessione_utente(session_id: str, uid: str = Depends(utente),
+                               conn=Depends(connessione)):
+        try:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE sessions SET revoked_at = now() "
+                            "WHERE id = %s AND user_id = %s AND revoked_at IS NULL",
+                            (session_id, uid))
+                if cur.rowcount != 1:
+                    conn.rollback()
+                    raise HTTPException(404, "sessione non trovata")
+            conn.commit()
+        except psycopg.errors.InvalidTextRepresentation:
+            conn.rollback()
+            raise HTTPException(404, "sessione non trovata") from None
+        return {"revocata": True}
+
+    @app.post("/me/sessioni/revoca-altre")
+    def revoca_altre_sessioni(request: Request, uid: str = Depends(utente),
+                              conn=Depends(connessione)):
+        corrente = auth._sha256(request.headers["Authorization"][7:].strip())
+        with conn.cursor() as cur:
+            cur.execute("UPDATE sessions SET revoked_at = now() "
+                        "WHERE user_id = %s AND revoked_at IS NULL "
+                        "AND token_hash <> %s", (uid, corrente))
+            revocate = cur.rowcount
+        conn.commit()
+        return {"revocate": revocate}
 
     @app.get("/me")
     def me(uid: str = Depends(utente), conn=Depends(connessione)):
@@ -595,19 +819,32 @@ def create_app() -> FastAPI:
                 # il pannello mostrava il piano senza dire cosa comprende,
                 # e «2 di 2» e' l'unico modo per sapere se ne resta una.
                 "q.max_searches, "
-                "(SELECT count(*) FROM user_clusters uc WHERE uc.user_id = u.id) "
+                "(SELECT count(*) FROM user_clusters uc WHERE uc.user_id = u.id), "
+                "(SELECT min(uc.next_digest_at) FROM user_clusters uc "
+                " JOIN clusters c ON c.id = uc.cluster_id "
+                " WHERE uc.user_id = u.id AND uc.frequency IS NOT NULL "
+                "   AND NOT uc.is_paused AND c.status = 'active'), "
+                "EXISTS (SELECT 1 FROM user_clusters uc_e "
+                "        JOIN clusters c_e ON c_e.id = uc_e.cluster_id "
+                "        WHERE uc_e.user_id = u.id AND uc_e.frequency IS NULL "
+                "          AND NOT uc_e.is_paused AND c_e.status = 'active'), "
+                "(SELECT max(uc.last_digest_at) FROM user_clusters uc "
+                " WHERE uc.user_id = u.id) "
                 "FROM users u JOIN plan_quotas q ON q.plan = u.plan "
                 "WHERE u.id = %s", (uid,))
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "utente inesistente")
+        prossimo = min((d for d in (r[8] if r[21] else None, r[20])
+                       if d is not None), default=None)
+        ultimo = max((d for d in (r[9], r[22]) if d is not None), default=None)
         return {"id": uid, "email": r[0], "piano": r[1], "abbonamento": r[2],
                 "canali": r[3], "frequenza": r[4], "fuso": r[5],
                 "email_verificata": r[6], "stato": r[7],
-                # La data vera, non la frequenza ripetuta: e' l'unica cosa
-                # che dice se il prodotto sta per fare qualcosa.
-                "prossimo_digest": r[8].isoformat() if r[8] else None,
-                "ultimo_digest": r[9].isoformat() if r[9] else None,
+                # Il minimo fra lo slot ereditato e gli override, senza
+                # riscrivere users.next_digest_at per abbellire la risposta.
+                "prossimo_digest": prossimo.isoformat() if prossimo else None,
+                "ultimo_digest": ultimo.isoformat() if ultimo else None,
                 "ora_invio": r[10], "giorno_settimana": r[11],
                 "giorno_mese": r[12], "email_consegna": r[13],
                 "nome": r[14], "locale": r[15],
@@ -667,6 +904,14 @@ def create_app() -> FastAPI:
                 "WHERE org_industry IS NOT NULL AND status = 'active' "
                 "GROUP BY 1 HAVING count(*) >= 5 ORDER BY count(*) DESC LIMIT 40")
             settori = [{"codice": i, "etichetta": i} for i, _ in cur.fetchall()]
+            cur.execute(
+                "SELECT skills.skill, count(*) FROM jobs j "
+                "CROSS JOIN LATERAL unnest(j.ai_key_skills) AS skills(skill) "
+                "WHERE j.status = 'active' "
+                "GROUP BY skills.skill HAVING count(*) >= 3 "
+                "ORDER BY count(*) DESC, skills.skill LIMIT 40")
+            tecnologie = [{"codice": s, "etichetta": s, "presente": True}
+                          for s, _ in cur.fetchall()]
 
         return {
             "livelli_esperienza": livelli,
@@ -681,6 +926,7 @@ def create_app() -> FastAPI:
             # Dal corpus, non da una lista scritta: i settori che il filtro
             # puo' davvero incontrare. La soglia tiene fuori il rumore.
             "settori": settori,
+            "tecnologie": tecnologie,
         }
 
     @app.get("/cluster")
@@ -696,6 +942,48 @@ def create_app() -> FastAPI:
                 "WHERE c.status = 'active' ORDER BY c.family, c.country")
             return [{"id": r[0], "famiglia": r[1], "paese": r[2],
                      "offerte_30g": r[3]} for r in cur.fetchall()]
+
+    @app.get("/copertura/paesi")
+    def copertura_paesi(family: str, conn=Depends(connessione)):
+        """Paesi realmente coperti per una famiglia, non un catalogo ISO."""
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM job_families WHERE family = %s", (family,))
+            if not cur.fetchone():
+                raise HTTPException(422, "famiglia professionale sconosciuta")
+            cur.execute(
+                "SELECT c.country, COALESCE(v.offerte_30g, 0) FROM clusters c "
+                "LEFT JOIN cluster_volume_v v ON v.id = c.id "
+                "WHERE c.family = %s AND c.status = 'active'", (family,))
+            attivi = {r[0]: r[1] for r in cur.fetchall() if r[0]}
+
+        from nivult.ingestion.runner import CLIENTS
+        statiche: dict[str, list[str]] = {}
+        for client in CLIENTS:
+            for code in client.countries:
+                statiche.setdefault(code, []).append(client.source)
+
+        with psycopg.connect(ats_database_url()) as c_ats, c_ats.cursor() as cur:
+            cur.execute(
+                "SELECT j.country, count(*) FROM ats_jobs j "
+                "JOIN job_classifications c ON c.job_id = j.id "
+                "  AND coalesce(c.confidence, 0) >= 0.5 "
+                "WHERE j.expired_at IS NULL "
+                "  AND coalesce(j.posted_at, j.fetched_at) >= now() - interval '30 days' "
+                "  AND c.family = %s GROUP BY j.country", (family,))
+            eleggibili = {r[0]: r[1] for r in cur.fetchall() if r[0]}
+
+        risultato = []
+        for code in sorted(set(statiche) | set(eleggibili) | set(attivi)):
+            fonti = statiche.get(code, [])
+            if code in eleggibili:
+                fonti = [*fonti, "ats"]
+            risultato.append({
+                "codice": code,
+                "stato": "active" if code in attivi else "available",
+                "fonti": fonti,
+                "offerte_30g": attivi.get(code, eleggibili.get(code, 0)),
+            })
+        return risultato
 
     def _valida_filtri(cur, filtri: FiltriCluster) -> None:
         """I valori devono esistere nei vocabolari: un refuso filtrerebbe
@@ -740,6 +1028,15 @@ def create_app() -> FastAPI:
             problemi.append({"campo": "min_headcount",
                              "valori": [filtri.min_headcount],
                              "ammessi": ["<= max_headcount"]})
+        if (filtri.min_salary_annual is None) != (filtri.salary_currency is None):
+            problemi.append({"campo": "min_salary_annual",
+                             "valori": [filtri.min_salary_annual, filtri.salary_currency],
+                             "ammessi": ["importo e valuta devono essere presenti insieme"]})
+        if (len(filtri.desired_technologies) > 15
+                or any(not item.strip() or len(item.strip()) > 80 for item in filtri.desired_technologies)):
+            problemi.append({"campo": "desired_technologies",
+                             "valori": filtri.desired_technologies,
+                             "ammessi": ["fino a 15 etichette non vuote da 80 caratteri"]})
         if problemi:
             raise HTTPException(422, detail=problemi)
 
@@ -773,44 +1070,144 @@ def create_app() -> FastAPI:
             "ON CONFLICT (role_norm) DO NOTHING", (norm, family))
         return family
 
-    def _scrivi_iscrizione(cur, uid: str, cluster_id: str,
-                           filtri: FiltriCluster) -> None:
-        """L'iscrizione a un cluster con i suoi filtri, in un posto solo.
+    def _ricerca_identificata(cur, uid: str, identificativo: str) -> tuple[str | None, str | None]:
+        cur.execute(
+            "SELECT id::text, cluster_id::text FROM user_clusters "
+            "WHERE user_id = %s AND id::text = %s", (uid, identificativo))
+        riga = cur.fetchone()
+        if riga:
+            return riga
+        cur.execute(
+            "SELECT id::text, cluster_id::text FROM user_clusters "
+            "WHERE user_id = %s AND cluster_id::text = %s", (uid, identificativo))
+        righe = cur.fetchall()
+        if len(righe) > 1:
+            raise HTTPException(409, "cluster_id is ambiguous: use the search UUID")
+        return righe[0] if righe else (None, identificativo)
 
-        La usano sia la PUT su una ricerca esistente sia l'apertura di una
-        nuova: due copie di questa INSERT vorrebbero dire che un campo nuovo
-        arriva in un percorso e non nell'altro, e il filtro mancante non si
-        vedrebbe — semplicemente non filtrerebbe.
-        """
+    _CAMPI_SCHEDULING = frozenset({
+        "frequency", "send_weekday", "send_monthday", "send_hour_local", "timezone",
+    })
+
+    def _pianificazione_ricerca(cur, uid: str, filtri: FiltriCluster):
+        presenti = _CAMPI_SCHEDULING & filtri.model_fields_set
+        if not presenti:
+            return None
+        if "frequency" not in presenti:
+            raise HTTPException(
+                422, "frequency e' richiesta insieme agli altri campi di pianificazione")
+        f = filtri.frequency
+        giorni = (filtri.send_weekday, filtri.send_monthday)
+        if f is None:
+            if any(v is not None for v in (
+                    *giorni, filtri.send_hour_local, filtri.timezone)):
+                raise HTTPException(422, "frequency null ripristina l'eredità: "
+                                    "gli altri valori devono essere null o assenti")
+            return None, None, None, None, None, None
+        if f == "daily" and any(v is not None for v in giorni):
+            raise HTTPException(422, "daily non ammette send_weekday né send_monthday")
+        if f == "weekly":
+            if filtri.send_weekday is None:
+                raise HTTPException(422, "weekly richiede send_weekday (1–7)")
+            if filtri.send_monthday is not None:
+                raise HTTPException(422, "weekly non ammette send_monthday")
+        if f == "monthly":
+            if filtri.send_monthday is None:
+                raise HTTPException(422, "monthly richiede send_monthday (1–28)")
+            if filtri.send_weekday is not None:
+                raise HTTPException(422, "monthly non ammette send_weekday")
+        if filtri.timezone is not None:
+            try:
+                ZoneInfo(filtri.timezone)
+            except (ValueError, KeyError):
+                raise HTTPException(422, "fuso orario non valido") from None
+
+        cur.execute("SELECT send_hour_local, timezone FROM users WHERE id = %s", (uid,))
+        ora_account, fuso_account = cur.fetchone()
+        ora = filtri.send_hour_local if filtri.send_hour_local is not None else ora_account
+        fuso = filtri.timezone or fuso_account
+        try:
+            slot = calcola_slot(f, ora, filtri.send_weekday, filtri.send_monthday,
+                                fuso, datetime.now(timezone.utc))
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(422, f"orario non calcolabile: {exc}") from None
+        return (f, filtri.send_weekday, filtri.send_monthday,
+                filtri.send_hour_local, filtri.timezone, slot)
+
+    def _scrivi_iscrizione(cur, uid: str, cluster_id: str,
+                           filtri: FiltriCluster,
+                           subscription_id: str | None = None) -> str | None:
+        """Scrive filtri e, solo se presente, l'intera pianificazione nuova."""
+        pianificazione = _pianificazione_ricerca(cur, uid, filtri)
         tipi = filtri.accepted_employer_kinds or \
             ["direct", "staffing_agency", "undisclosed"]
+        tecnologie = list(dict.fromkeys(
+            item.strip() for item in filtri.desired_technologies if item.strip()))
+        valori = (uid, cluster_id, filtri.languages, filtri.min_seniority,
+                  filtri.max_seniority, filtri.work_arrangements,
+                  filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
+                  filtri.min_headcount, filtri.max_headcount,
+                  (filtri.wants or "").strip() or None,
+                  (filtri.target_role or "").strip() or None,
+                  filtri.industries, filtri.min_salary_annual,
+                  filtri.salary_currency.upper() if filtri.salary_currency else None,
+                  tecnologie, filtri.min_score)
+        if subscription_id is not None:
+            sql = (
+                "UPDATE user_clusters SET languages = %s, min_seniority = %s, "
+                "  max_seniority = %s, work_arrangements = %s, employment_types = %s, "
+                "  needs_visa_sponsorship = %s, accepted_employer_kinds = %s, "
+                "  min_headcount = %s, max_headcount = %s, wants = %s, target_role = %s, "
+                "  industries = %s, min_salary_annual = %s, salary_currency = %s, "
+                "  desired_technologies = %s, min_score = %s, is_paused = false ")
+            params = valori[2:]
+            if pianificazione is not None:
+                sql += (", frequency = %s, send_weekday = %s, send_monthday = %s, "
+                        "send_hour_local = %s, timezone = %s, next_digest_at = %s ")
+                params += pianificazione
+            sql += "WHERE id = %s AND user_id = %s AND cluster_id = %s"
+            cur.execute(sql, params + (subscription_id, uid, cluster_id))
+            if cur.rowcount != 1:
+                raise HTTPException(404, "ricerca inesistente")
+            return subscription_id
+
+        colonne = (
+            "user_id, cluster_id, languages, min_seniority, max_seniority, "
+            "work_arrangements, employment_types, needs_visa_sponsorship, "
+            "accepted_employer_kinds, min_headcount, max_headcount, wants, "
+            "target_role, industries, min_salary_annual, salary_currency, "
+            "desired_technologies, min_score")
+        conflitto = (
+            "languages = EXCLUDED.languages, "
+            "min_seniority = EXCLUDED.min_seniority, "
+            "max_seniority = EXCLUDED.max_seniority, "
+            "work_arrangements = EXCLUDED.work_arrangements, "
+            "employment_types = EXCLUDED.employment_types, "
+            "needs_visa_sponsorship = EXCLUDED.needs_visa_sponsorship, "
+            "accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
+            "min_headcount = EXCLUDED.min_headcount, "
+            "max_headcount = EXCLUDED.max_headcount, wants = EXCLUDED.wants, "
+            "industries = EXCLUDED.industries, "
+            "min_salary_annual = EXCLUDED.min_salary_annual, "
+            "salary_currency = EXCLUDED.salary_currency, "
+            "desired_technologies = EXCLUDED.desired_technologies, "
+            "min_score = EXCLUDED.min_score, is_paused = false")
+        if pianificazione is not None:
+            colonne += (", frequency, send_weekday, send_monthday, "
+                        "send_hour_local, timezone, next_digest_at")
+            valori += pianificazione
+            conflitto += (", frequency = EXCLUDED.frequency, "
+                          "send_weekday = EXCLUDED.send_weekday, "
+                          "send_monthday = EXCLUDED.send_monthday, "
+                          "send_hour_local = EXCLUDED.send_hour_local, "
+                          "timezone = EXCLUDED.timezone, "
+                          "next_digest_at = EXCLUDED.next_digest_at")
+        segnaposto = ",".join(["%s"] * len(valori))
         cur.execute(
-            "INSERT INTO user_clusters (user_id, cluster_id, languages, "
-            "  min_seniority, max_seniority, work_arrangements, employment_types, "
-            "  needs_visa_sponsorship, accepted_employer_kinds, min_headcount, "
-            "  max_headcount, wants, target_role, industries) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
-            "ON CONFLICT (user_id, cluster_id) DO UPDATE SET "
-            "  languages = EXCLUDED.languages, "
-            "  min_seniority = EXCLUDED.min_seniority, "
-            "  max_seniority = EXCLUDED.max_seniority, "
-            "  work_arrangements = EXCLUDED.work_arrangements, "
-            "  employment_types = EXCLUDED.employment_types, "
-            "  needs_visa_sponsorship = EXCLUDED.needs_visa_sponsorship, "
-            "  accepted_employer_kinds = EXCLUDED.accepted_employer_kinds, "
-            "  min_headcount = EXCLUDED.min_headcount, "
-            "  max_headcount = EXCLUDED.max_headcount, "
-            "  wants = EXCLUDED.wants, "
-            "  target_role = EXCLUDED.target_role, "
-            "  industries = EXCLUDED.industries, "
-            "  is_paused = false",
-            (uid, cluster_id, filtri.languages, filtri.min_seniority,
-             filtri.max_seniority, filtri.work_arrangements,
-             filtri.employment_types, filtri.needs_visa_sponsorship, tipi,
-             filtri.min_headcount, filtri.max_headcount,
-             (filtri.wants or "").strip() or None,
-             (filtri.target_role or "").strip() or None,
-             filtri.industries))
+            f"INSERT INTO user_clusters ({colonne}) VALUES ({segnaposto}) "
+            "ON CONFLICT (user_id, cluster_id, target_role_key) DO UPDATE SET "
+            + conflitto + " RETURNING id::text", valori)
+        return cur.fetchone()[0]
 
     def _riempi_dal_archivio(cluster_id: str) -> None:
         """Travasa subito nel cluster appena aperto cio' che l'archivio ha.
@@ -842,6 +1239,39 @@ def create_app() -> FastAPI:
             log.warning("cluster %s: riempimento dall'archivio fallito: %s",
                         cluster_id, str(exc)[:200])
 
+    def _anticipa_primo_digest(cur, uid: str, *, nuova_ricerca_id: str | None = None,
+                               inizializza_override: bool = False) -> None:
+        """Anticipa solo il primo digest, senza riscrivere ogni modifica."""
+        cur.execute(
+            "UPDATE users u SET next_digest_at = now() "
+            "WHERE u.id = %s AND u.last_digest_at IS NULL "
+            "  AND (u.next_digest_at IS NULL OR u.next_digest_at > now()) "
+            "  AND NOT EXISTS (SELECT 1 FROM digests d WHERE d.user_id = u.id) "
+            "  AND EXISTS (SELECT 1 FROM user_cvs cv "
+            "              WHERE cv.user_id = u.id AND cv.status = 'active') "
+            "  AND EXISTS (SELECT 1 FROM user_clusters uc "
+            "              JOIN clusters c ON c.id = uc.cluster_id "
+            "              WHERE uc.user_id = u.id AND NOT uc.is_paused "
+            "                AND uc.frequency IS NULL AND c.status = 'active')", (uid,))
+        if nuova_ricerca_id is None and not inizializza_override:
+            return
+        sql = (
+            "UPDATE user_clusters uc SET next_digest_at = now() "
+            "FROM users u, clusters c "
+            "WHERE u.id = uc.user_id AND c.id = uc.cluster_id AND u.id = %s "
+            "  AND uc.frequency IS NOT NULL AND uc.last_digest_at IS NULL "
+            "  AND (uc.next_digest_at IS NULL OR uc.next_digest_at > now()) "
+            "  AND NOT uc.is_paused AND c.status = 'active' "
+            "  AND u.last_digest_at IS NULL "
+            "  AND NOT EXISTS (SELECT 1 FROM digests d WHERE d.user_id = u.id) "
+            "  AND EXISTS (SELECT 1 FROM user_cvs cv "
+            "              WHERE cv.user_id = u.id AND cv.status = 'active')")
+        params: list = [uid]
+        if nuova_ricerca_id is not None:
+            sql += " AND uc.id = %s"
+            params.append(nuova_ricerca_id)
+        cur.execute(sql, params)
+
     @app.post("/me/ricerca", status_code=201)
     def apri_ricerca(corpo: NuovaRicerca, sfondo: BackgroundTasks,
                      uid: str = Depends(utente),
@@ -850,9 +1280,9 @@ def create_app() -> FastAPI:
         c'e' ancora.
 
         Il tetto del piano si verifica QUI e non solo nel sito: e' anche il
-        freno sui crediti. Ogni ricerca e' un cluster che entra
-        nell'ingestione notturna e consuma il tetto mensile della fonte
-        finche' resta attiva, quindi il numero non e' una regola commerciale
+        freno sui crediti. Ogni ruolo seguito usa un cluster condiviso, che
+        entra nell'ingestione notturna e consuma il tetto mensile della fonte
+        finche' resta attivo, quindi il numero non e' una regola commerciale
         soltanto.
         """
         paese = corpo.country.upper()
@@ -883,14 +1313,28 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, "piano sconosciuto")
             tetto, attuali = r
 
-            cur.execute("SELECT c.id::text FROM user_clusters uc "
+            ruolo_chiave = (corpo.filtri.target_role or "").strip().lower()
+            cur.execute("SELECT 1 FROM user_clusters uc "
                         "JOIN clusters c ON c.id = uc.cluster_id "
-                        "WHERE uc.user_id = %s AND c.family = %s AND c.country = %s",
-                        (uid, famiglia, paese))
+                        "WHERE uc.user_id = %s AND c.family = %s AND c.country = %s "
+                        "AND uc.target_role_key = %s",
+                        (uid, famiglia, paese, ruolo_chiave))
             gia = cur.fetchone()
-            # Cambiare i filtri di una ricerca che si ha gia' non consuma una
-            # posizione: e' la stessa ricerca.
-            if not gia and attuali >= tetto:
+            esistente_generica = None
+            if ruolo_chiave:
+                cur.execute(
+                    "SELECT uc.id::text FROM user_clusters uc "
+                    "JOIN clusters c ON c.id = uc.cluster_id "
+                    "WHERE uc.user_id = %s AND c.family = %s AND c.country = %s "
+                    "AND uc.target_role_key = '' "
+                    "AND NOT EXISTS (SELECT 1 FROM user_clusters alt "
+                    "                WHERE alt.user_id = uc.user_id "
+                    "                  AND alt.cluster_id = uc.cluster_id "
+                    "                  AND alt.target_role_key <> '')",
+                    (uid, famiglia, paese))
+                esistente_generica = cur.fetchone()
+            # Cambiare filtri o assegnare il primo ruolo non consuma una posizione.
+            if not gia and not esistente_generica and attuali >= tetto:
                 raise HTTPException(
                     409,
                     f"Your plan covers {tetto} searches, and you have {attuali}. "
@@ -904,10 +1348,23 @@ def create_app() -> FastAPI:
             cluster_id = cur.fetchone()[0]
 
             _valida_filtri(cur, corpo.filtri)
-            _scrivi_iscrizione(cur, uid, cluster_id, corpo.filtri)
+            try:
+                ricerca_id = _scrivi_iscrizione(
+                    cur, uid, cluster_id, corpo.filtri,
+                    esistente_generica[0] if esistente_generica else None)
+            except psycopg.errors.CheckViolation as exc:
+                conn.rollback()
+                raise HTTPException(422, "pianificazione o filtri incoerenti") from exc
+            _anticipa_primo_digest(
+                cur, uid,
+                nuova_ricerca_id=(ricerca_id if not gia and not esistente_generica
+                                  else None))
             cur.execute("SELECT status, last_successful_fetch_at IS NOT NULL "
                         "FROM clusters WHERE id = %s", (cluster_id,))
             _, gia_letto = cur.fetchone()
+            cur.execute("SELECT next_digest_at, last_digest_at FROM user_clusters "
+                        "WHERE id = %s AND user_id = %s", (ricerca_id, uid))
+            prossimo, ultimo = cur.fetchone()
         conn.commit()
         # Il mercato si riempie SUBITO da cio' che abbiamo gia' in archivio,
         # senza chiamare nessuna fonte a pagamento e senza aspettare la notte.
@@ -915,7 +1372,134 @@ def create_app() -> FastAPI:
         # `nuovo` dice al sito se il primo digest deve aspettare la prima
         # ingestione notturna: un mercato appena aperto non ha ancora offerte,
         # e non dirlo farebbe sembrare guasto un prodotto che sta lavorando.
-        return {"id": cluster_id, "nuovo": not gia_letto, "famiglia": famiglia}
+        return {"id": ricerca_id, "cluster_id": cluster_id,
+                "nuovo": not gia_letto, "famiglia": famiglia,
+                "next_digest_at": prossimo.isoformat() if prossimo else None,
+                "last_digest_at": ultimo.isoformat() if ultimo else None}
+
+    # Le traduzioni fra i campi ATS e i vocabolari del motore: le STESSE del
+    # ponte (ponte_ats._come_rawjob), tenute a mano su due righe perche' li'
+    # sono locali alla funzione. Se una cambia, cambi anche l'altra.
+    _SEN_ATS = {"intern": "0-2", "junior": "0-2", "mid": "2-5",
+                "senior": "5-10", "lead": "5-10", "head": "10+"}
+    _REM_ATS = {"remote": "Remote Solely", "hybrid": "Hybrid",
+                "onsite": "On-site"}
+
+    @app.post("/me/ricerche/stima")
+    def stima_ricerca(corpo: NuovaRicerca, uid: str = Depends(utente),
+                      conn=Depends(connessione)):
+        """Quante offerte degli ultimi 30 giorni passano queste regole.
+
+        Il numero che la tab Regole mostra come «riceverai ~N ruoli a
+        settimana»: prima era finto (contava match locali), ora e' il conto
+        vero sull'archivio ATS — lo stesso corpus da cui il ponte riempie i
+        cluster (`/copertura/paesi` legge con la stessa query di base).
+
+        QUALI FILTRI ENTRANO NEL CONTO — solo quelli con un campo ATS
+        affidabile, con la STESSA semantica del funnel (funnel.py: un campo
+        NULL non esclude mai):
+
+          - languages            -> ats_jobs.lang (il ponte la copia cosi')
+          - work_arrangements    -> ats_jobs.remote, tradotta con _REM_ATS
+          - min/max_seniority    -> ats_jobs.seniority, tradotta con _SEN_ATS
+          - min_salary_annual    -> salary_min/currency/period/salary_da,
+                                    clausola identica a quella del funnel
+
+        QUALI RESTANO FUORI, e perche':
+
+          - employment_types: ats_jobs.employment_type ha un vocabolario suo
+            («FullTime», «Employee»…) che il ponte NON traduce apposta —
+            filtrarlo qui escluderebbe offerte che il digest terrebbe;
+          - accepted_employer_kinds: employer_kind nasce da un trigger sul
+            database del motore, nell'archivio ATS non esiste;
+          - industries, min/max_headcount: sono campi dell'organizzazione
+            arricchita sul motore (org_industry/org_headcount), non di
+            ats_jobs;
+          - needs_visa_sponsorship, wants, target_role, desired_technologies:
+            non sono filtri deterministici nemmeno nel funnel — sono segnali
+            di punteggio per il modello, e una stima non li puo' contare.
+
+        Il conto e' anche PRE-dedup: la stessa posizione pubblicata da due
+        fonti conta due volte (il ponte la collassa, il funnel no finche'
+        non entra nel motore). La stima e' quindi grossolana ma vera: mai
+        piu' bassa del digest reale, piu' alta di poco.
+        """
+        paese = corpo.country.upper()
+        filtri = corpo.filtri
+        with conn.cursor() as cur:
+            famiglia = corpo.family
+            if not famiglia:
+                ruolo = (filtri.target_role or "").strip()
+                if not ruolo:
+                    raise HTTPException(422, "serve la famiglia oppure il ruolo")
+                famiglia = _famiglia_dal_ruolo(cur, ruolo)
+            cur.execute("SELECT 1 FROM job_families WHERE family = %s",
+                        (famiglia,))
+            if not cur.fetchone():
+                raise HTTPException(422, "famiglia professionale sconosciuta")
+            # La stessa validazione della creazione: un refuso nel filtro
+            # darebbe una stima a zero che sembra «mercato vuoto».
+            _valida_filtri(cur, filtri)
+
+            # La fascia di seniority in codici motore, poi rovesciata nei
+            # valori ATS che vi si traducono (stessa query del funnel).
+            cur.execute(
+                "SELECT code FROM experience_levels WHERE rank BETWEEN "
+                "COALESCE((SELECT rank FROM experience_levels WHERE code = %s), 0) "
+                "AND COALESCE((SELECT rank FROM experience_levels WHERE code = %s), 5)",
+                (filtri.min_seniority, filtri.max_seniority))
+            livelli = {r[0] for r in cur.fetchall()}
+
+        sql = ("SELECT count(*) FROM ats_jobs j "
+               "JOIN job_classifications c ON c.job_id = j.id "
+               "  AND coalesce(c.confidence, 0) >= 0.5 "
+               "WHERE j.expired_at IS NULL "
+               "  AND coalesce(j.posted_at, j.fetched_at) "
+               "      >= now() - interval '30 days' "
+               "  AND c.family = %s AND j.country = %s")
+        params: list = [famiglia, paese]
+
+        if filtri.languages:
+            sql += " AND (j.lang IS NULL OR j.lang = ANY(%s))"
+            params.append(filtri.languages)
+        if filtri.work_arrangements:
+            # NULL e valori che il ponte non sa tradurre non escludono:
+            # nel motore arriverebbero come ai_work_arrangement NULL.
+            ammessi = [k for k, v in _REM_ATS.items()
+                       if v in filtri.work_arrangements]
+            sql += (" AND (j.remote IS NULL OR NOT (j.remote = ANY(%s)) "
+                    "OR j.remote = ANY(%s))")
+            params += [list(_REM_ATS), ammessi]
+        if filtri.min_seniority or filtri.max_seniority:
+            ammessi = [k for k, v in _SEN_ATS.items() if v in livelli]
+            sql += (" AND (j.seniority IS NULL OR NOT (j.seniority = ANY(%s)) "
+                    "OR j.seniority = ANY(%s))")
+            params += [list(_SEN_ATS), ammessi]
+        if filtri.min_salary_annual is not None:
+            # La clausola del funnel, parola per parola: il salario vincola
+            # solo se dichiarato, annuale/mensile e nella stessa valuta.
+            sql += (" AND (j.salary_min IS NULL OR j.salary_period IS NULL "
+                    "OR j.salary_currency IS NULL OR j.salary_da IS NULL "
+                    "OR j.salary_da <> 'dichiarato' "
+                    "OR j.salary_currency <> %s "
+                    "OR lower(j.salary_period) NOT IN ('year', 'month') "
+                    "OR j.salary_min * CASE lower(j.salary_period) "
+                    "  WHEN 'year' THEN 1 ELSE 12 END >= %s)")
+            params += [filtri.salary_currency.upper(),
+                       filtri.min_salary_annual]
+
+        try:
+            with psycopg.connect(ats_database_url()) as c_ats, \
+                 c_ats.cursor() as cur:
+                cur.execute(sql, params)
+                n = cur.fetchone()[0]
+        except Exception as exc:  # noqa: BLE001
+            # L'archivio ATS irraggiungibile non deve rompere la pagina delle
+            # regole: 503 esplicito, il sito mostra «stima non disponibile».
+            log.error("stima ricerca: archivio ATS non leggibile: %s",
+                      str(exc)[:200])
+            raise HTTPException(503, "stima non disponibile in questo momento")
+        return {"offerte_30g": n, "stima_settimanale": round(n / 4.3)}
 
     def _svuota(request_id: str, email: str) -> None:
         """Lo svuotamento vero, in sottofondo e su una connessione sua.
@@ -967,47 +1551,238 @@ def create_app() -> FastAPI:
         sfondo.add_task(_svuota, request_id, uid)
         return {"esito": "cancellazione avviata", "richiesta": request_id}
 
-    @app.get("/me/offerte")
-    def mie_offerte(uid: str = Depends(utente), conn=Depends(connessione),
-                    limite: int = Query(40, ge=1, le=100),
-                    lingua: str = Query("en")):
-        """Le offerte che hanno superato la soglia per questo utente.
+    _OFFERTE_COLONNE = """
+        m.id::text AS id, m.score, m.reason, m.evaluated_at,
+        m.saved_at, m.dismissed_at, m.dismiss_reason, m.archived_at,
+        m.application_status, m.applied_at, m.action_version, m.user_action_at,
+        m.note, m.next_action, m.next_action_at,
+        j.title, j.organization, j.url, j.link_kind, j.employer_kind,
+        j.cities, j.salary,
+        COALESCE(j.org_linkedin_slug, j.domain_derived) AS logo_slug,
+        j.purged_at, j.source, j.date_posted, j.date_posted_declared,
+        j.date_valid_through, j.first_seen_at, j.last_seen_alive_at,
+        j.status AS offerta_status,
+        ricerche.ricerca_ids, ricerche.ricerca_eleggibile_ids
+    """
+    _OFFERTE_FROM = """
+        FROM matches m
+        JOIN jobs j ON j.id = m.job_id
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(array_agg(uc_r.id::text ORDER BY uc_r.created_at, uc_r.id), '{}')
+              AS ricerca_ids,
+            COALESCE(array_agg(uc_r.id::text ORDER BY uc_r.created_at, uc_r.id)
+              FILTER (WHERE NOT uc_r.is_paused AND c_r.status = 'active'
+                            AND m.score >= COALESCE(uc_r.min_score, 70)), '{}')
+              AS ricerca_eleggibile_ids
+          FROM job_clusters jc_r
+          JOIN user_clusters uc_r ON uc_r.cluster_id = jc_r.cluster_id
+                                 AND uc_r.user_id = m.user_id
+          JOIN clusters c_r ON c_r.id = uc_r.cluster_id
+          WHERE jc_r.job_id = m.job_id
+        ) ricerche ON TRUE
+    """
 
-        Solo quelle passate: le scartate sono rumore, e mostrarle
-        contraddirebbe la promessa — leggiamo tutto perche' te ne arrivi
-        poco. Il conteggio del letto resta pero' nell'intestazione, perche'
-        e' il lavoro fatto.
-        """
+    def _iso(valore):
+        return valore.isoformat() if valore is not None else None
+
+    def _serializza_offerta(r: dict, lingua: str, *, dettaglio: bool = False) -> dict:
+        analisi = r.get("analysis") or {}
+        raw = r.get("raw") or {}
+        offerta = {
+            "punteggio": r["score"],
+            "motivo": (analisi.get("perche") or r["reason"]) if dettaglio else r["reason"],
+            "quando": _iso(r["evaluated_at"]),
+            "titolo": r["title"], "azienda": r["organization"], "url": r["url"],
+            "link_kind": r["link_kind"], "id": r["id"],
+            "tipo_datore": r["employer_kind"],
+            "citta": (r["cities"] or [None])[0],
+            "stipendio": _fmt_stipendio(r["salary"], lingua or "en") or None,
+            "logo": f"/logo/{r['logo_slug']}" if r["logo_slug"] else None,
+            "archiviata": r["purged_at"] is not None,
+            "salvata": r["saved_at"] is not None,
+            "scartata": r["dismissed_at"] is not None,
+            "motivo_scarto": r["dismiss_reason"],
+            "in_archivio": r["archived_at"] is not None,
+            "candidatura": r["application_status"],
+            "applicata_il": _iso(r["applied_at"]),
+            "action_version": r["action_version"],
+            "azioni_aggiornate_il": _iso(r["user_action_at"]),
+            "note": r["note"],
+            "prossima_azione": r["next_action"],
+            "prossima_azione_il": _iso(r["next_action_at"]),
+            "fonte": r["source"],
+            "pubblicata_il": (_iso(r["date_posted"])
+                              if r["date_posted_declared"] is True else None),
+            "valid_through": _iso(r["date_valid_through"]),
+            "prima_rilevazione": _iso(r["first_seen_at"]),
+            "ultima_verifica": _iso(r["last_seen_alive_at"]),
+            "offerta_status": r["offerta_status"],
+            "ricerca_ids": list(r["ricerca_ids"] or []),
+            "ricerca_eleggibile_ids": list(r["ricerca_eleggibile_ids"] or []),
+        }
+        if dettaglio:
+            offerta["annuncio"] = {
+                "responsabilita": (analisi.get("responsabilita")
+                                   or _campo_testo(raw.get("ai_core_responsibilities"))),
+                "requisiti": (analisi.get("requisiti")
+                              or _campo_testo(raw.get("ai_requirements_summary"))),
+                "benefit": (analisi.get("benefit")
+                            or _campo_testo(raw.get("ai_benefits"))),
+                "orario": _campo_testo(raw.get("ai_working_hours")),
+            }
+            offerta["analisi"] = ({"pro": analisi.get("pros") or [],
+                                   "attenzioni": analisi.get("cons") or []}
+                                  if analisi else None)
+            offerta["evidence"] = r.get("evidence")
+            offerta["colloqui"] = list(r.get("colloqui") or [])
+            offerta["documenti"] = list(r.get("documenti") or [])
+        return offerta
+
+    def _riga_offerta(cur, uid: str, match_id, *, completa: bool = False) -> dict:
+        extra = ", m.analysis AS analysis, j.raw AS raw" if completa else ""
+        cur.execute(
+            f"SELECT {_OFFERTE_COLONNE} {extra} {_OFFERTE_FROM} "
+            "WHERE m.id = %s AND m.user_id = %s",
+            (str(match_id), uid))
+        riga = cur.fetchone()
+        if riga is None:
+            raise HTTPException(404, "posting not found")
+        return riga
+
+    def _carica_collezioni(cur, uid: str, riga: dict) -> dict:
+        cur.execute(
+            "SELECT id::text AS id, starts_at, note, reminder_minutes "
+            "FROM match_interviews WHERE match_id = %s AND user_id = %s "
+            "ORDER BY starts_at, id", (riga["id"], uid))
+        riga["colloqui"] = [{
+            "id": r["id"], "inizio": _iso(r["starts_at"]), "note": r["note"],
+            "promemoria_minuti": r["reminder_minutes"],
+        } for r in cur.fetchall()]
+        cur.execute(
+            "SELECT id::text AS id, original_filename, mime_type, size_bytes, created_at "
+            "FROM match_documents WHERE match_id = %s AND user_id = %s "
+            "ORDER BY created_at, id", (riga["id"], uid))
+        riga["documenti"] = [{
+            "id": r["id"], "nome": r["original_filename"], "mime": r["mime_type"],
+            "dimensione": r["size_bytes"], "creato_il": _iso(r["created_at"]),
+        } for r in cur.fetchall()]
+        return riga
+
+    def _offerta_canonica(cur, uid: str, match_id) -> dict:
+        riga = _riga_offerta(cur, uid, match_id, completa=True)
+        return _serializza_offerta(_carica_collezioni(cur, uid, riga), "en", dettaglio=True)
+
+    def _stato_attuale(r: dict) -> tuple:
+        return (r["saved_at"] is not None, r["dismissed_at"] is not None,
+                r["dismiss_reason"], r["archived_at"] is not None,
+                r["application_status"], r["note"], r["next_action"],
+                r["next_action_at"])
+
+    def _conflitto_stato(r: dict) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "stato cambiato: rileggi la versione corrente",
+                     "offerta": _serializza_offerta(r, "en")})
+
+    @app.get("/me/offerte")
+    def mie_offerte(
+            vista: Literal["match", "azioni", "salvate", "candidature",
+                           "scartate", "archivio"] = Query("match"),
+            ricerca_id: UUID | None = Query(None),
+            uid: str = Depends(utente), conn=Depends(connessione),
+            limite: int = Query(40, ge=1, le=100),
+            offset: int = Query(0, ge=0), lingua: str = Query("en")):
+        ricerca_uuid = None
+        if ricerca_id is not None:
+            with conn.cursor() as cur:
+                ricerca_uuid, _ = _ricerca_identificata(cur, uid, str(ricerca_id))
+            if ricerca_uuid is None:
+                raise HTTPException(404, "ricerca inesistente")
+
+        where = ["m.user_id = %s"]
+        params: list = [uid]
+        azione = (
+            "m.saved_at IS NOT NULL OR m.dismissed_at IS NOT NULL "
+            "OR m.archived_at IS NOT NULL OR m.application_status <> 'not_started' "
+            "OR m.note IS NOT NULL OR m.next_action IS NOT NULL "
+            "OR m.next_action_at IS NOT NULL "
+            "OR EXISTS (SELECT 1 FROM match_interviews mi "
+            "           WHERE mi.match_id = m.id AND mi.user_id = m.user_id) "
+            "OR EXISTS (SELECT 1 FROM match_documents md "
+            "           WHERE md.match_id = m.id AND md.user_id = m.user_id)")
+        if vista == "match":
+            if ricerca_uuid is None:
+                where.append(match_attivo)
+            else:
+                where.append("""EXISTS (
+                    SELECT 1 FROM job_clusters jc_f
+                    JOIN user_clusters uc_f ON uc_f.cluster_id = jc_f.cluster_id
+                    JOIN clusters c_f ON c_f.id = uc_f.cluster_id
+                    WHERE jc_f.job_id = m.job_id AND uc_f.id = %s
+                      AND uc_f.user_id = m.user_id AND NOT uc_f.is_paused
+                      AND c_f.status = 'active'
+                      AND m.score >= COALESCE(uc_f.min_score, 70))""")
+                params.append(ricerca_uuid)
+            where += ["j.status = 'active'", "m.dismissed_at IS NULL",
+                      "m.archived_at IS NULL", "m.application_status = 'not_started'"]
+        else:
+            if vista == "azioni":
+                where.append(f"({azione})")
+            elif vista == "salvate":
+                where.append("m.saved_at IS NOT NULL")
+            elif vista == "candidature":
+                where.append("m.application_status <> 'not_started'")
+            elif vista == "scartate":
+                where.append("m.dismissed_at IS NOT NULL")
+            else:
+                where.append("m.archived_at IS NOT NULL")
+            if ricerca_uuid is not None:
+                where.append("""EXISTS (
+                    SELECT 1 FROM job_clusters jc_f
+                    JOIN user_clusters uc_f ON uc_f.cluster_id = jc_f.cluster_id
+                    WHERE jc_f.job_id = m.job_id AND uc_f.id = %s
+                      AND uc_f.user_id = m.user_id)""")
+                params.append(ricerca_uuid)
+
+        condizione = " AND ".join(f"({parte})" for parte in where)
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(f"SELECT count(*) AS totale {_OFFERTE_FROM} WHERE {condizione}",
+                        params)
+            totale = cur.fetchone()["totale"]
+            cur.execute(
+                f"SELECT {_OFFERTE_COLONNE} {_OFFERTE_FROM} WHERE {condizione} "
+                "ORDER BY m.evaluated_at DESC, m.id DESC LIMIT %s OFFSET %s",
+                params + [limite, offset])
+            righe = cur.fetchall()
+            cur.execute("SELECT count(*) AS valutate FROM matches WHERE user_id = %s",
+                        (uid,))
+            valutate = cur.fetchone()["valutate"]
+        return {"valutate": valutate,
+                "offerte": [_serializza_offerta(r, lingua) for r in righe],
+                "totale": totale}
+
+    @app.get("/me/digest")
+    def storico_digest(uid: str = Depends(utente), conn=Depends(connessione)):
+        """Le lettere realmente consegnate, con i match inclusi."""
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT m.score, m.reason, m.evaluated_at, "
-                "       j.title, j.organization, j.url, j.link_kind, "
-                "       m.id::text, "
-                "       j.employer_kind, j.cities, j.salary, "
-                "       COALESCE(j.org_linkedin_slug, j.domain_derived), "
-                "       j.purged_at IS NOT NULL "
-                "FROM matches m JOIN jobs j ON j.id = m.job_id "
-                "WHERE m.user_id = %s AND m.passed "
-                "ORDER BY m.evaluated_at DESC, m.score DESC LIMIT %s",
-                (uid, limite))
-            righe = cur.fetchall()
-            cur.execute("SELECT count(*) FROM matches WHERE user_id = %s", (uid,))
-            lette = cur.fetchone()[0]
-        return {
-            "valutate": lette,
-            "offerte": [{
-                "punteggio": r[0], "motivo": r[1],
-                "quando": r[2].isoformat() if r[2] else None,
-                "titolo": r[3], "azienda": r[4], "url": r[5],
-                # Serve al sito per l'etichetta di trasparenza: "candidatura
-                # diretta" oppure "via <agenzia nazionale>".
-                "link_kind": r[6], "id": r[7], "tipo_datore": r[8],
-                "citta": (r[9] or [None])[0],
-                "stipendio": _fmt_stipendio(r[10], lingua) or None,
-                "logo": f"/logo/{r[11]}" if r[11] else None,
-                "archiviata": r[12],
-            } for r in righe],
-        }
+                "SELECT d.id::text, d.sent_at, d.scheduled_for, d.status, "
+                "       d.jobs_evaluated_count, d.jobs_sent_count, "
+                "       COALESCE(array_agg(di.match_id::text) FILTER "
+                "         (WHERE di.match_id IS NOT NULL), '{}') "
+                "FROM digests d LEFT JOIN digest_items di ON di.digest_id = d.id "
+                "WHERE d.user_id = %s AND d.status IN ('sent', 'skipped_empty') "
+                "GROUP BY d.id ORDER BY d.scheduled_for DESC LIMIT 30", (uid,))
+            return [{
+                "id": r[0],
+                "timestamp": (r[1] or r[2]).isoformat(),
+                "kind": "silence" if r[3] == "skipped_empty" or r[5] == 0 else "digest",
+                "readCount": r[4],
+                "selectedCount": r[5],
+                "read": True,
+                "matchIds": r[6],
+            } for r in cur.fetchall()]
 
     # ── il portale clienti B2B: le chiavi API dell'utente (27/09/2026) ──
     # Self-service: il cliente crea e revoca da solo. La chiave in chiaro
@@ -1016,17 +1791,36 @@ def create_app() -> FastAPI:
     # della landing ("first 1,000 credits free").
     from nivult.api_clienti import chiavi as _chiavi
 
+    @app.exception_handler(_chiavi.ContatoreNonDisponibile)
+    async def contatore_non_disponibile(request: Request, exc: Exception):
+        return JSONResponse({"detail": "credit metering temporarily unavailable"},
+                            status_code=503)
+
     @app.get("/me/chiavi")
-    def mie_chiavi(uid: str = Depends(utente)):
+    def mie_chiavi(uid: str = Depends(utente), conn=Depends(connessione)):
         extra = _chiavi.extra_per_utente(uid)
         lista, trial = _chiavi.trial_per_utente(uid)
+        interno = _chiavi.riepilogo_per_utente(uid)
+        saldo = {
+            "monthly_credits": interno["crediti_mensili"],
+            "used": interno["usati"],
+            "monthly_remaining": interno["residui_mensili"],
+            "purchased_credits": interno["crediti_extra"],
+            "balance": interno["saldo"],
+            "usage_month": interno["mese_uso"],
+        }
         rivelazioni = _chiavi.conta_rivelazioni(uid)
+        with conn.cursor() as cur:
+            cur.execute("SELECT EXISTS(SELECT 1 FROM portale_uso "
+                        "WHERE user_id = %s AND via = 'api')", (uid,))
+            prima_chiamata = cur.fetchone()[0]
+        base = {"extra": extra, "saldo": saldo, "rivelazioni": rivelazioni,
+                "prima_chiamata_fatta": prima_chiamata}
         if lista:
-            return {"chiavi": lista, "extra": extra, "rivelazioni": rivelazioni}
+            return {"chiavi": lista, **base}
         # primo accesso: la chiave trial SI MOSTRA in chiaro questa
         # volta sola — in tabella resta solo l'hash
-        return {"chiavi": _chiavi.lista_per_utente(uid), "extra": extra,
-                "rivelazioni": rivelazioni,
+        return {"chiavi": _chiavi.lista_per_utente(uid), **base,
                 "chiave_nuova": trial,
                 "nota": "la chiave si vede solo ora: conservala tu"}
 
@@ -1052,6 +1846,7 @@ def create_app() -> FastAPI:
     # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
+    from nivult.api_clienti import opensearch as _opensearch
     from nivult.api_clienti import vivo as _vivo
 
     # Anti-raccolta (29/09/2026): la lettura del portale e' gratis per gli
@@ -1075,13 +1870,12 @@ def create_app() -> FastAPI:
                                 "navigazione e' libera, l'estrazione "
                                 "massiva no — per i volumi c'e' l'export")
 
-    # I campi che consegnano il dominio o il contatto: nel dettaglio
-    # gratuito si tolgono, tornano col reveal dell'azienda (29/09/2026).
-    # url e' ovvio; job_sources porta le URL dei gemelli; external_id e
-    # path ricostruiscono l'URL delle piattaforme prevedibili.
-    _CAMPI_COPERTI = ("url", "contact_email", "recruiter", "job_sources",
-                      "latitude", "longitude", "postal_code", "external_id",
-                      "path")
+    # I campi che consegnano il dominio: nel dettaglio gratuito si tolgono,
+    # tornano col reveal dell'azienda (29/09/2026). url e' ovvio;
+    # job_sources porta le URL dei gemelli; external_id e path ricostruiscono
+    # l'URL delle piattaforme prevedibili.
+    _CAMPI_COPERTI = ("url", "job_sources", "latitude", "longitude",
+                      "postal_code", "external_id", "path")
 
     @app.post("/portale/cerca")
     async def cerca_nel_portale(request: Request, uid: str = Depends(utente)):
@@ -1099,12 +1893,17 @@ def create_app() -> FastAPI:
         cur = (corpo or {}).get("cursor")
         _freno_portale(uid)
         if (corpo or {}).get("stato") == "chiuse":
-            righe, prossimo, totale = _dati.cerca_chiuse_portale(filtri, cur)
+            righe, prossimo, totale = await run_in_threadpool(
+                _dati.cerca_chiuse_portale, filtri, cur)
+        elif filtri.get("q"):
+            righe, prossimo, totale = await run_in_threadpool(
+                _vivo.cerca_portale, filtri, cur)
         else:
-            righe, prossimo, totale = _dati.cerca_portale(filtri, cur)
+            righe, prossimo, totale = await run_in_threadpool(
+                _dati.cerca_portale, filtri, cur)
         rif = [f"{r['ats']}:{r['company_slug']}" for r in righe
                if r.get("ats") and r.get("company_slug")]
-        sue = _chiavi.rivelate_per_utente(uid, "azienda", rif)
+        sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", rif)
         for r in righe:
             r["az_rivelata"] = bool(
                 r.get("ats") and r.get("company_slug")
@@ -1120,8 +1919,8 @@ def create_app() -> FastAPI:
         filtri = {k: v for k, v in (corpo or {}).items()
                   if k in ("country", "industry", "technology")}
         _freno_portale(uid)
-        righe, prossimo, totale = _dati.cerca_aziende_portale(
-            filtri, (corpo or {}).get("cursor"))
+        righe, prossimo, totale = await run_in_threadpool(
+            _dati.cerca_aziende_portale, filtri, (corpo or {}).get("cursor"))
         return {"data": righe, "next_cursor": prossimo, "totale": totale}
 
     @app.post("/portale/offerta-dettaglio")
@@ -1138,13 +1937,14 @@ def create_app() -> FastAPI:
         if not offerta_id:
             raise HTTPException(400, "missing id")
         _freno_portale(uid)
-        riga = _vivo.rivela_offerta(offerta_id)
+        riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
         if riga is None:
             raise HTTPException(404, "posting not found")
         rif = None
         if riga.get("ats") and riga.get("company_slug"):
             rif = f"{riga['ats']}:{riga['company_slug']}"
-        rivelata = bool(rif) and _chiavi.e_rivelata(uid, "azienda", rif)
+        rivelata = (await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
+                    if rif else False)
         if not rivelata:
             for k in _CAMPI_COPERTI:
                 riga.pop(k, None)
@@ -1163,15 +1963,17 @@ def create_app() -> FastAPI:
             raise HTTPException(400, "missing id")
         # Si guarda prima e si paga dopo: un credito speso sul vuoto
         # (offerta sparita dall'export di oggi) non si perdona (29/09/2026).
-        riga = _vivo.rivela_offerta(offerta_id)
+        riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
         if riga is None:
             raise HTTPException(404, "posting not found")
-        esito = _chiavi.rivela_per_utente(uid, "job", offerta_id)
+        esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "job", offerta_id)
+        if esito == "account_sospeso":
+            raise HTTPException(403, "account paused — contact support")
         if esito == "senza_crediti":
             raise HTTPException(429, "this month's credits are spent — top up from the dashboard")
         if esito == "ok":
-            _chiavi.registra_uso(uid, "portale", "posting unlock",
-                                 offerta_id)
+            await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
+                                    "posting unlock", offerta_id)
         return {"offerta": riga, "esito": esito}
 
     @app.post("/portale/rivela-azienda")
@@ -1186,14 +1988,17 @@ def create_app() -> FastAPI:
         # Si guarda prima e si paga dopo: rivelare un'azienda che il
         # DuckDB non ha (export di oggi mancante) non deve costare
         # nulla (29/09/2026).
-        riga = _dati.rivela_azienda(rif)
+        riga = await run_in_threadpool(_dati.rivela_azienda, rif)
         if riga is None:
             raise HTTPException(404, "company not found")
-        esito = _chiavi.rivela_per_utente(uid, "azienda", rif)
+        esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "azienda", rif)
+        if esito == "account_sospeso":
+            raise HTTPException(403, "account paused — contact support")
         if esito == "senza_crediti":
             raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
         if esito == "ok":
-            _chiavi.registra_uso(uid, "portale", "company unlock", rif)
+            await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
+                                    "company unlock", rif)
         return {"azienda": riga, "esito": esito}
 
     @app.post("/portale/azienda-jobs")
@@ -1204,16 +2009,16 @@ def create_app() -> FastAPI:
         except Exception:                            # noqa: BLE001
             corpo = {}
         rif = str((corpo or {}).get("ref") or "").strip()
-        if not _chiavi.e_rivelata(uid, "azienda", rif):
+        if not await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif):
             raise HTTPException(402, "reveal the company first")
         _freno_portale(uid)
-        return {"data": _dati.azienda_jobs_portale(rif)}
+        return {"data": await run_in_threadpool(_dati.azienda_jobs_portale, rif)}
 
     @app.get("/portale/export/{nome}")
     def export_dal_portale(nome: str, uid: str = Depends(utente)):
         """L'export del giorno dal portale, con la sessione: la chiave
         non si mostra mai all'utente in chiaro dopo la creazione, e il
-        download paga un credito dal suo contatore. Sotto i 50K/mese
+        download paga un credito dal suo contatore. Sotto i 500K/mese
         l'export bulk non e' nel piano (la soglia della landing)."""
         if nome not in ("offerte", "aziende"):
             raise HTTPException(404, "unknown export")
@@ -1221,17 +2026,19 @@ def create_app() -> FastAPI:
                   if not k["revocata_il"]]
         if not attive:
             raise HTTPException(402, "create an API key first")
-        if max(k["crediti_mensili"] for k in attive) < 50000:
-            raise HTTPException(402, "the daily export starts at the 50K "
+        if _chiavi.volume_per_utente(uid) < 500000:
+            raise HTTPException(402, "the daily export starts at the 500K "
                                 "credits/month tier — raise your volume below")
-        if not _chiavi.spendi_per_utente(uid):
-            raise HTTPException(429, "this month's credits are spent")
-        _chiavi.registra_uso(uid, "export", "daily export", nome)
         percorso = (_dati.stato_export().get("file") or {}).get(nome)
         if not percorso or not os.path.isfile(percorso):
             raise HTTPException(404, "today's export is not ready yet")
-        return FileResponse(percorso, media_type="application/gzip",
-                            filename=os.path.basename(percorso))
+        if not _chiavi.spendi_per_utente(uid, via="export", azione="daily export",
+                                         dettaglio=nome):
+            raise HTTPException(429, "this month's credits are spent")
+        return StreamingResponse(
+            _dati.stream_export_senza_pii(percorso), media_type="application/gzip",
+            headers={"Content-Disposition": "attachment; filename=\""
+                     + os.path.basename(percorso) + "\""})
 
     # ── l'export filtrato del portale: stima il costo, poi scarica ──
     # Il prezzo (28/09/2026): 1 credito ogni 10 righe, per eccesso.
@@ -1251,7 +2058,7 @@ def create_app() -> FastAPI:
     def _prezzo_export(righe: int, tipo: str = "postings") -> int:
         per = (EXPORT_AZIENDE_PER_CREDITO if tipo == "companies"
                else EXPORT_RIGHE_PER_CREDITO)
-        return max(1, -(-righe // per))
+        return -(-righe // per) if righe else 0
 
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
@@ -1265,7 +2072,8 @@ def create_app() -> FastAPI:
         if tipo == "companies":
             righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
         else:
-            righe = await run_in_threadpool(_dati.stima_export, filtri)
+            stima = _opensearch.conteggio if _opensearch.attivo() else _dati.stima_export
+            righe = await run_in_threadpool(stima, filtri)
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
         return {"righe": righe, "crediti": _prezzo_export(righe, tipo),
                 "saldo": saldo, "tipo": tipo,
@@ -1295,7 +2103,6 @@ def create_app() -> FastAPI:
             raise HTTPException(413, f"this slice has {righe} rows — past the "
                                 f"{EXPORT_TETTO_RIGHE}-row ceiling. Narrow the "
                                 "filters or ask us about the full feed")
-        costo = _prezzo_export(righe, tipo)
         # Prima si SCRIVE il file, poi si paga: se la scrittura fallisce
         # nessun credito bruciato; se il saldo non basta, il file si butta.
         import tempfile
@@ -1310,15 +2117,17 @@ def create_app() -> FastAPI:
         except Exception:                            # noqa: BLE001
             os.unlink(percorso)
             raise
-        if not await run_in_threadpool(_chiavi.spendi_n_per_utente, uid, costo):
+        if scritte == 0:
+            os.unlink(percorso)
+            raise HTTPException(404, "no rows match these filters")
+        costo = _prezzo_export(scritte, tipo)
+        if not await run_in_threadpool(
+                _chiavi.spendi_n_per_utente, uid, costo,
+                via="export", azione="filtered export",
+                dettaglio=f"{scritte} rows" + (f" · {filtri}" if filtri else "")):
             os.unlink(percorso)
             raise HTTPException(429, "not enough credits for this export: "
                                 f"it costs {costo}")
-        _chiavi.registra_uso(uid, "export",
-                             f"filtered export ({tipo})",
-                             f"{scritte} rows" +
-                             (f" · {filtri}" if filtri else ""),
-                             crediti=costo)
         sfondo = BackgroundTasks()
         sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
         return FileResponse(percorso, media_type="application/gzip",
@@ -1373,20 +2182,13 @@ def create_app() -> FastAPI:
         titolo dell'offerta) e, quando c'e', il LOGO dal dominio: gli
         identificativi tecnici restano come dettaglio secondario, mai
         come testo principale."""
-        extra = _chiavi.extra_per_utente(uid)
-        mensile = max(0, _chiavi.saldo_per_utente(uid) - extra)
+        riepilogo = _chiavi.riepilogo_per_utente(uid)
+        extra = riepilogo["crediti_extra"]
+        mensile = riepilogo["residui_mensili"]
         # Lo speso del mese lo dice il contatore che fa scattare i 429,
         # non il registro: portale_uso nasce il 04/10/2026 e le chiamate
         # API e gli export di prima non sono dettagliati da nessuna parte.
-        # La differenza si DICHIARA («contati, non dettagliati»): i totali
-        # devono quadrare, e un buco silenzioso e' peggio di una nota.
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT coalesce(sum(CASE WHEN mese_uso < date_trunc('month', CURRENT_DATE)::date "
-                "                     THEN 0 ELSE usati_mese END), 0) "
-                "FROM api_chiavi WHERE user_id = %s AND revoked_at IS NULL",
-                (uid,))
-            speso_reale = int(cur.fetchone()[0])
+        speso_reale = int(riepilogo["usati"])
         try:
             with conn.cursor() as cur:
                 cur.execute(
@@ -1501,21 +2303,18 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        volume = int((corpo or {}).get("volume") or 0)
-        # qualunque volume entro la curva e' vendibile: il PREZZO lo
-        # calcola billing dalla curva, il client non decide mai gli euro
-        if not 100 <= volume <= 5_000_000:
-            raise HTTPException(400, "amount outside the price curve")
+        volume = (corpo or {}).get("volume") or 0
+        # Il prezzo e i limiti sono validati dal modulo billing, mai dal client.
         with conn.cursor() as cur:
             cur.execute("SELECT email FROM users WHERE id = %s", (uid,))
             riga = cur.fetchone()
         try:
-            url = _billing.checkout(
-                uid, riga[0] if riga else "", volume,
+            url = await run_in_threadpool(
+                _billing.checkout, uid, riga[0] if riga else "", volume,
                 success_url=os.environ.get("SITE_URL", "").rstrip("/")
-                + "/account.html?pagato=1",
+                + "/account?pagato=1",
                 cancel_url=os.environ.get("SITE_URL", "").rstrip("/")
-                + "/account.html")
+                + "/account")
         except _billing.BillingNonPronto:
             raise HTTPException(503, "checkout is not live yet — "
                                 "write to hello@nivult.com")
@@ -1531,7 +2330,7 @@ def create_app() -> FastAPI:
             evento = json.loads(corpo)
         except ValueError:
             raise HTTPException(400, "corpo non JSON")
-        esito = _billing.applica_pagamento(database_url(), evento)
+        esito = await run_in_threadpool(_billing.applica_pagamento, database_url(), evento)
         return {"esito": esito}
 
     def _campo_testo(v) -> str | None:
@@ -1545,35 +2344,49 @@ def create_app() -> FastAPI:
         v = (str(v).strip() if v is not None else "")
         return v or None
 
+    def _profilo_match(cur, uid: str, match_id: str):
+        cur.execute(
+            "SELECT c.id::text, c.families, c.seniority, c.skills, c.languages, "
+            "       c.years_experience, u.locale "
+            "FROM matches m JOIN users u ON u.id = m.user_id "
+            "LEFT JOIN user_cvs c ON c.id = m.cv_id "
+            "WHERE m.id = %s AND m.user_id = %s", (match_id, uid))
+        pr = cur.fetchone()
+        if pr is not None and pr[0] is not None:
+            return pr[1:]
+        cur.execute(
+            "SELECT c.families, c.seniority, c.skills, c.languages, "
+            "       c.years_experience, u.locale "
+            "FROM user_cvs c JOIN users u ON u.id = c.user_id "
+            "WHERE c.user_id = %s AND c.status = 'active'", (uid,))
+        return cur.fetchone()
+
     @app.get("/me/offerte/{match_id}")
-    def dettaglio_offerta(match_id: str, lingua: str | None = None,
+    def dettaglio_offerta(match_id: UUID, lingua: str | None = None,
                           uid: str = Depends(utente),
                           conn=Depends(connessione)):
-        """La finestra di dettaglio di UN match: l'annuncio in breve e
-        l'analisi di allineamento.
-
-        L'analisi (pro e attenzioni, scritti da GLM contro il profilo del
-        candidato) si genera alla PRIMA apertura e si salva sul match: una
-        chiamata per offerta aperta, mai due. Se il credito e' esaurito o
-        l'offerta e' stata purgata, la finestra vive con quello che c'e' —
-        il motivo del punteggio resta sempre.
-        """
+        """Dettaglio del match, anche fuori discovery o dalla soglia odierna."""
+        match_key = str(match_id)
+        with conn.cursor(row_factory=dict_row) as cur:
+            r = _riga_offerta(cur, uid, match_key, completa=True)
+        analisi = r["analysis"]
+        raw = r["raw"] or {}
+        purgata = r["purged_at"] is not None
+        offerta_evidenza = {
+            "title": r["title"],
+            "ai_experience_level": raw.get("ai_experience_level"),
+            "ai_key_skills": raw.get("ai_key_skills"),
+            "ai_requirements_summary": raw.get("ai_requirements_summary"),
+        }
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT m.score, m.reason, m.evaluated_at, m.analysis, "
-                "       j.raw, j.purged_at IS NOT NULL, j.title, "
-                "       j.organization, j.url, j.link_kind, j.employer_kind, "
-                "       j.cities, j.salary, "
-                "       COALESCE(j.org_linkedin_slug, j.domain_derived) "
-                "FROM matches m JOIN jobs j ON j.id = m.job_id "
-                "WHERE m.id = %s AND m.user_id = %s AND m.passed",
-                (match_id, uid))
-            r = cur.fetchone()
-        if not r:
-            raise HTTPException(404, "posting not found")
-        (score, reason, quando, analisi, raw, purgata, titolo, azienda,
-         url, link_kind, tipo_datore, citta, stipendio, slug) = r
-        raw = raw or {}
+            pr = _profilo_match(cur, uid, match_key)
+        profilo_evidenza = {
+            "ruolo": ", ".join(pr[0] or []),
+            "seniority": pr[1] or "—",
+            "competenze": list(pr[2] or []),
+            "lingue": list(pr[3] or []),
+        } if pr else {}
+        r["evidence"] = evidenze(profilo_evidenza, offerta_evidenza)
 
         from nivult.delivery.testi import LINGUA_PER_GLM
         lingua_voluta = LINGUA_PER_GLM.get(lingua or "", None)
@@ -1581,81 +2394,438 @@ def create_app() -> FastAPI:
                        or "perche" not in analisi
                        or (lingua_voluta
                            and analisi.get("lang") != lingua_voluta))
-        if da_scrivere and not purgata and os.environ.get("GLM_API_KEY"):
+        if da_scrivere and not purgata and os.environ.get("GLM_API_KEY") and pr:
+            from nivult.matching.llm import (GLM, analizza_allineamento,
+                                             profilo_come_testo)
+            profilo = {
+                "ruolo": ", ".join(pr[0] or []),
+                "seniority": pr[1] or "—",
+                "competenze": list(pr[2] or []),
+                "lingue": list(pr[3] or []),
+                "sedi": [],
+                "note": (f"{pr[4]} anni di esperienza" if pr[4] else None),
+            }
+            offerta = {
+                "id": match_key,
+                "title": r["title"],
+                "organization": r["organization"],
+                "cities": list(r["cities"] or []),
+                **{c: raw.get(c) for c in (
+                    "ai_experience_level", "ai_work_arrangement",
+                    "ai_visa_sponsorship", "ai_key_skills",
+                    "ai_requirements_summary",
+                    "ai_core_responsibilities", "ai_benefits",
+                    "ai_working_hours")},
+            }
+            try:
+                nuova = analizza_allineamento(
+                    GLM(), profilo_come_testo(profilo), offerta,
+                    lingua=(lingua_voluta
+                            or LINGUA_PER_GLM.get(pr[5], "English")))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE matches SET analysis = %s "
+                        "WHERE id = %s AND user_id = %s",
+                        (Json(nuova), match_key, uid))
+                conn.commit()
+                analisi = nuova
+                r["analysis"] = analisi
+            except Exception as exc:
+                log.warning("analisi allineamento fallita per %s: %s",
+                            match_key, exc)
+
+        with conn.cursor(row_factory=dict_row) as cur:
+            _carica_collezioni(cur, uid, r)
+        return _serializza_offerta(r, lingua or "en", dettaglio=True)
+
+    @app.put("/me/offerte/{match_id}/stato")
+    def aggiorna_stato_offerta(match_id: UUID, corpo: StatoOfferta,
+                               uid: str = Depends(utente),
+                               conn=Depends(connessione)):
+        match_key = str(match_id)
+        adesso = datetime.now(timezone.utc)
+        if corpo.scartata:
+            if corpo.motivo_scarto is None:
+                raise HTTPException(422, "motivo_scarto richiesto")
+            if corpo.salvata or corpo.candidatura != "not_started":
+                raise HTTPException(422, "scarto incompatibile con salvataggio o candidatura")
+        elif corpo.motivo_scarto is not None:
+            raise HTTPException(422, "motivo_scarto senza scarto")
+
+        for nome, attivo in (
+                ("salvata_il", corpo.salvata),
+                ("scartata_il", corpo.scartata),
+                ("archiviata_il", corpo.in_archivio),
+                ("applicata_il", corpo.candidatura != "not_started")):
+            valore = getattr(corpo, nome)
+            if valore is None:
+                continue
+            if not attivo:
+                raise HTTPException(422, f"{nome} incoerente con lo stato richiesto")
+            if valore.tzinfo is None or valore.utcoffset() is None:
+                raise HTTPException(422, f"{nome} deve includere il fuso orario")
+            if valore > adesso:
+                raise HTTPException(422, f"{nome} non puo' essere nel futuro")
+        if (corpo.prossima_azione_il is not None
+                and (corpo.prossima_azione_il.tzinfo is None
+                     or corpo.prossima_azione_il.utcoffset() is None)):
+            raise HTTPException(422, "prossima_azione_il deve includere il fuso orario")
+
+        with conn.cursor(row_factory=dict_row) as cur:
+            attuale = _riga_offerta(cur, uid, match_key)
+        campi = corpo.model_fields_set
+        note = _campo_testo(corpo.note) if "note" in campi else attuale["note"]
+        azione = (_campo_testo(corpo.prossima_azione)
+                  if "prossima_azione" in campi else attuale["next_action"])
+        azione_il = (corpo.prossima_azione_il
+                     if "prossima_azione_il" in campi else attuale["next_action_at"])
+        if azione is None and azione_il is not None:
+            raise HTTPException(422, "prossima_azione_il senza prossima_azione")
+        desiderato = (corpo.salvata, corpo.scartata, corpo.motivo_scarto,
+                      corpo.in_archivio, corpo.candidatura, note, azione, azione_il)
+        if _stato_attuale(attuale) == desiderato:
+            return _serializza_offerta(attuale, "en")
+        if corpo.base_version != attuale["action_version"]:
+            return _conflitto_stato(attuale)
+
+        timestamp_legacy = [corpo.salvata_il, corpo.scartata_il,
+                            corpo.archiviata_il, corpo.applicata_il]
+        if attuale["action_version"] != 0 and any(
+                valore is not None for valore in timestamp_legacy):
+            raise HTTPException(
+                422, "i timestamp del client sono ammessi solo sul replay a versione zero")
+
+        saved_at = ((attuale["saved_at"] or corpo.salvata_il or adesso)
+                    if corpo.salvata else None)
+        dismissed_at = ((attuale["dismissed_at"] or corpo.scartata_il or adesso)
+                        if corpo.scartata else None)
+        archived_at = ((attuale["archived_at"] or corpo.archiviata_il or adesso)
+                       if corpo.in_archivio else None)
+        applied_at = ((attuale["applied_at"] or corpo.applicata_il or adesso)
+                      if corpo.candidatura != "not_started" else None)
+        try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT c.families, c.seniority, c.skills, c.languages, "
-                    "       c.years_experience, u.locale "
-                    "FROM user_cvs c JOIN users u ON u.id = c.user_id "
-                    "WHERE c.user_id = %s AND c.status = 'active'", (uid,))
-                pr = cur.fetchone()
-            if pr:
-                from nivult.matching.llm import (GLM, analizza_allineamento,
-                                                 profilo_come_testo)
-                profilo = {
-                    "ruolo": ", ".join(pr[0] or []),
-                    "seniority": pr[1] or "—",
-                    "competenze": list(pr[2] or []),
-                    "lingue": list(pr[3] or []),
-                    "sedi": [],
-                    "note": (f"{pr[4]} anni di esperienza" if pr[4] else None),
-                }
-                # `offerta_come_testo` legge l'annuncio con i NOSTRI nomi
-                # di campo — `job['id']`, `job['title']`, in parentesi quadre —
-                # mentre `raw` e' il payload della fonte, che quei nomi non li
-                # ha. Passandogli `raw` la chiamata moriva su KeyError('id'),
-                # l'except la registrava come riga di log e la finestra
-                # restituiva l'analisi vecchia: e' per questo che il dettaglio
-                # non seguiva piu' la lingua del pannello.
-                offerta = {
-                    "id": match_id,
-                    "title": titolo,
-                    "organization": azienda,
-                    "cities": list(citta or []),
-                    **{c: raw.get(c) for c in (
-                        "ai_experience_level", "ai_work_arrangement",
-                        "ai_visa_sponsorship", "ai_key_skills",
-                        "ai_requirements_summary",
-                        "ai_core_responsibilities", "ai_benefits",
-                        "ai_working_hours")},
-                }
-                try:
-                    nuova = analizza_allineamento(
-                        GLM(), profilo_come_testo(profilo), offerta,
-                        lingua=(lingua_voluta
-                                or LINGUA_PER_GLM.get(pr[5], "English")))
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "UPDATE matches SET analysis = %s WHERE id = %s",
-                            (Json(nuova), match_id))
-                    conn.commit()
-                    analisi = nuova
-                except Exception as exc:
-                    log.warning("analisi allineamento fallita per %s: %s",
-                                match_id, exc)
+                    "UPDATE matches SET saved_at = %s, dismissed_at = %s, "
+                    "  dismiss_reason = %s, archived_at = %s, "
+                    "  application_status = %s, applied_at = %s, "
+                    "  note = %s, next_action = %s, next_action_at = %s, "
+                    "  action_version = action_version + 1, user_action_at = %s "
+                    "WHERE id = %s AND user_id = %s AND action_version = %s",
+                    (saved_at, dismissed_at,
+                     corpo.motivo_scarto if corpo.scartata else None,
+                     archived_at, corpo.candidatura, applied_at,
+                     note, azione, azione_il, adesso,
+                     match_key, uid, corpo.base_version))
+                if cur.rowcount != 1:
+                    with conn.cursor(row_factory=dict_row) as lettura:
+                        canonico = _riga_offerta(lettura, uid, match_key)
+                    if _stato_attuale(canonico) == desiderato:
+                        return _serializza_offerta(canonico, "en")
+                    return _conflitto_stato(canonico)
+        except psycopg.errors.CheckViolation:
+            conn.rollback()
+            raise HTTPException(422, "stato personale incoerente") from None
 
+        with conn.cursor(row_factory=dict_row) as cur:
+            aggiornata = _riga_offerta(cur, uid, match_key)
+        risposta = _serializza_offerta(aggiornata, "en")
+        conn.commit()
+        return risposta
+
+    def _blocca_match(cur, uid: str, match_id: str) -> None:
+        cur.execute("SELECT id FROM matches WHERE id = %s AND user_id = %s FOR UPDATE",
+                    (match_id, uid))
+        if cur.fetchone() is None:
+            raise HTTPException(404, "posting not found")
+
+    def _incrementa_versione(cur, uid: str, match_id: str) -> None:
+        cur.execute(
+            "UPDATE matches SET action_version = action_version + 1, "
+            "user_action_at = now() WHERE id = %s AND user_id = %s",
+            (match_id, uid))
+
+    def _dati_colloquio(corpo: ColloquioOfferta) -> tuple:
+        if corpo.inizio.tzinfo is None or corpo.inizio.utcoffset() is None:
+            raise HTTPException(422, "inizio deve includere il fuso orario")
+        return corpo.inizio, _campo_testo(corpo.note), corpo.promemoria_minuti
+
+    @app.get("/me/offerte/{match_id}/colloqui")
+    def colloqui_offerta(match_id: UUID, uid: str = Depends(utente),
+                         conn=Depends(connessione)):
+        with conn.cursor(row_factory=dict_row) as cur:
+            riga = _riga_offerta(cur, uid, str(match_id))
+            _carica_collezioni(cur, uid, riga)
+        return {"colloqui": riga["colloqui"]}
+
+    @app.post("/me/offerte/{match_id}/colloqui")
+    def crea_colloquio(match_id: UUID, corpo: ColloquioOfferta,
+                       uid: str = Depends(utente), conn=Depends(connessione)):
+        match_key = str(match_id)
+        inizio, note, promemoria = _dati_colloquio(corpo)
+        with conn.cursor() as cur:
+            _blocca_match(cur, uid, match_key)
+            cur.execute(
+                "INSERT INTO match_interviews "
+                "(match_id, user_id, starts_at, note, reminder_minutes) "
+                "VALUES (%s,%s,%s,%s,%s)", (match_key, uid, inizio, note, promemoria))
+            _incrementa_versione(cur, uid, match_key)
+        with conn.cursor(row_factory=dict_row) as cur:
+            risposta = _offerta_canonica(cur, uid, match_key)
+        conn.commit()
+        return risposta
+
+    @app.put("/me/offerte/{match_id}/colloqui/{colloquio_id}")
+    def aggiorna_colloquio(match_id: UUID, colloquio_id: UUID, corpo: ColloquioOfferta,
+                           uid: str = Depends(utente), conn=Depends(connessione)):
+        match_key = str(match_id)
+        inizio, note, promemoria = _dati_colloquio(corpo)
+        with conn.cursor() as cur:
+            _blocca_match(cur, uid, match_key)
+            cur.execute(
+                "UPDATE match_interviews SET starts_at = %s, note = %s, "
+                "reminder_minutes = %s WHERE id = %s AND match_id = %s AND user_id = %s",
+                (inizio, note, promemoria, str(colloquio_id), match_key, uid))
+            if cur.rowcount != 1:
+                raise HTTPException(404, "interview not found")
+            _incrementa_versione(cur, uid, match_key)
+        with conn.cursor(row_factory=dict_row) as cur:
+            risposta = _offerta_canonica(cur, uid, match_key)
+        conn.commit()
+        return risposta
+
+    @app.delete("/me/offerte/{match_id}/colloqui/{colloquio_id}")
+    def elimina_colloquio(match_id: UUID, colloquio_id: UUID,
+                          uid: str = Depends(utente), conn=Depends(connessione)):
+        match_key = str(match_id)
+        with conn.cursor() as cur:
+            _blocca_match(cur, uid, match_key)
+            cur.execute(
+                "DELETE FROM match_interviews WHERE id = %s AND match_id = %s "
+                "AND user_id = %s", (str(colloquio_id), match_key, uid))
+            if cur.rowcount != 1:
+                raise HTTPException(404, "interview not found")
+            _incrementa_versione(cur, uid, match_key)
+        with conn.cursor(row_factory=dict_row) as cur:
+            risposta = _offerta_canonica(cur, uid, match_key)
+        conn.commit()
+        return risposta
+
+    DOCUMENTI_MIME = {
+        "application/pdf": "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain": "text/plain",
+    }
+    DOCUMENTI_ESTENSIONI = {
+        ".pdf": DOCUMENTI_MIME["application/pdf"],
+        ".docx": DOCUMENTI_MIME[
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        ".txt": DOCUMENTI_MIME["text/plain"],
+    }
+    DOCUMENTO_MAX_BYTES = 10 * 1024 * 1024
+    DOCUMENTI_MAX_PER_MATCH = 10
+    DOCUMENTI_MAX_BYTES_PER_MATCH = 50 * 1024 * 1024
+
+    def _mime_documento(nome: str, mime: str) -> str | None:
+        mime = (mime or "").split(";", 1)[0].strip().lower()
+        if mime in DOCUMENTI_MIME:
+            return DOCUMENTI_MIME[mime]
+        return DOCUMENTI_ESTENSIONI.get(os.path.splitext(nome.lower())[1])
+
+    def _nome_documento(nome: str | None) -> str:
+        nome = os.path.basename((nome or "").replace("\\", "/"))
+        nome = "".join(c for c in nome if c.isprintable()).strip()
+        return (nome or "documento")[:255]
+
+    @app.get("/me/offerte/{match_id}/documenti")
+    def documenti_offerta(match_id: UUID, uid: str = Depends(utente),
+                          conn=Depends(connessione)):
+        with conn.cursor(row_factory=dict_row) as cur:
+            riga = _riga_offerta(cur, uid, str(match_id))
+            _carica_collezioni(cur, uid, riga)
+        return {"documenti": riga["documenti"]}
+
+    @app.post("/me/offerte/{match_id}/documenti")
+    async def carica_documento(match_id: UUID, file: UploadFile = File(...),
+                               uid: str = Depends(utente), conn=Depends(connessione)):
+        match_key = str(match_id)
+        nome = _nome_documento(file.filename)
+        mime = _mime_documento(nome, file.content_type or "")
+        if mime is None:
+            raise HTTPException(422, "sono ammessi soltanto PDF, DOCX e TXT")
+        dati = await file.read(DOCUMENTO_MAX_BYTES + 1)
+        if len(dati) > DOCUMENTO_MAX_BYTES:
+            raise HTTPException(413, "il documento supera i 10 MB")
+        if not dati:
+            raise HTTPException(422, "il documento e' vuoto")
+
+        esito = await run_in_threadpool(crypto.cifra, dati)
+        chiave = f"documenti/{uid}/{match_key}/{secrets.token_hex(16)}"
+        await run_in_threadpool(storage.salva, chiave, esito.dati)
+        try:
+            with conn.cursor() as cur:
+                _blocca_match(cur, uid, match_key)
+                cur.execute(
+                    "SELECT count(*), COALESCE(sum(size_bytes), 0) FROM match_documents "
+                    "WHERE match_id = %s AND user_id = %s", (match_key, uid))
+                conteggio, byte_attuali = cur.fetchone()
+                if conteggio >= DOCUMENTI_MAX_PER_MATCH:
+                    raise HTTPException(409, "massimo 10 documenti per offerta")
+                if byte_attuali + len(dati) > DOCUMENTI_MAX_BYTES_PER_MATCH:
+                    raise HTTPException(413, "massimo 50 MB di documenti per offerta")
+                cur.execute(
+                    "INSERT INTO match_documents "
+                    "(match_id, user_id, original_filename, mime_type, size_bytes, sha256, "
+                    " storage_key, encryption_algo, encrypted_dek, nonce, auth_tag, kek_version) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,'aes-256-gcm',%s,%s,%s,1)",
+                    (match_key, uid, nome, mime, len(dati),
+                     hashlib.sha256(dati).hexdigest(), chiave,
+                     Binary(esito.encrypted_dek), Binary(esito.nonce), Binary(esito.auth_tag)))
+                _incrementa_versione(cur, uid, match_key)
+            with conn.cursor(row_factory=dict_row) as cur:
+                risposta = _offerta_canonica(cur, uid, match_key)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            await run_in_threadpool(storage.elimina, chiave)
+            raise
+        return risposta
+
+    def _riga_documento(cur, uid: str, match_id: str, documento_id: str):
+        cur.execute(
+            "SELECT original_filename, mime_type, storage_key, encrypted_dek "
+            "FROM match_documents WHERE id = %s AND match_id = %s AND user_id = %s",
+            (documento_id, match_id, uid))
+        riga = cur.fetchone()
+        if riga is None:
+            raise HTTPException(404, "document not found")
+        return riga
+
+    @app.get("/me/offerte/{match_id}/documenti/{documento_id}")
+    @app.get("/me/offerte/{match_id}/documenti/{documento_id}/file")
+    async def scarica_documento(match_id: UUID, documento_id: UUID,
+                                uid: str = Depends(utente), conn=Depends(connessione)):
+        with conn.cursor() as cur:
+            nome, mime, chiave, encrypted_dek = _riga_documento(
+                cur, uid, str(match_id), str(documento_id))
+        try:
+            cifrato = await run_in_threadpool(storage.leggi, chiave)
+            dati = await run_in_threadpool(crypto.decifra, cifrato, encrypted_dek)
+        except Exception as exc:
+            log.warning("documento %s non leggibile: %s", documento_id, exc)
+            raise HTTPException(502, "document temporarily unavailable") from None
+        ascii_nome = nome.encode("ascii", "replace").decode().replace('"', "'")
+        return Response(
+            content=dati, media_type=mime,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Security-Policy": "default-src 'none'; sandbox",
+                "Content-Disposition": (
+                    f'attachment; filename="{ascii_nome}"; '
+                    f"filename*=UTF-8''{quote(nome, safe='')}")
+            })
+
+    @app.delete("/me/offerte/{match_id}/documenti/{documento_id}")
+    async def elimina_documento(match_id: UUID, documento_id: UUID,
+                                uid: str = Depends(utente), conn=Depends(connessione)):
+        match_key = str(match_id)
+        with conn.cursor() as cur:
+            _blocca_match(cur, uid, match_key)
+            cur.execute(
+                "DELETE FROM match_documents WHERE id = %s AND match_id = %s "
+                "AND user_id = %s RETURNING storage_key",
+                (str(documento_id), match_key, uid))
+            riga = cur.fetchone()
+            if riga is None:
+                raise HTTPException(404, "document not found")
+            chiave = riga[0]
+            _incrementa_versione(cur, uid, match_key)
+        with conn.cursor(row_factory=dict_row) as cur:
+            risposta = _offerta_canonica(cur, uid, match_key)
+        conn.commit()
+        try:
+            await run_in_threadpool(storage.elimina, chiave)
+        except Exception as exc:
+            log.warning("blob del documento %s non rimosso: %s", documento_id, exc)
+        return risposta
+
+    def _offerte_per_riepilogo(cur, uid: str, ids: list[str]) -> list[dict]:
+        return [_offerta_canonica(cur, uid, match_id) for match_id in ids]
+
+    @app.get("/me/riepilogo-settimanale")
+    def riepilogo_settimanale(uid: str = Depends(utente), conn=Depends(connessione)):
+        adesso = datetime.now(timezone.utc)
+        with conn.cursor() as cur:
+            cur.execute("SELECT timezone FROM users WHERE id = %s", (uid,))
+            riga = cur.fetchone()
+        try:
+            fuso = ZoneInfo((riga[0] if riga else None) or "UTC")
+        except Exception:
+            fuso = timezone.utc
+        locale = adesso.astimezone(fuso)
+        inizio_locale = (locale - timedelta(days=locale.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        inizio_settimana = inizio_locale.astimezone(timezone.utc)
+        fra_trenta_giorni = adesso + timedelta(days=30)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT application_status, count(*) FROM matches "
+                "WHERE user_id = %s AND application_status <> 'not_started' "
+                "GROUP BY application_status", (uid,))
+            conteggi = dict(cur.fetchall())
+            cur.execute(
+                "SELECT count(*) FROM matches WHERE user_id = %s "
+                "AND applied_at >= %s AND applied_at < %s",
+                (uid, inizio_settimana, inizio_settimana + timedelta(days=7)))
+            candidature = cur.fetchone()[0]
+            cur.execute(
+                "SELECT dismiss_reason, count(*) FROM matches WHERE user_id = %s "
+                "AND dismiss_reason IS NOT NULL GROUP BY dismiss_reason "
+                "ORDER BY count(*) DESC, dismiss_reason LIMIT 8", (uid,))
+            motivi = [{"motivo": motivo, "count": numero}
+                      for motivo, numero in cur.fetchall()]
+            cur.execute("SELECT count(*) FROM digests WHERE user_id = %s AND status = 'sent'",
+                        (uid,))
+            digest_ricevuti = cur.fetchone()[0]
+            cur.execute(
+                "SELECT i.match_id::text, min(i.starts_at) AS primo "
+                "FROM match_interviews i WHERE i.user_id = %s "
+                "AND i.starts_at >= %s AND i.starts_at < %s "
+                "GROUP BY i.match_id ORDER BY primo, i.match_id LIMIT 10",
+                (uid, adesso, fra_trenta_giorni))
+            ids_colloqui = [r[0] for r in cur.fetchall()]
+            cur.execute(
+                "SELECT id::text FROM matches WHERE user_id = %s "
+                "AND next_action_at >= %s AND next_action_at < %s "
+                "ORDER BY next_action_at, id LIMIT 10",
+                (uid, adesso, fra_trenta_giorni))
+            ids_azioni = [r[0] for r in cur.fetchall()]
+            cur.execute(
+                "SELECT m.id::text FROM matches m JOIN jobs j ON j.id = m.job_id "
+                "WHERE m.user_id = %s AND m.saved_at IS NOT NULL "
+                "AND m.dismissed_at IS NULL AND m.archived_at IS NULL "
+                "AND m.application_status <> 'rejected' "
+                "AND j.date_valid_through >= %s AND j.date_valid_through < %s "
+                "ORDER BY j.date_valid_through, m.id LIMIT 10",
+                (uid, adesso, fra_trenta_giorni))
+            ids_scadenze = [r[0] for r in cur.fetchall()]
+
+        with conn.cursor(row_factory=dict_row) as cur:
+            colloqui = _offerte_per_riepilogo(cur, uid, ids_colloqui)
+            azioni = _offerte_per_riepilogo(cur, uid, ids_azioni)
+            scadenze = _offerte_per_riepilogo(cur, uid, ids_scadenze)
         return {
-            "punteggio": score,
-            "motivo": (analisi or {}).get("perche") or reason,
-            "quando": quando.isoformat() if quando else None,
-            "titolo": titolo, "azienda": azienda, "url": url,
-            "link_kind": link_kind, "tipo_datore": tipo_datore,
-            "citta": (citta or [None])[0],
-            "stipendio": _fmt_stipendio(stipendio, lingua or "en") or None,
-            "logo": f"/logo/{slug}" if slug else None,
-            "archiviata": purgata,
-            "annuncio": {
-                "responsabilita": ((analisi or {}).get("responsabilita")
-                                   or _campo_testo(raw.get("ai_core_responsibilities"))),
-                "requisiti": ((analisi or {}).get("requisiti")
-                              or _campo_testo(raw.get("ai_requirements_summary"))),
-                "benefit": ((analisi or {}).get("benefit")
-                            or _campo_testo(raw.get("ai_benefits"))),
-                "orario": _campo_testo(raw.get("ai_working_hours")),
-            },
-            "analisi": ({"pro": analisi.get("pros") or [],
-                         "attenzioni": analisi.get("cons") or []}
-                        if analisi else None),
+            "pipeline": {stato: int(conteggi.get(stato, 0))
+                         for stato in ("applied", "interview", "offer", "rejected")},
+            "candidature_questa_settimana": candidature,
+            "colloqui_prossimi": colloqui,
+            "azioni_prossime": azioni,
+            "scadenze": scadenze,
+            "motivi_scarto": motivi,
+            "digest_ricevuti": digest_ricevuti,
         }
 
     # «Pflegefachkraft (m/w/d)», «Comptable unique F/H», «(d/f/m)»: il
@@ -1806,9 +2976,14 @@ def create_app() -> FastAPI:
                     "LIMIT 1", (chiave,))
                 fonte = cur.fetchone()
                 url, dominio = (fonte or (None, None))
-                # Terzo anello della catena in CLAUDE.md: Logo.dev dal dominio.
+                # Terzo anello della catena: il favicon grande del dominio
+                # via Google (20/10/2026: prima era logo.dev, che ora vuole
+                # un token a pagamento e risponde 401; Clearbit e' morto del
+                # tutto). s2/favicons e' gratis e affidabile, 128px bastano
+                # per le card.
                 if not url and dominio:
-                    url = f"https://img.logo.dev/{dominio}?size=128&format=png"
+                    url = ("https://www.google.com/s2/favicons?"
+                           f"domain={dominio}&sz=128")
                 if not url:
                     # Quarto anello (28/09/2026): il corpus ATS. Il B2C
                     # conosce 780 aziende, il portale 66.000 — li' il logo
@@ -1945,11 +3120,14 @@ def create_app() -> FastAPI:
                 "       uc.min_seniority, uc.max_seniority, uc.work_arrangements, "
                 "       uc.employment_types, uc.accepted_employer_kinds, "
                 "       uc.needs_visa_sponsorship, uc.min_headcount, uc.max_headcount, "
-                "       uc.wants, uc.target_role, uc.industries "
+                "       uc.wants, uc.target_role, uc.industries, uc.min_salary_annual, "
+                "       uc.salary_currency, uc.desired_technologies, uc.min_score, uc.id::text, "
+                "       uc.frequency, uc.send_weekday, uc.send_monthday, "
+                "       uc.send_hour_local, uc.timezone, uc.next_digest_at, uc.last_digest_at "
                 "FROM user_clusters uc JOIN clusters c ON c.id = uc.cluster_id "
                 "WHERE uc.user_id = %s AND c.status = 'active' "
                 "ORDER BY c.family, c.country", (uid,))
-            return [{"id": r[0], "famiglia": r[1], "paese": r[2],
+            return [{"id": r[19], "cluster_id": r[0], "famiglia": r[1], "paese": r[2],
                      "filtri": {
                          "languages": r[3] or [], "min_seniority": r[4],
                          "max_seniority": r[5], "work_arrangements": r[6] or [],
@@ -1958,32 +3136,71 @@ def create_app() -> FastAPI:
                          "needs_visa_sponsorship": r[9],
                          "min_headcount": r[10], "max_headcount": r[11],
                          "wants": r[12], "target_role": r[13],
-                         "industries": r[14] or []}}
+                         "industries": r[14] or [],
+                         "min_salary_annual": float(r[15]) if r[15] is not None else None,
+                         "salary_currency": r[16],
+                         "desired_technologies": r[17] or [],
+                         "min_score": r[18],
+                         "frequency": r[20], "send_weekday": r[21],
+                         "send_monthday": r[22], "send_hour_local": r[23],
+                         "timezone": r[24]},
+                     "next_digest_at": r[25].isoformat() if r[25] else None,
+                     "last_digest_at": r[26].isoformat() if r[26] else None}
                     for r in cur.fetchall()]
 
     @app.put("/me/cluster/{cluster_id}", status_code=204)
     def iscrivi_cluster(cluster_id: str, filtri: FiltriCluster,
                         uid: str = Depends(utente), conn=Depends(connessione)):
-        """Iscriviti al cluster con questi filtri, o aggiorna i filtri se già
-        iscritto. Sostituzione integrale: ciò che non c'è nel corpo torna al
-        default. Il pannello preferenze legge e riscrive tutto il blocco."""
+        """Aggiorna una ricerca per UUID, o un vecchio cluster non ambiguo."""
         with conn.cursor() as cur:
+            subscription_id, cluster_id = _ricerca_identificata(cur, uid, cluster_id)
             cur.execute("SELECT status FROM clusters WHERE id = %s", (cluster_id,))
             r = cur.fetchone()
             if not r or r[0] != "active":
                 raise HTTPException(404, "cluster inesistente o non attivo")
+            if subscription_id is None:
+                ruolo_chiave = (filtri.target_role or "").strip().lower()
+                cur.execute("SELECT 1 FROM user_clusters "
+                            "WHERE user_id = %s AND cluster_id = %s AND target_role_key = %s",
+                            (uid, cluster_id, ruolo_chiave))
+                if cur.fetchone() is None:
+                    cur.execute(
+                        "SELECT q.max_searches, "
+                        "  (SELECT count(*) FROM user_clusters uc JOIN clusters c "
+                        "     ON c.id = uc.cluster_id "
+                        "   WHERE uc.user_id = %s AND c.status = 'active') "
+                        "FROM users u JOIN plan_quotas q ON q.plan = u.plan "
+                        "WHERE u.id = %s", (uid, uid))
+                    tetto, attuali = cur.fetchone()
+                    if attuali >= tetto:
+                        raise HTTPException(
+                            409,
+                            f"Your plan covers {tetto} searches, and you have {attuali}. "
+                            f"Stop one from your panel, or move up a plan.")
             _valida_filtri(cur, filtri)
             # La lista vuota dei tipi datore accettati non è esprimibile in
             # tabella (CHECK cardinality > 0): il default li accetta tutti.
-            _scrivi_iscrizione(cur, uid, cluster_id, filtri)
+            try:
+                ricerca_id = _scrivi_iscrizione(
+                    cur, uid, cluster_id, filtri, subscription_id)
+            except psycopg.errors.UniqueViolation:
+                conn.rollback()
+                raise HTTPException(409, "a search with this role already exists")
+            except psycopg.errors.CheckViolation as exc:
+                conn.rollback()
+                raise HTTPException(422, "pianificazione o filtri incoerenti") from exc
+            _anticipa_primo_digest(
+                cur, uid,
+                nuova_ricerca_id=ricerca_id if subscription_id is None else None)
         conn.commit()
 
     @app.delete("/me/cluster/{cluster_id}", status_code=204)
     def disiscrivi_cluster(cluster_id: str, uid: str = Depends(utente),
                            conn=Depends(connessione)):
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM user_clusters WHERE user_id = %s "
-                        "AND cluster_id = %s", (uid, cluster_id))
+            subscription_id, _ = _ricerca_identificata(cur, uid, cluster_id)
+            cur.execute("DELETE FROM user_clusters WHERE user_id = %s AND id = %s",
+                        (uid, subscription_id))
         conn.commit()
 
     # --- collegamento Telegram ---------------------------------------------
@@ -2131,7 +3348,7 @@ def create_app() -> FastAPI:
         pezzi = testo.split(maxsplit=1)
         gettone = pezzi[1].strip() if len(pezzi) > 1 else ""
         if not gettone:
-            telegram_mod.invia_testo(chat_id, TG_SENZA_GETTONE)
+            telegram_mod.invia_testo(chat_id, _marchio(TG_SENZA_GETTONE))
             return {"ok": True}
 
         with conn.cursor() as cur:
@@ -2145,7 +3362,7 @@ def create_app() -> FastAPI:
             r = cur.fetchone()
             if not r:
                 conn.rollback()
-                telegram_mod.invia_testo(chat_id, TG_SCADUTO)
+                telegram_mod.invia_testo(chat_id, _marchio(TG_SCADUTO))
                 return {"ok": True}
             uid = r[0]
             # Una chat appartiene a un utente solo: l'indice unico parziale
@@ -2157,7 +3374,7 @@ def create_app() -> FastAPI:
                     "WHERE id = %s", (chat_id, uid))
             except psycopg.errors.UniqueViolation:
                 conn.rollback()
-                telegram_mod.invia_testo(chat_id, TG_GIA_COLLEGATA)
+                telegram_mod.invia_testo(chat_id, _marchio(TG_GIA_COLLEGATA))
                 return {"ok": True}
             cur.execute("SELECT locale, display_name, frequency "
                         "FROM users WHERE id = %s", (uid,))
@@ -2253,7 +3470,7 @@ def create_app() -> FastAPI:
                     conn.rollback()
                     try:
                         whatsapp_mod.invia_testo(tr["conversazione"],
-                                                 WA_GIA_COLLEGATO)
+                                                 _marchio(WA_GIA_COLLEGATO))
                     except Exception:
                         pass
                     continue
@@ -2291,6 +3508,53 @@ def create_app() -> FastAPI:
                 "    ELSE array_remove(delivery_channels, 'whatsapp') END "
                 "WHERE id = %s", (uid,))
         conn.commit()
+
+    # --- token push dell'app nativa -----------------------------------------
+    # Il token identifica un dispositivo: formato chiuso, tetto per account e
+    # registrazione seriale per impedire accumuli e raffiche di notifiche.
+
+    @app.post("/me/push/token", status_code=204)
+    def push_registra(corpo: PushTokenRegistrazione, uid: str = Depends(utente),
+                      conn=Depends(connessione)):
+        """Registra (o rinfresca) il token push del dispositivo.
+
+        Idempotente per costruzione: la stessa coppia (utente, token) si
+        aggiorna e basta, quindi l'app puo' ri-registrarsi a ogni avvio.
+        """
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (uid,))
+            cur.execute("SELECT count(*) FROM user_push_tokens "
+                        "WHERE user_id = %s AND token <> %s", (uid, corpo.token))
+            if cur.fetchone()[0] >= MAX_PUSH_TOKENS_PER_USER:
+                cur.execute("SELECT 1 FROM user_push_tokens "
+                            "WHERE user_id = %s AND token = %s", (uid, corpo.token))
+                if cur.fetchone() is None:
+                    raise HTTPException(409, "massimo 10 dispositivi per account")
+            cur.execute(
+                "INSERT INTO user_push_tokens (user_id, token, platform) "
+                "VALUES (%s, %s, %s) "
+                "ON CONFLICT (user_id, token) DO UPDATE "
+                "SET platform = EXCLUDED.platform, updated_at = now()",
+                (uid, corpo.token, corpo.platform))
+        conn.commit()
+        # Il token NON si logga intero: e' un dato quasi-personale.
+        log.info("push: token %s… registrato (%s)",
+                 corpo.token[:12], corpo.platform)
+
+    @app.delete("/me/push/token", status_code=204)
+    def push_rimuovi(corpo: PushTokenRimozione, uid: str = Depends(utente),
+                     conn=Depends(connessione)):
+        """Dimentica il token (logout, disinstallazione, opt-out nell'app).
+
+        204 anche se il token non c'e': la rimozione e' idempotente, e
+        confessare se esisteva non aiuterebbe nessuno.
+        """
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_push_tokens "
+                        "WHERE user_id = %s AND token = %s",
+                        (uid, corpo.token))
+        conn.commit()
+        log.info("push: token %s… rimosso", corpo.token[:12])
 
     @app.put("/me")
     def aggiorna_me(pref: PreferenzeUtente, uid: str = Depends(utente),
@@ -2355,9 +3619,12 @@ def create_app() -> FastAPI:
             if not canali:
                 raise HTTPException(422, "serve almeno un canale")
             for c in canali:
-                if c not in ("email", "telegram", "whatsapp"):
+                if c not in ("email", "telegram", "whatsapp", "app"):
                     raise HTTPException(422, "delivery_channels: email, "
-                                        "telegram o whatsapp")
+                                        "telegram, whatsapp o app")
+            # 'app' non ha recapito da controllare: il recapito e' l'account
+            # stesso (la tab Digest legge digest_items), non un indirizzo
+            # esterno da collegare come telegram/whatsapp.
             with conn.cursor() as cur:
                 cur.execute("SELECT telegram_chat_id IS NOT NULL, "
                             "whatsapp_e164 IS NOT NULL FROM users "
@@ -2400,45 +3667,43 @@ def create_app() -> FastAPI:
                     "       send_monthday, timezone FROM users WHERE id = %s",
                     (uid,))
                 f, ora, wd, md, tz = cur.fetchone()
+                adesso = datetime.now(timezone.utc)
                 try:
-                    slot = calcola_slot(f, ora, wd, md, tz,
-                                        datetime.now(timezone.utc))
+                    slot = calcola_slot(f, ora, wd, md, tz, adesso)
                 except Exception as exc:
                     raise HTTPException(422, f"orario non calcolabile: {exc}")
 
-                # IL PRIMO DIGEST NON ASPETTA LO SLOT.
-                #
-                # `calcola_slot` dà la prossima occorrenza dell'orario
-                # scelto: fino a un giorno per chi lo vuole quotidiano, fino
-                # a un MESE per chi lo vuole mensile. Significa che qualcuno
-                # finiva l'iscrizione, caricava il CV, sceglieva le ricerche
-                # — e poi non riceveva niente per settimane. Il momento in
-                # cui una persona ha appena consegnato il proprio CV è
-                # esattamente quello in cui va mostrato che il motore
-                # funziona; un mese dopo si è già dimenticata di noi.
-                #
-                # Solo la PRIMA volta, e solo se il digest può davvero
-                # nascere: senza CV attivo o senza una ricerca attiva il
-                # worker registrerebbe un fallimento invece di una
-                # consegna, che è peggio dell'attesa. Dal secondo in poi
-                # comanda la frequenza scelta.
-                cur.execute(
-                    "SELECT u.last_digest_at IS NULL "
-                    "   AND u.next_digest_at IS NULL "
-                    "   AND EXISTS (SELECT 1 FROM user_cvs cv "
-                    "               WHERE cv.user_id = u.id AND cv.status = 'active') "
-                    "   AND EXISTS (SELECT 1 FROM user_clusters uc "
-                    "               JOIN clusters c ON c.id = uc.cluster_id "
-                    "               WHERE uc.user_id = u.id AND NOT uc.is_paused "
-                    "                 AND c.status = 'active') "
-                    "FROM users u WHERE u.id = %s", (uid,))
-                primo = cur.fetchone()[0]
                 cur.execute("UPDATE users SET next_digest_at = %s WHERE id = %s",
-                            (datetime.now(timezone.utc) if primo else slot, uid))
+                            (slot, uid))
+                if {"send_hour_local", "timezone"} & set(campi):
+                    cur.execute(
+                        "SELECT id::text, frequency, send_weekday, send_monthday, "
+                        "       send_hour_local, timezone FROM user_clusters "
+                        "WHERE user_id = %s AND frequency IS NOT NULL "
+                        "  AND ((%s AND send_hour_local IS NULL) "
+                        "       OR (%s AND timezone IS NULL))",
+                        (uid, "send_hour_local" in campi, "timezone" in campi))
+                    override_fallback = cur.fetchall()
+                    for ricerca_id, f_r, wd_r, md_r, ora_r, tz_r in override_fallback:
+                        try:
+                            slot_r = calcola_slot(
+                                f_r, ora if ora_r is None else ora_r, wd_r, md_r,
+                                tz_r or tz, adesso)
+                        except Exception as exc:
+                            raise HTTPException(422, f"orario non calcolabile: {exc}")
+                        cur.execute(
+                            "UPDATE user_clusters SET next_digest_at = %s "
+                            "WHERE id = %s AND user_id = %s",
+                            (slot_r, ricerca_id, uid))
+                _anticipa_primo_digest(cur, uid)
         conn.commit()
         return me(uid=uid, conn=conn)
 
     # --- CV ----------------------------------------------------------------
+
+    def _analizza_cv_connessione(testo: str) -> dict:
+        with psycopg.connect(database_url()) as analisi_conn:
+            return _analizza_cv(analisi_conn, testo)
 
     @app.post("/me/cv")
     async def carica_cv(file: UploadFile = File(...),
@@ -2450,18 +3715,16 @@ def create_app() -> FastAPI:
         Il testo del CV non si logga MAI: è un dato personale come tutto il
         resto del file.
         """
-        # 26/09/2026: il file veniva letto intero in memoria prima di
-        # qualunque controllo — un upload da centinaia di MB gonfiava la RAM
-        # dell'API. Tetto dichiarato: 20 MB bastano a qualunque CV.
-        dati = await file.read(20 * 1024 * 1024 + 1)
-        if len(dati) > 20 * 1024 * 1024:
+        dati = await file.read(cv.MAX_BYTES + 1)
+        if len(dati) > cv.MAX_BYTES:
             raise HTTPException(413, "il file supera i 20 MB: troppo grande per un CV")
         try:
-            testo = cv.estrai_testo(file.filename or "", file.content_type or "", dati)
+            testo = await run_in_threadpool(
+                cv.estrai_testo, file.filename or "", file.content_type or "", dati)
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         try:
-            profilo = _analizza_cv(conn, testo)
+            profilo = await run_in_threadpool(_analizza_cv_connessione, testo)
         except RuntimeError as exc:
             # Il dettaglio del fornitore resta nei log, dove serve a noi. A chi
             # sta caricando il CV non dice nulla di azionabile, e "credito
@@ -2476,9 +3739,9 @@ def create_app() -> FastAPI:
                 "minutes.",
             )
 
-        esito = crypto.cifra(dati)
+        esito = await run_in_threadpool(crypto.cifra, dati)
         chiave = f"cv/{uid}/{secrets.token_hex(8)}"
-        storage.salva(chiave, esito.dati)
+        await run_in_threadpool(storage.salva, chiave, esito.dati)
         da_eliminare: list[str] = []
         try:
             with conn.cursor() as cur:
@@ -2512,24 +3775,18 @@ def create_app() -> FastAPI:
                      Binary(esito.nonce),
                      Binary(esito.auth_tag)))
                 cv_id = cur.fetchone()[0]
-                # Un CV nuovo è un giudizio nuovo: i match mai consegnati si
-                # riaprono, così vengono rivalutati contro il profilo vero.
-                # Quelli già entrati in un digest restano — sono il registro
-                # di ciò che l'utente ha ricevuto, e l'anti-ripetizione su
-                # quelli è una promessa, non un ostacolo.
-                cur.execute(
-                    "DELETE FROM matches m WHERE m.user_id = %s "
-                    "AND NOT EXISTS (SELECT 1 FROM digest_items di "
-                    "                WHERE di.match_id = m.id)", (uid,))
-                riaperti = cur.rowcount
+                # Un CV nuovo riapre solo i match mai consegnati e senza
+                # azioni personali: feedback e tracker restano allo stesso id.
+                riaperti = funnel_matching.elimina_match_da_rivalutare(cur, uid)
+                _anticipa_primo_digest(cur, uid, inizializza_override=True)
             conn.commit()
         except Exception:
             # La riga non c'è, il file cifrato non deve restare orfano.
-            storage.elimina(chiave)
+            await run_in_threadpool(storage.elimina, chiave)
             raise
         for vecchia in da_eliminare:
             try:
-                storage.elimina(vecchia)
+                await run_in_threadpool(storage.elimina, vecchia)
             except Exception as exc:  # noqa: BLE001
                 # Il blob orfano è un residuo, non un guasto: si logga e si va.
                 log.warning("blob del CV precedente non rimosso (%s): %s",
@@ -2543,7 +3800,7 @@ def create_app() -> FastAPI:
         pannello mostra. Il file vero sta in /me/cv/file."""
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT families, seniority, skills, languages, years_experience, "
+                "SELECT id::text, families, seniority, skills, languages, years_experience, "
                 "       uploaded_at, mime_type, original_filename, raw_extraction "
                 "FROM user_cvs WHERE user_id = %s AND status = 'active'", (uid,))
             r = cur.fetchone()
@@ -2553,7 +3810,7 @@ def create_app() -> FastAPI:
         # ripuliti dall'estrazione. Un CV caricato prima che esistessero
         # non li ha: si risponde vuoto e il pannello non li disegna —
         # meglio una scheda piu' corta di un campo che dice «—».
-        estratto = r[8] if isinstance(r[8], dict) else {}
+        estratto = r[9] if isinstance(r[9], dict) else {}
 
         # La sintesi e' prosa NOSTRA (scritta da GLM all'estrazione), e la
         # prosa segue la lingua del pannello che la chiede: si traduce una
@@ -2606,9 +3863,9 @@ def create_app() -> FastAPI:
             sintesi = tr_sintesi.get(voluta) or sintesi
             consigli = tr_consigli.get(voluta) or consigli
 
-        return {"families": r[0], "seniority": r[1], "skills": r[2],
-                "languages": r[3], "years_experience": r[4],
-                "caricato_il": r[5], "tipo": r[6], "nome_file": r[7],
+        return {"id": r[0], "families": r[1], "seniority": r[2], "skills": r[3],
+                "languages": r[4], "years_experience": r[5],
+                "caricato_il": r[6], "tipo": r[7], "nome_file": r[8],
                 "sintesi": sintesi,
                 "ruoli": estratto.get("roles") or [],
                 "certificazioni": estratto.get("certifications") or [],
@@ -2620,8 +3877,12 @@ def create_app() -> FastAPI:
     # Non si rimanda mai indietro il content-type dichiarato dal client: un
     # file caricato come text/html e riservito tale sarebbe una pagina
     # ospitata sul nostro dominio, scritta da chi l'ha caricata.
-    TIPI_CV = {"application/pdf": "application/pdf",
-               "text/plain": "text/plain; charset=utf-8"}
+    TIPI_CV = {
+        "application/pdf": "application/pdf",
+        "text/plain": "text/plain; charset=utf-8",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
 
     @app.put("/me/cv/profilo")
     def aggiorna_profilo_cv(corpo: ProfiloCv, uid: str = Depends(utente),
@@ -2663,17 +3924,9 @@ def create_app() -> FastAPI:
             if not cur.fetchone():
                 raise HTTPException(404, "nessun CV caricato")
 
-            # Il profilo E' cio' che GLM legge in testa a ogni valutazione:
-            # correggerlo cambia il giudizio, quindi i match non ancora
-            # consegnati si riaprono e verranno rivalutati. Quelli gia'
-            # entrati in un digest restano — sono il registro di cio' che
-            # l'utente ha ricevuto, e l'anti-ripetizione su quelli e' una
-            # promessa, non un ostacolo.
-            cur.execute(
-                "DELETE FROM matches m WHERE m.user_id = %s "
-                "AND NOT EXISTS (SELECT 1 FROM digest_items di "
-                "                WHERE di.match_id = m.id)", (uid,))
-            riaperti = cur.rowcount
+            # Come per un CV nuovo: si rivalutano solo i match non consegnati
+            # e mai toccati dall'utente; feedback e tracker non si cancellano.
+            riaperti = funnel_matching.elimina_match_da_rivalutare(cur, uid)
         conn.commit()
         log.info("profilo CV corretto da %s: %d match riaperti", uid, riaperti)
         return {"families": fam, "seniority": sen, "skills": skl,
@@ -2709,6 +3962,12 @@ def create_app() -> FastAPI:
         except Exception as exc:
             log.warning("CV non leggibile per %s: %s", uid, exc)
             raise HTTPException(503, "il file non e' leggibile in questo momento")
+        from urllib.parse import quote
+        nome_file = (nome or "cv").replace("\r", "").replace("\n", "")[:120]
+        nome_ascii = (nome_file.replace('"', "").replace("\\", "_")
+                      .encode("ascii", "replace").decode("ascii")) or "cv"
+        disposizione = (f'inline; filename="{nome_ascii}"; '
+                        f"filename*=UTF-8''{quote(nome_file, safe='')}")
         return Response(
             content=dati,
             media_type=tipo_servito,
@@ -2716,13 +3975,7 @@ def create_app() -> FastAPI:
                 "Cache-Control": "no-store, private",
                 "X-Content-Type-Options": "nosniff",
                 "Content-Security-Policy": "sandbox; default-src 'none'",
-                # `inline`: l'anteprima lo mostra, non lo scarica. Il nome
-                # fra virgolette e ripulito: un a-capo in un header lo
-                # spezzerebbe in due.
-                "Content-Disposition":
-                    'inline; filename="%s"' % (
-                        (nome or "cv").replace('"', "").replace("\r", "")
-                                      .replace("\n", "")[:120]),
+                "Content-Disposition": disposizione,
             })
 
     # L'API dei clienti B2B (dataset di offerte e aziende), versionata nel

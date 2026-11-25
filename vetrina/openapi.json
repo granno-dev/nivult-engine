@@ -3,7 +3,7 @@
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
     "version": "1.0.0",
-    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support PostgreSQL full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy. Free monthly tiers up to 1,000 credits/month return at most 25 records/page and allow 2 requests/second with burst 5. Higher monthly tiers return up to 500 records/page and allow 15 requests/second with burst 30. Values above the free page cap are truncated to 25.",
+    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://api.nivult.com" }],
@@ -13,17 +13,34 @@
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. q uses PostgreSQL full-text search over title and description. Unknown query parameters are ignored. Unknown filter values normally produce an empty page rather than a validation error.",
+        "description": "Active postings with keyset pagination. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. v2 adds source_type, employer, domain, location, salary and skills filters with validation without charging invalid requests. Unknown query parameters are ignored.",
         "parameters": [
-          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "ISO 3166-1 alpha-2 country code" },
-          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP" }, "description": "Case-insensitive exact match against extracted, normalized technologies" },
-          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "greenhouse" }, "description": "Source platform slug. `bundesagentur` is accepted as a public alias for `bundesanstellung`." },
-          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology" } },
-          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "senior" } },
-          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote" }, "description": "remote, hybrid or onsite" },
-          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en" } },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "PostgreSQL full-text query over job title and description" },
-          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-09-01" }, "description": "Posted on or after this date (YYYY-MM-DD)" },
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. `bundesagentur` is accepted as a public alias for `bundesanstellung` only when used alone." },
+          { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Exclude these source platform slugs; comma-separated values are supported. If the same value appears in ats and exclude_ats, it is excluded." },
+          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Comma-separated values are ORed" },
+          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "Comma-separated values are ORed" },
+          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote,hybrid" }, "description": "remote, hybrid or onsite; comma-separated values are ORed" },
+          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en,it" }, "description": "Comma-separated values are ORed" },
+          { "name": "q", "in": "query", "schema": { "type": "string", "example": "MBSE SysML" }, "description": "Full-text search over job title and description; all terms are required (AND)" },
+          { "name": "q_any", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML,CATIA" }, "description": "At least one comma-separated keyword must match the title or description (OR); maximum 15 keywords. Can be combined with q." },
+          { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to the job title; all terms are required (AND)" },
+          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
+          { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-11-24T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
+          { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR" },
+          { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Full-text match on employer name" },
+          { "name": "company_slug", "in": "query", "schema": { "type": "string" }, "description": "Employer/source slug; comma-separated OR" },
+          { "name": "company_domain", "in": "query", "schema": { "type": "string", "example": "dixonvalve.com" }, "description": "Employer domain; scheme, www and path are removed; comma-separated OR" },
+          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "City; comma-separated OR" },
+          { "name": "state", "in": "query", "schema": { "type": "string" }, "description": "State/region; comma-separated OR" },
+          { "name": "employment_type", "in": "query", "schema": { "type": "string" }, "description": "Employment type; comma-separated OR" },
+          { "name": "department", "in": "query", "schema": { "type": "string" }, "description": "Department; comma-separated OR" },
+          { "name": "skills", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML" }, "description": "Skills; comma-separated OR" },
+          { "name": "salary_currency", "in": "query", "schema": { "type": "string", "example": "usd" }, "description": "Salary currency; comma-separated OR" },
+          { "name": "has_salary", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Whether salary_min or salary_max is present" },
+          { "name": "salary_min", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range lower bound on the observed salary_min field" },
+          { "name": "salary_max", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range upper bound on the observed salary_max field" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],
@@ -104,7 +121,7 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 500,000-credit bulk-file tier, but it is authenticated and metered.",
+        "description": "Returns metadata for the latest available export. The manifest endpoint does not require the 50,000-credit bulk-file tier, but it is authenticated and metered.",
         "responses": {
           "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
@@ -117,7 +134,7 @@
       "get": {
         "summary": "Download the latest available bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 500,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
+        "description": "Downloads offerte or aziende as JSONL gzip. Direct keys require an account monthly tier of at least 50,000 credits; top-ups do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
         "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
           "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
@@ -161,14 +178,14 @@
       "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key. RapidAPI users authenticate through the RapidAPI proxy instead." }
     },
     "parameters": {
-      "PageLimit": { "name": "limit", "in": "query", "description": "Requested page size. Free monthly tiers up to 1,000 credits/month are truncated to 25 records/page; higher tiers allow up to 500.", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
+      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 } },
       "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
     },
     "responses": {
       "BadRequest": { "description": "Invalid date or cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
-      "CreditsExhausted": { "description": "Monthly/purchased credits exhausted, or rate limit exceeded: free tiers 2 requests/second with burst 5; higher tiers 15/second with burst 30. Rate-limit responses include Retry-After.", "headers": { "Retry-After": { "description": "Seconds to wait after a rate-limit response", "schema": { "type": "integer", "minimum": 1 } } }, "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/CreditError" }, { "$ref": "#/components/schemas/ErrorResponse" }] } } } },
+      "CreditsExhausted": { "description": "Monthly and purchased credits exhausted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
       "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; the response is JSON and no credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
     },
     "schemas": {

@@ -1,251 +1,340 @@
-"""Il livello HTTP dell'API clienti B2B, versionata nel percorso come /v1.
+"""Livello HTTP dell'API clienti B2B ``/v1``.
 
-LA REGOLA DELL'API: i campi delle risposte non si rinominano e non si
-tolgono MAI — si aggiungono soltanto. Chi compra il dataset ci scrive
-codice sopra: un campo rinominato e' un incidente di produzione loro,
-non un refactor nostro. Per questo il router passa i dict del data layer
-cosi' come sono, senza rimappare nulla.
-
-Qui c'e' SOLO HTTP: parametri, codici di stato, autenticazione. I dati
-arrivano da `nivult.api_clienti.dati` (modulo a parte, stessa interfaccia
-per tutti gli endpoint), le chiavi da `nivult.api_clienti.chiavi`.
-
-Contratto atteso da `dati.stato_export()`:
-    {"data": "2026-09-23", "righe": {...},
-     "file": {"offerte": "/percorso/offerte-....jsonl.gz",
-              "aziende": "/percorso/aziende-....jsonl.gz"}}
+Il contratto pubblico usa nomi di campi inglesi; le rimozioni privacy sono
+deliberate. L'autenticazione e' separata dall'addebito per non consumare crediti
+su errori del cliente, entitlement mancante, file assente o errori del database.
+L'addebito precede sempre la risposta e un guasto del contatore chiude con 503,
+mai con dati gratuiti.
 """
 from __future__ import annotations
 
+import ipaddress
+import logging
+import math
 import os
 import re
 import time
-from datetime import datetime
+from datetime import date, datetime
+from pathlib import Path
 
+import psycopg
+import psycopg_pool
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-from nivult.api_clienti import chiavi, dati
-from nivult.api_clienti import vivo
+from nivult.api_clienti import chiavi, dati, opensearch, vivo
+from nivult.rate_limit import RateLimiter
 
 router = APIRouter(prefix="/v1", tags=["clienti"])
 
-# Oltre le 500 righe una pagina non e' piu' una pagina: e' un export
-# mascherato da chiamata, e gli export hanno la loro rotta.
 LIMITE_DEFAULT = 100
 LIMITE_MASSIMO = 500
-
-# I soli due export del giorno che si possono scaricare.
+LIMITE_FREE = 25
+TIER_FREE_MASSIMO = 1_000
+RATE_FREE, BURST_FREE = 2, 5
+RATE_PAGANTI, BURST_PAGANTI = 15, 30
 NOMI_EXPORT = ("offerte", "aziende")
+SOGLIA_BULK = 500_000
+SOGLIA_DELTA = 200_000
+_rate_limiter = RateLimiter()
+
+
+def _volume_mensile(cliente: dict) -> int:
+    if cliente.get("via") == "rapidapi":
+        return 10_000
+    if "monthly_tier" in cliente:
+        return int(cliente["monthly_tier"])
+    try:
+        volume = (chiavi.volume_per_utente(str(cliente["user_id"]))
+                  if cliente.get("user_id") else int(cliente["crediti_mensili"]))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(503, "credit counter temporarily unavailable") from exc
+    cliente["monthly_tier"] = volume
+    return volume
+
+
+def _e_free(cliente: dict) -> bool:
+    return _volume_mensile(cliente) <= TIER_FREE_MASSIMO
+
+
+def _limite_per_tier(cliente: dict, limite: int) -> int:
+    return min(limite, LIMITE_FREE if _e_free(cliente) else LIMITE_MASSIMO)
+
+
+def _applica_rate_limit(request: Request, cliente: dict) -> None:
+    free = _e_free(cliente)
+    rate, burst = (RATE_FREE, BURST_FREE) if free else (RATE_PAGANTI, BURST_PAGANTI)
+    identita = (f"rapidapi:{cliente.get('utente_rapidapi') or _ip(request) or 'unknown'}"
+                if cliente.get("via") == "rapidapi" else f"key:{cliente['id']}")
+    ammesso, retry = _rate_limiter.allow(identita, rate, burst)
+    if not ammesso:
+        raise HTTPException(
+            429, f"rate limit exceeded: {rate} requests/second (burst {burst})",
+            headers={"Retry-After": str(retry)})
 
 
 def _cliente(request: Request) -> dict:
-    """La dipendenza di autenticazione: header X-Api-Key -> record chiave.
-
-    La chiave viaggia SOLO in un header: mai in query string, perche' le
-    URL finiscono nei log — la stessa regola dei token di sessione.
-    Ogni chiamata che supera questo cancello costa un credito.
-
-    Il canale RapidAPI (08/10/2026): loro fanno da proxy e autenticano il
-    cliente per conto loro (piani e quote li applicano loro). A noi
-    arriva X-RapidAPI-Proxy-Secret, che solo RapidAPI conosce: se torna
-    col segreto in ambiente, la chiamata e' gia' autenticata e NON scala
-    crediti dal nostro contatore (il cliente paga RapidAPI, non noi due
-    volte). Il segreto sbagliato o assente cade nel percorso normale.
-    """
+    """Autentica e limita il canale senza spendere crediti."""
     segreto = os.environ.get("RAPIDAPI_PROXY_SECRET")
     if segreto and request.headers.get("X-RapidAPI-Proxy-Secret") == segreto:
-        return {"id": "rapidapi", "user_id": None,
-                "via": "rapidapi",
-                "utente_rapidapi": request.headers.get("X-RapidAPI-User", "")}
+        cliente = {"id": "rapidapi", "user_id": None, "via": "rapidapi",
+                   "utente_rapidapi": request.headers.get("X-RapidAPI-User", "")}
+        _applica_rate_limit(request, cliente)
+        return cliente
     chiave = request.headers.get("X-Api-Key", "").strip()
     if not chiave:
         raise HTTPException(401, "missing API key: send the X-Api-Key header")
     try:
-        rec = chiavi.autentica(chiave)
+        cliente = dict(chiavi.verifica(chiave))
+        _volume_mensile(cliente)
+        _applica_rate_limit(request, cliente)
+        return cliente
+    except chiavi.ChiaveInvalida:
+        raise HTTPException(401, "invalid or revoked API key")
+    except chiavi.ContatoreNonDisponibile:
+        raise HTTPException(503, "credit counter temporarily unavailable")
+
+
+def _addebita(request: Request, cliente: dict) -> dict:
+    if cliente.get("via") == "rapidapi":
+        return cliente
+    try:
+        return chiavi.addebita_chiave(
+            str(cliente["id"]), via="api", azione=request.url.path,
+            dettaglio=str(request.url.query)[:200] or None)
     except chiavi.ChiaveInvalida:
         raise HTTPException(401, "invalid or revoked API key")
     except chiavi.CreditiEsauriti as e:
         raise HTTPException(429, detail={
-            "errore": "monthly credits exhausted",
-            "crediti_mensili": e.crediti_mensili,
-            "mese_uso": str(e.mese_uso)})
-    # nel registro dei consumi: chi paga vede dove vanno i crediti
-    # (04/10/2026) — la via «api», l'endpoint, la query
-    if rec.get("user_id"):
-        chiavi.registra_uso(str(rec["user_id"]), "api",
-                            request.url.path,
-                            str(request.url.query)[:200] or None)
-    return rec
+            "error": "monthly and purchased credits exhausted",
+            "monthly_credits": e.crediti_mensili,
+            "purchased_credits": e.crediti_extra,
+            "usage_month": str(e.mese_uso)})
+    except chiavi.ContatoreNonDisponibile:
+        raise HTTPException(503, "credit counter temporarily unavailable")
+
+
+def _risposta_export(percorso: str, nome_file: str) -> StreamingResponse:
+    return StreamingResponse(
+        dati.stream_export_senza_pii(percorso), media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{nome_file}"'})
+
+
+def _richiedi_volume(cliente: dict, minimo: int, prodotto: str) -> None:
+    if cliente.get("via") == "rapidapi":
+        return
+    if _volume_mensile(cliente) < minimo:
+        raise HTTPException(403, f"{prodotto} requires the {minimo:,} "
+                                 "credits/month tier")
 
 
 def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
-    """La forma delle liste, una sola per tutte: data / next_cursor / count_page.
-
-    Il cursore malformato e' un errore del CLIENTE (400), non un guasto
-    nostro (500): senza questa traduzione una richiesta sbagliata pagava
-    un credito e riceveva un Internal Server Error.
-    """
     try:
         righe, prossimo = funzione(filtri, cursore, limite)
+    except psycopg.errors.QueryCanceled as e:
+        logging.getLogger(__name__).warning("query API interrotta per timeout")
+        raise HTTPException(
+            503, "database query timed out; narrow the filters or retry") from e
+    except (psycopg.errors.LockNotAvailable, psycopg_pool.PoolTimeout) as e:
+        logging.getLogger(__name__).warning("database API non disponibile: %s",
+                                            type(e).__name__)
+        raise HTTPException(503, "database temporarily unavailable") from e
+    except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+        logging.getLogger(__name__).exception("database API non disponibile")
+        raise HTTPException(503, "database temporarily unavailable") from e
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
 def _filtri(**coppie) -> dict:
-    """Solo i parametri presenti: al data layer non arrivano i None."""
     if coppie.get("ats") == "bundesagentur":
         coppie["ats"] = "bundesanstellung"
     return {k: v for k, v in coppie.items() if v is not None}
 
 
-@router.get("/jobs")
-def jobs(country: str | None = None, category: str | None = None,
-         ats: str | None = None, seniority: str | None = None,
-         remote: str | None = None, language: str | None = None,
-         q: str | None = None, technology: str | None = None,
-         posted_after: str | None = None, dal: str | None = None,
-         limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-         cursor: str | None = None, _=Depends(_cliente)):
-    """Le offerte, filtrate e paginate a cursore.
+def _numero_salario(valore: str | None, campo: str) -> float | None:
+    if valore is None:
+        return None
+    try:
+        numero = float(valore)
+    except ValueError:
+        raise HTTPException(400, f"{campo} must be a number")
+    if not math.isfinite(numero) or numero < 0:
+        raise HTTPException(400, f"{campo} must be finite and non-negative")
+    return numero
 
-    Dal vivo (Postgres, ruolo di sola lettura): la stessa pagina che
-    sul DuckDB del volume di rete costava 47,8 secondi (03/10/2026).
-    `posted_after` e' il nome pubblico (09/10/2026): `dal` resta accettato
-    in silenzio per chi ci chiamava gia' — ma in documentazione e sui
-    marketplace esiste solo l'inglese.
-    """
-    return _pagina(vivo.offerte,
-                   _filtri(country=country, category=category, ats=ats,
-                           seniority=seniority, remote=remote,
-                           language=language, q=q, technology=technology,
-                           dal=posted_after or dal),
-                   cursor, limit)
+
+def _valida_jobs_v2(source_type: str | None, has_salary: str | None,
+                    salary_min: str | None, salary_max: str | None) -> tuple[float | None, float | None]:
+    if source_type:
+        valori = [v.strip().lower() for v in source_type.split(",") if v.strip()]
+        if any(v not in opensearch.SOURCE_TYPES for v in valori):
+            raise HTTPException(400, "source_type must use direct, aggregator, "
+                                     "staffing or public_board")
+    if has_salary is not None and has_salary.strip().lower() not in ("true", "false"):
+        raise HTTPException(400, "has_salary must be true or false")
+    minimo = _numero_salario(salary_min, "salary_min")
+    massimo = _numero_salario(salary_max, "salary_max")
+    if minimo is not None and massimo is not None and minimo > massimo:
+        raise HTTPException(400, "salary_min cannot exceed salary_max")
+    return minimo, massimo
+
+
+@router.get("/jobs")
+def jobs(request: Request, country: str | None = None, category: str | None = None,
+         ats: str | None = None, exclude_ats: str | None = None,
+         seniority: str | None = None, remote: str | None = None,
+         language: str | None = None, q: str | None = None, q_any: str | None = None,
+         title: str | None = None, technology: str | None = None,
+         source_type: str | None = None, company: str | None = None,
+         company_slug: str | None = None, company_domain: str | None = None,
+         city: str | None = None, state: str | None = None,
+         employment_type: str | None = None, department: str | None = None,
+         skills: str | None = None, salary_currency: str | None = None,
+         has_salary: str | None = None, salary_min: str | None = None,
+         salary_max: str | None = None, posted_after: str | None = None,
+         posted_before: str | None = None, dal: str | None = None,
+         limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
+         cursor: str | None = None, cliente=Depends(_cliente)):
+    """Cerca offerte attive; i filtri keyword accettano valori multipli separati
+    da virgola. ``exclude_ats`` esclude le sorgenti indicate. ``q`` richiede
+    tutti i termini, ``q_any`` almeno una delle massimo 15 keyword; ``title``
+    cerca solo nel titolo. I filtri v2 coprono datore, dominio, luogo, salario
+    e ``source_type``, con validazione senza addebito."""
+    minimo, massimo = _valida_jobs_v2(source_type, has_salary, salary_min, salary_max)
+    risposta = _pagina(
+        opensearch.offerte if opensearch.attivo() else vivo.offerte,
+        _filtri(country=country, category=category, ats=ats, exclude_ats=exclude_ats,
+                seniority=seniority, remote=remote, language=language, q=q,
+                q_any=q_any, title=title, technology=technology, source_type=source_type,
+                company=company, company_slug=company_slug, company_domain=company_domain,
+                city=city, state=state, employment_type=employment_type,
+                department=department, skills=skills, salary_currency=salary_currency,
+                has_salary=(has_salary.strip().lower() == "true"
+                            if has_salary is not None else None),
+                salary_min=minimo, salary_max=massimo,
+                dal=posted_after or dal, posted_before=posted_before),
+        cursor, _limite_per_tier(cliente, limit))
+    _addebita(request, cliente)
+    return risposta
 
 
 @router.get("/companies")
-def companies(country: str | None = None, industry: str | None = None,
-              q: str | None = None, technology: str | None = None,
-              employees_min: int | None = None,
+def companies(request: Request, country: str | None = None,
+              industry: str | None = None, q: str | None = None,
+              technology: str | None = None, employees_min: int | None = None,
               employees_max: int | None = None,
               limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-              cursor: str | None = None, _=Depends(_cliente)):
-    """Le aziende, filtrate e paginate a cursore."""
-    return _pagina(dati.aziende,
-                   _filtri(country=country, industry=industry, q=q,
-                           technology=technology,
-                           employees_min=employees_min,
-                           employees_max=employees_max),
-                   cursor, limit)
+              cursor: str | None = None, cliente=Depends(_cliente)):
+    risposta = _pagina(
+        dati.aziende,
+        _filtri(country=country, industry=industry, q=q, technology=technology,
+                employees_min=employees_min, employees_max=employees_max),
+        cursor, _limite_per_tier(cliente, limit))
+    _addebita(request, cliente)
+    return risposta
 
 
 @router.get("/companies/{piattaforma}/{slug}")
-def company(piattaforma: str, slug: str, _=Depends(_cliente)):
-    """La singola azienda, technologies comprese."""
+def company(request: Request, piattaforma: str, slug: str, cliente=Depends(_cliente)):
     azienda = dati.azienda(piattaforma, slug)
     if azienda is None:
         raise HTTPException(404, "company not found")
+    _addebita(request, cliente)
     return azienda
 
 
 @router.get("/changes")
-def changes(since: str | None = None, cursor: str | None = None,
+def changes(request: Request, since: str | None = None, cursor: str | None = None,
             limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-            _=Depends(_cliente)):
-    """Il delta feed: offerte nuove e chiuse da `since` in poi.
-
-    `since` e' OBBLIGATORIO: senza, «tutto cio' che e' cambiato» vorrebbe
-    dire tutto il corpus, e non e' una domanda a cui questa rotta risponde.
-    """
+            cliente=Depends(_cliente)):
     if not since or not since.strip():
-        raise HTTPException(
-            400, "the 'since' parameter is required: an ISO 8601 date, "
-                 "e.g. 2026-09-01T00:00:00Z")
+        raise HTTPException(400, "the 'since' parameter is required: an ISO 8601 date, "
+                                 "e.g. 2026-09-01T00:00:00Z")
     try:
-        # fromisoformat non accetta la «Z» prima di Python 3.11: si traduce.
         datetime.fromisoformat(
             since.strip()[:-1] + "+00:00" if since.strip().endswith("Z")
             else since.strip())
     except ValueError:
-        raise HTTPException(
-            400, f"'since' is not a valid ISO 8601 date: {since!r}")
+        raise HTTPException(400, f"'since' is not a valid ISO 8601 date: {since!r}")
+    _richiedi_volume(cliente, SOGLIA_DELTA, "the delta feed")
     try:
-        righe, prossimo = dati.cambiamenti(since.strip(), cursor, limit)
+        righe, prossimo = dati.cambiamenti(
+            since.strip(), cursor, _limite_per_tier(cliente, limit))
+    except dati.DeltaRetentionError as e:
+        raise HTTPException(400, detail=e.as_dict())
     except ValueError as e:
         raise HTTPException(400, str(e))
+    _addebita(request, cliente)
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
 @router.get("/exports/latest")
-def export_latest(_=Depends(_cliente)):
-    """Lo stato dell'export del giorno: data, righe e path dei file."""
-    return dati.stato_export()
+def export_latest(request: Request, cliente=Depends(_cliente)):
+    stato = dati.stato_export()
+    _addebita(request, cliente)
+    return stato
 
 
 @router.get("/exports/latest/{nome}")
-def export_file(nome: str, _=Depends(_cliente)):
-    """Il file .jsonl.gz del giorno. Il nome e' chiuso: niente path dal client."""
-    if isinstance(_, dict) and _.get("via") == "rapidapi":
-        # 08/10/2026: sul canale RapidAPI il file intero non si vende a
-        # chiamata — un piano da $49 non puo' portarsi via l'export
-        # giornaliero completo, li' il prezzo e' un discorso a parte.
+def export_file(request: Request, nome: str, cliente=Depends(_cliente)):
+    if cliente.get("via") == "rapidapi":
         raise HTTPException(403, "the daily bulk export is not part of the "
                                  "RapidAPI plans — write to hello@nivult.com")
     if nome not in NOMI_EXPORT:
         raise HTTPException(404, "unknown export: allowed values are "
-                            + ", ".join(NOMI_EXPORT))
+                                 + ", ".join(NOMI_EXPORT))
+    _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
     stato = dati.stato_export()
     percorso = (stato.get("file") or {}).get(nome)
     if not percorso or not os.path.isfile(percorso):
         raise HTTPException(404, f"export '{nome}' is not available today")
-    return FileResponse(percorso, media_type="application/gzip",
-                        filename=os.path.basename(percorso))
+    _addebita(request, cliente)
+    return _risposta_export(percorso, os.path.basename(percorso))
 
 
 @router.get("/coverage")
-def coverage(_=Depends(_cliente)):
-    """Il manifest della copertura per campo.
-
-    E' l'argomento di vendita dichiarato: i buchi si mostrano, non si
-    nascondono. Passa com'e' dal data layer — niente abbellimenti qui.
-    """
-    return dati.copertura()
+def coverage(request: Request, cliente=Depends(_cliente)):
+    risposta = dati.copertura()
+    _addebita(request, cliente)
+    return risposta
 
 
 @router.get("/usage")
-def usage(cliente=Depends(_cliente)):
-    """I crediti della chiave che sta chiamando: mensili, usati, residui.
-
-    Questa chiamata stessa costa un credito, quindi `usati` la include.
-    """
+def usage(request: Request, cliente=Depends(_cliente)):
     if cliente.get("via") == "rapidapi":
-        # la quota del canale RapidAPI la conta e la mostra RapidAPI: qui
-        # non c'e' un saldo crediti da leggere (08/10/2026)
         return {"via": "rapidapi",
-                "nota": "usage quotas are managed by the RapidAPI plan"}
-    mensili = cliente["crediti_mensili"]
-    usati = cliente["usati_mese"]
-    return {"crediti_mensili": mensili, "usati": usati,
-            "residui": max(0, mensili - usati),
-            "mese_uso": str(cliente["mese_uso"])}
+                "note": "usage quotas are managed by the RapidAPI plan"}
+    rec = _addebita(request, cliente)
+    mensili = int(rec["crediti_mensili"])
+    usati = int(rec.get("usati", rec["usati_mese"]))
+    extra = int(rec.get("crediti_extra") or 0)
+    residui_mensili = max(0, mensili - usati)
+    saldo = residui_mensili + extra
+    return {"monthly_credits": mensili, "used": usati,
+            "remaining": saldo, "usage_month": str(rec["mese_uso"]),
+            "monthly_remaining": residui_mensili, "purchased_credits": extra,
+            "balance": saldo, "key_credits_used": rec.get("usati_chiave", usati),
+            "account_monthly_credits": mensili}
 
 
-# ── la demo pubblica della vetrina (25/09/2026) ──────────────────────
-# Senza chiave, ma non senza difese: whitelist di caratteri (l'iniezione
-# SQL e' impossibile per costruzione), otto righe al massimo, trenta
-# chiamate al minuto per IP, e solo i campi che la pagina mostra.
 _DEMO_RX = re.compile(r"^[A-Za-z0-9 .+#&()/'À-ÿ\-]{2,40}$")
 _demo_finestra: dict[str, list[float]] = {}
 
 
-def _demo_gate(request: Request) -> None:
-    """Il rate limit della demo pubblica: 30 chiamate al minuto per IP.
+def _ip(request: Request) -> str | None:
+    host = (request.headers.get("cf-connecting-ip")
+            or (request.client.host if request.client else None))
+    try:
+        return str(ipaddress.ip_address(host)) if host else None
+    except ValueError:
+        return None
 
-    La mappa si pota oltre i 5000 IP: chi non batte piu' da un minuto non
-    ha piu' niente da contare."""
+
+def _demo_gate(request: Request) -> None:
     ora = time.time()
-    ip = request.client.host if request.client else "?"
+    ip = _ip(request) or "?"
     finestra = [t for t in _demo_finestra.get(ip, []) if ora - t < 60]
     if len(finestra) >= 30:
         raise HTTPException(429, "too fast: try again in a minute")
@@ -259,10 +348,6 @@ def _demo_gate(request: Request) -> None:
 
 @router.get("/demo/tecnologie")
 def demo_tecnologie(request: Request, q: str = Query(default="")):
-    """Quali aziende assumono con la tecnologia q — la demo della landing.
-
-    Risponde anche senza chiave perche' e' la porta d'ingresso pubblica:
-    i campi restituiti sono quelli della vetrina, niente di piu'."""
     q = q.strip()
     if not _DEMO_RX.fullmatch(q):
         raise HTTPException(400, "caratteri non ammessi nella ricerca")
@@ -275,10 +360,6 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
 
 @router.get("/demo/stats")
 def demo_stats(request: Request):
-    """I quattro contatori della vetrina. Nessun parametro, niente input:
-    la superficie d'attacco e' il nulla, e' il punto (26/09/2026).
-    no-store esplicito (07/10/2026): il numero fresco e' il prodotto —
-    funzionava per fortuna (CF non cacha), ora funziona per regola."""
     _demo_gate(request)
     risp = JSONResponse(dati.demo_stats())
     risp.headers["Cache-Control"] = "no-store"
@@ -291,6 +372,35 @@ CAMPIONI_EXPORT = {
 }
 
 
+def _campione_export(tipo: str) -> str | None:
+    configurato = CAMPIONI_EXPORT.get(tipo)
+    if not configurato:
+        return None
+    nome = os.path.basename(configurato)
+    radice = Path(os.environ.get("EXPORT_DIR") or os.path.dirname(configurato))
+    ultimo = radice / nome
+    if ultimo.is_file():
+        return str(ultimo)
+    prefisso = nome.split("-campione-", 1)[0]
+    rx = re.compile(r"^" + re.escape(prefisso) +
+                    r"-campione-(\d{4}-\d{2}-\d{2})\.jsonl\.gz$")
+    candidati: list[tuple[str, str]] = []
+    try:
+        for percorso in radice.iterdir():
+            m = rx.fullmatch(percorso.name)
+            if not m:
+                continue
+            try:
+                date.fromisoformat(m.group(1))
+            except ValueError:
+                continue
+            if percorso.is_file():
+                candidati.append((m.group(1), str(percorso)))
+    except OSError:
+        return None
+    return max(candidati)[1] if candidati else None
+
+
 @router.get("/demo/sample-export")
 @router.get("/demo/export-campione")
 def demo_export_campione(
@@ -298,7 +408,6 @@ def demo_export_campione(
     tipo: str | None = Query(default=None),
     sample_type: str | None = Query(default=None, alias="type"),
 ):
-    """Campione gratuito, con alias inglese e legacy retrocompatibile."""
     _demo_gate(request)
     if sample_type is not None:
         tipi = {"jobs": "offerte", "companies": "aziende"}
@@ -307,11 +416,10 @@ def demo_export_campione(
         tipo = tipi[sample_type]
     else:
         tipo = tipo or "offerte"
-    p = CAMPIONI_EXPORT.get(tipo)
-    if not p:
+    if tipo not in CAMPIONI_EXPORT:
         raise HTTPException(404, "campione sconosciuto: valori ammessi "
-                            + ", ".join(CAMPIONI_EXPORT))
-    if not os.path.isfile(p):
+                                 + ", ".join(CAMPIONI_EXPORT))
+    percorso = _campione_export(tipo)
+    if not percorso:
         raise HTTPException(404, "campione non disponibile oggi")
-    return FileResponse(p, media_type="application/gzip",
-                        filename=f"nivult-campione-{tipo}.jsonl.gz")
+    return _risposta_export(percorso, f"nivult-campione-{tipo}.jsonl.gz")

@@ -148,11 +148,26 @@ _PAESI_FINALI = {
 }
 
 
+_PORTALI_PUBBLICI = frozenset({
+    "francetravail", "bundesanstellung", "arbetsformedlingen",
+})
+_SUFFISSO_PAGINA_AZIENDA = re.compile(
+    r"\s+(?:careers?|jobs?|employment)(?:\s+(?:page|site|portal|board))+\s*$",
+    re.IGNORECASE,
+)
+
+
 def _senza_paese_finale(nome: str) -> str:
     match = re.search(r"\s*\(([^()]+)\)\s*$", nome)
     if match and match.group(1).casefold() in _PAESI_FINALI:
         return nome[:match.start()].strip()
     return nome
+
+
+def _etichetta_datori(slug: str, numero: int) -> str:
+    if slug in _PORTALI_PUBBLICI and numero == 1:
+        return "1 public portal"
+    return f"{_n(numero)} {'company' if numero == 1 else 'companies'}"
 
 
 def _nome_azienda(nome: str | None, slug: str) -> str | None:
@@ -164,11 +179,14 @@ def _nome_azienda(nome: str | None, slug: str) -> str | None:
                   or _NOMI_AZIENDE.get(slug.casefold()))
     if verificato:
         return _senza_paese_finale(verificato)
+    ripulito = _SUFFISSO_PAGINA_AZIENDA.sub("", nome).strip(" -–—|:,")
+    suffisso_rimosso = ripulito != nome
+    nome = ripulito
     if re.match(r"(?:Careers|Field|Jobs|Internal)\s", nome, re.IGNORECASE):
         return None
     if re.fullmatch(r"Q\d+", nome, re.IGNORECASE):
         return None
-    if _chiave_nome(nome) == _chiave_nome(slug):
+    if not suffisso_rimosso and _chiave_nome(nome) == _chiave_nome(slug):
         return None
     return _senza_paese_finale(nome) or None
 
@@ -602,8 +620,9 @@ def _ld_dataset(nome: str, descrizione: str, canonical: str,
 
 # ── FAQ generate dai dati ──────────────────────────────────────────────────
 
-def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
+def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int, slug: str) -> list[dict]:
     stato = edit["api_status"]
+    datori = _etichetta_datori(slug, m.aziende)
     if stato == "public-json":
         r_api = (f"Yes. {nome} serves public job board data as JSON with no "
                  f"API key. The exact endpoint and a working request are in "
@@ -636,7 +655,7 @@ def _faq_ats(nome: str, edit: dict, m: Misure, fonti: int) -> list[dict]:
         {"q": f"How many {nome} job postings are live right now?",
          "a": (f"As of the last refresh ({_data(m.ultimo_fetch)}), our index "
                f"holds {_n(m.attive)} active {nome} postings across "
-               f"{_n(m.aziende)} companies. A posting counts as active only "
+               f"{datori}. A posting counts as active only "
                f"while it appears on the employer's own board; when it "
                f"leaves the source we mark it closed, we never let it age "
                f"out silently.")},
@@ -692,13 +711,14 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
     slug, nome = plat["slug"], plat["name"]
     public_slug = plat.get("public_slug", slug)
     canonical = f"{SITO}/ats/{public_slug}/"
+    datori = _etichetta_datori(slug, m.aziende)
     title = (f"{nome} Jobs API & Dataset "
              f"({_arrotonda(m.attive)} Live Postings) | Nivult")
     description = (f"{_n(m.attive)} live {nome} job postings from "
-                   f"{_n(m.aziende)} companies. Access the Nivult API and "
+                   f"{datori}. Access the Nivult API and "
                    f"daily dataset, refreshed across {fonti}+ ATS sources.")
 
-    faq = _faq_ats(nome, edit, m, fonti)
+    faq = _faq_ats(nome, edit, m, fonti, slug)
     ld = [{
         "@context": "https://schema.org",
         "@graph": [
@@ -707,7 +727,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
                             (nome, canonical)]),
             _ld_dataset(
                 f"{nome} Job Postings Dataset",
-                f"{_n(m.attive)} live postings from {_n(m.aziende)} companies "
+                f"{_n(m.attive)} live postings from {datori} "
                 f"on {nome}; latest content update {_data(m.ultimo)}.",
                 canonical, m.ultimo, public_slug),
             _ld_faq(faq),
@@ -743,7 +763,7 @@ def pagina_ats(plat: dict, m: Misure, edit: dict,
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
         <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">{_n(m.aziende)}</b>
-        <span class="text-[12.5px] text-slate-500">companies hiring</span>
+        <span class="text-[12.5px] text-slate-500">{"public portal" if datori == "1 public portal" else "companies hiring"}</span>
       </div>
       <div class="rounded-2xl border border-slate-900/5 bg-white p-5 shadow-sm">
         <b class="block text-2xl font-black tracking-tight tabular-nums text-brand-600">{m.quota_salario:.0f}%</b>
@@ -971,12 +991,7 @@ def pagina_hub_ats(pubblicate: list[dict], fonti: int, totale_reale: int) -> str
     for p in pubblicate:
         m = p["misure"]
         public_slug = p.get("public_slug", p["slug"])
-        if p["slug"] in {"arbetsformedlingen", "bundesanstellung",
-                         "francetravail"} and m.aziende == 1:
-            aziende = "1 public portal"
-        else:
-            aziende = (f"{_n(m.aziende)} companies" if m.aziende != 1
-                       else "1 company")
+        aziende = _etichetta_datori(p["slug"], m.aziende)
         carte += f"""
       <a href="/ats/{public_slug}/" class="lift rounded-2xl border border-slate-900/5 bg-white p-6 hover:border-brand-500/40 hover:shadow-xl transition block">
         <div class="flex items-baseline justify-between gap-3">
