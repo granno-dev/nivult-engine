@@ -835,7 +835,7 @@ def create_app() -> FastAPI:
             r = cur.fetchone()
         if not r:
             raise HTTPException(404, "utente inesistente")
-        prossimo = min((d for d in (r[8] if r[21] else None, r[20])
+        prossimo = min((d for d in (r[8] if r[21] or r[20] is None else None, r[20])
                        if d is not None), default=None)
         ultimo = max((d for d in (r[9], r[22]) if d is not None), default=None)
         return {"id": uid, "email": r[0], "piano": r[1], "abbonamento": r[2],

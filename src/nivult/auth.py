@@ -16,7 +16,9 @@ nei log, né negli errori.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import re
 import secrets
 import sys
 from datetime import datetime, timedelta, timezone
@@ -24,8 +26,7 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from nivult.config import database_url, load_dotenv, safe_dsn
-from nivult.config import VERSIONE_TERMINI
+from nivult.config import VERSIONE_TERMINI, database_url, load_dotenv, safe_dsn
 
 # Finestra di vita del magic link. Corta di proposito: è un rinvio da email,
 # non un oggetto che viaggia in tasca per giorni.
@@ -127,20 +128,34 @@ def richiedi_magic_link(conn: psycopg.Connection, email: str, *, ip=None, ua=Non
     return token
 
 
-def consuma(conn: psycopg.Connection, token: str, *, ip=None, ua=None
-            ) -> tuple[str, str] | None:
-    """Scambia il magic link con una sessione. -> (token_sessione, user_id).
+_NATIVE_VERIFIER = re.compile(r"^[A-Za-z0-9._~-]{43,128}$")
+
+
+def _sfida_nativa(verifier: str) -> str:
+    return base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+
+
+def consuma(conn: psycopg.Connection, token: str, *, ip=None, ua=None,
+            native_verifier: str | None = None) -> tuple[str, str] | None:
+    """Scambia un gettone monouso con una sessione. -> (token_sessione, user_id).
 
     Il consumo è atomico nel UPDATE condizionato: due richieste concorrenti
-    con lo stesso link, una sola vince.
+    con lo stesso link, una sola vince. Un gettone nativo richiede anche il
+    verifier corrispondente alla sfida salvata; uno web continua a non averla.
     """
     if not token:
         return None
+    verifier = native_verifier or None
+    if verifier is not None and not _NATIVE_VERIFIER.fullmatch(verifier):
+        return None
+    sfida = _sfida_nativa(verifier) if verifier is not None else None
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE login_tokens SET consumed_at = now() "
             "WHERE token_hash = %s AND consumed_at IS NULL AND expires_at > now() "
-            "RETURNING user_id::text, origin", (_sha256(token),))
+            "  AND native_challenge IS NOT DISTINCT FROM %s "
+            "RETURNING user_id::text, origin", (_sha256(token), sfida))
         r = cur.fetchone()
         if not r:
             conn.rollback()

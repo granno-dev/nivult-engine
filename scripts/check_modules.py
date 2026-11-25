@@ -138,8 +138,8 @@ def seed(conn: psycopg.Connection) -> dict:
             jid = cur.fetchone()[0]
             cur.execute("INSERT INTO job_clusters (job_id,cluster_id) VALUES (%s,%s)",
                         (jid, ids["cluster"]))
-            cur.execute("INSERT INTO job_embeddings (job_id,embedding,model) "
-                        "VALUES (%s,%s,'bge-m3')", (jid, VEC))
+            cur.execute("INSERT INTO job_embeddings (job_id,embedding,model,content_hash) "
+                        "VALUES (%s,%s,'bge-m3',md5(%s))", (jid, VEC, sid))
             return jid
 
         ids["job_free"] = mkjob("free", "expired", 90, 150)     # morta, mai valutata

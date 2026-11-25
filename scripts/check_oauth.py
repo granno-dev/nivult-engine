@@ -59,6 +59,7 @@ def id_token(claim: dict) -> str:
 class Risposta:
     def __init__(self, status: int, corpo: dict):
         self.status_code = status
+        self.text = json.dumps(corpo)
         self._corpo = corpo
 
     def json(self):
@@ -72,7 +73,7 @@ class ClientFinto:
         self.claim = claim
         self.status = status
 
-    def post(self, url, data=None):
+    def post(self, url, data=None, headers=None):
         if self.claim is None:
             return Risposta(self.status, {"errore": "no"})
         return Risposta(self.status, {"id_token": id_token(self.claim)})

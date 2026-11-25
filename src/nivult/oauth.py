@@ -23,12 +23,14 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import os
+import re
 import secrets
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 import httpx
-import logging
 import psycopg
 
 from nivult.config import VERSIONE_TERMINI
@@ -41,6 +43,7 @@ FLUSSO_VALIDITA = timedelta(minutes=10)
 # Il gettone di ritorno lo riscatta il browser nel redirect successivo, quindi
 # può essere molto più corto del magic link, che invece aspetta in una casella.
 GETTONE_VALIDITA = timedelta(minutes=5)
+NATIVE_CALLBACK = os.environ.get("NATIVE_CALLBACK", "nivult://oauth/callback")
 
 # Il tenant "consumer" di Microsoft: gli account personali (outlook.com, Xbox,
 # Skype). Serve più sotto, dove si decide di quale email fidarsi.
@@ -179,8 +182,64 @@ def api_url() -> str:
 
 
 def site_url() -> str:
-    """L'origine del sito, dove finisce ogni giro. Stessa fonte del magic link."""
+    """L'origine del sito, destinazione predefinita dei giri web."""
     return os.environ.get("SITE_URL", "https://nivult.com").rstrip("/")
+
+
+def native_challenge_valida(challenge: str) -> bool:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", challenge):
+        return False
+    try:
+        grezzo = base64.urlsafe_b64decode(challenge + "=")
+    except ValueError:
+        return False
+    canonica = base64.urlsafe_b64encode(grezzo).decode().rstrip("=")
+    return len(grezzo) == 32 and canonica == challenge
+
+
+def callback_nativa(destinazione: str | None) -> bool:
+    if not destinazione:
+        return False
+    if destinazione == NATIVE_CALLBACK:
+        return True
+    percorso = urlsplit(destinazione).path
+    return percorso in ("/app", "/app/") and destinazione_valida(destinazione)
+
+
+def parametri_nativi_validi(destinazione: str | None,
+                            native_state: str | None,
+                            native_challenge: str | None) -> bool:
+    if not callback_nativa(destinazione):
+        return native_state is None and native_challenge is None
+    return (native_state is not None
+            and 1 <= len(native_state) <= 512
+            and all(ord(c) >= 0x20 and ord(c) != 0x7f for c in native_state)
+            and native_challenge is not None
+            and native_challenge_valida(native_challenge))
+
+
+def destinazione_valida(destinazione: str) -> bool:
+    """Ammette solo il deep link esatto o un URL sulle origini web previste."""
+    if destinazione == NATIVE_CALLBACK:
+        return True
+    if (not destinazione or destinazione != destinazione.strip()
+            or "#" in destinazione or "\\" in destinazione
+            or any(ord(c) < 0x20 or ord(c) == 0x7f for c in destinazione)):
+        return False
+    try:
+        u = urlsplit(destinazione)
+        if (not u.netloc or not u.hostname or u.netloc.endswith(":")
+                or u.username is not None or u.password is not None):
+            return False
+        porta = u.port
+        if u.scheme == "http" and u.hostname == "localhost":
+            return True
+        sito = urlsplit(site_url())
+        porta_sito = sito.port
+    except ValueError:
+        return False
+    return (u.scheme == sito.scheme and u.hostname == sito.hostname
+            and porta == porta_sito)
 
 
 def redirect_uri(provider: str) -> str:
@@ -272,11 +331,21 @@ def _email_attendibile(provider: str, claim: dict) -> tuple[str | None, bool]:
 
 
 def inizia(conn: psycopg.Connection, provider: str,
-           destinazione: str | None = None) -> str:
-    """Apre un giro e ritorna l'URL a cui mandare il browser.
+           destinazione: str | None = None,
+           native_state: str | None = None,
+           native_challenge: str | None = None,
+           *, link_user_id: str | None = None) -> str:
+    """Apre un giro web, nativo o di collegamento e ritorna l'URL del provider.
 
-    `destinazione` (27/09/2026): dove atterrare a fine giro invece che su
-    /verify — il portale B2B e' un'altra pagina dello stesso sito."""
+    `link_user_id` deve venire soltanto da una sessione già verificata dal
+    chiamante. In quel caso il callback collegherà l'identità a quell'utente,
+    senza emettere gettoni o sessioni.
+    """
+    if destinazione is not None and not destinazione_valida(destinazione):
+        raise OAuthError("destinazione_non_valida", "Destinazione non consentita.")
+    if not parametri_nativi_validi(destinazione, native_state, native_challenge):
+        raise OAuthError("parametri_nativi_non_validi",
+                         "Parametri dell'app nativa non validi.")
     cfg = _config(provider)
     client_id, _ = _credenziali(provider)
 
@@ -287,14 +356,26 @@ def inizia(conn: psycopg.Connection, provider: str,
         hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
 
     with conn.cursor() as cur:
+        if link_user_id is not None:
+            if not link_user_id:
+                raise OAuthError("utente_non_valido", "Sessione non più valida.")
+            cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE",
+                        (link_user_id,))
+            account = cur.fetchone()
+            if not account or account[0] == "deleted":
+                conn.rollback()
+                raise OAuthError("utente_non_valido", "Sessione non più valida.")
         # Potatura opportunistica: sono righe da dieci minuti, e non c'è nulla
         # da conservare in quelle morte. Meglio qui che in un job in più.
         cur.execute("DELETE FROM oauth_flows WHERE expires_at < now()")
         cur.execute(
             "INSERT INTO oauth_flows (provider, state_hash, nonce_hash, code_verifier, "
-            "  destinazione, expires_at) VALUES (%s, %s, %s, %s, %s, now() + make_interval(mins => %s))",
+            "  destinazione, native_state, native_challenge, link_user_id, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, "
+            "        now() + make_interval(mins => %s))",
             (provider, _sha256(state), _sha256(nonce), verifier,
-             destinazione, FLUSSO_VALIDITA.seconds // 60))
+             destinazione, native_state, native_challenge, link_user_id,
+             FLUSSO_VALIDITA.seconds // 60))
     conn.commit()
 
     parametri = {
@@ -394,6 +475,86 @@ def _collega_o_crea(cur, provider: str, subject: str,
     return uid
 
 
+def _utente_attivo(cur, uid: str) -> None:
+    cur.execute("SELECT status FROM users WHERE id = %s FOR UPDATE", (uid,))
+    r = cur.fetchone()
+    if not r or r[0] == "deleted":
+        raise OAuthError("utente_non_valido", "Account non più disponibile.")
+
+
+def _revoca_credenziali_microsoft(cur, uid: str) -> None:
+    cur.execute(
+        "UPDATE sessions SET revoked_at = now() "
+        "WHERE user_id = %s AND origin = 'microsoft' AND revoked_at IS NULL",
+        (uid,),
+    )
+    cur.execute(
+        "UPDATE login_tokens SET consumed_at = now() "
+        "WHERE user_id = %s AND origin = 'microsoft' AND consumed_at IS NULL",
+        (uid,),
+    )
+
+
+def _collega_autenticato(cur, provider: str, subject: str,
+                         email: str | None, nome: str | None,
+                         tenant_id: str | None, link_user_id: str) -> None:
+    """Collega il subject al solo utente salvato nello state autenticato."""
+    _utente_attivo(cur, link_user_id)
+    cur.execute(
+        "SELECT user_id::text, link_method, revoked_at, tenant_id FROM oauth_identities "
+        "WHERE provider = %s AND subject = %s FOR UPDATE",
+        (provider, subject),
+    )
+    r = cur.fetchone()
+    if r and r[0] != link_user_id:
+        raise OAuthError("identita_gia_collegata",
+                         "Questa identità è già collegata a un altro account.")
+
+    if r:
+        if (provider == "microsoft" and tenant_id != MSA_TENANT
+                and (r[1] != "authenticated" or r[2] is not None
+                     or r[3] != tenant_id)):
+            _revoca_credenziali_microsoft(cur, link_user_id)
+        cur.execute(
+            "UPDATE oauth_identities SET email_at_link = COALESCE(%s, email_at_link), "
+            "link_method = 'authenticated', tenant_id = %s, revoked_at = NULL, "
+            "last_login_at = now() WHERE provider = %s AND subject = %s",
+            (email, tenant_id, provider, subject),
+        )
+    else:
+        cur.execute(
+            "SELECT subject, revoked_at, link_method, tenant_id FROM oauth_identities "
+            "WHERE user_id = %s AND provider = %s FOR UPDATE",
+            (link_user_id, provider),
+        )
+        altra = cur.fetchone()
+        if altra and altra[1] is None:
+            sostituibile = (provider == "microsoft" and tenant_id != MSA_TENANT
+                            and altra[2] != "authenticated" and altra[3] != MSA_TENANT)
+            if not sostituibile:
+                raise OAuthError("provider_gia_collegato",
+                                 "Per questo provider è già collegata un'altra identità.")
+        if altra:
+            if (provider == "microsoft" and tenant_id != MSA_TENANT
+                    and (altra[1] is not None or altra[2] != "authenticated")):
+                _revoca_credenziali_microsoft(cur, link_user_id)
+            cur.execute(
+                "UPDATE oauth_identities SET subject = %s, "
+                "email_at_link = COALESCE(%s, email_at_link), "
+                "link_method = 'authenticated', tenant_id = %s, revoked_at = NULL, "
+                "last_login_at = now() WHERE user_id = %s AND provider = %s",
+                (subject, email, tenant_id, link_user_id, provider),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO oauth_identities (provider, subject, user_id, email_at_link, "
+                "  link_method, tenant_id, last_login_at) "
+                "VALUES (%s, %s, %s, %s, 'authenticated', %s, now())",
+                (provider, subject, link_user_id, email, tenant_id),
+            )
+    _forse_nome(cur, link_user_id, nome)
+
+
 def _userinfo_github(access_token: str | None, client=None) -> dict:
     """L'identita' GitHub letta dalla sua API, nella forma dei claim OIDC.
 
@@ -434,13 +595,45 @@ def _userinfo_github(access_token: str | None, client=None) -> dict:
             "name": utente.get("name") or utente.get("login")}
 
 
-def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
-             *, client=None) -> tuple[str, str | None]:
-    """Chiude il giro e ritorna (gettone monouso, destinazione del giro).
+def contesto(conn: psycopg.Connection, provider: str, state: str
+             ) -> tuple[str | None, str | None] | None:
+    """Destinazione e state nativo di un flusso ancora valido, senza consumarlo."""
+    if not state:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT destinazione, native_state FROM oauth_flows "
+            "WHERE state_hash = %s AND provider = %s AND consumed_at IS NULL "
+            "  AND expires_at > now()",
+            (_sha256(state), provider))
+        return cur.fetchone()
 
-    Il gettone si spende su /verify; la destinazione e' dove atterrare
-    (None = /verify del sito). `client` è iniettabile: i test non parlano
-    con Google.
+
+def annulla(conn: psycopg.Connection, provider: str, state: str
+            ) -> tuple[str | None, str | None] | None:
+    """Consuma un ritorno annullato e recupera soltanto la destinazione salvata."""
+    if not state:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE oauth_flows SET consumed_at = now() "
+            "WHERE state_hash = %s AND provider = %s AND consumed_at IS NULL "
+            "  AND expires_at > now() "
+            "RETURNING destinazione, native_state",
+            (_sha256(state), provider))
+        r = cur.fetchone()
+    conn.commit()
+    return r
+
+
+def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
+             *, client=None) -> tuple[str | None, str | None]:
+    """Chiude il giro e ritorna `(gettone, destinazione)`.
+
+    Per un login il gettone monouso si spende su /verify o nell'app. Per un
+    flusso nato con `link_user_id` il gettone è None: l'identità viene collegata
+    all'utente salvato e non vengono creati token né sessioni. `client` è
+    iniettabile per non parlare con i provider nei test.
     """
     cfg = _config(provider)
     # `segreto` e non `client_secret`: la scansione dei segreti in pre-commit
@@ -456,14 +649,15 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
             "UPDATE oauth_flows SET consumed_at = now() "
             "WHERE state_hash = %s AND provider = %s AND consumed_at IS NULL "
             "  AND expires_at > now() "
-            "RETURNING code_verifier, nonce_hash, destinazione",
+            "RETURNING code_verifier, nonce_hash, destinazione, native_challenge, "
+            "       link_user_id::text",
             (_sha256(state), provider))
         r = cur.fetchone()
         if not r:
             conn.rollback()
             raise OAuthError("state_rifiutato",
                              "Richiesta scaduta o già usata. Riprova ad accedere.")
-        verifier, nonce_hash, destinazione = r
+        verifier, nonce_hash, destinazione, native_challenge, link_user_id = r
     conn.commit()
 
     dati = {
@@ -513,6 +707,7 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
         raise OAuthError("sub_assente", "Risposta del provider incompleta.")
 
     email, email_fidata = _email_attendibile(provider, claim)
+    tenant_id = claim.get("tid") if provider == "microsoft" else None
     # `name` c'e' su entrambi i provider dentro lo scope `profile`, gia'
     # approvato. Il fallback compone dai due pezzi quando manca l'intero.
     nome = (claim.get("name")
@@ -520,12 +715,23 @@ def concludi(conn: psycopg.Connection, provider: str, code: str, state: str,
                                     claim.get("family_name")) if x)
             or None)
 
-    gettone = secrets.token_urlsafe(32)
-    with conn.cursor() as cur:
-        uid = _collega_o_crea(cur, provider, subject, email, email_fidata, nome)
-        cur.execute(
-            "INSERT INTO login_tokens (user_id, token_hash, expires_at, origin) "
-            "VALUES (%s, %s, now() + make_interval(mins => %s), %s)",
-            (uid, _sha256(gettone), GETTONE_VALIDITA.seconds // 60, provider))
+    gettone = None
+    try:
+        with conn.cursor() as cur:
+            if link_user_id is not None:
+                _collega_autenticato(cur, provider, subject, email, nome,
+                                     tenant_id, link_user_id)
+            else:
+                uid = _collega_o_crea(cur, provider, subject, email, email_fidata, nome)
+                gettone = secrets.token_urlsafe(32)
+                cur.execute(
+                    "INSERT INTO login_tokens (user_id, token_hash, expires_at, origin, "
+                    "  native_challenge) "
+                    "VALUES (%s, %s, now() + make_interval(mins => %s), %s, %s)",
+                    (uid, _sha256(gettone), GETTONE_VALIDITA.seconds // 60, provider,
+                     native_challenge))
+    except Exception:
+        conn.rollback()
+        raise
     conn.commit()
     return gettone, destinazione

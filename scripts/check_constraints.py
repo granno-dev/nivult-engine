@@ -340,14 +340,19 @@ def main() -> int:
                         "VALUES (%s,'france_travail','ressources humaines')", (cl,))
         expect_value(conn, "un termine per fonte, registrato",
             "SELECT count(*) FROM cluster_source_queries WHERE cluster_id=%s", (cl,), 1)
-        expect_error(conn, "23505", "due termini per la stessa fonte rifiutati",
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO cluster_source_queries (cluster_id,source,query) "
+                        "VALUES (%s,'france_travail','altro')", (cl,))
+        expect_value(conn, "due termini per la stessa fonte ammessi",
+            "SELECT count(*) FROM cluster_source_queries WHERE cluster_id=%s", (cl,), 2)
+        expect_error(conn, "23505", "termine identico duplicato rifiutato",
             "INSERT INTO cluster_source_queries (cluster_id, source, query) "
             "VALUES (%s, 'france_travail', 'altro')", (cl,))
 
         section("cursore per coppia cluster-fonte")
         expect_error(conn, "23514", "fonte fuori vocabolario rifiutata",
             "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
-            "VALUES (%s, 'linkedin', now())", (cl,))
+            "VALUES (%s, 'fonte_sconosciuta', now())", (cl,))
         expect_error(conn, "23505", "un solo cursore per coppia cluster-fonte",
             "INSERT INTO cluster_source_cursors (cluster_id, source, last_seen_posted_at) "
             "VALUES (%s, 'fantastic', now()), (%s, 'fantastic', now())", (cl, cl))
@@ -781,8 +786,8 @@ def main() -> int:
                      expired_days, expired_days))
                 jid = cur.fetchone()[0]
                 cur.execute("INSERT INTO job_clusters (job_id,cluster_id) VALUES (%s,%s)", (jid, cl))
-                cur.execute("INSERT INTO job_embeddings (job_id,embedding,model) "
-                            "VALUES (%s,%s,'bge-m3')", (jid, VEC))
+                cur.execute("INSERT INTO job_embeddings (job_id,embedding,model,content_hash) "
+                            "VALUES (%s,%s,'bge-m3',md5(%s))", (jid, VEC, sid))
                 return jid
 
             j_free   = mkjob("ret-free",   "expired", 90, 120, salary=True)

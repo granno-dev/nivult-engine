@@ -544,6 +544,9 @@ def main() -> int:
                   r.json().get("famiglia"), "Human Resources")
 
             # Apertura senza famiglia: la ricava dal ruolo.
+            with psycopg.connect(database_url(), autocommit=True) as cc:
+                cc.execute("DELETE FROM user_clusters uc USING clusters c "
+                           "WHERE c.id = uc.cluster_id AND c.country = 'IT'")
             r = client.post("/me/ricerca", headers={"Authorization": f"Bearer {sessione}"},
                             json={"country": "it",
                                   "filtri": {"target_role": "People Partner"}})

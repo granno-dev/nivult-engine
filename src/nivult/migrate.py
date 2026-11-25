@@ -112,6 +112,23 @@ def verify_checksums(migrations: list[Migration], state: dict[int, tuple[str, st
             )
 
 
+REQUIRED_TABLES = {
+    93: "ats_companies",
+    94: "ats_companies",
+    97: "ats_companies",
+}
+
+
+def missing_required_table(conn: psycopg.Connection, migration: Migration) -> str | None:
+    table = REQUIRED_TABLES.get(migration.version)
+    if table is None:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s)", (f"public.{table}",))
+        present = cur.fetchone()[0] is not None
+    return None if present else table
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     migrations = discover()
     with psycopg.connect(migrator_database_url(), autocommit=True) as conn:
@@ -164,8 +181,18 @@ def cmd_up(args: argparse.Namespace) -> int:
 
             for m in todo:
                 mode = "transazione" if m.transactional else "no-transaction"
+                missing = missing_required_table(conn, m)
                 if args.dry_run:
-                    print(f"  [dry-run] {m.label} ({mode}, {len(m.sql)} byte)")
+                    suffix = f", {missing} assente" if missing else ""
+                    print(f"  [dry-run] {m.label} ({mode}, {len(m.sql)} byte{suffix})")
+                    continue
+
+                if missing:
+                    started = time.monotonic()
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            _record(cur, m, started)
+                    print(f"  registro {m.label}: {missing} assente, DDL non applicabile")
                     continue
 
                 print(f"  applico {m.label} ({mode}) ... ", end="", flush=True)
