@@ -680,8 +680,11 @@ tailwind.config = {
         </li>
       </ul>
       <div class="mt-6 inline-flex rounded-xl bg-slate-100 p-1" role="group" aria-label="Billing interval">
-        <button id="billing-month" type="button" aria-pressed="true" onclick="setBillingInterval('month')" class="rounded-lg bg-white px-5 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition">Monthly</button>
-        <button id="billing-year" type="button" aria-pressed="false" onclick="setBillingInterval('year')" class="rounded-lg px-5 py-2.5 text-[13px] font-bold text-slate-500 transition">Annual (2 months free)</button>
+        <button id="billing-month" type="button" aria-pressed="true" onclick="setBillingInterval('month')" class="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-white px-4 text-[13px] font-bold text-slate-900 shadow-sm transition sm:px-5">Monthly</button>
+        <button id="billing-year" type="button" aria-pressed="false" onclick="setBillingInterval('year')" class="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-[13px] font-bold text-slate-500 transition sm:px-5">
+          <span>Annual</span>
+          <span class="rounded-full bg-mint-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.04em] text-mint-600">2 months free</span>
+        </button>
       </div>
     </div>
 
@@ -1274,8 +1277,8 @@ function setBillingInterval(interval){
     const btn=document.getElementById(id);
     btn.setAttribute('aria-pressed',String(selected));
     btn.className=selected
-      ?'rounded-lg bg-white px-5 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition'
-      :'rounded-lg px-5 py-2.5 text-[13px] font-bold text-slate-500 transition';
+      ?'inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-white px-4 text-[13px] font-bold text-slate-900 shadow-sm transition sm:px-5'
+      :'inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-[13px] font-bold text-slate-500 transition sm:px-5';
   }
   document.querySelectorAll('[data-plan-card]').forEach(card=>{
     const prezzo=Number(card.dataset[annual?'year':'month']);
