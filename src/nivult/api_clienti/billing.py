@@ -199,7 +199,7 @@ def checkout_abbonamento(user_id: str, email: str, piano: str, intervallo: str,
     request_id = "nivult-abbonamento-" + secrets.token_urlsafe(18)
     risposta = _creem_request("POST", "/checkouts", {
         "product_id": product_id, "request_id": request_id,
-        "success_url": success_url, "cancel_url": cancel_url,
+        "success_url": success_url,
         "metadata": {"user_id": user_id, "kind": "subscription",
                      "subscription_plan": piano, "subscription_interval": intervallo},
         "customer": {"email": email}})
@@ -213,7 +213,8 @@ def upgrade_abbonamento(subscription_id: str, piano: str, intervallo: str) -> di
     if not subscription_id:
         raise BillingNonPronto("subscription mancante")
     return _creem_request("POST", f"/subscriptions/{subscription_id}/upgrade",
-                          {"product_id": _prodotto_abbonamento(piano, intervallo)})
+                          {"product_id": _prodotto_abbonamento(piano, intervallo),
+                           "update_behavior": "proration-charge-immediately"})
 
 
 def customer_portal(customer_id: str) -> str:

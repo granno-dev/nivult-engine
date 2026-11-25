@@ -236,12 +236,49 @@ def test_checkout_upgrade_and_customer_portal_mocked(monkeypatch):
     url = billing.checkout_abbonamento(UID, "user@example.com", "growth", "month",
                                       "https://nivult.com/account", "https://nivult.com/account")
     assert url == "https://creem.test/checkout"
-    assert calls[0][2]["product_id"] == "prod-growth-month"
-    assert "custom_price" not in calls[0][2]
+    checkout = calls[0][2]
+    assert set(checkout) <= {
+        "product_id", "request_id", "units", "custom_price", "trial_period_days",
+        "discount_code", "affiliate_code", "customer", "custom_fields",
+        "success_url", "metadata"}
+    assert "cancel_url" not in checkout and "custom_price" not in checkout
+    assert set(checkout["customer"]) <= {"id", "email", "name"}
+    assert checkout["success_url"] == "https://nivult.com/account"
+    assert ".html" not in checkout["success_url"]
+    assert checkout["product_id"] == "prod-growth-month"
     billing.upgrade_abbonamento("sub-1", "growth", "month")
     assert calls[1][0] == "POST" and calls[1][1].endswith("/subscriptions/sub-1/upgrade")
+    assert set(calls[1][2]) <= {"product_id", "update_behavior"}
+    assert calls[1][2]["update_behavior"] == "proration-charge-immediately"
     assert billing.customer_portal("cust-1") == "https://creem.test/portal"
     assert calls[2][2] == {"customer_id": "cust-1"}
+    assert set(calls[2][2]) <= {"customer_id"}
+
+
+def test_topup_checkout_payload_whitelist(monkeypatch):
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append(kwargs["json"])
+        return CreemResponse({"checkout_url": "https://creem.test/topup"})
+
+    monkeypatch.setattr(billing.httpx, "post", post)
+    monkeypatch.setenv("CREEM_API_KEY", "test-key")
+    monkeypatch.setenv("CREEM_PRODOTTO", "prod-topup")
+    url = billing.checkout(UID, "user@example.com", 10_000,
+                           "https://nivult.com/account?pagato=1",
+                           "https://nivult.com/account")
+    assert url == "https://creem.test/topup"
+    payload = calls[0]
+    assert set(payload) <= {
+        "product_id", "request_id", "units", "custom_price", "trial_period_days",
+        "discount_code", "affiliate_code", "customer", "custom_fields",
+        "success_url", "metadata"}
+    assert "cancel_url" not in payload
+    assert payload["custom_price"] == 4000 and payload["units"] == 1
+    assert set(payload["customer"]) <= {"id", "email", "name"}
+    assert payload["success_url"].startswith("https://nivult.com/account")
+    assert ".html" not in payload["success_url"]
 
 
 def test_existing_subscription_uses_upgrade_not_second_checkout(monkeypatch):
