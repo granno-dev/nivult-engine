@@ -33,6 +33,7 @@ from psycopg.rows import dict_row
 from nivult.ats.esporta import _skills_pulite
 from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
+from nivult.ats.titoli import pulisci as pulisci_titolo
 
 from .dati import (_cursore, _iso, _leggi_cursore, _like, _norm_ts)
 
@@ -209,6 +210,24 @@ def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
     return " AND ".join(dove), par
 
 
+def completa_titoli_portale(righe: list[dict]) -> list[dict]:
+    from nivult.ats.titoli import numerico
+    ids = [str(r["id"]) for r in righe if r.get("id") and numerico(r.get("title"))]
+    urls: dict[str, str] = {}
+    if ids:
+        try:
+            with _conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, url FROM ats_jobs WHERE id = ANY(%(ids)s::uuid[])",
+                    {"ids": ids}).fetchall()
+            urls = {str(r["id"]): r["url"] for r in rows}
+        except Exception as exc:  # noqa: BLE001
+            log.warning("recupero titoli dagli URL non disponibile: %s", exc)
+    for riga in righe:
+        riga["title"] = pulisci_titolo(riga.get("title"), urls.get(str(riga.get("id"))))
+    return righe
+
+
 def cerca_portale(filtri: dict, cursore: str | None,
                   limite: int = 20) -> tuple[list[dict], str | None, int | None]:
     """Ricerca nel titolo redatto, senza un COUNT integrale costoso."""
@@ -248,7 +267,8 @@ def _riga_export(j: dict) -> dict:
     geo = ({"latitude": j["latitude"], "longitude": j["longitude"],
             "source": j["geo_da"]} if j.get("latitude") is not None else None)
     riga = {
-        "id": str(j["id"]), "title": j["title"], "ats": j["platform_id"],
+        "id": str(j["id"]), "title": pulisci_titolo(j["title"], j["url"]),
+        "ats": j["platform_id"],
         "company_slug": j["slug"], "company": j["company"], "url": j["url"],
         "source_type": j.get("source_type") or "direct",
         "company_domain": j.get("company_domain"),

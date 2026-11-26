@@ -1961,6 +1961,7 @@ def create_app() -> FastAPI:
                     _dati.cerca_portale, filtri, cursore, limite)
         except ValueError as exc:
             raise HTTPException(400, "invalid filters or cursor") from exc
+        righe = await run_in_threadpool(_vivo.completa_titoli_portale, righe)
         riferimenti = [_riferimento(r) for r in righe]
         sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", riferimenti)
         profili = await run_in_threadpool(_dati.profili_aziende, riferimenti)
@@ -2097,7 +2098,9 @@ def create_app() -> FastAPI:
             raise HTTPException(exc.status_code, str(exc)) from exc
         if not await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif):
             raise HTTPException(402, "reveal the company first")
-        return {"data": await run_in_threadpool(_dati.azienda_jobs_portale, rif)}
+        righe = await run_in_threadpool(_dati.azienda_jobs_portale, rif)
+        righe = await run_in_threadpool(_vivo.completa_titoli_portale, righe)
+        return {"data": righe}
 
     @app.get("/portale/export/{nome}")
     def export_dal_portale(nome: str, request: Request, uid: str = Depends(utente)):

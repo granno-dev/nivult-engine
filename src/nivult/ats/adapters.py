@@ -2766,19 +2766,16 @@ class SuccessFactors(BaseAdapter):
             if sciolto == path:
                 break
             path = sciolto
-        # il titolo di riserva e' il segmento del path che non e' l'id:
-        # /job/{slug}/{id}/ nel formato classico, /{lingua}/jobs/{id}/{slug}/
-        # nel nuovo CSB — in entrambi e' l'ultimo che non e' l'id (26/09)
-        pezzi = [p for p in path.split("/") if p]
-        titolo_slug = next((p for p in reversed(pezzi) if p != id_offerta), "")
-        titolo = titolo or unquote(titolo_slug).replace("-", " ").strip()
+        from nivult.ats.titoli import pulisci
+        url = urljoin(base, path)
+        titolo = pulisci(titolo, url)
         citta = None
         if sede:
             primo = sede.split(",")[0].strip()
             citta = primo if not re.fullmatch(r"[A-Z]{2}|\d+", primo) else None
         return AtsJob(
             platform_id=self.platform_id, slug=slug, external_id=id_offerta,
-            title=titolo, url=urljoin(base, path), location=sede, city=citta,
+            title=titolo, url=url, location=sede, city=citta,
             country=self._paese(sede), department=reparto, posted_at=data,
             raw={"path": path, "location": sede, "fonte": fonte})
 
