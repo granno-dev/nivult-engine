@@ -1,26 +1,29 @@
-# 📊 Sample Dataset: Normalized Job Postings from 65+ ATS Platforms
+# Sample Dataset: Normalized Job Postings from 65 ATS Platforms
 
-This repository contains a free, static sample of job postings read directly from enterprise Applicant Tracking Systems (Workday, Greenhouse, SAP SuccessFactors, iCIMS, Lever, and many more).
+This repository contains a free, static sample of job postings from enterprise Applicant Tracking Systems including Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, and SAP SuccessFactors.
 
-Scraping ATS platforms is notoriously painful. The data is messy, job titles don't reflect the actual tech stack, and aggregators are full of expired listings. We built Nivult to solve this: we index directly from the source — the employer's own career system — and run our own measured classifiers to extract and normalize what matters.
+Nivult maintains a normalized index and runs measured classifiers to extract job family, seniority, workplace, skills, and technologies. The full index also includes career sites, staffing sources, aggregators, and public employment portals.
 
-### 🚀 Scale of the full Nivult index
-This repository is a static sample. The latest daily export contains at least:
+## Scale of the full Nivult index
 
-*   **5,900,000** active job postings
-*   **69,000** companies hiring now
-*   **240** countries and territories
-*   **85,000** new postings per day
+This repository is a static sample. The current public index contains at least:
 
-These are conservative public minimums; the exact snapshot is available from `GET /v1/demo/stats`.
+- **6,300,000** active job postings
+- **73,000** company records with active postings
+- **240** countries and territories
+- **150,000** new postings per day
 
-### 💡 About this sample
-* **Format:** `.jsonl.gz` (gzipped JSON Lines — one JSON object per line)
-* **Content:** job title, company, full description text, location, seniority, remote policy, skills and technologies extracted from the text
-* **Source:** employer career systems and public employment portals — no commercial aggregators
+These are conservative public minimums, not a live count for this sample. The exact current snapshot is available from `GET /v1/demo/stats`.
 
-### 💡 What a record looks like
-A real row from this sample (lightly trimmed for readability):
+## About this sample
+
+- **Format:** `.jsonl.gz` (gzipped JSON Lines — one JSON object per line)
+- **Content:** job title, company, full description text where available, location, seniority, workplace, skills, and technologies extracted from the text
+- **Source:** employer career systems and other source types included in the Nivult index
+
+## What a record looks like
+
+A real row from this sample, lightly trimmed for readability:
 
 ```json
 {
@@ -43,23 +46,24 @@ A real row from this sample (lightly trimmed for readability):
 }
 ```
 
-`posted_at` is the employer's own date; `first_seen`/`last_seen` are our reading dates — a posting is marked closed only when it disappears at the source.
+`posted_at` is the source posting date when available and can be estimated when the source does not expose an exact date. `first_seen` and `last_seen` are Nivult observation dates. A posting is marked closed when it leaves the source.
 
-### 🐍 Quickstart (Python)
+## Quickstart (Python)
 
 ```python
-import gzip, json
+import gzip
+import json
 
-with gzip.open("Jobs Sample.gz", "rt") as f:        # the file is gzipped
+with gzip.open("Jobs Sample.gz", "rt") as f:
     for line in f:
         job = json.loads(line)
         print(f"{job['title']} at {job['company']} — {job['country']}")
 ```
 
-### ⚡ Need the live index?
+## Need the live index?
 
-This repository is a snapshot. The full index refreshes every morning and ships a delta feed (new, updated, closed postings) so your copy never goes stale.
+This repository is a snapshot. The full index refreshes daily. Daily Delta feeds and Daily bulk JSONL exports are available through direct Nivult plans, not through the RapidAPI marketplace plans.
 
-👉 **Live API on RapidAPI:** https://rapidapi.com/nivult-nivult-default/api/nivult-job-postings-company-data
-👉 **Actors on Apify Store:** search "Nivult"
-👉 **Site & free portal trial:** https://nivult.com
+- **Live API on RapidAPI:** https://rapidapi.com/nivult-nivult-default/api/nivult-job-postings-company-data
+- **Actors on Apify Store:** search for "Nivult"
+- **Direct API, Delta, bulk exports, and portal trial:** https://nivult.com

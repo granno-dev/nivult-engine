@@ -1,95 +1,99 @@
 {
-  "title": "Global Job Postings — input",
+  "title": "Global Job Postings API — input",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "tipo": {
-      "title": "What do you need?",
+      "title": "Result type",
       "type": "string",
-      "enum": [
-        "jobs",
-        "companies"
-      ],
-      "enumTitles": [
-        "Job postings",
-        "Companies (enriched employer records)"
-      ],
+      "enum": ["jobs", "companies"],
+      "enumTitles": ["Job postings", "Company records"],
       "default": "jobs",
-      "description": "Job postings or enriched company records"
+      "description": "Return individual job postings or enriched company records keyed by ATS + company_slug."
     },
     "country": {
-      "title": "Country (ISO-2)",
+      "title": "Country",
       "type": "string",
-      "description": "e.g. IT, DE, US — leave empty for worldwide",
+      "description": "ISO 3166-1 alpha-2 code such as IT, DE, or US. Comma-separated values are ORed. Leave empty for worldwide. In company mode, filters the country on the company record.",
+      "editor": "textfield"
+    },
+    "category": {
+      "title": "Job category (jobs only)",
+      "type": "string",
+      "description": "Job-family category. Comma-separated values are ORed.",
+      "editor": "textfield"
+    },
+    "ats": {
+      "title": "ATS platform (jobs only)",
+      "type": "string",
+      "description": "Source platform slug such as workday, greenhouse, lever, ashby, smartrecruiters, icims, or successfactors. Comma-separated values are ORed.",
       "editor": "textfield"
     },
     "technology": {
       "title": "Technology",
       "type": "string",
-      "description": "e.g. SAP, Snowflake, Kubernetes — postings mentioning it in the text",
+      "description": "Jobs: exact match against normalized technologies extracted from the posting. Companies: match against the company-level technology aggregate. Comma-separated values are ORed.",
       "editor": "textfield"
     },
     "q": {
       "title": "Keyword",
       "type": "string",
-      "description": "free text in title and description",
+      "description": "Jobs: all terms must match the title or description. Companies: case-insensitive company-name search.",
       "editor": "textfield"
     },
     "seniority": {
-      "title": "Seniority",
+      "title": "Seniority (jobs only)",
       "type": "string",
-      "enum": [
-        "",
-        "intern",
-        "junior",
-        "mid",
-        "senior",
-        "lead",
-        "head"
-      ],
-      "enumTitles": [
-        "any",
-        "intern",
-        "junior",
-        "mid",
-        "senior",
-        "lead",
-        "head"
-      ],
+      "enum": ["", "intern", "junior", "mid", "senior", "lead", "head"],
+      "enumTitles": ["Any", "Intern", "Junior", "Mid", "Senior", "Lead", "Head"],
       "default": "",
-      "description": "Filter by seniority level (optional)"
+      "description": "Filter by classified seniority. Empty includes all values."
     },
     "remote": {
-      "title": "Workplace",
+      "title": "Workplace (jobs only)",
       "type": "string",
-      "enum": [
-        "",
-        "remote",
-        "hybrid",
-        "onsite"
-      ],
-      "enumTitles": [
-        "any",
-        "remote",
-        "hybrid",
-        "on site"
-      ],
+      "enum": ["", "remote", "hybrid", "onsite"],
+      "enumTitles": ["Any", "Remote", "Hybrid", "On site"],
       "default": "",
-      "description": "Filter by workplace type (optional)"
+      "description": "Filter by classified workplace. Empty includes all values."
     },
-    "dal": {
-      "title": "Posted after",
+    "language": {
+      "title": "Language (jobs only)",
       "type": "string",
-      "description": "ISO date, e.g. 2026-10-01 — only fresher postings",
+      "description": "ISO language code such as en, de, or it. Comma-separated values are ORed.",
       "editor": "textfield"
     },
-    "limite": {
-      "title": "Max results",
+    "dal": {
+      "title": "Posted after (jobs only)",
+      "type": "string",
+      "description": "ISO 8601 date or timestamp, for example 2026-11-01. Posting dates can be estimated when the source does not expose an exact date.",
+      "editor": "textfield"
+    },
+    "industry": {
+      "title": "Industry (companies only)",
+      "type": "string",
+      "description": "Exact industry value on the company record.",
+      "editor": "textfield"
+    },
+    "employees_min": {
+      "title": "Minimum employees (companies only)",
       "type": "integer",
-      "description": "1–10,000 (for bigger slices ask about the daily full export)",
+      "minimum": 0,
+      "description": "Lower bound on the company employee count."
+    },
+    "employees_max": {
+      "title": "Maximum employees (companies only)",
+      "type": "integer",
+      "minimum": 0,
+      "description": "Upper bound on the company employee count."
+    },
+    "limite": {
+      "title": "Maximum results",
+      "type": "integer",
+      "description": "Maximum number of rows returned by this run, from 1 to 5,000.",
       "default": 100,
       "minimum": 1,
-      "maximum": 10000
+      "maximum": 5000
     }
   }
 }

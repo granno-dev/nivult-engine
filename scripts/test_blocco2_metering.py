@@ -128,6 +128,21 @@ def test_bulk_requires_active_scale_and_scheduled_cancel_respects_period_end():
     assert exc.value.status_code == 403
 
 
+def test_rapidapi_cannot_access_direct_only_delta_or_exports():
+    app = FastAPI()
+    app.include_router(v1.router)
+    app.dependency_overrides[v1._cliente] = lambda: {
+        "id": "rapidapi", "user_id": None, "via": "rapidapi",
+        "utente_rapidapi": "buyer", "monthly_tier": 10_000,
+    }
+    client = TestClient(app)
+    for path in ("/v1/changes?since=2026-11-24T00:00:00Z",
+                 "/v1/exports/latest", "/v1/exports/latest/offerte"):
+        response = client.get(path)
+        assert response.status_code == 403
+        assert "RapidAPI" in response.json()["detail"] or "direct Nivult" in response.json()["detail"]
+
+
 def test_annual_subscription_resets_monthly_but_trial_does_not():
     previous_month = datetime.now(UTC).date().replace(day=1) - timedelta(days=1)
     rows = [{"crediti_mensili": 500, "usati_mese": 100, "mese_uso": previous_month}]
@@ -305,3 +320,119 @@ def test_portal_daily_bulk_still_requires_active_scale(monkeypatch, tmp_path):
     client = _portal_export_client()
     assert client.get("/portale/export/offerte").status_code == 403
     assert calls["service"] == 0 and calls["charges"] == []
+
+
+RAPID_HEADERS = {"X-RapidAPI-Proxy-Secret": "test-secret",
+                 "X-RapidAPI-User": "buyer"}
+
+
+def _rapid_billing_client(monkeypatch):
+    monkeypatch.setenv("RAPIDAPI_PROXY_SECRET", "test-secret")
+    monkeypatch.setattr(v1, "_applica_rate_limit", lambda *args: None)
+    app = FastAPI()
+    app.middleware("http")(v1.billing_rapidapi)
+    app.include_router(v1.router)
+    return TestClient(app)
+
+
+def test_rapidapi_jobs_billing_empty_validation_and_direct_only(monkeypatch):
+    rows = [{"id": "1"}, {"id": "2"}]
+    monkeypatch.setattr(opensearch, "attivo", lambda: True)
+    monkeypatch.setattr(opensearch, "offerte",
+                        lambda filters, cursor, limit: (rows[:limit], None))
+    client = _rapid_billing_client(monkeypatch)
+    response = client.get("/v1/jobs?limit=2", headers=RAPID_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=2"
+
+    rows.clear()
+    response = client.get("/v1/jobs", headers=RAPID_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+
+    for path in ("/v1/jobs?salary_min=invalid", "/v1/jobs?limit=0",
+                 "/v1/changes?since=2026-11-24T00:00:00Z",
+                 "/v1/exports/latest"):
+        response = client.get(path, headers=RAPID_HEADERS)
+        assert response.status_code in (400, 403, 422)
+        assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+
+
+def test_rapidapi_companies_and_detail_billing(monkeypatch):
+    rows = [{"company": "A"}, {"company": "B"}]
+    monkeypatch.setattr(dati, "aziende",
+                        lambda filters, cursor, limit: (rows[:limit], None))
+    monkeypatch.setattr(dati, "azienda",
+                        lambda platform, slug: {"company": "A"} if slug == "acme" else None)
+    client = _rapid_billing_client(monkeypatch)
+    response = client.get("/v1/companies?limit=2", headers=RAPID_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=6"
+
+    rows.clear()
+    response = client.get("/v1/companies", headers=RAPID_HEADERS)
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+
+    response = client.get("/v1/companies/greenhouse/acme", headers=RAPID_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=3"
+    response = client.get("/v1/companies/greenhouse/missing", headers=RAPID_HEADERS)
+    assert response.status_code == 404
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+
+
+def test_rapidapi_coverage_and_usage_bill_zero(monkeypatch):
+    monkeypatch.setattr(dati, "copertura", lambda: {"country": 100})
+    client = _rapid_billing_client(monkeypatch)
+    for path in ("/v1/coverage", "/v1/usage"):
+        response = client.get(path, headers=RAPID_HEADERS)
+        assert response.status_code == 200
+        assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+        assert "X-Credits-Charged" not in response.headers
+
+
+def test_rapidapi_rate_limit_and_server_errors(monkeypatch):
+    client = _rapid_billing_client(monkeypatch)
+
+    def limited(*args):
+        raise v1.HTTPException(429, "limited")
+
+    monkeypatch.setattr(v1, "_applica_rate_limit", limited)
+    response = client.get("/v1/jobs", headers=RAPID_HEADERS)
+    assert response.status_code == 429
+    assert response.headers["X-RapidAPI-Billing"] == "Credits=0"
+
+    monkeypatch.setattr(v1, "_applica_rate_limit", lambda *args: None)
+    monkeypatch.setattr(opensearch, "attivo", lambda: True)
+
+    def broken(*args):
+        raise v1.psycopg.OperationalError("down")
+
+    monkeypatch.setattr(opensearch, "offerte", broken)
+    response = client.get("/v1/jobs", headers=RAPID_HEADERS)
+    assert response.status_code == 503
+    assert "X-RapidAPI-Billing" not in response.headers
+
+
+def test_direct_api_never_gets_rapidapi_billing_header(monkeypatch):
+    monkeypatch.setattr(opensearch, "attivo", lambda: True)
+    monkeypatch.setattr(opensearch, "offerte",
+                        lambda filters, cursor, limit: ([{"id": "1"}], None))
+    monkeypatch.setattr(chiavi, "addebita_chiave", lambda *args, **kwargs: {})
+    app = FastAPI()
+    app.middleware("http")(v1.billing_rapidapi)
+    app.include_router(v1.router)
+    app.dependency_overrides[v1._cliente] = lambda: {
+        "id": "direct-key", "user_id": "direct-user", "monthly_tier": 100_000,
+        "crediti_residui": 100, "subscription_status": "active",
+        "creem_subscription_id": "sub", "current_period_end": None,
+    }
+    response = TestClient(app).get("/v1/jobs", headers={"X-Api-Key": "direct"})
+    assert response.status_code == 200
+    assert "X-RapidAPI-Billing" not in response.headers
+
+
+def test_production_app_registers_rapidapi_billing_middleware():
+    app = app_module.create_app()
+    assert any(middleware.kwargs.get("dispatch") is v1.billing_rapidapi
+               for middleware in app.user_middleware)

@@ -17,7 +17,7 @@ FILTRI_JOBS = ("country", "category", "ats", "seniority", "remote",
                "language", "q", "technology", "dal")
 FILTRI_AZIENDE = ("country", "industry", "q", "technology",
                   "employees_min", "employees_max")
-TETTO = 10_000          # oltre, il canale giusto e' l'export giornaliero
+TETTO = 5_000           # oltre, il canale giusto e' l'export giornaliero
 
 
 async def main() -> None:
@@ -40,10 +40,14 @@ async def main() -> None:
             if k in ammessi and not filtri.get(k):
                 filtri[k] = v
         limite = min(int(inp.get("limite") or 100), TETTO)
+        evento = "company-result" if tipo == "companies" else "job-result"
+        pricing = Actor.get_charging_manager().get_pricing_info()
+        evento_custom = evento if evento in pricing.per_event_prices else None
         cursor = None
         scritti = 0
+        budget_raggiunto = False
         async with httpx.AsyncClient(timeout=60) as cli:
-            while scritti < limite:
+            while scritti < limite and not budget_raggiunto:
                 params = {**filtri, "limit": min(500, limite - scritti)}
                 if cursor:
                     params["cursor"] = cursor
@@ -54,8 +58,21 @@ async def main() -> None:
                 righe = d.get("data") or []
                 if not righe:
                     break
-                await Actor.push_data(righe)
-                scritti += len(righe)
+                if evento_custom:
+                    for riga in righe:
+                        charge_result = await Actor.push_data(
+                            riga, charged_event_name=evento_custom)
+                        scritti += charge_result.charged_count
+                        if charge_result.event_charge_limit_reached:
+                            budget_raggiunto = True
+                            break
+                else:
+                    await Actor.push_data(righe)
+                    scritti += len(righe)
+                if budget_raggiunto:
+                    Actor.log.info("budget utente raggiunto: stop pulito a %d righe",
+                                   scritti)
+                    break
                 cursor = d.get("next_cursor")
                 if not cursor:
                     break

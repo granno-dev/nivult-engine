@@ -523,6 +523,8 @@ def create_app() -> FastAPI:
             "max-age=63072000; includeSubDomains")
         return risposta
 
+    app.middleware("http")(api_clienti_v1.billing_rapidapi)
+
     def connessione():
         """Una connessione per richiesta: il pattern di tutto il motore."""
         with psycopg.connect(database_url()) as conn:

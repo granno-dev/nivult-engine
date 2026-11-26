@@ -251,6 +251,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from nivult.api_clienti import v1  # noqa: E402
 
 app = FastAPI()
+app.middleware("http")(v1.billing_rapidapi)
 app.include_router(v1.router)
 client = TestClient(app)
 H = {"X-Api-Key": CHIAVE}
@@ -366,9 +367,11 @@ prova("100.000 -> 200 e due crediti per due eventi", r.status_code == 200 and _c
 os.environ["RAPIDAPI_PROXY_SECRET"] = "segreto-finto"
 RH = {"X-RapidAPI-Proxy-Secret": "segreto-finto", "X-RapidAPI-User": "buyer"}
 r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z"}, headers=RH)
-prova("RapidAPI conserva delta e nessun addebito", r.status_code == 200 and _consumi() == prima + 2)
+prova("delta RapidAPI resta 403 senza addebito", r.status_code == 403 and _consumi() == prima + 2
+      and r.headers["X-RapidAPI-Billing"] == "Credits=0")
 r = client.get("/v1/usage", headers=RH)
-prova("usage RapidAPI invariato", r.status_code == 200 and r.json()["via"] == "rapidapi")
+prova("usage RapidAPI invariato e gratuito", r.status_code == 200
+      and r.json()["via"] == "rapidapi" and r.headers["X-RapidAPI-Billing"] == "Credits=0")
 
 print("companies, coverage ed export")
 r = client.get("/v1/companies", params={"country": "DE"}, headers=H)

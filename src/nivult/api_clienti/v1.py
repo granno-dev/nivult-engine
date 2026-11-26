@@ -93,6 +93,8 @@ def _cliente(request: Request) -> dict:
     if segreto and request.headers.get("X-RapidAPI-Proxy-Secret") == segreto:
         cliente = {"id": "rapidapi", "user_id": None, "via": "rapidapi",
                    "utente_rapidapi": request.headers.get("X-RapidAPI-User", "")}
+        request.state.rapidapi_autenticato = True
+        request.state.rapidapi_credits = 0
         _applica_rate_limit(request, cliente)
         return cliente
     chiave = request.headers.get("X-Api-Key", "").strip()
@@ -114,9 +116,10 @@ def _cliente(request: Request) -> dict:
 
 def _addebita(request: Request, cliente: dict, risultati: int = 1,
               costo: int = 1) -> dict:
-    if cliente.get("via") == "rapidapi":
-        return cliente
     crediti = max(0, int(risultati)) * costo
+    if cliente.get("via") == "rapidapi":
+        request.state.rapidapi_credits = crediti
+        return cliente
     if crediti == 0:
         return {**cliente, "addebitati": 0}
     try:
@@ -133,6 +136,15 @@ def _addebita(request: Request, cliente: dict, risultati: int = 1,
             "usage_month": str(e.mese_uso)})
     except chiavi.ContatoreNonDisponibile:
         raise HTTPException(503, "credit counter temporarily unavailable")
+
+
+async def billing_rapidapi(request: Request, call_next):
+    response = await call_next(request)
+    if (getattr(request.state, "rapidapi_autenticato", False)
+            and response.status_code < 500):
+        crediti = max(0, int(getattr(request.state, "rapidapi_credits", 0)))
+        response.headers["X-RapidAPI-Billing"] = f"Credits={crediti}"
+    return response
 
 
 def _servizio(cliente: dict) -> dict:
@@ -154,7 +166,8 @@ def _risposta_export(percorso: str, nome_file: str) -> StreamingResponse:
 
 def _richiedi_volume(cliente: dict, minimo: int, prodotto: str) -> None:
     if cliente.get("via") == "rapidapi":
-        return
+        raise HTTPException(403, f"{prodotto} is available only through direct "
+                                 "Nivult plans — https://nivult.com")
     stato = cliente.get("subscription_status")
     attivo = bool(cliente.get("creem_subscription_id")) and stato in ("active", "scheduled_cancel")
     periodo = cliente.get("current_period_end")

@@ -1,0 +1,37 @@
+{
+  "pricingModel": "PAY_PER_EVENT",
+  "pricingPerEvent": {
+    "actorChargeEvents": {
+      "apify-actor-start": {
+        "eventTitle": "Actor Start",
+        "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+        "isOneTimeEvent": true,
+        "eventPriceUsd": 0.00005
+      },
+      "job-result": {
+        "eventTitle": "Job result",
+        "eventDescription": "One job posting written to the default dataset.",
+        "isOneTimeEvent": false,
+        "isPrimaryEvent": true,
+        "eventTieredPricingUsd": {
+          "FREE": { "tieredEventPriceUsd": 0.006 },
+          "BRONZE": { "tieredEventPriceUsd": 0.0054 },
+          "SILVER": { "tieredEventPriceUsd": 0.0048 },
+          "GOLD": { "tieredEventPriceUsd": 0.0042 }
+        }
+      },
+      "company-result": {
+        "eventTitle": "Company result",
+        "eventDescription": "One enriched company record written to the default dataset; priced at three times the job-result event for the same subscription tier.",
+        "isOneTimeEvent": false,
+        "eventTieredPricingUsd": {
+          "FREE": { "tieredEventPriceUsd": 0.018 },
+          "BRONZE": { "tieredEventPriceUsd": 0.0162 },
+          "SILVER": { "tieredEventPriceUsd": 0.0144 },
+          "GOLD": { "tieredEventPriceUsd": 0.0126 }
+        }
+      }
+    }
+  },
+  "reasonForChange": "Proposal only: when activating tiered pricing in Apify Console, add job-result and company-result and remove apify-default-dataset-item in the same pricing change to prevent double charging. Keep apify-actor-start at $0.00005."
+}

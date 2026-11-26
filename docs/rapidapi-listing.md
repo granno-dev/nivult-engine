@@ -1,44 +1,47 @@
 # Nivult — Job Postings & Company Data (RapidAPI listing)
 
-Customer-facing overview and technical documentation for the RapidAPI listing. All examples use the RapidAPI proxy host and headers.
+Customer-facing overview and technical documentation for the RapidAPI listing. Examples use the RapidAPI proxy host and headers.
 
 ---
 
 ## 1. LONG DESCRIPTION
 
-Not a scraper. A maintained index.
+Query **6.3M+ active job postings** and **73,000+ company records** across **240+ countries and territories**. The maintained Nivult index covers **65 ATS platforms** and public employment sources, with daily refreshes and closed-posting detection.
 
-Nivult reads job postings from employer career systems and public employment portals: Workday, Greenhouse, SAP SuccessFactors, iCIMS, SmartRecruiters and 60+ ATS platforms, across 240+ countries and territories. The index also includes public national employment sources; it is not limited to employer ATS records.
+Search records from **Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors**, and other supported sources. The API queries the existing index; it does not scrape employer sites on demand.
 
-What you get in one subscription:
+What you can access through RapidAPI:
 
-- **Live job postings** — title, full text where available, location, seniority, remote policy, employment type, observed and modelled salary in separate fields, and technologies extracted by measured classifiers.
-- **Company records** — keyed by `ats + company_slug`, with technology aggregate, industry and registry source where available, size band, locations and 30-day hiring pace.
-- **A delta feed** — `new`, `updated` and `closed` events since an ISO timestamp. Delta history is retained for seven days.
-- **Declared coverage** — percentages for the documented set of fields measured in the latest export. Coverage does not claim to describe every response field.
-- **Selected provenance metadata** — source fields are exposed for selected enriched values, not for every field.
+- **Live job postings** — title, employer, source URL, description where available, geography, seniority, workplace, employment type, skills, technologies, and observed salary where available.
+- **Company records** — keyed by `ats + company_slug`, with industry, size, locations, technology aggregate, legal data, and selected source fields where available.
+- **Declared field coverage** — fill rates for the documented posting and company fields measured in the latest export.
+- **Keyset pagination** — retrieve up to 500 records per call with opaque cursors.
 
-Typical uses: labor-market analytics, talent intelligence, sales prospecting, academic research, HR tech products and competitive intelligence.
+Typical uses include labor-market analytics, talent intelligence, sales prospecting, academic research, HR tech products, and competitive intelligence.
+
+### Enterprise and high-volume use cases
+
+For **Daily Delta feeds, Daily bulk JSONL exports, more than 50K–100K credits per month, missing-company requests across the 65 supported ATS platforms, historical backfill, custom company lists including non-standard career sites, or redistribution rights**, use the direct API at [nivult.com](https://nivult.com). These capabilities are not included in RapidAPI plans. Direct Scale and Business plans include missing-company requests; Enterprise covers custom sourcing, backfill, redistribution licensing, and volumes from 5M credits per month.
 
 ---
 
 ## 2. SPOTLIGHTS
 
-**Spotlight 1 — Employer and public sources**
+**Spotlight 1 — Maintained global coverage**
 
-Records come from employer career systems and public employment portals, not recycled commercial aggregators. Closure timestamps reflect Nivult's source-checking pipeline.
+Access 6.3M+ active postings from 73,000+ company records across 240+ countries and territories. Sources include employer ATS platforms, career sites, staffing sources, and public employment portals.
 
-**Spotlight 2 — A delta feed, not just snapshots**
+**Spotlight 2 — Filters for precise slices**
 
-`GET /v1/changes?since=` returns new, updated and closed events. Paginate every response with `next_cursor`; use the timestamp of the previous sync for the next `since` value.
+Filter jobs by source platform, employer, domain, geography, technology, skills, department, employment type, posting date, and observed salary. Keyword filters accept comma-separated OR values; `q` and `title` require all search terms.
 
 **Spotlight 3 — Declared coverage**
 
-`GET /v1/coverage` returns fill rates for the documented set of posting and company fields. Observed and modelled salary fields are separate.
+`GET /v1/coverage` returns fill rates for the documented set of posting and company fields. Enrichment and provenance are available on covered fields, not guaranteed on every row.
 
-**Spotlight 4 — Measured enrichment**
+**Spotlight 4 — Separate observed and modelled salary fields**
 
-Job family, seniority, remote policy and technologies come from classifiers evaluated against hand-labeled benchmarks. Exported records contain the resulting classifications, not benchmark-score fields.
+Observed salary uses `salary_min`, `salary_max`, and `salary_currency`. Modelled salary fields, when populated, use the `salary_estimate_*` namespace and are never presented as employer-provided salary.
 
 ---
 
@@ -57,7 +60,9 @@ X-RapidAPI-Host: nivult-job-postings-company-data.p.rapidapi.com
 
 Direct Nivult API keys use `X-Api-Key` against `https://api.nivult.com` instead. Do not put either key in the URL.
 
-List calls return 100 records by default and accept `limit=1` through `limit=500`.
+RapidAPI manages plan quotas and billing. The custom `Credits` quota counts returned data records: 1 credit per job and 3 per company. Empty results and application errors below 500 bill 0 credits; coverage and usage also return `Credits=0`. Direct Nivult credit balances are not consumed. See the Pricing tab for the live quota and overage configuration.
+
+List calls return 100 records by default and accept `limit=1` through `limit=500`. RapidAPI requests are limited to 15 requests/second with a burst of 30.
 
 ## Quickstart
 
@@ -70,78 +75,108 @@ curl -H "X-RapidAPI-Key: $RAPIDAPI_KEY" \
      "https://$HOST/v1/jobs?technology=SAP&country=DE&limit=100"
 ```
 
-The response has `data`, `next_cursor` and `count_page`. When `next_cursor` is non-null, pass it back as `cursor`. The keyset cursor avoids offset pagination, but pages are separate live queries, not one transactionally isolated snapshot.
+The response has `data`, `next_cursor`, and `count_page`. When `next_cursor` is non-null, pass it back as `cursor`. Pages are separate live queries, not one transactionally isolated snapshot.
+
+```json
+{
+  "data": [
+    {
+      "id": "01JABC...",
+      "title": "Data Engineer",
+      "company": "Example GmbH",
+      "company_slug": "example-gmbh",
+      "ats": "greenhouse",
+      "country": "DE",
+      "city": "Berlin",
+      "remote": "hybrid",
+      "technologies": ["Snowflake", "Python"],
+      "url": "https://boards.greenhouse.io/example/jobs/123"
+    }
+  ],
+  "next_cursor": "opaque-cursor",
+  "count_page": 1
+}
+```
 
 ## GET /v1/jobs
 
-Active postings, 100 by default and up to 500 per call.
+Returns active postings. Unknown query parameters are ignored; unknown filter values generally produce an empty page.
 
-Parameters:
+### General filters
 
-- `q` — PostgreSQL full-text search over title and description. Multiple terms follow PostgreSQL `plainto_tsquery` semantics.
-- `country` — ISO 3166-1 alpha-2, such as `DE`, `US` or `IT`.
-- `technology` — case-insensitive exact match against extracted, normalized technologies; not arbitrary text search.
-- `category`, `ats`, `seniority`, `remote`, `language` — corresponding exported values.
-- `posted_after` — posted on/after `YYYY-MM-DD`.
+- `country` — ISO 3166-1 alpha-2; comma-separated values are ORed.
+- `category`, `ats`, `seniority`, `remote`, `language`, `technology` — corresponding exported values; comma-separated values are ORed.
+- `exclude_ats` — comma-separated source platform slugs to exclude. A value present in both `ats` and `exclude_ats` is excluded.
+- `q` — full-text search over title and description; all terms are required (AND).
+- `q_any` — at least one of up to 15 comma-separated keywords must match the title or description (OR). Can be combined with `q`.
+- `title` — full-text search restricted to the job title; all terms are required (AND).
+- `posted_after` — inclusive ISO 8601 date or timestamp.
+- `posted_before` — exclusive ISO 8601 date or timestamp.
 - `limit` — 1–500, default 100.
 - `cursor` — previous response's `next_cursor`.
 
-Records include available fields such as title, company, `company_slug`, `ats`, URL, geography, `posted_at`, seniority, remote, employment type, skills, technologies and full description. Observed salary uses `salary_min`, `salary_max` and `salary_currency`. Modelled salary uses `salary_is_estimate`, `salary_estimate_min`, `salary_estimate_median`, `salary_estimate_max`, `salary_estimate_currency` and `salary_estimate_basis`.
+`technology` is a case-insensitive exact match against extracted, normalized technologies, not arbitrary text search. `ats=bundesagentur`, used alone, is an alias for `bundesanstellung`.
+
+### Employer, location, and source filters
+
+- `source_type` — `direct`, `aggregator`, `staffing`, or `public_board`; comma-separated OR.
+- `company` — full-text match on employer name.
+- `company_slug`, `company_domain` — comma-separated OR. Domain normalization removes scheme, `www`, and path.
+- `city`, `state` — comma-separated OR.
+
+### Role, skills, and salary filters
+
+- `employment_type`, `department`, `skills`, `salary_currency` — comma-separated OR.
+- `has_salary` — `true` or `false`; tests whether `salary_min` or `salary_max` is present.
+- `salary_min`, `salary_max` — non-negative finite bounds on the corresponding observed salary fields. `salary_min` cannot exceed `salary_max`.
+
+Job records can include title, company, `company_slug`, `ats`, URL, geography, `posted_at`, `first_seen`, `last_seen`, seniority, workplace, employment type, skills, technologies, and full description. Observed salary uses `salary_min`, `salary_max`, and `salary_currency`. Modelled salary uses `salary_is_estimate`, `salary_estimate_min`, `salary_estimate_median`, `salary_estimate_max`, `salary_estimate_currency`, and `salary_estimate_basis` when populated. Optional fields can be omitted, null, or empty.
 
 ## GET /v1/companies
 
 Company records are keyed by **`ats + company_slug`**, not by slug alone.
 
-Parameters:
-
 - `q` — case-insensitive company-name search.
 - `country` — country on the company record, not necessarily every posting location.
 - `industry` — exact industry value.
-- `technology` — company-level exported technology aggregate; this is not a distinct-employers query over the filtered job slice.
+- `technology` — company-level exported technology aggregate; this is not a distinct-employers query over a filtered job slice.
 - `employees_min`, `employees_max` — employee-count bounds.
 - `limit`, `cursor` — as above.
 
+Available fields include employer name, domain, active-job count, industry, legal and registration data, size band, locations, technology stack, and selected source fields. Enrichment is optional and varies by employer.
+
 ## GET /v1/companies/{piattaforma}/{slug}
 
-Returns one company record. Supply both the ATS/source and the employer slug from the job or company record.
-
-## GET /v1/changes
-
-Events are `new`, `updated` and `closed`. Updates carry a full posting snapshot and `updated_at`; closures carry `closed_at`.
-
-- `since` is required and must be an ISO 8601 timestamp within the seven-day retention window.
-- `limit` and `cursor` paginate the current response.
-- `next_cursor` is not the `since` value for the next synchronization. Store an ISO timestamp from the previous sync separately.
-
-If `since` predates `retention_since`, the response is HTTP 400 with `code: delta_retention_exceeded` and `resync_required: true`. Rebuild from the active snapshot or bulk export before resuming.
-
-## GET /v1/exports/latest
-
-Returns the latest available export manifest for 0 credits. Direct accounts require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. Authentication and rate limits still apply.
-
-## GET /v1/exports/latest/{nome}
-
-`nome` is `offerte` or `aziende`; the response is JSONL gzip and costs 0 credits. Direct accounts require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. One-time top-ups do not unlock this entitlement. RapidAPI does not include bulk-file downloads.
+Returns one company record. Supply both the ATS/source and employer slug from a job or company record. A missing company returns 404 and bills 0 custom credits. A successful record bills 3 custom credits.
 
 ## GET /v1/coverage
 
-Returns percentages from 0 to 100 for the documented set of fields measured in the latest export. It does not claim coverage for every possible response field. Costs 0 credits on every direct plan and works at zero balance; authentication and rate limits still apply.
+Returns percentages from 0 to 100 for the documented set of fields measured in the latest export. Company-field percentages are nested under `aziende`. It does not claim coverage for every possible response field. Direct accounts pay 0 credits and can use it at zero balance. RapidAPI returns `X-RapidAPI-Billing: Credits=0`.
 
 ## GET /v1/usage
 
-Direct usage is account-level across keys, including revoked keys. The monthly allowance is spent before purchased credits. This endpoint costs 0 credits, does not change usage and returns 200 at a zero balance. Authentication and rate limits still apply. RapidAPI returns a channel note because RapidAPI manages its own quotas.
+Direct usage costs 0 credits, does not change usage, and returns 200 at zero balance. RapidAPI returns a channel note because RapidAPI manages marketplace quotas, together with `X-RapidAPI-Billing: Credits=0`; it does not return a direct Nivult credit balance.
+
+## Not included on RapidAPI
+
+- `GET /v1/changes` — Daily Delta feed; direct Growth and higher only, 1 direct credit per returned event.
+- `GET /v1/exports/latest` — daily export manifest; direct Scale and higher only, 0 direct credits including at zero balance.
+- `GET /v1/exports/latest/{nome}` — Daily bulk JSONL download; direct Scale and higher only, 0 direct credits including at zero balance.
+- Missing-company onboarding, custom company lists, historical backfill, and redistribution rights — direct plans or Enterprise agreements as applicable.
+
+These endpoints return 403 through RapidAPI. One-time direct top-ups do not unlock Delta or Daily Bulk entitlements.
 
 ## Errors
 
-- **400** — invalid date/cursor, missing `since`, or an expired delta-retention window.
-- **401** — missing, invalid or revoked credentials.
-- **403** — the channel or monthly tier does not include the requested resource.
-- **404** — company, export name or file not found.
-- **422** — FastAPI parameter validation failed, such as `limit=0`, `limit=501` or a non-integer limit. Its `detail` is an array.
-- **429** — plan quota/rate limit on RapidAPI, rate limiting on direct service endpoints, or exhausted monthly and purchased credits on direct paid-data endpoints. Usage, coverage and Daily Bulk never return 429 for zero balance.
-- **503** — the direct credit counter is unavailable; the request fails closed.
+- **400** — invalid date, cursor, source type, boolean, salary bound, more than 15 `q_any` terms, missing `since`, or an expired Delta retention window on the direct API.
+- **401** — missing, invalid, or revoked credentials.
+- **403** — the channel or direct subscription does not include the requested resource.
+- **404** — company, export name, or file not found.
+- **422** — FastAPI parameter validation failed, such as `limit=0`, `limit=501`, or a non-integer limit. Its `detail` is an array.
+- **429** — RapidAPI plan quota/rate limit, backend rate limit, or exhausted direct credits on paid-data endpoints. Direct Usage, coverage, and Daily Bulk never return 429 for zero balance.
+- **503** — the direct credit counter or database is temporarily unavailable; the request fails closed.
 
-Unknown query parameters are ignored. Unknown filter values generally produce an empty page rather than a 422.
+Authenticated RapidAPI application errors below 500 include `X-RapidAPI-Billing: Credits=0`. Server errors do not set the billing header.
 
 A direct-key credit-exhausted response has an object in `detail`:
 
@@ -149,14 +184,14 @@ A direct-key credit-exhausted response has an object in `detail`:
 {
   "detail": {
     "error": "monthly and purchased credits exhausted",
-    "monthly_credits": 1000,
+    "monthly_credits": 15000,
     "purchased_credits": 0,
     "usage_month": "2026-11-01"
   }
 }
 ```
 
-A delta-retention error has a structured `detail` containing `code`, `error`, `message`, `since`, `retention_since`, `action` and `resync_required`.
+If a direct balance cannot cover one result, `detail` instead contains `error`, `remaining`, and `credits_per_record`. A backend rate-limit 429 contains a string `detail` and a `Retry-After` header. RapidAPI gateway errors can use RapidAPI's own response format.
 
 ---
 
@@ -204,25 +239,11 @@ curl -H "X-RapidAPI-Key: $RAPIDAPI_KEY" -H "X-RapidAPI-Host: $HOST" \
 
 Do not use `q=snowflake` as a substitute: company `q` searches company names, not technologies or job text.
 
-### Step 4 — Request recent changes
-
-Generate a timestamp within the seven-day retention window:
-
-```bash
-SINCE=$(python -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc)-timedelta(hours=1)).isoformat())')
-curl -H "X-RapidAPI-Key: $RAPIDAPI_KEY" -H "X-RapidAPI-Host: $HOST" \
-  --get "https://$HOST/v1/changes" \
-  --data-urlencode "since=$SINCE" \
-  --data-urlencode "limit=500"
-```
-
-Paginate until `next_cursor` is null. For the next run use a separately stored sync timestamp, not the pagination cursor.
-
-### Step 5 — Check field coverage
+### Step 4 — Check field coverage
 
 ```bash
 curl -H "X-RapidAPI-Key: $RAPIDAPI_KEY" -H "X-RapidAPI-Host: $HOST" \
   "https://$HOST/v1/coverage"
 ```
 
-Use the returned percentages to decide which documented fields your pipeline can rely on.
+Use the returned percentages to decide which documented fields your pipeline can rely on. For ongoing Delta synchronization or a full snapshot rebuild, use the direct API at [nivult.com](https://nivult.com); those feeds are not part of RapidAPI plans.

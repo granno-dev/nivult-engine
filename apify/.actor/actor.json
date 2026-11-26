@@ -1,23 +1,39 @@
 {
   "actorSpecification": 1,
   "name": "global-job-postings",
-  "title": "Global Job Postings — live ATS index",
-  "description": "Live job postings and enriched employer records, read directly from the career systems of tens of thousands of companies. Filter by country, technology, seniority, workplace. Every field carries its source.",
+  "title": "Global Job Postings API — Workday, Greenhouse & 65 ATS",
+  "description": "Query 6.3M+ active job postings and 73,000+ company records across 240+ countries. Search Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors and other ATS platforms by country, technology, seniority, workplace, keyword, or date.",
   "version": "0.1",
   "buildTag": "latest",
   "envVars": [
     {
       "name": "NIVULT_API_KEY",
-      "description": "Chiave interna dell'indice (segreto, mai nel repo)",
+      "description": "Internal Nivult index key; stored as an Actor secret, never in the repository",
       "isSecret": true,
       "value": "@NIVULT_API_KEY"
     }
   ],
   "pricingInfos": [
     {
-      "pricingModel": "PRICE_PER_DATASET_ITEM",
-      "pricePerItemUsd": 0.003,
-      "reasonForChange": "Lancio a $3/1.000: nel campo dei seri (2,70-5$), mai il piu' caro senza recensioni"
+      "pricingModel": "PAY_PER_EVENT",
+      "pricingPerEvent": {
+        "actorChargeEvents": {
+          "apify-actor-start": {
+            "eventTitle": "Actor Start",
+            "eventDescription": "Charged when the Actor starts running. Number of events charged depends on Actor memory (one event per GB, minimum one event).",
+            "isOneTimeEvent": true,
+            "eventPriceUsd": 0.00005
+          },
+          "apify-default-dataset-item": {
+            "eventTitle": "Result",
+            "eventDescription": "One job or company record in the default dataset.",
+            "isOneTimeEvent": false,
+            "eventPriceUsd": 0.003,
+            "isPrimaryEvent": true
+          }
+        }
+      },
+      "reasonForChange": "Align the repository with the live flat pay-per-event configuration; tiered pricing is prepared separately and is not active."
     }
   ],
   "dockerfile": "../Dockerfile",

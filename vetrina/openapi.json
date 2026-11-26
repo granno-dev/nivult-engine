@@ -2,22 +2,22 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
-    "version": "1.0.0",
-    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Metering is pay per result: jobs and changes cost 1 credit per returned record, companies cost 3 credits per returned record, and empty results or errors cost 0 credits. For direct accounts, the effective page limit is capped by the available balance and per-record cost. Usage, coverage and Daily Bulk are unmetered service endpoints; authentication, rate limits and entitlements still apply. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
+    "version": "1.2.0",
+    "description": "Direct Nivult API for 6.3M+ active job postings and 73,000+ company records across 240+ countries and 65 ATS platforms, plus public employment sources. Jobs and changes cost 1 credit per returned record, companies cost 3 credits, and empty results or errors cost 0 credits. Usage, coverage, export manifest, and Daily Bulk are unmetered service endpoints; authentication, rate limits, and entitlements still apply. Company records are keyed by ATS + company_slug. Coverage and provenance apply to documented, selected fields.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
-  "servers": [{ "url": "https://api.nivult.com" }],
+  "servers": [{ "url": "https://api.nivult.com", "description": "Direct Nivult API" }],
   "security": [{ "ApiKeyAuth": [] }],
   "paths": {
     "/v1/jobs": {
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. Each returned job record costs 1 credit; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 1 credit per record. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated values. v2 adds source_type, employer, domain, location, salary and skills filters with validation without charging invalid requests. Unknown query parameters are ignored.",
+        "description": "Active postings with keyset pagination. Direct accounts pay 1 credit per returned job. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated OR values. Unknown query parameters are ignored.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
           { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
-          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. `bundesagentur` is accepted as a public alias for `bundesanstellung` only when used alone." },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. bundesagentur is accepted as an alias for bundesanstellung only when used alone." },
           { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Exclude these source platform slugs; comma-separated values are supported. If the same value appears in ats and exclude_ats, it is excluded." },
           { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Comma-separated values are ORed" },
           { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "Comma-separated values are ORed" },
@@ -45,7 +45,23 @@
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": { "description": "A page of postings", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobPage" } } } },
+          "200": {
+            "description": "A page of postings",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobPage" },
+              "example": {
+                "data": [{
+                  "id": "01JABC123", "title": "Data Engineer", "company": "Example GmbH",
+                  "company_slug": "example-gmbh", "ats": "greenhouse", "country": "DE",
+                  "city": "Berlin", "remote": "hybrid", "seniority": "mid",
+                  "technologies": ["Snowflake", "Python"], "has_salary": false,
+                  "posted_at": "2026-11-20T00:00:00+00:00",
+                  "url": "https://boards.greenhouse.io/example/jobs/123", "source_type": "direct"
+                }],
+                "next_cursor": null, "count_page": 1
+              }
+            } }
+          },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "422": { "$ref": "#/components/responses/ValidationError" },
@@ -58,7 +74,7 @@
       "get": {
         "summary": "Search company records",
         "operationId": "companies",
-        "description": "Company records keyed by ATS + company_slug. Each returned company record costs 3 credits; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 3 credits per record. q searches the company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
+        "description": "Company records keyed by ATS + company_slug. Direct accounts pay 3 credits per returned company. q searches company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
           { "name": "industry", "in": "query", "schema": { "type": "string" }, "description": "Exact industry value" },
@@ -70,7 +86,22 @@
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": { "description": "A page of companies", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CompanyPage" } } } },
+          "200": {
+            "description": "A page of companies",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/CompanyPage" },
+              "example": {
+                "data": [{
+                  "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
+                  "domain": "italgas.it", "active_jobs": 92,
+                  "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
+                  "legal_name": "ITALGAS S.P.A.", "size_range": "1001-5000",
+                  "size_range_source": "pdl (free dataset)"
+                }],
+                "next_cursor": null, "count_page": 1
+              }
+            } }
+          },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "422": { "$ref": "#/components/responses/ValidationError" },
@@ -83,13 +114,26 @@
       "get": {
         "summary": "Get one company record",
         "operationId": "companyDetail",
-        "description": "Returns one company record for 3 credits. A missing company and all other errors cost 0 credits.",
+        "description": "Returns one company record for 3 direct credits when found. Missing companies and other errors cost 0 credits.",
         "parameters": [
           { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier" },
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Employer slug within that ATS" }
         ],
         "responses": {
-          "200": { "description": "The company record", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": {
+            "description": "The company record",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/Company" },
+              "example": {
+                "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
+                "domain": "italgas.it", "active_jobs": 92,
+                "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
+                "legal_name": "ITALGAS S.P.A.", "legal_form": "Società Per Azioni",
+                "registration_id": "815600F25FF44EF1FA76", "founded": "2016-05-31",
+                "size_range": "1001-5000", "size_range_source": "pdl (free dataset)"
+              }
+            } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "404": { "description": "Company not found" },
           "429": { "$ref": "#/components/responses/CreditsExhausted" },
@@ -101,17 +145,31 @@
       "get": {
         "summary": "Delta feed: new, updated and closed events",
         "operationId": "changes",
-        "description": "Delta history is retained for seven days. Each returned change record costs 1 credit; empty results and errors cost 0 credits. For direct accounts, the effective limit is the requested limit capped by the available balance at 1 credit per record. Direct keys require an active Growth subscription or higher with at least 100,000 credits/month; top-ups do not raise this entitlement. RapidAPI plans bypass the direct-account tier check. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
+        "description": "Delta history is retained for seven days and costs 1 direct credit per returned event. Requires an active Growth subscription or higher with at least 100,000 credits/month; top-ups do not unlock it. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
         "parameters": [
           { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp within retained history" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
-          "200": { "description": "A page of events", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePage" } } } },
+          "200": {
+            "description": "A page of events",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePage" },
+              "example": {
+                "data": [{
+                  "event": "updated", "id": "01JABC123", "title": "Data Engineer",
+                  "ats": "greenhouse", "company_slug": "example-gmbh",
+                  "url": "https://boards.greenhouse.io/example/jobs/123",
+                  "updated_at": "2026-11-25T10:30:00+00:00"
+                }],
+                "next_cursor": null, "count_page": 1
+              }
+            } }
+          },
           "400": { "description": "Missing/malformed since, invalid cursor, or expired retention window; retention errors require resync", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/ErrorResponse" }, { "$ref": "#/components/schemas/DeltaRetentionResponse" }] } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active Growth-or-higher subscription with at least 100,000 credits/month" },
+          "403": { "description": "No active direct Growth-or-higher subscription with at least 100,000 credits/month" },
           "422": { "$ref": "#/components/responses/ValidationError" },
           "429": { "$ref": "#/components/responses/CreditsExhausted" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -122,11 +180,21 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns metadata for the latest available export for 0 credits. The manifest and file downloads require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance; top-ups do not raise this entitlement. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0.",
+        "description": "Returns the latest export manifest for 0 direct credits, including at zero balance. Requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not unlock it. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
         "responses": {
-          "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": {
+            "description": "Latest export manifest",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExportManifest" },
+              "example": {
+                "data": "2026-11-26",
+                "righe": { "offerte": 6372345, "aziende": 73008, "flusso": 150000 },
+                "file": { "offerte": "/exports/offerte.jsonl.gz", "aziende": "/exports/aziende.jsonl.gz" }
+              }
+            } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month" },
+          "403": { "description": "No active direct Scale-or-higher subscription with at least 500,000 credits/month" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
@@ -134,14 +202,14 @@
     },
     "/v1/exports/latest/{nome}": {
       "get": {
-        "summary": "Download the latest available bulk export",
+        "summary": "Download the latest bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip for 0 credits. Daily Bulk requires an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance; top-ups add spendable credits but do not raise this entitlement. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0. RapidAPI does not include bulk-file downloads.",
+        "description": "Downloads offerte or aziende as JSONL gzip for 0 direct credits, including at zero balance. Requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not unlock it. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
         "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
           "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month, or RapidAPI channel" },
+          "403": { "description": "No active direct Scale-or-higher subscription with at least 500,000 credits/month" },
           "404": { "description": "Unknown export name or no export available" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -152,9 +220,18 @@
       "get": {
         "summary": "Coverage for documented fields",
         "operationId": "coverage",
-        "description": "Returns percentages from 0 to 100 for the documented set of posting and company fields measured in the latest export; it is not a schema of every response field. Costs 0 credits on every plan and works at zero balance. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0.",
+        "description": "Returns percentages from 0 to 100 for documented fields measured in the latest export. Costs 0 direct credits and works at zero balance. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
         "responses": {
-          "200": { "description": "Field coverage percentages", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": {
+            "description": "Field coverage percentages; company fields are nested under aziende",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/Coverage" },
+              "example": {
+                "description": 95.4, "country": 89.4, "seniority": 56.7,
+                "aziende": { "domain": 70.0, "industry": 62.0 }
+              }
+            } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -165,9 +242,22 @@
       "get": {
         "summary": "Get current credit usage",
         "operationId": "usage",
-        "description": "Direct-account usage is shared across keys, including revoked keys. The recurring plan allowance or one-time trial allowance is spent before purchased credits. Purchased top-ups never expire and do not unlock Delta or Daily Bulk entitlements. This endpoint costs 0 credits, does not change usage and returns 200 at a zero balance. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
+        "description": "Direct usage is shared across keys, including revoked keys. The recurring plan or one-time trial allowance is spent before purchased credits. This endpoint costs 0 credits, does not change usage, and returns 200 at zero balance. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
         "responses": {
-          "200": { "description": "Direct usage or RapidAPI channel note", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Usage" }, { "$ref": "#/components/schemas/RapidApiUsage" }] } } } },
+          "200": {
+            "description": "Direct usage",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/Usage" },
+              "example": {
+                "monthly_credits": 100000, "used": 12500, "remaining": 87500,
+                "usage_month": "2026-11-01", "monthly_remaining": 87500,
+                "purchased_credits": 0, "balance": 87500, "key_credits_used": 400,
+                "account_monthly_credits": 100000, "subscription_status": "active",
+                "subscription_plan": "growth", "subscription_interval": "month",
+                "current_period_end": "2026-12-01T00:00:00+00:00"
+              }
+            } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
@@ -177,61 +267,148 @@
   },
   "components": {
     "securitySchemes": {
-      "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key. RapidAPI users authenticate through the RapidAPI proxy instead." }
+      "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key" }
     },
     "parameters": {
-      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 }, "description": "Requested page size. For direct accounts, the effective limit is also capped by the available credit balance divided by the per-record cost: 1 credit for jobs/changes and 3 for companies. Empty results and errors cost 0 credits." },
+      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 }, "description": "Requested page size. Direct free/trial accounts up to 1,000 monthly credits are capped at 25 records/page, 2 requests/second, burst 5. Other direct accounts use up to 500 records/page, 15 requests/second, burst 30. Effective limit is also capped by available balance divided by per-record cost." },
       "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
     },
     "responses": {
-      "BadRequest": { "description": "Invalid date or cursor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "BadRequest": { "description": "Invalid date, cursor, source_type, has_salary, salary bound, salary range, or more than 15 q_any terms", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
-      "CreditsExhausted": { "description": "Insufficient credits for one result, or plan/trial and purchased credits exhausted; no credits are charged for the error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
-      "RateLimited": { "description": "Request frequency exceeded the key or IP rate limit; this response is unrelated to the credit balance and no credits are charged" },
-      "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; the response is JSON and no credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+      "CreditsExhausted": { "description": "Insufficient or exhausted direct credits, or backend rate limit", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/CreditError" }, { "$ref": "#/components/schemas/InsufficientCreditError" }, { "$ref": "#/components/schemas/ErrorResponse" }] } } } },
+      "RateLimited": { "description": "Request frequency exceeded the key or IP rate limit; unrelated to credit balance and no credits are charged", "headers": { "Retry-After": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; no direct credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
     },
     "schemas": {
-      "JobPage": { "$ref": "#/components/schemas/Page" },
-      "CompanyPage": { "$ref": "#/components/schemas/Page" },
-      "ChangePage": { "$ref": "#/components/schemas/Page" },
-      "Page": {
+      "Job": {
         "type": "object",
-        "required": ["data", "next_cursor", "count_page"],
+        "required": ["id", "title", "ats", "company_slug", "url"],
         "properties": {
-          "data": { "type": "array", "items": { "type": "object" } },
-          "next_cursor": { "type": ["string", "null"] },
-          "count_page": { "type": "integer" }
+          "id": { "type": "string" }, "title": { "type": "string" },
+          "ats": { "type": "string" }, "company_slug": { "type": "string" },
+          "company": { "type": ["string", "null"] }, "url": { "type": "string" },
+          "company_domain": { "type": ["string", "null"] },
+          "country": { "type": ["string", "null"] }, "city": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] }, "state": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] }, "seniority": { "type": ["string", "null"] },
+          "remote": { "type": ["string", "null"] }, "category": { "type": ["string", "null"] },
+          "employment_type": { "type": ["string", "null"] }, "department": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "technologies": { "type": "array", "items": { "type": "string" } },
+          "has_salary": { "type": "boolean" },
+          "salary_min": { "type": ["number", "null"] }, "salary_max": { "type": ["number", "null"] },
+          "salary_currency": { "type": ["string", "null"] },
+          "posted_at": { "type": ["string", "null"] }, "first_seen": { "type": ["string", "null"] },
+          "last_seen": { "type": ["string", "null"] }, "updated_at": { "type": ["string", "null"] },
+          "source_type": { "type": "string", "enum": ["direct", "aggregator", "staffing", "public_board"] }
+        },
+        "additionalProperties": true
+      },
+      "Company": {
+        "type": "object",
+        "required": ["ats", "company_slug", "company"],
+        "properties": {
+          "ats": { "type": "string" }, "company_slug": { "type": "string" },
+          "company": { "type": "string" }, "country": { "type": ["string", "null"] },
+          "domain": { "type": ["string", "null"] }, "website": { "type": ["string", "null"] },
+          "active_jobs": { "type": "integer" }, "employees": { "type": ["integer", "null"] },
+          "industry": { "type": ["string", "null"] }, "industry_source": { "type": ["string", "null"] },
+          "legal_name": { "type": ["string", "null"] }, "legal_form": { "type": ["string", "null"] },
+          "registration_id": { "type": ["string", "null"] }, "founded": { "type": ["string", "null"] },
+          "size_range": { "type": ["string", "null"] }, "size_range_source": { "type": ["string", "null"] },
+          "jobs_posted_30d": { "type": ["integer", "null"] },
+          "locations": { "type": "array", "items": { "type": "object" } },
+          "technologies": { "type": "array", "items": { "type": "object" } }
+        },
+        "additionalProperties": true
+      },
+      "Change": {
+        "type": "object",
+        "required": ["event", "id"],
+        "properties": {
+          "event": { "type": "string", "enum": ["new", "updated", "closed"] },
+          "id": { "type": "string" }, "title": { "type": ["string", "null"] },
+          "ats": { "type": ["string", "null"] }, "company_slug": { "type": ["string", "null"] },
+          "url": { "type": ["string", "null"] }, "posted_at": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"] }, "closed_at": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      },
+      "JobPage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Job" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
         }
+      },
+      "CompanyPage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Company" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+        }
+      },
+      "ChangePage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Change" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+        }
+      },
+      "ExportManifest": {
+        "type": "object",
+        "properties": {
+          "data": { "type": ["string", "null"] },
+          "righe": { "type": "object", "properties": { "offerte": { "type": ["integer", "null"] }, "aziende": { "type": ["integer", "null"] }, "flusso": { "type": ["integer", "null"] } } },
+          "file": { "type": "object", "properties": { "offerte": { "type": ["string", "null"] }, "aziende": { "type": ["string", "null"] } } }
+        },
+        "additionalProperties": true
+      },
+      "Coverage": {
+        "type": "object",
+        "properties": { "aziende": { "type": "object", "additionalProperties": { "type": "number" } } },
+        "additionalProperties": { "type": "number" }
       },
       "ErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "string" } } },
       "ValidationErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "array", "items": { "type": "object" } } } },
       "CreditError": {
-        "type": "object",
-        "required": ["detail"],
+        "type": "object", "required": ["detail"],
         "properties": {
           "detail": {
             "type": "object",
+            "required": ["error"],
             "properties": {
               "error": { "type": "string", "example": "monthly and purchased credits exhausted" },
-              "monthly_credits": { "type": "integer" },
-              "purchased_credits": { "type": "integer" },
+              "monthly_credits": { "type": "integer" }, "purchased_credits": { "type": "integer" },
               "usage_month": { "type": "string", "format": "date" }
             }
           }
         }
       },
+      "InsufficientCreditError": {
+        "type": "object", "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "object", "required": ["error", "remaining", "credits_per_record"],
+            "properties": {
+              "error": { "type": "string", "example": "insufficient credits for one result" },
+              "remaining": { "type": "integer" }, "credits_per_record": { "type": "integer" }
+            }
+          }
+        }
+      },
       "DeltaRetentionResponse": {
-        "type": "object",
-        "required": ["detail"],
+        "type": "object", "required": ["detail"],
         "properties": {
           "detail": {
             "type": "object",
             "properties": {
               "code": { "type": "string", "example": "delta_retention_exceeded" },
               "error": { "type": "string", "example": "delta_retention_exceeded" },
-              "message": { "type": "string" },
-              "since": { "type": "string", "format": "date-time" },
+              "message": { "type": "string" }, "since": { "type": "string", "format": "date-time" },
               "retention_since": { "type": "string", "format": "date-time" },
               "action": { "type": "string", "example": "resync" },
               "resync_required": { "type": "boolean", "example": true }
@@ -243,20 +420,16 @@
         "type": "object",
         "required": ["monthly_credits", "used", "remaining", "usage_month", "monthly_remaining", "purchased_credits", "balance", "key_credits_used", "account_monthly_credits"],
         "properties": {
-          "monthly_credits": { "type": "integer" },
-          "used": { "type": "integer" },
+          "monthly_credits": { "type": "integer" }, "used": { "type": "integer" },
           "remaining": { "type": "integer", "description": "Total remaining credits, including purchased credits" },
-          "usage_month": { "type": "string", "format": "date" },
-          "monthly_remaining": { "type": "integer" },
-          "purchased_credits": { "type": "integer" },
-          "balance": { "type": "integer", "description": "Same total balance as remaining" },
-          "key_credits_used": { "type": "integer" },
-          "account_monthly_credits": { "type": "integer" }
+          "usage_month": { "type": "string", "format": "date" }, "monthly_remaining": { "type": "integer" },
+          "purchased_credits": { "type": "integer" }, "balance": { "type": "integer" },
+          "key_credits_used": { "type": "integer" }, "account_monthly_credits": { "type": "integer" },
+          "subscription_status": { "type": ["string", "null"] },
+          "subscription_plan": { "type": ["string", "null"] },
+          "subscription_interval": { "type": ["string", "null"] },
+          "current_period_end": { "type": ["string", "null"] }
         }
-      },
-      "RapidApiUsage": {
-        "type": "object",
-        "properties": { "via": { "type": "string", "example": "rapidapi" }, "note": { "type": "string" } }
       }
     }
   }

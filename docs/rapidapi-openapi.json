@@ -1,0 +1,346 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nivult Job Postings & Company Data — RapidAPI",
+    "version": "1.0.0",
+    "description": "RapidAPI access to 6.3M+ active job postings and 73,000+ company records across 240+ countries and 65 ATS platforms, plus public employment sources. The custom Credits quota bills 1 credit per returned job and 3 per returned company; empty results and application errors below 500 bill 0 credits. Coverage and usage bill 0 custom credits. Delta feed, export manifest, and bulk downloads are not included. Company records are keyed by ATS + company_slug.",
+    "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
+  },
+  "servers": [{ "url": "https://nivult-job-postings-company-data.p.rapidapi.com", "description": "RapidAPI proxy" }],
+  "security": [{ "RapidApiKeyAuth": [] }],
+  "paths": {
+    "/v1/jobs": {
+      "get": {
+        "summary": "Search live job postings",
+        "operationId": "jobs",
+        "description": "Active postings with keyset pagination. Bills 1 custom credit per returned job and 0 for empty results or application errors. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated OR values. Unknown query parameters are ignored.",
+        "parameters": [
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. bundesagentur is accepted as an alias for bundesanstellung only when used alone." },
+          { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Exclude these source platform slugs; comma-separated values are supported. If the same value appears in ats and exclude_ats, it is excluded." },
+          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Comma-separated values are ORed" },
+          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "Comma-separated values are ORed" },
+          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote,hybrid" }, "description": "remote, hybrid or onsite; comma-separated values are ORed" },
+          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en,it" }, "description": "Comma-separated values are ORed" },
+          { "name": "q", "in": "query", "schema": { "type": "string", "example": "MBSE SysML" }, "description": "Full-text search over job title and description; all terms are required (AND)" },
+          { "name": "q_any", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML,CATIA" }, "description": "At least one comma-separated keyword must match the title or description (OR); maximum 15 keywords. Can be combined with q." },
+          { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to the job title; all terms are required (AND)" },
+          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
+          { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-11-24T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
+          { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR" },
+          { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Full-text match on employer name" },
+          { "name": "company_slug", "in": "query", "schema": { "type": "string" }, "description": "Employer/source slug; comma-separated OR" },
+          { "name": "company_domain", "in": "query", "schema": { "type": "string", "example": "dixonvalve.com" }, "description": "Employer domain; scheme, www and path are removed; comma-separated OR" },
+          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "City; comma-separated OR" },
+          { "name": "state", "in": "query", "schema": { "type": "string" }, "description": "State/region; comma-separated OR" },
+          { "name": "employment_type", "in": "query", "schema": { "type": "string" }, "description": "Employment type; comma-separated OR" },
+          { "name": "department", "in": "query", "schema": { "type": "string" }, "description": "Department; comma-separated OR" },
+          { "name": "skills", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML" }, "description": "Skills; comma-separated OR" },
+          { "name": "salary_currency", "in": "query", "schema": { "type": "string", "example": "usd" }, "description": "Salary currency; comma-separated OR" },
+          { "name": "has_salary", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Whether salary_min or salary_max is present" },
+          { "name": "salary_min", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range lower bound on the observed salary_min field" },
+          { "name": "salary_max", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range upper bound on the observed salary_max field" },
+          { "$ref": "#/components/parameters/PageLimit" },
+          { "$ref": "#/components/parameters/Cursor" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of postings",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/JobPage" },
+              "example": {
+                "data": [{
+                  "id": "01JABC123", "title": "Data Engineer", "company": "Example GmbH",
+                  "company_slug": "example-gmbh", "ats": "greenhouse", "country": "DE",
+                  "city": "Berlin", "remote": "hybrid", "seniority": "mid",
+                  "technologies": ["Snowflake", "Python"], "has_salary": false,
+                  "posted_at": "2026-11-20T00:00:00+00:00",
+                  "url": "https://boards.greenhouse.io/example/jobs/123", "source_type": "direct"
+                }],
+                "next_cursor": null, "count_page": 1
+              }
+            } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/companies": {
+      "get": {
+        "summary": "Search company records",
+        "operationId": "companies",
+        "description": "Company records keyed by ATS + company_slug. Bills 3 custom credits per returned company and 0 for empty results or application errors. q searches company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
+        "parameters": [
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
+          { "name": "industry", "in": "query", "schema": { "type": "string" }, "description": "Exact industry value" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Case-insensitive company-name search" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" } },
+          { "name": "employees_min", "in": "query", "schema": { "type": "integer", "example": 500 } },
+          { "name": "employees_max", "in": "query", "schema": { "type": "integer", "example": 5000 } },
+          { "$ref": "#/components/parameters/PageLimit" },
+          { "$ref": "#/components/parameters/Cursor" }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of companies",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/CompanyPage" },
+              "example": {
+                "data": [{
+                  "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
+                  "domain": "italgas.it", "active_jobs": 92,
+                  "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
+                  "legal_name": "ITALGAS S.P.A.", "size_range": "1001-5000",
+                  "size_range_source": "pdl (free dataset)"
+                }],
+                "next_cursor": null, "count_page": 1
+              }
+            } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": { "$ref": "#/components/responses/ValidationError" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/companies/{piattaforma}/{slug}": {
+      "get": {
+        "summary": "Get one company record",
+        "operationId": "companyDetail",
+        "description": "Returns one company record for 3 custom credits. Missing companies and application errors bill 0 credits.",
+        "parameters": [
+          { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier" },
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Employer slug within that ATS" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The company record",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/Company" },
+              "example": {
+                "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
+                "domain": "italgas.it", "active_jobs": 92,
+                "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
+                "legal_name": "ITALGAS S.P.A.", "legal_form": "Società Per Azioni",
+                "registration_id": "815600F25FF44EF1FA76", "founded": "2016-05-31",
+                "size_range": "1001-5000", "size_range_source": "pdl (free dataset)"
+              }
+            } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Company not found" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/coverage": {
+      "get": {
+        "summary": "Coverage for documented fields",
+        "operationId": "coverage",
+        "description": "Returns percentages from 0 to 100 for documented fields measured in the latest export. Bills 0 custom credits and returns X-RapidAPI-Billing: Credits=0.",
+        "responses": {
+          "200": {
+            "description": "Field coverage percentages; company fields are nested under aziende",
+            "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "example": "Credits=0" } } },
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/Coverage" },
+              "example": {
+                "description": 95.4, "country": 89.4, "seniority": 56.7,
+                "aziende": { "domain": 70.0, "industry": 62.0 }
+              }
+            } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    },
+    "/v1/usage": {
+      "get": {
+        "summary": "Get the RapidAPI channel note",
+        "operationId": "usage",
+        "description": "Returns a channel note because RapidAPI manages marketplace quotas. Bills 0 custom credits and returns X-RapidAPI-Billing: Credits=0.",
+        "responses": {
+          "200": {
+            "description": "RapidAPI channel note",
+            "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "example": "Credits=0" } } },
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/RapidApiUsage" },
+              "example": { "via": "rapidapi", "note": "usage quotas are managed by the RapidAPI plan" }
+            } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "RapidApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-RapidAPI-Key", "description": "RapidAPI application key; RapidAPI also supplies X-RapidAPI-Host" }
+    },
+    "parameters": {
+      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 }, "description": "Requested page size, up to 500 records. RapidAPI backend rate limit: 15 requests/second, burst 30." },
+      "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
+    },
+    "responses": {
+      "BadRequest": { "description": "Invalid filters or cursor; bills 0 custom credits", "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "example": "Credits=0" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Unauthorized": { "description": "Missing, invalid or revoked credentials" },
+      "ValidationError": { "description": "FastAPI parameter validation failed; bills 0 custom credits after proxy authentication", "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "example": "Credits=0" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
+      "RateLimited": { "description": "RapidAPI plan quota or backend rate limit; application responses below 500 bill 0 custom credits", "headers": { "Retry-After": { "schema": { "type": "string" } }, "X-RapidAPI-Billing": { "schema": { "type": "string", "example": "Credits=0" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable; server errors do not set X-RapidAPI-Billing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "schemas": {
+      "Job": {
+        "type": "object",
+        "required": ["id", "title", "ats", "company_slug", "url"],
+        "properties": {
+          "id": { "type": "string" }, "title": { "type": "string" },
+          "ats": { "type": "string" }, "company_slug": { "type": "string" },
+          "company": { "type": ["string", "null"] }, "url": { "type": "string" },
+          "company_domain": { "type": ["string", "null"] },
+          "country": { "type": ["string", "null"] }, "city": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] }, "state": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] }, "seniority": { "type": ["string", "null"] },
+          "remote": { "type": ["string", "null"] }, "category": { "type": ["string", "null"] },
+          "employment_type": { "type": ["string", "null"] }, "department": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] },
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "technologies": { "type": "array", "items": { "type": "string" } },
+          "has_salary": { "type": "boolean" },
+          "salary_min": { "type": ["number", "null"] }, "salary_max": { "type": ["number", "null"] },
+          "salary_currency": { "type": ["string", "null"] },
+          "posted_at": { "type": ["string", "null"] }, "first_seen": { "type": ["string", "null"] },
+          "last_seen": { "type": ["string", "null"] }, "updated_at": { "type": ["string", "null"] },
+          "source_type": { "type": "string", "enum": ["direct", "aggregator", "staffing", "public_board"] }
+        },
+        "additionalProperties": true
+      },
+      "Company": {
+        "type": "object",
+        "required": ["ats", "company_slug", "company"],
+        "properties": {
+          "ats": { "type": "string" }, "company_slug": { "type": "string" },
+          "company": { "type": "string" }, "country": { "type": ["string", "null"] },
+          "domain": { "type": ["string", "null"] }, "website": { "type": ["string", "null"] },
+          "active_jobs": { "type": "integer" }, "employees": { "type": ["integer", "null"] },
+          "industry": { "type": ["string", "null"] }, "industry_source": { "type": ["string", "null"] },
+          "legal_name": { "type": ["string", "null"] }, "legal_form": { "type": ["string", "null"] },
+          "registration_id": { "type": ["string", "null"] }, "founded": { "type": ["string", "null"] },
+          "size_range": { "type": ["string", "null"] }, "size_range_source": { "type": ["string", "null"] },
+          "jobs_posted_30d": { "type": ["integer", "null"] },
+          "locations": { "type": "array", "items": { "type": "object" } },
+          "technologies": { "type": "array", "items": { "type": "object" } }
+        },
+        "additionalProperties": true
+      },
+      "Change": {
+        "type": "object",
+        "required": ["event", "id"],
+        "properties": {
+          "event": { "type": "string", "enum": ["new", "updated", "closed"] },
+          "id": { "type": "string" }, "title": { "type": ["string", "null"] },
+          "ats": { "type": ["string", "null"] }, "company_slug": { "type": ["string", "null"] },
+          "url": { "type": ["string", "null"] }, "posted_at": { "type": ["string", "null"] },
+          "updated_at": { "type": ["string", "null"] }, "closed_at": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      },
+      "JobPage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Job" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+        }
+      },
+      "CompanyPage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Company" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+        }
+      },
+      "ChangePage": {
+        "type": "object", "required": ["data", "next_cursor", "count_page"],
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Change" } },
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+        }
+      },
+      "ExportManifest": {
+        "type": "object",
+        "properties": {
+          "data": { "type": ["string", "null"] },
+          "righe": { "type": "object", "properties": { "offerte": { "type": ["integer", "null"] }, "aziende": { "type": ["integer", "null"] }, "flusso": { "type": ["integer", "null"] } } },
+          "file": { "type": "object", "properties": { "offerte": { "type": ["string", "null"] }, "aziende": { "type": ["string", "null"] } } }
+        },
+        "additionalProperties": true
+      },
+      "Coverage": {
+        "type": "object",
+        "properties": { "aziende": { "type": "object", "additionalProperties": { "type": "number" } } },
+        "additionalProperties": { "type": "number" }
+      },
+      "ErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "string" } } },
+      "ValidationErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "array", "items": { "type": "object" } } } },
+      "CreditError": {
+        "type": "object", "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "object",
+            "required": ["error"],
+            "properties": {
+              "error": { "type": "string", "example": "monthly and purchased credits exhausted" },
+              "monthly_credits": { "type": "integer" }, "purchased_credits": { "type": "integer" },
+              "usage_month": { "type": "string", "format": "date" }
+            }
+          }
+        }
+      },
+      "InsufficientCreditError": {
+        "type": "object", "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "object", "required": ["error", "remaining", "credits_per_record"],
+            "properties": {
+              "error": { "type": "string", "example": "insufficient credits for one result" },
+              "remaining": { "type": "integer" }, "credits_per_record": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "DeltaRetentionResponse": {
+        "type": "object", "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "delta_retention_exceeded" },
+              "error": { "type": "string", "example": "delta_retention_exceeded" },
+              "message": { "type": "string" }, "since": { "type": "string", "format": "date-time" },
+              "retention_since": { "type": "string", "format": "date-time" },
+              "action": { "type": "string", "example": "resync" },
+              "resync_required": { "type": "boolean", "example": true }
+            }
+          }
+        }
+      },
+      "RapidApiUsage": {
+        "type": "object",
+        "required": ["via", "note"],
+        "properties": { "via": { "const": "rapidapi" }, "note": { "type": "string" } },
+        "additionalProperties": false
+      }
+    }
+  }
+}
