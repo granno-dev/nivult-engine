@@ -197,6 +197,47 @@ body { background: #F5F4EF; }
 .cov-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .cov-scroll::-webkit-scrollbar-track { background: transparent; }
 .cov-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+.company-logo { position: relative; display: inline-grid; place-items: center; overflow: hidden; isolation: isolate; flex-shrink: 0; border: 1px solid #D9E2EF; background: #FFFFFF; color: #2549B8; box-shadow: 0 3px 10px rgba(15,23,42,.05); }
+.company-logo-monogram { display: grid; width: 100%; height: 100%; place-items: center; background: linear-gradient(135deg,#EEF4FF,#ECFDF5); font-size: 1rem; font-weight: 800; line-height: 1; }
+.company-logo-image { position: absolute; inset: 0; display: none; box-sizing: border-box; width: 100%; height: 100%; padding: inherit; background: #FFFFFF; object-fit: contain; }
+.company-logo-image.is-loaded { display: block; }
+.company-reveal-card { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; border: 1px solid #C7D8F5; border-radius: 16px; background: linear-gradient(125deg,#EEF4FF 0%,#F6F7FF 52%,#ECFDF5 100%); padding: 1.1rem; box-shadow: 0 8px 22px rgba(47,93,224,.07); }
+.company-reveal-icon { display: grid; width: 44px; height: 44px; flex-shrink: 0; place-items: center; border: 1px solid #C7D8F5; border-radius: 13px; background: rgba(255,255,255,.85); color: #2F5DE0; box-shadow: 0 4px 12px rgba(47,93,224,.08); }
+.company-reveal-icon svg { width: 20px; height: 20px; }
+.company-reveal-copy { min-width: 200px; flex: 1; }
+.company-reveal-meta { display: inline-flex; align-items: center; gap: .35rem; margin-top: .65rem; border: 1px solid rgba(15,191,154,.20); border-radius: 8px; background: rgba(255,255,255,.72); padding: .3rem .5rem; color: #047857; font-size: 11px; font-weight: 750; }
+.company-summary-card { border: 1px solid #D8E3F2; border-radius: 16px; background: linear-gradient(120deg,#FFFFFF,#F7FAFF 65%,#F1FDF8); box-shadow: 0 8px 22px rgba(15,23,42,.055); }
+.locked-posting-card { border: 1px dashed #C7D2E4; border-radius: 16px; background: linear-gradient(120deg,#F8FAFC,#F5F8FF); padding: 1.1rem; }
+.modal-close { display: inline-grid; width: 36px; height: 36px; flex-shrink: 0; place-items: center; border: 1px solid #DFE7F1; border-radius: 11px; background: rgba(255,255,255,.88); color: #64748B; transition: border-color .15s,color .15s,background .15s; }
+.modal-close:hover { border-color: #AFC8FF; background: #FFFFFF; color: #2549B8; }
+.modal-close svg { width: 17px; height: 17px; }
+.company-profile-header { border-bottom: 1px solid #DCE6F2; background: linear-gradient(125deg,#EEF4FF 0%,#FAFBFF 55%,#ECFDF5 100%); padding: 1.35rem; }
+.company-profile-body { padding: 1.35rem; }
+.company-kpi { min-width: 0; border: 1px solid #DFE7F1; border-radius: 14px; background: #FFFFFF; padding: .85rem .7rem; box-shadow: 0 3px 10px rgba(15,23,42,.035); }
+.company-kpi-value { color: #0F172A; font-size: 1.2rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.company-kpi-label { margin-top: .3rem; color: #64748B; font-size: 9.5px; font-weight: 750; letter-spacing: .07em; line-height: 1.35; text-transform: uppercase; }
+.company-section { margin-top: 1.35rem; }
+.company-section-title { color: #64748B; font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.company-tech-list { display: grid; gap: .55rem; margin-top: .65rem; }
+.company-tech-row { border: 1px solid #E2E8F0; border-radius: 11px; background: #FFFFFF; padding: .65rem .75rem; }
+.company-tech-track { height: 5px; margin-top: .55rem; overflow: hidden; border-radius: 99px; background: #E8EEF6; }
+.company-tech-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#3B6EF6,#0FBF9A); }
+.company-location-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; border-bottom: 1px solid #EDF1F6; padding: .65rem .1rem; }
+.company-location-row:last-child { border-bottom: 0; }
+.company-job-row { display: flex; flex-direction: column; gap: .3rem; margin: 0 -.5rem; cursor: pointer; border-bottom: 1px solid #EDF1F6; border-radius: 9px; padding: .7rem .5rem; transition: background .15s; }
+.company-job-row:hover { background: #F5F8FF; }
+.company-domain { overflow-wrap: anywhere; }
+@media (max-width: 639px) {
+  .company-reveal-card { align-items: flex-start; }
+  .company-reveal-copy { min-width: 0; flex-basis: calc(100% - 60px); }
+  .company-reveal-card .app-btn { width: 100%; }
+  .company-profile-header, .company-profile-body { padding: 1.1rem; }
+}
+@media (min-width: 640px) {
+  .company-profile-header { padding: 1.5rem 1.75rem; }
+  .company-profile-body { padding: 1.5rem 1.75rem 1.75rem; }
+  .company-job-row { flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; }
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
 @keyframes skel-pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
@@ -1633,9 +1674,39 @@ function iconaAziendaNascosta(className) {
 }
 function logoRivelato(record, className) {
   if (record.revealed !== true) return "";
-  const src = urlSicuro(record.logo_url) || urlSicuro(record.logo)
-    || (record.company_slug ? `https://api.nivult.com/logo/${encodeURIComponent(record.company_slug)}` : "");
-  return src ? `<img src="${esc(src)}" alt="" loading="lazy" class="${className} border border-slate-200 bg-white object-contain shrink-0" onerror="this.remove()">` : "";
+  const identity = String(record.company || record.legal_name || record.company_domain
+    || record.domain || record.website || "Company").trim();
+  const monogramSource = identity.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const initial = (monogramSource.match(/[\p{L}\p{N}]/u) || ["C"])[0].toUpperCase();
+  const local = record.company_slug
+    ? `${API}/logo/${encodeURIComponent(record.company_slug)}` : "";
+  const remote = urlSicuro(record.logo_url) || urlSicuro(record.logo);
+  const sources = [...new Set([local, remote].filter(Boolean))];
+  return `<span class="company-logo ${className}" role="img" aria-label="${esc(identity + " logo")}">
+    <span class="company-logo-monogram" aria-hidden="true">${esc(initial)}</span>
+    ${sources.length ? `<img src="${esc(sources[0])}" alt="" loading="lazy" class="company-logo-image" data-logo-sources="${esc(JSON.stringify(sources))}" data-logo-index="0">` : ""}
+  </span>`;
+}
+document.addEventListener("load", event => {
+  const img = event.target;
+  if (img && img.tagName === "IMG" && img.hasAttribute("data-logo-sources")) {
+    img.classList.add("is-loaded");
+  }
+}, true);
+document.addEventListener("error", event => {
+  const img = event.target;
+  if (!img || img.tagName !== "IMG" || !img.hasAttribute("data-logo-sources")) return;
+  img.classList.remove("is-loaded");
+  let sources = [];
+  try { sources = JSON.parse(img.dataset.logoSources || "[]"); } catch (e) {}
+  const next = Number(img.dataset.logoIndex || 0) + 1;
+  if (next < sources.length) {
+    img.dataset.logoIndex = String(next);
+    img.src = sources[next];
+  }
+}, true);
+function pulsanteChiusuraDettaglio() {
+  return `<button type="button" onclick="chiudiDettaglio()" class="modal-close" aria-label="Close details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
 }
 function aggiornaRigheRivelate(group) {
   document.querySelectorAll("#cerca-righe [data-reveal-token]").forEach(row => {
@@ -1671,7 +1742,7 @@ function rigaAzienda(input) {
   const a = registraRivelazione(input, "companies");
   const nomeAz = a.revealed ? (a.company || a.domain || a.website || "Company") : "Hidden company";
   const logo = a.revealed
-    ? (logoRivelato(a, "h-10 w-10 rounded-xl p-1") || iconaAziendaNascosta("h-10 w-10 !rounded-xl"))
+    ? logoRivelato(a, "h-10 w-10 rounded-xl p-1")
     : iconaAziendaNascosta("h-10 w-10 !rounded-xl");
   const dipendenti = a.employees ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
   const dominio = a.revealed ? (a.domain || a.website) : null;
@@ -1966,19 +2037,27 @@ async function dettaglioJob(id) {
       ? logoRivelato(o, "h-12 w-12 rounded-xl p-1 shadow-sm")
       : iconaAziendaNascosta("h-12 w-12 !rounded-xl");
     const linkOfferta = rivelata ? urlSicuro(o.url) : "";
+    const dominioAzienda = rivelata ? String(o.company_domain || "") : "";
     const azienda = rivelata
-      ? `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-indigo-600 via-brand-500 to-violet-600 px-5 py-4 cursor-pointer shadow-lg shadow-indigo-500/20 transition hover:shadow-xl hover:shadow-indigo-500/25" onclick="apriAziendaDaJob(${jsArg(o.reveal_token)})">
+      ? `<div class="company-summary-card group mt-6 flex flex-wrap items-center gap-4 p-4 sm:px-5 cursor-pointer transition hover:border-brand-300 hover:shadow-lg" onclick="apriAziendaDaJob(${jsArg(o.reveal_token)})">
            ${logo}
-           <div class="min-w-0">
-             <b class="text-[15px] truncate block text-white">${esc(o.company || o.company_domain || "Company")}</b>
-             <p class="text-[12px] font-bold text-indigo-100 group-hover:text-white transition">Open the company profile →</p>
+           <div class="min-w-0 flex-1 basis-48">
+             <p class="text-[10px] font-bold uppercase tracking-[0.11em] text-brand-600">Revealed company</p>
+             <b class="mt-0.5 block break-words text-[15px] text-slate-900">${esc(o.company || o.company_domain || "Company")}</b>
+             ${dominioAzienda && dominioAzienda !== o.company ? `<p class="company-domain mt-0.5 text-[12px] font-medium text-slate-500">${esc(dominioAzienda)}</p>` : ""}
+             <p class="mt-1.5 text-[12px] font-bold text-brand-600 group-hover:text-brand-700 transition">Open company profile <span aria-hidden="true">→</span></p>
            </div>
-           ${linkOfferta ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-white px-5 py-2.5 text-[13px] font-bold text-brand-700 shadow-md shadow-indigo-900/20 hover:bg-indigo-50 transition">Open the original posting ↗</a>` : ""}
+           ${linkOfferta ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Open original posting in a new tab" class="app-btn app-btn-secondary w-full sm:ml-auto sm:w-auto">Open original posting<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M10 14 19 5M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>` : ""}
          </div>`
-      : `<div class="mt-5 flex flex-wrap items-center gap-4 rounded-2xl bg-slate-950 px-5 py-4">
-           ${logo}
-           <div class="min-w-0 flex-1"><b class="text-sm text-white">Company reveal</b><p class="mt-0.5 text-xs text-slate-400">3 credits once, permanent</p></div>
-           <button data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl transition">Reveal company · 3 credits</button>
+      : `<div class="company-reveal-card mt-5">
+           <div class="company-reveal-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
+           <div class="company-reveal-copy">
+             <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company reveal</p>
+             <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Unlock the company behind this posting</h4>
+             <p class="mt-1 text-[12.5px] leading-5 text-slate-600">View the company profile, complete job description and original source.</p>
+             <span class="company-reveal-meta">3 credits once · permanent access</span>
+           </div>
+           <button type="button" data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="app-btn app-btn-primary">Reveal company · 3 credits</button>
          </div>`;
     const fatti = rivelata ? [
       o.salary_text ? ["Salary", o.salary_text] : null,
@@ -1989,18 +2068,25 @@ async function dettaglioJob(id) {
     ].filter(Boolean) : [];
     const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
     const corpo = !rivelata
-      ? `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4"><p class="text-[13px] font-semibold text-slate-500">Company details, job description, and source link unlock on reveal</p></div>`
+      ? `<section class="locked-posting-card mt-5" aria-label="Locked posting content">
+           <div class="flex items-start gap-3">
+             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+             <div><p class="company-section-title">From the posting</p><h4 class="mt-1 text-[13.5px] font-extrabold text-slate-800">The complete posting is locked</h4>
+             <p class="mt-1 text-[12.5px] leading-5 text-slate-500">Reveal the company to read the full description and follow the source link.</p></div>
+           </div>
+           <div class="mt-3 flex flex-wrap gap-2 pl-0 sm:pl-12"><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Full description</span><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Original source</span><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Company details</span></div>
+         </section>`
       : (o.description
-        ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>`
-        : `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4">
-             <p class="text-[12.5px] font-bold text-slate-500">Full text still being indexed</p>
-             <p class="mt-1 text-[12px] text-slate-400">The essentials are already on this card — the original posting carries the full description.</p>
+        ? `<p class="company-section mt-5 company-section-title">From the posting</p><div class="mt-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 cov-scroll"><p class="whitespace-pre-wrap border-l-2 border-brand-300 pl-4 text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(o.description))}</p></div>`
+        : `<div class="locked-posting-card mt-5">
+             <p class="text-[12.5px] font-bold text-slate-600">Full text still being indexed</p>
+             <p class="mt-1 text-[12px] leading-5 text-slate-500">The essentials are already on this card — the original posting carries the full description.</p>
            </div>`);
-    apriDettaglio(`<div class="hidden from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
+    apriDettaglio(`<div class="p-5 sm:p-8">
       <div class="flex items-start justify-between gap-4">
-        <div><h3 class="text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
+        <div class="min-w-0"><h3 class="break-words text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
         <p class="mt-1 text-[13.5px] text-slate-500">${esc([citta, o.country].filter(Boolean).join(", "))}</p></div>
-        <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+        ${pulsanteChiusuraDettaglio()}
       </div>
       <div class="mt-4 flex flex-wrap gap-2">${[
         o.category, o.seniority, o.remote, rivelata ? o.employment_type : null,
@@ -2076,8 +2162,7 @@ async function mostraAzienda(input, revealToken) {
   const jobsSeq = ++aziendaJobsSeq;
   const a = { ...input, revealed: true, reveal_token: revealToken };
   const nomeAz = a.company || a.legal_name || a.domain || a.website || "Company";
-  const logo = logoRivelato(a, "h-14 w-14 rounded-2xl p-1.5 shadow-sm")
-    || iconaAziendaNascosta("h-14 w-14 !rounded-2xl");
+  const logo = logoRivelato(a, "h-16 w-16 rounded-2xl p-1.5");
   const dipendenti = a.employees > 1 ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
   const hq = a.headquarters && a.headquarters.city
     ? a.headquarters.city.charAt(0).toUpperCase() + a.headquarters.city.slice(1).toLowerCase()
@@ -2085,49 +2170,56 @@ async function mostraAzienda(input, revealToken) {
   const dominio = (a.domain || a.website || "").replace(/^'+/, "");
   const dominioNormalizzato = dominio.replace(/^https?:\/\//i, "");
   const linkDominio = dominioNormalizzato
-    ? "https://" + encodeURI(dominioNormalizzato).replace(/"/g, "") : "";
+    ? urlSicuro("https://" + encodeURI(dominioNormalizzato).replace(/"/g, "")) : "";
   const kpi = [
     [a.active_jobs, "active postings"],
     [a.jobs_posted_30d, "posted in 30 days"],
-    [a.n_locations > 0 ? a.n_locations : null, "locations"],
+    [a.n_locations, "locations"],
     [a.size_range || null, "company size"],
-  ].filter(([v]) => v).map(([v, l]) =>
-    `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3 text-center">
-       <p class="text-lg font-black text-slate-900 tabular-nums">${esc(v)}</p>
-       <p class="mt-0.5 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${l}</p>
+  ].filter(([v]) => v !== null && v !== undefined && v !== "").map(([v, l]) =>
+    `<div class="company-kpi text-center">
+       <p class="company-kpi-value tabular-nums">${esc(v)}</p>
+       <p class="company-kpi-label">${esc(l)}</p>
      </div>`).join("");
   const chips = [
     a.founded ? "founded " + String(a.founded).slice(0, 4) : null,
     a.legal_name ? "legal: " + a.legal_name : null,
-  ].filter(Boolean).map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")
-    + (a.languages || []).map(l => `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(String(l).toUpperCase())}</span>`).join("")
-    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg bg-violet-500/10 text-violet-600 px-2.5 py-1 text-[12px] font-bold">${esc(f)}</span>`).join("");
+  ].filter(Boolean).map(x => `<span class="rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-bold text-brand-700">${esc(x)}</span>`).join("")
+    + (a.languages || []).map(l => `<span class="rounded-lg border border-mint-500/15 bg-mint-500/10 px-2.5 py-1 text-[12px] font-bold text-mint-600">${esc(String(l).toUpperCase())}</span>`).join("")
+    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg border border-violet-500/15 bg-violet-500/10 px-2.5 py-1 text-[12px] font-bold text-violet-600">${esc(f)}</span>`).join("");
   const techs = (a.technologies || []).slice(0, 40);
-  const maxTec = Math.max(1, ...techs.map(t => t.active_jobs || t.jobs || 0));
-  const tec = techs.map(t => {
-    const n = t.active_jobs || t.jobs || 0;
-    return `<div class="relative overflow-hidden rounded-lg">
-      <div class="absolute inset-y-0 left-0 bg-brand-500 from-brand-500/15 to-mint-500/15" style="width:${Math.round(n / maxTec * 100)}%"></div>
-      <div class="relative flex items-center justify-between px-2.5 py-1.5"><span class="text-[13px] font-semibold">${esc(t.technology)}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${n} jobs</span></div>
+  const conteggiTec = techs.map(t => {
+    const n = Number(t.active_jobs || t.jobs || 0);
+    return Number.isFinite(n) ? n : 0;
+  });
+  const maxTec = Math.max(1, ...conteggiTec);
+  const tec = techs.map((t, index) => {
+    const n = conteggiTec[index];
+    return `<div class="company-tech-row">
+      <div class="flex flex-wrap items-center justify-between gap-2"><span class="min-w-0 break-words text-[13px] font-bold text-slate-800">${esc(t.technology)}</span><span class="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11.5px] font-bold text-slate-700 tabular-nums">${n} jobs</span></div>
+      <div class="company-tech-track" aria-hidden="true"><span style="width:${Math.round(n / maxTec * 100)}%"></span></div>
     </div>`;
   }).join("");
   const sedi = (a.locations || []).slice(0, 8).map(l =>
-    `<div class="flex items-center justify-between py-1.5 border-b border-slate-50"><span class="text-[13px] font-semibold">${esc([l.city, l.country].filter(Boolean).join(", "))}</span><span class="text-[11.5px] text-slate-400 tabular-nums">${l.offerte || ""} jobs</span></div>`).join("");
-  apriDettaglio(`<div class="hidden from-mint-500 via-brand-500 to-violet-500"></div><div class="p-8">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex items-center gap-4 min-w-0">${logo}
-        <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${esc(nomeAz)}</h3>
-        <p class="mt-1 text-[13.5px] text-slate-500">${esc([a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · "))}</p>
-        ${linkDominio ? `<a href="${esc(linkDominio)}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${esc(dominio)} ↗</a>` : ""}</div>
+    `<div class="company-location-row"><span class="min-w-0 break-words text-[13px] font-semibold text-slate-700">${esc([l.city, l.country].filter(Boolean).join(", "))}</span><span class="shrink-0 rounded-md bg-slate-50 px-2 py-0.5 text-[11.5px] font-bold text-slate-600 tabular-nums">${esc(l.offerte || "")} jobs</span></div>`).join("");
+  apriDettaglio(`<div class="company-profile-header">
+    <div class="flex items-start gap-3 sm:gap-4">
+      <div class="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center">${logo}
+        <div class="min-w-0"><p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company profile</p>
+        <h3 class="mt-1 break-words text-xl font-black tracking-tight text-slate-900 sm:text-2xl">${esc(nomeAz)}</h3>
+        ${linkDominio ? `<a href="${esc(linkDominio)}" target="_blank" rel="noopener" class="company-domain mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-brand-600 hover:text-brand-700 transition">${esc(dominioNormalizzato)}<svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M10 14 19 5M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>` : ""}
+        <p class="mt-1.5 text-[13px] leading-5 text-slate-600">${esc([a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · "))}</p></div>
       </div>
-      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
+      ${pulsanteChiusuraDettaglio()}
     </div>
-    ${kpi ? `<div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${kpi}</div>` : ""}
+  </div>
+  <div class="company-profile-body">
+    ${kpi ? `<div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">${kpi}</div>` : ""}
     ${chips ? `<div class="mt-4 flex flex-wrap gap-2">${chips}</div>` : ""}
-    ${a.description ? `<p class="mt-4 text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap">${esc(testoDesc(a.description))}</p>` : ""}
-    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p><div class="mt-2 max-h-56 overflow-auto pr-1 cov-scroll space-y-0.5">${tec}</div>` : ""}
-    ${sedi ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Where they hire</p><div class="mt-1">${sedi}</div>` : ""}
-    <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
+    ${a.description ? `<section class="company-section"><p class="company-section-title">About</p><p class="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(a.description))}</p></section>` : ""}
+    ${tec ? `<section class="company-section"><p class="company-section-title">Technology stack</p><div class="company-tech-list max-h-64 overflow-auto pr-1 cov-scroll">${tec}</div></section>` : ""}
+    ${sedi ? `<section class="company-section"><p class="company-section-title">Where they hire</p><div class="mt-1">${sedi}</div></section>` : ""}
+    <section id="az-jobs" class="company-section"><p class="company-section-title">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></section>
   </div>`);
   let r;
   try {
@@ -2146,7 +2238,7 @@ async function mostraAzienda(input, revealToken) {
   const d = await r.json();
   if (jobsSeq !== aziendaJobsSeq) return;
   el.innerHTML = (d.data || []).map(j =>
-    `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${esc(j.title)}</span><span class="text-slate-400 text-[11.5px] shrink-0">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
+    `<div data-job="${encodeURIComponent(j.id)}" class="company-job-row group"><span class="min-w-0 font-semibold text-slate-700 group-hover:text-brand-600 transition sm:flex-1 sm:truncate">${esc(j.title)}</span><span class="shrink-0 text-[11.5px] font-medium text-slate-500">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
   el.querySelectorAll("[data-job]").forEach(n =>
     n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
@@ -2160,44 +2252,44 @@ function dettaglioAzienda(revealToken) {
                     a.n_tecnologie ? a.n_tecnologie + " technologies" : null]
                    .filter(Boolean).join(" · ");
   const barra = (w, h = 3) =>
-    `<span class="skel inline-block rounded-full bg-brand-500 from-slate-200 via-slate-300 to-slate-200 blur-[2.5px] select-none" style="width:${w}%;height:${h * 4}px"></span>`;
+    `<span class="skel inline-block select-none rounded-full bg-slate-200 blur-[2px]" style="width:${w}%;height:${h * 4}px"></span>`;
   const kpis = ["active postings", "posted in 30 days", "locations", "company size"]
-    .map(l => `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
+    .map(l => `<div class="company-kpi text-center">
        <div class="flex justify-center">${barra(46, 5)}</div>
-       <p class="mt-2 text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400 text-center">${l}</p>
+       <p class="company-kpi-label mt-2">${esc(l)}</p>
      </div>`).join("");
   const tecRighe = [88, 62, 41].map(w =>
-    `<div class="relative overflow-hidden rounded-lg">
-       <div class="absolute inset-y-0 left-0 bg-brand-500 from-brand-500/15 to-mint-500/15" style="width:${w}%"></div>
-       <div class="relative flex items-center justify-between px-2.5 py-2">${barra(38)}${barra(10)}</div>
+    `<div class="company-tech-row">
+       <div class="flex items-center justify-between gap-3">${barra(38)}${barra(10)}</div>
+       <div class="company-tech-track"><span class="bg-slate-200" style="width:${w}%"></span></div>
      </div>`).join("");
-  apriDettaglio(`<div class="hidden from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
-    <div class="flex items-center gap-4">
-      ${iconaAziendaNascosta("h-14 w-14 !rounded-2xl")}
+  apriDettaglio(`<div class="company-profile-header">
+    <div class="flex items-start gap-4">
+      ${iconaAziendaNascosta("h-16 w-16 !rounded-2xl")}
       <div class="min-w-0 flex-1">
-        <b class="inline-block text-[15px] blur-[4px] select-none text-slate-400">Hidden company</b>
+        <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company profile</p>
+        <b class="mt-1 inline-block select-none text-[18px] text-slate-400 blur-[4px]">Hidden company</b>
         ${pubblici
-          ? `<p class="mt-2 text-[13.5px] text-slate-500">${esc(pubblici)}</p>`
+          ? `<p class="mt-2 text-[13px] leading-5 text-slate-600">${esc(pubblici)}</p>`
           : `<div class="mt-2">${barra(34)}</div>`}
       </div>
-      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0 self-start">×</button>
+      ${pulsanteChiusuraDettaglio()}
     </div>
-    <div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${kpis}</div>
-    <div class="mt-4 flex gap-2">${barra(16, 6)}${barra(22, 6)}${barra(13, 6)}</div>
-    <p class="mt-6 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technology stack</p>
-    <div class="mt-2 space-y-0.5">${tecRighe}</div>
-    <p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p>
-    <div class="mt-2 space-y-2">${barra(78, 3.5)}${barra(64, 3.5)}</div>
-    <div class="mt-7 relative overflow-hidden rounded-2xl bg-slate-950 px-5 py-4 flex flex-wrap items-center gap-4 shadow-xl shadow-slate-900/25">
-      <div class="absolute inset-x-0 top-0 h-0.5 bg-brand-500 from-brand-500 via-violet-500 to-mint-500"></div>
-      <div class="h-11 w-11 rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 grid place-items-center shadow-lg shadow-violet-500/30 shrink-0">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>
+  </div>
+  <div class="company-profile-body">
+    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">${kpis}</div>
+    <div class="mt-4 flex flex-wrap gap-2">${barra(16, 6)}${barra(22, 6)}${barra(13, 6)}</div>
+    <section class="company-section"><p class="company-section-title">Technology stack</p><div class="company-tech-list">${tecRighe}</div></section>
+    <section class="company-section"><p class="company-section-title">Active postings</p><div class="mt-3 space-y-2">${barra(78, 3.5)}${barra(64, 3.5)}</div></section>
+    <div class="company-reveal-card mt-7">
+      <div class="company-reveal-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
+      <div class="company-reveal-copy">
+        <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company reveal</p>
+        <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Unlock the full company record</h4>
+        <p class="mt-1 text-[12.5px] leading-5 text-slate-600">See the name, domain, technology stack, locations and active postings.</p>
+        <span class="company-reveal-meta">3 credits once · permanent access</span>
       </div>
-      <div class="min-w-0 flex-1">
-        <p class="text-[14px] font-black text-white">The full record unlocks with 3 credits</p>
-        <p class="mt-0.5 text-[12.5px] text-slate-400">Name, domain, tech stack, locations and live postings — pay once, it's yours forever.</p>
-      </div>
-      <button onclick="rivelaAzienda(${jsArg(revealToken)}, this)" class="rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal company · 3 credits</button>
+      <button type="button" onclick="rivelaAzienda(${jsArg(revealToken)}, this)" class="app-btn app-btn-primary">Reveal company · 3 credits</button>
     </div>
   </div>`);
 }
