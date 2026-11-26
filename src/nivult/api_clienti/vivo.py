@@ -20,7 +20,6 @@ non il contratto.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
@@ -150,7 +149,7 @@ _SEARCH_DOC = ("to_tsvector('simple', j.title || ' ' || "
                "NULLIF(j.raw->>'ShortDescriptionStr', ''), ''))")
 
 
-def _dove(filtri: dict) -> tuple[str, dict]:
+def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
     """I filtri della lista, identici a dati.offerte. Ogni valore e' un
     PARAMETRO: mai concatenato, mai."""
     dove = ["j.expired_at IS NULL",
@@ -178,7 +177,28 @@ def _dove(filtri: dict) -> tuple[str, dict]:
             if isinstance(v, bool) else str(v)
         dove.append("j.remote = %(remote)s")
     if filtri.get("q"):
-        dove.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)")
+        if portale:
+            titolo_sicuro = ("CASE WHEN NULLIF(btrim((" + COMPANY_SQL + ")), '') IS NULL "
+                             "THEN '' ELSE "
+                             "replace(lower(coalesce(j.title, '')), lower((" + COMPANY_SQL
+                             + ")), 'hidden company') END")
+            dove.append("to_tsvector('simple', " + titolo_sicuro
+                        + ") @@ plainto_tsquery('simple', %(q)s)")
+            dove.append("((" + COMPANY_SQL + ") IS NULL OR (" + COMPANY_SQL
+                        + ") NOT ILIKE %(q_company)s ESCAPE '\\')")
+            par["q_company"] = _like(str(filtri["q"]))
+            q_normalizzato = "".join(c for c in str(filtri["q"]).lower()
+                                     if c.isascii() and c.isalnum())
+            if len(q_normalizzato) >= 3:
+                dove.append("((" + COMPANY_SQL + ") IS NULL OR regexp_replace(lower(("
+                            + COMPANY_SQL + ")), '[^a-z0-9]+', '', 'g') "
+                            "NOT ILIKE %(q_brand)s ESCAPE '\\')")
+                dove.append("(co.site_domain IS NULL OR regexp_replace("
+                            "lower(co.site_domain), '[^a-z0-9]+', '', 'g') "
+                            "NOT ILIKE %(q_brand)s ESCAPE '\\')")
+                par["q_brand"] = _like(q_normalizzato)
+        else:
+            dove.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)")
         par["q"] = str(filtri["q"])
     if filtri.get("technology"):
         dove.append("tr.tecnologia = lower(%(technology)s)")
@@ -190,18 +210,19 @@ def _dove(filtri: dict) -> tuple[str, dict]:
 
 
 def cerca_portale(filtri: dict, cursore: str | None,
-                  limite: int = 25) -> tuple[list[dict], str | None, int | None]:
-    """Ricerca full-text della /v1, senza un COUNT integrale costoso."""
+                  limite: int = 20) -> tuple[list[dict], str | None, int | None]:
+    """Ricerca nel titolo redatto, senza un COUNT integrale costoso."""
     filtri = filtri or {}
-    limite = max(1, min(int(limite or 25), 50))
-    righe, prossimo = offerte(filtri, cursore, limite)
+    limite = max(1, min(int(limite or 20), 20))
+    righe, prossimo = offerte(filtri, cursore, limite, portale=True)
     return ([{"id": r["id"], "title": r["title"], "country": r.get("country"),
               "city": r.get("city"), "seniority": r.get("seniority"),
               "remote": r.get("remote"), "category": r.get("category"),
               "posted_at": r.get("posted_at"),
               "technologies": list(r.get("technologies") or []),
               "ats": r.get("ats"), "company": r.get("company"),
-              "company_slug": r.get("company_slug")}
+              "company_slug": r.get("company_slug"),
+              "company_domain": r.get("company_domain")}
              for r in righe], prossimo, None)
 
 
@@ -318,16 +339,16 @@ def _fonti_per_righe(ids: list[str]) -> dict[str, list]:
 
 
 def offerte(filtri: dict, cursore: str | None,
-            limite: int) -> tuple[list[dict], str | None]:
+            limite: int, portale: bool = False) -> tuple[list[dict], str | None]:
     """La pagina di offerte VIVE, per chiave: prima gli id via indice,
     poi le righe piene per quegli id — mai una scansione."""
     limite = max(1, min(int(limite or 50), 500))
     con_tecnologia = bool(filtri.get("technology"))
-    testo_separato = bool(filtri.get("q")) and not con_tecnologia
+    testo_separato = bool(filtri.get("q")) and not con_tecnologia and not portale
     data_pubblicazione = "tr.posted_at" if con_tecnologia else "j.posted_at"
     sorgente = ("tecnologie_ricerca tr JOIN ats_jobs j ON j.id = tr.job_id"
                 if con_tecnologia else "ats_jobs j")
-    dove, par = _dove({**filtri, "q": None} if testo_separato else filtri)
+    dove, par = _dove({**filtri, "q": None} if testo_separato else filtri, portale)
     if cursore:
         ts, pid = _leggi_cursore(cursore)
         par["pid"] = pid
@@ -341,9 +362,12 @@ def offerte(filtri: dict, cursore: str | None,
             par["pts"] = _norm_ts(ts)
     # Con una tecnologia si parte dall'indice normalizzato gia' ordinato:
     # niente espansione JSONB e niente ordinamento di tutti i candidati.
+    join_azienda = ("LEFT JOIN ats_companies co ON co.platform_id = j.platform_id "
+                    "AND co.slug = j.slug" if portale else "")
     selezione = f"""SELECT j.id, {data_pubblicazione} AS posted_at
                       FROM {sorgente}
                       LEFT JOIN job_classifications x ON x.job_id = j.id
+                      {join_azienda}
                      WHERE {dove}"""
     if testo_separato:
         paese = str(filtri.get("country") or "")

@@ -233,7 +233,7 @@ body.modale-aperto { overflow: hidden; }
     <span class="sr-only">Loading your account…</span>
   </div>
 
-  <div id="vista-login" class="hidden relative max-w-5xl mx-auto px-6 py-10 lg:py-16 grid lg:grid-cols-[1fr_1fr] gap-10 items-center">
+  <div id="vista-login" hidden class="hidden relative max-w-5xl mx-auto px-6 py-10 lg:py-16 grid lg:grid-cols-[1fr_1fr] gap-10 items-center">
     <section class="hidden lg:block pr-6" aria-label="Why create a Nivult account">
       <p class="text-[12px] font-black uppercase tracking-[0.14em] text-brand-600">Your data workspace</p>
       <h2 class="mt-4 text-4xl font-black tracking-tight leading-tight">From sign-in to your first API call in minutes.</h2>
@@ -273,7 +273,7 @@ body.modale-aperto { overflow: hidden; }
     </div>
   </div>
 
-  <div id="vista-dash" class="hidden min-h-screen lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+  <div id="vista-dash" hidden class="hidden min-h-screen lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
     <button id="drawer-overlay" type="button" aria-label="Close navigation" onclick="chiudiDrawer()" class="hidden fixed inset-0 z-40 bg-slate-950/35 lg:hidden"></button>
     <aside id="account-sidebar" aria-label="Account navigation" class="fixed inset-y-0 left-0 z-50 flex w-60 -translate-x-full flex-col border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:h-screen lg:translate-x-0">
       <div class="flex h-16 shrink-0 items-center border-b border-slate-200 px-5">
@@ -305,7 +305,7 @@ body.modale-aperto { overflow: hidden; }
             <div id="dash-iniziale" class="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">N</div>
             <div class="min-w-0 flex-1"><p id="dash-nome" class="break-words text-[11px] font-bold leading-4">—</p><p id="dash-email" class="mt-0.5 break-all text-[10px] leading-4 text-slate-400"></p></div>
           </div>
-          <button type="button" onclick="esci()" class="mt-2.5 flex min-h-7 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg>Sign out</button>
+          <button id="logout-button" type="button" onclick="esci()" class="mt-2.5 flex min-h-7 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-[10px] font-bold text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17l5-5-5-5M15 12H3M15 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg>Sign out</button>
         </div>
       </div>
     </aside>
@@ -485,7 +485,7 @@ body.modale-aperto { overflow: hidden; }
         <section id="explorer" data-view="explorer" aria-label="Explorer and API" class="hidden">
           <div class="flex flex-wrap items-center gap-3">
             <div class="explorer-tabs" role="tablist" aria-label="Explorer view"><button id="explorer-query" type="button" role="tab" aria-selected="true" onclick="cambiaExplorer('query')" class="explorer-tab is-active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>Query Explorer</button><button id="explorer-reference" type="button" role="tab" aria-selected="false" onclick="cambiaExplorer('reference')" class="explorer-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12a2 2 0 0 1 2 2v16l-7-4-7 4z"/></svg>API Reference</button></div>
-            <p class="text-xs text-slate-500">Browsing is free · revealing a company costs 1 credit, once</p>
+            <p class="text-xs text-slate-500">Browsing is free · revealing a company costs 3 credits, once</p>
           </div>
 
           <div id="explorer-query-panel" class="mt-4">
@@ -497,7 +497,7 @@ body.modale-aperto { overflow: hidden; }
               <button id="filtri-toggle" type="button" onclick="toggleFiltri()" aria-expanded="false" aria-controls="filtri-gruppo" class="app-btn app-btn-secondary mt-4 w-full sm:hidden">Show filters</button>
               <div id="filtri-pannello" class="hidden sm:block">
                 <div id="filtri-gruppo" class="hidden sm:grid md:grid-cols-2 xl:grid-cols-5 gap-3 mt-4">
-                  <div><label for="f-q" class="app-label">Search</label><input id="f-q" type="text" aria-label="Job title or description" placeholder="Title or description" class="app-input"></div>
+                  <div><label for="f-q" class="app-label">Search</label><input id="f-q" type="text" aria-label="Redacted job title" placeholder="Redacted job title" class="app-input"></div>
                   <div><label for="f-tec" class="app-label">Technology</label><input id="f-tec" type="text" aria-label="Technology" placeholder="SAP, Python…" class="app-input"></div>
                   <div class="relative"><label for="f-paese" class="app-label">Country</label><input id="f-paese" type="text" placeholder="Any country" autocomplete="off" role="combobox" aria-label="Country" aria-autocomplete="list" aria-controls="f-paese-lista" aria-expanded="false" class="app-input"><div id="f-paese-lista" role="listbox" aria-label="Countries" class="hidden absolute z-20 mt-1.5 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl cov-scroll"></div></div>
                   <div><label for="f-remoto" class="app-label">Workplace</label><select id="f-remoto" aria-label="Workplace" class="app-input"><option value="">Any workplace</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="onsite">On site</option></select></div>
@@ -513,7 +513,7 @@ body.modale-aperto { overflow: hidden; }
                     <div><label for="f-dal" class="app-label">Posted since</label><input id="f-dal" type="date" class="app-input"></div>
                   </div>
                 </details>
-                <div class="mt-2 flex flex-wrap items-center gap-2"><p id="f-q-help" class="text-[11px] text-slate-400">Open postings search titles and full descriptions; recently closed postings search titles.</p><button id="pulisci" type="button" onclick="pulisciFiltri()" class="hidden app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Clear filters</button></div><p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2"><p id="f-q-help" class="text-[11px] text-slate-400">Open Explorer searches redacted job titles only; recently closed postings search titles.</p><button id="pulisci" type="button" onclick="pulisciFiltri()" class="hidden app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Clear filters</button></div><p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
               </div>
             </article>
 
@@ -524,7 +524,7 @@ body.modale-aperto { overflow: hidden; }
             </details>
 
             <div class="mt-5 flex items-end justify-between gap-3 border-b border-slate-200 pb-3"><div><h2 class="text-sm font-bold">Query results</h2><p class="mt-1 text-xs text-slate-500">Live records returned by your current filters, not sample API responses.</p></div><span class="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">LIVE INDEX</span></div>
-            <article class="app-card mt-3 p-3 sm:p-4"><div id="cerca-righe" aria-live="polite" class="grid gap-2 content-start"></div><div class="mt-3 flex justify-center"><button id="cerca-altro" type="button" onclick="cercaAncora()" class="hidden app-btn app-btn-secondary">Load more</button></div></article>
+            <article class="app-card mt-3 p-3 sm:p-4"><div id="cerca-righe" aria-live="polite" class="grid gap-2 content-start"></div><div id="cerca-cap" role="status" class="hidden mt-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-xs leading-5 text-slate-600"><b class="text-slate-900">Preview limit reached.</b> Explorer shows up to 5 pages of 20 results. For deeper access, use <code>/v1/jobs</code> or <code>/v1/companies</code>, or <a href="#exports" class="font-bold text-brand-600">Filtered Export</a>.</div><div class="mt-3 flex justify-center"><button id="cerca-altro" type="button" onclick="cercaAncora()" class="hidden app-btn app-btn-secondary">Load more</button></div></article>
           </div>
 
           <div id="dettaglio" role="dialog" aria-modal="true" aria-label="Posting and company details" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4"><div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiDettaglio()"></div><div class="relative w-full h-full sm:h-auto max-w-2xl max-h-full sm:max-h-[85vh] overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl" id="dettaglio-box"></div></div>
@@ -885,6 +885,7 @@ function notifica(testo, tipo = "ok") {
 async function api(percorso, opz = {}) {
   try {
     const r = await fetch(API + percorso, {
+      credentials: "include",
       ...opz,
       signal: opz.signal || AbortSignal.timeout(30000),
       headers: { "Authorization": "Bearer " + getTok(),
@@ -969,18 +970,27 @@ function chiudiDrawer(restoreFocus = false) {
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && !dialogoAttivo) chiudiDrawer(true);
 });
+function mostraVistaAccount(id, visibile) {
+  const el = document.getElementById(id);
+  el.style.removeProperty("display");
+  el.hidden = !visibile;
+  el.classList.toggle("hidden", !visibile);
+  el.setAttribute("aria-hidden", String(!visibile));
+}
 function mostraLogin() {
-  document.getElementById("vista-login").classList.remove("hidden");
-  document.getElementById("vista-dash").classList.add("hidden");
-  document.getElementById("auth-header").classList.remove("hidden");
-  document.getElementById("site-footer").classList.remove("hidden");
+  mostraVistaAccount("vista-avvio", false);
+  mostraVistaAccount("vista-login", true);
+  mostraVistaAccount("vista-dash", false);
+  mostraVistaAccount("auth-header", true);
+  mostraVistaAccount("site-footer", true);
   document.getElementById("nav-stato").textContent = "";
 }
 function mostraDashboard() {
-  document.getElementById("vista-login").classList.add("hidden");
-  document.getElementById("vista-dash").classList.remove("hidden");
-  document.getElementById("auth-header").classList.add("hidden");
-  document.getElementById("site-footer").classList.add("hidden");
+  mostraVistaAccount("vista-avvio", false);
+  mostraVistaAccount("vista-login", false);
+  mostraVistaAccount("vista-dash", true);
+  mostraVistaAccount("auth-header", false);
+  mostraVistaAccount("site-footer", false);
   route();
 }
 function oauth(provider) {
@@ -1212,9 +1222,79 @@ async function collegaMicrosoft() {
     if (e.message !== "401") notifica("Microsoft linking could not be started. Retry.", "errore");
   }
 }
-function esci() {
-  api("/auth/logout", { method: "POST" }).catch(() => {});
-  setTok(""); mostraLogin();
+let logoutInCorso = false;
+function pulisciStorageAccount(storage) {
+  try {
+    for (let i = storage.length - 1; i >= 0; i -= 1) {
+      const key = storage.key(i);
+      if (key && /^(nv_|nivult)/i.test(key)) storage.removeItem(key);
+    }
+  } catch (e) {}
+}
+function pulisciStatoAccount() {
+  setTok("");
+  pulisciStorageAccount(sessionStorage);
+  pulisciStorageAccount(localStorage);
+  chiavi = [];
+  creditiExtra = 0;
+  rivelazioni = 0;
+  primaChiamataFatta = false;
+  copiaFatta = false;
+  saldoAccount = { crediti_mensili: 0, usati: 0, residui_mensili: 0,
+                   crediti_extra: 0, saldo: 0 };
+  abbonamento = {};
+  chiaveFresca = "";
+  quickLanguage = "curl";
+  apiLanguage = "curl";
+  billingInterval = "month";
+  drawerFocus = null;
+  dialogoAttivo = null;
+  focusPrimaDelDialogo = null;
+  cursore = null;
+  tab = "jobs";
+  clearTimeout(cercaTimer);
+  cercaTimer = null;
+  cercaSeq += 1;
+  dettaglioSeq += 1;
+  aziendaJobsSeq += 1;
+  usoDati = null;
+  usoSeq += 1;
+  paeseIso = "";
+  clearTimeout(exStimaTimer);
+  exStimaTimer = null;
+  exDati = null;
+  exStimaSeq += 1;
+  exTipoCorrente = "postings";
+  for (const mappa of [revealInfo, revealRows, gruppiRivelati]) {
+    for (const key of Object.keys(mappa)) delete mappa[key];
+  }
+  for (const id of ["dettaglio", "export-modale"]) {
+    const el = document.getElementById(id);
+    if (el) mostraVistaAccount(id, false);
+  }
+  const dettaglioBox = document.getElementById("dettaglio-box");
+  if (dettaglioBox) dettaglioBox.innerHTML = "";
+  document.body.classList.remove("modale-aperto");
+  mostraVistaAccount("vista-dash", false);
+  document.getElementById("vista-dash").innerHTML = "";
+  document.getElementById("notifiche").innerHTML = "";
+}
+async function esci() {
+  if (logoutInCorso) return;
+  logoutInCorso = true;
+  const btn = document.getElementById("logout-button");
+  btn.disabled = true;
+  try {
+    await api("/auth/logout", { method: "POST", credentials: "include" });
+  } catch (e) {
+  } finally {
+    try {
+      pulisciStatoAccount();
+      mostraLogin();
+    } finally {
+      window.location.replace('/account');
+    }
+  }
 }
 
 let dialogoAttivo = null;
@@ -1425,8 +1505,9 @@ async function scaricaDaily(nome) {
   }
 }
 
-let cursore = null, cercaTimer = null, tab = "jobs";
-const azInfo = {};
+let cursore = null, cercaTimer = null, cercaSeq = 0, tab = "jobs";
+let dettaglioSeq = 0, aziendaJobsSeq = 0;
+const revealInfo = {}, revealRows = {}, gruppiRivelati = {};
 function filtri() {
   const f = {};
   const q = document.getElementById("f-q").value.trim();
@@ -1462,7 +1543,8 @@ function aggiornaRichiestaApi() {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(current)) {
     if (key === "stato") continue;
-    params.set(key === "dal" ? "posted_after" : key, value);
+    const apiKey = key === "dal" ? "posted_after" : (key === "q" && tab === "jobs" ? "title" : key);
+    params.set(apiKey, value);
   }
   params.set("limit", "25");
   const key = chiaveFresca || ESEMPIO_CHIAVE;
@@ -1512,18 +1594,71 @@ function chipAts(ats) {
     <img src="loghi-ats/${encodeURIComponent(ats)}.png" alt="" class="h-4 w-4 rounded-sm object-contain" onerror="this.outerHTML='<span class=&quot;grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black&quot; style=&quot;background:${esc(colore)}&quot;>${esc(mono)}</span>'">
     <span class="text-[11px] font-semibold text-slate-500">${esc(ats)}</span></span>`;
 }
-function rigaJob(o) {
+function unisciAziendaRivelata(record, azienda) {
+  if (record.explorer_kind === "companies") {
+    return { ...record, ...azienda, reveal_token: record.reveal_token,
+      reveal_group: record.reveal_group, explorer_kind: "companies",
+      explorer_key: record.explorer_key, revealed: true };
+  }
+  return { ...record, revealed: true,
+    company: azienda.company || record.company,
+    company_domain: azienda.domain || azienda.company_domain || record.company_domain,
+    logo_url: azienda.logo || azienda.logo_url || record.logo_url,
+    company_slug: azienda.company_slug || record.company_slug };
+}
+function registraRivelazione(record, kind, rivelata = record.revealed === true) {
+  const revealToken = String(record.reveal_token || "");
+  const group = String(record.reveal_group || "");
+  const rowKey = `${kind}:${kind === "jobs" ? String(record.id || "") : "company"}`;
+  const rows = revealRows[revealToken] || {};
+  const previous = rows[rowKey] || {};
+  let merged = { ...previous, ...record, explorer_kind: kind, explorer_key: rowKey,
+    reveal_token: revealToken, reveal_group: group,
+    revealed: rivelata === true || previous.revealed === true };
+  if (group && gruppiRivelati[group]) merged = unisciAziendaRivelata(merged, gruppiRivelati[group]);
+  if (revealToken) {
+    rows[rowKey] = merged;
+    revealRows[revealToken] = rows;
+    const info = revealInfo[revealToken] || {};
+    const identity = kind === "companies" ? merged : (merged.revealed ? {
+      company: merged.company, company_domain: merged.company_domain,
+      logo_url: merged.logo_url, company_slug: merged.company_slug, ats: merged.ats,
+    } : {});
+    revealInfo[revealToken] = { ...info, ...identity, reveal_token: revealToken,
+      reveal_group: group, revealed: info.revealed === true || merged.revealed === true };
+  }
+  return merged;
+}
+function iconaAziendaNascosta(className) {
+  return `<span class="${className} grid place-items-center rounded-lg border border-slate-200 bg-slate-100 text-slate-400 shrink-0" aria-hidden="true"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v16M8 7h2m-2 4h2m-2 4h2m4-8h1m-1 4h1M2 21h20M17 11h3a2 2 0 0 1 2 2v8"/></svg></span>`;
+}
+function logoRivelato(record, className) {
+  if (record.revealed !== true) return "";
+  const src = urlSicuro(record.logo_url) || urlSicuro(record.logo)
+    || (record.company_slug ? `https://api.nivult.com/logo/${encodeURIComponent(record.company_slug)}` : "");
+  return src ? `<img src="${esc(src)}" alt="" loading="lazy" class="${className} border border-slate-200 bg-white object-contain shrink-0" onerror="this.remove()">` : "";
+}
+function aggiornaRigheRivelate(group) {
+  document.querySelectorAll("#cerca-righe [data-reveal-token]").forEach(row => {
+    if (row.dataset.revealGroup !== group) return;
+    const record = (revealRows[row.dataset.revealToken] || {})[row.dataset.explorerKey];
+    if (!record) return;
+    row.outerHTML = record.explorer_kind === "companies" ? rigaAzienda(record) : rigaJob(record);
+  });
+}
+function rigaJob(input) {
+  const o = registraRivelazione(input, "jobs");
   const tec = (o.technologies || []).slice(0, 4).map(t =>
     `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${esc(t)}</span>`).join("");
   const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
-  const rif = (o.ats && o.company_slug) ? `${o.ats}:${o.company_slug}` : "";
-  const logo = o.company_slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" loading="lazy" class="h-9 w-9 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shrink-0" onerror="this.outerHTML='<div class=&quot;h-9 w-9 rounded-lg bg-brand-500 from-brand-500 to-mint-500 grid place-items-center text-white text-[13px] font-black shrink-0&quot;>${esc((o.company || "?")[0].toUpperCase())}</div>'">`
-    : "";
-  const az = o.company
-    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob(${jsArg(rif)}, ${o.az_rivelata ? "true" : "false"})">${esc(o.company)}</span> · `
-    : "";
-  return `<div class="premium-action flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-300 cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob(${jsArg(o.id)})">
+  const logo = o.revealed
+    ? logoRivelato(o, "h-9 w-9 rounded-lg p-0.5")
+    : iconaAziendaNascosta("h-9 w-9");
+  const nomeAz = o.revealed ? (o.company || o.company_domain || "") : "";
+  const az = o.revealed && nomeAz
+    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob(${jsArg(o.reveal_token)})">${esc([nomeAz, o.company_domain && o.company_domain !== nomeAz ? o.company_domain : null].filter(Boolean).join(" · "))}</span> · `
+    : `<span class="inline-block blur-[4px] select-none text-slate-400">Hidden company</span> · `;
+  return `<div data-explorer-kind="jobs" data-explorer-key="${esc(o.explorer_key)}" data-reveal-token="${esc(o.reveal_token)}" data-reveal-group="${esc(o.reveal_group)}" class="premium-action flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-300 cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob(${jsArg(o.id)})">
     ${logo}
     <div class="min-w-0 flex-1">
       <b class="text-[14px] block truncate">${esc(o.title || "—")} ${chiusa}</b>
@@ -1533,17 +1668,25 @@ function rigaJob(o) {
     <div class="shrink-0">${chipAts(o.ats)}</div>
   </div>`;
 }
-function rigaAzienda(a) {
-  azInfo[a.ref] = a;
-  return `<div class="premium-action flex items-center gap-4 flex-wrap rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-mint-500/50 cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.ref)})">
-    <div class="h-10 w-10 rounded-xl bg-brand-500 from-slate-200 to-slate-100 grid place-items-center text-slate-400 font-black">?</div>
+function rigaAzienda(input) {
+  const a = registraRivelazione(input, "companies");
+  const nomeAz = a.revealed ? (a.company || a.domain || a.website || "Company") : "Hidden company";
+  const logo = a.revealed
+    ? (logoRivelato(a, "h-10 w-10 rounded-xl p-1") || iconaAziendaNascosta("h-10 w-10 !rounded-xl"))
+    : iconaAziendaNascosta("h-10 w-10 !rounded-xl");
+  const dipendenti = a.employees ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
+  const dominio = a.revealed ? (a.domain || a.website) : null;
+  return `<div data-explorer-kind="companies" data-explorer-key="${esc(a.explorer_key)}" data-reveal-token="${esc(a.reveal_token)}" data-reveal-group="${esc(a.reveal_group)}" class="premium-action flex items-center gap-4 flex-wrap rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-mint-500/50 cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.reveal_token)})">
+    ${logo}
     <div class="min-w-0 flex-1">
-      <b class="text-[14px] blur-[5px] select-none text-slate-400">██████████</b>
-      <div class="text-[12px] text-slate-500 mt-0.5">${esc([a.industry, a.country, a.employees ? a.employees.toLocaleString("en-US") + " employees" : null].filter(Boolean).join(" · "))}</div>
+      <b class="text-[14px] ${a.revealed ? "text-slate-800" : "blur-[4px] select-none text-slate-400"}">${esc(nomeAz)}</b>
+      <div class="text-[12px] text-slate-500 mt-0.5">${esc([dominio, a.industry, a.country, dipendenti].filter(Boolean).join(" · "))}</div>
     </div>
     <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
       <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
-      <button onclick="rivelaAzienda(${jsArg(a.ref)}, this)" class="rounded-lg bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal · 1 credit</button>
+      ${a.revealed
+        ? `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[11px] font-bold">Revealed</span>`
+        : `<button onclick="rivelaAzienda(${jsArg(a.reveal_token)}, this)" class="rounded-lg bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal company · 3 credits</button>`}
     </div>
   </div>`;
 }
@@ -1555,11 +1698,11 @@ function cambiaTab(t) {
   document.getElementById("tab-az").className = t === "az" ? on : off;
   document.getElementById("tab-jobs").setAttribute("aria-selected", String(t === "jobs"));
   document.getElementById("tab-az").setAttribute("aria-selected", String(t === "az"));
-  document.getElementById("f-q").placeholder = t === "jobs" ? "Job title or description…" : "Industry (exact)…";
-  document.getElementById("f-q").setAttribute("aria-label", t === "jobs" ? "Job title or description" : "Industry (exact)");
+  document.getElementById("f-q").placeholder = t === "jobs" ? "Redacted job title…" : "Industry (exact)…";
+  document.getElementById("f-q").setAttribute("aria-label", t === "jobs" ? "Redacted job title" : "Industry (exact)");
   document.getElementById("f-q-help").textContent = t === "jobs"
-    ? "Open postings search titles and full descriptions; recently closed postings search titles."
-    : "Industry filters company records. Job title and description search is available in Jobs.";
+    ? "Open Explorer searches redacted job titles only; recently closed postings search titles."
+    : "Industry filters company records. Redacted job title search is available in Jobs.";
   document.getElementById("f-stato").style.display = t === "jobs" ? "" : "none";
   document.getElementById("f-remoto").style.display = t === "jobs" ? "" : "none";
   document.getElementById("f-tec-help").style.display = t === "jobs" ? "" : "none";
@@ -1576,46 +1719,80 @@ function mostraCaricamento() {
     </div>`).join("");
 }
 async function cerca(append = false) {
+  const seq = ++cercaSeq, tabRichiesta = tab;
   aggiornaRichiestaApi();
-  const via = tab === "jobs" ? "/portale/cerca" : "/portale/cerca-aziende";
-  const body = { ...filtri(), cursor: append ? cursore : null };
+  const via = tabRichiesta === "jobs" ? "/portale/cerca" : "/portale/cerca-aziende";
+  const body = { ...filtri(), limit: 20, cursor: append ? cursore : null };
   const btnAltro = document.getElementById("cerca-altro");
+  const cap = document.getElementById("cerca-cap");
   if (append) {
     btnAltro.disabled = true;
     btnAltro.innerHTML = `<svg class="spinner inline-block align-[-2px] mr-1.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>Loading…`;
   } else {
     mostraCaricamento();
     btnAltro.classList.add("hidden");
+    cap.classList.add("hidden");
   }
   let r;
   try {
     r = await api(via, { method: "POST", body: JSON.stringify(body) });
   } catch (e) {
+    if (seq !== cercaSeq) return;
+    const message = "The index could not be reached. Check your connection and retry.";
     if (!append) document.getElementById("cerca-righe").innerHTML =
-      `<div role="alert" class="px-4 py-6 text-center text-[13px] font-semibold text-slate-500">The index could not be reached. Check your connection and retry.</div>`;
+      `<div role="alert" class="px-4 py-6 text-center text-[13px] font-semibold text-slate-500">${message}</div>`;
+    else notifica(message, "errore");
     return;
   } finally {
-    if (append) { btnAltro.disabled = false; btnAltro.textContent = "Load more"; }
+    if (seq === cercaSeq && append) { btnAltro.disabled = false; btnAltro.textContent = "Load more"; }
   }
+  if (seq !== cercaSeq || tab !== tabRichiesta) return;
   if (!r.ok) {
+    let errore = {};
+    try { errore = await r.json(); } catch (e) {}
+    if (seq !== cercaSeq || tab !== tabRichiesta) return;
+    const detail = errore.detail;
+    const code = typeof detail === "object" && detail ? (detail.code || detail.error) : detail;
+    if (r.status === 400 && (code === "preview_limit" || errore.code === "preview_limit")) {
+      cursore = null;
+      btnAltro.classList.add("hidden");
+      cap.classList.remove("hidden");
+      if (!append) document.getElementById("cerca-righe").innerHTML = "";
+      return;
+    }
+    const retryAfter = Number(r.headers.get("Retry-After") || 0);
+    const message = r.status === 429
+      ? (retryAfter > 3600
+        ? "The daily Explorer preview quota is exhausted. Retry tomorrow or use the API and Exports."
+        : "The preview is temporarily rate-limited. Wait for the indicated cooldown and retry.")
+      : "The index could not answer. Retry in a moment.";
     if (!append) document.getElementById("cerca-righe").innerHTML =
-      `<div role="alert" class="px-4 py-6 text-center text-[13px] font-semibold text-slate-500">The index could not answer. Retry in a moment.</div>`;
+      `<div role="alert" class="px-4 py-6 text-center text-[13px] font-semibold text-slate-500">${message}</div>`;
+    else notifica(message, "errore");
     return;
   }
-  const d = await r.json();
-  cursore = d.next_cursor;
+  let d;
+  try { d = await r.json(); } catch (e) {
+    if (seq === cercaSeq && !append) document.getElementById("cerca-righe").innerHTML =
+      `<div role="alert" class="px-4 py-6 text-center text-[13px] font-semibold text-slate-500">The index returned an invalid response. Retry in a moment.</div>`;
+    else if (seq === cercaSeq) notifica("The index returned an invalid response. Retry.", "errore");
+    return;
+  }
+  if (seq !== cercaSeq || tab !== tabRichiesta) return;
+  cursore = d.cap_reached === true ? null : (d.next_cursor || null);
+  cap.classList.toggle("hidden", d.cap_reached !== true);
   const filtrando = document.getElementById("f-q").value.trim()
     || document.getElementById("f-tec").value.trim() || paeseIso
-    || (tab === "jobs" && document.getElementById("f-remoto").value)
-    || (tab === "jobs" && document.getElementById("f-stato").value !== "aperte");
+    || (tabRichiesta === "jobs" && document.getElementById("f-remoto").value)
+    || (tabRichiesta === "jobs" && document.getElementById("f-stato").value !== "aperte");
   if (!append) document.getElementById("cerca-match").textContent = filtrando && typeof d.totale === "number"
-    ? d.totale.toLocaleString("en-US") + (tab === "jobs" ? " postings match your filters" : " companies match your filters")
+    ? d.totale.toLocaleString("en-US") + (tabRichiesta === "jobs" ? " postings match your filters" : " companies match your filters")
     : "";
   const el = document.getElementById("cerca-righe");
   if (!append) el.innerHTML = "";
   el.insertAdjacentHTML("beforeend",
-    d.data.map(tab === "jobs" ? rigaJob : rigaAzienda).join(""));
-  document.getElementById("cerca-altro").classList.toggle("hidden", !cursore);
+    (Array.isArray(d.data) ? d.data : []).map(tabRichiesta === "jobs" ? rigaJob : rigaAzienda).join(""));
+  btnAltro.classList.toggle("hidden", !cursore);
 }
 function cercaAncora() { cerca(true); }
 function pulisciFiltri() {
@@ -1643,41 +1820,92 @@ for (const id of ["f-remoto", "f-stato", "f-category", "f-ats", "f-seniority", "
   });
 }
 
-async function rivelaAzienda(ref, btn) {
-  btn.disabled = true; btn.textContent = "…";
+function aggiornaSaldoDopoRivelazione(saldo) {
+  if (saldo && typeof saldo === "object") {
+    saldoAccount = {
+      crediti_mensili: Number(saldo.crediti_mensili ?? saldo.monthly_credits ?? saldoAccount.crediti_mensili),
+      usati: Number(saldo.usati ?? saldo.used ?? saldoAccount.usati),
+      residui_mensili: Number(saldo.residui_mensili ?? saldo.monthly_remaining ?? saldoAccount.residui_mensili),
+      crediti_extra: Number(saldo.crediti_extra ?? saldo.purchased_credits ?? saldoAccount.crediti_extra),
+      saldo: Number(saldo.saldo ?? saldo.balance ?? saldoAccount.saldo),
+    };
+    creditiExtra = saldoAccount.crediti_extra;
+    disegna();
+  } else if (saldo !== null && saldo !== undefined && Number.isFinite(Number(saldo))) {
+    saldoAccount.saldo = Number(saldo);
+    document.getElementById("sidebar-credit-available").textContent = saldoAccount.saldo.toLocaleString("en-US");
+    document.getElementById("hero-crediti").textContent = saldoAccount.saldo.toLocaleString("en-US");
+  }
+  carica().catch(() => {});
+}
+async function rivelaAzienda(revealToken, btn) {
+  let completata = false;
+  const seq = ++dettaglioSeq;
+  aziendaJobsSeq += 1;
+  const jobId = btn.dataset.jobId || "";
+  btn.disabled = true; btn.textContent = "Revealing…";
   try {
-    let r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+    let r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
     if (r.status === 503) {
       await new Promise(resolve => setTimeout(resolve, 400));
-      r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+      r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
+    }
+    if (!r.ok && seq !== dettaglioSeq) return;
+    if (r.status === 400) {
+      notifica("This reveal is invalid or has expired. Refresh the results and retry.", "errore");
+      return;
     }
     if (r.status === 403) {
-      btn.textContent = "Reveal · 1 credit";
-      notifica("Your account is paused. Contact support to reactivate it.", "errore");
+      notifica("This reveal is not available to your account, or your account is paused. Contact support if the problem persists.", "errore");
       return;
     }
     if (r.status === 429) {
-      btn.textContent = "credits out — top up";
-      btn.className = "rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-white";
-      notifica("You have no credits left. Top up to reveal this company.", "errore");
+      notifica(r.headers.get("Retry-After")
+        ? "Too many reveal requests. Wait a moment and retry."
+        : "You have no credits left, or the reveal rate limit was reached. Top up if needed or retry shortly.", "errore");
       return;
     }
     if (r.status === 404) { aziendaAssente(); return; }
     if (!r.ok) { notifica("The company could not be revealed. Retry.", "errore"); return; }
     const d = await r.json();
-    mostraAzienda(d.azienda, ref);
-    btn.textContent = "Unlocked";
-    btn.className = "rounded-lg bg-mint-500/10 text-mint-600 px-3.5 py-1.5 text-[11.5px] font-bold";
-    await carica();
+    const token = String(d.reveal_token || revealToken);
+    const previous = revealInfo[revealToken] || {};
+    const group = String(d.reveal_group || previous.reveal_group || "");
+    const azienda = { ...(d.azienda || {}), revealed: true, reveal_token: token,
+      reveal_group: group, explorer_kind: "companies" };
+    if (group) gruppiRivelati[group] = azienda;
+    for (const rows of Object.values(revealRows)) {
+      for (const [rowKey, record] of Object.entries(rows)) {
+        if (record.reveal_group === group) rows[rowKey] = unisciAziendaRivelata(record, azienda);
+      }
+    }
+    for (const [key, record] of Object.entries(revealInfo)) {
+      if (record.reveal_group === group) revealInfo[key] = unisciAziendaRivelata(
+        { ...record, explorer_kind: "companies" }, azienda);
+    }
+    revealInfo[token] = { ...(revealInfo[token] || {}), ...azienda };
+    aggiornaRigheRivelate(group);
+    aggiornaSaldoDopoRivelazione(d.saldo);
+    completata = true;
+    if (seq === dettaglioSeq) {
+      if (jobId) await dettaglioJob(jobId);
+      else await mostraAzienda(azienda, token);
+    }
   } catch (e) {
-    if (e.message !== "401") notifica("The company could not be revealed. Retry.", "errore");
+    if (seq === dettaglioSeq && !completata && e.message !== "401") {
+      notifica("The company could not be revealed. Retry.", "errore");
+    }
   } finally {
-    btn.disabled = btn.textContent === "Unlocked";
-    if (btn.textContent === "…") btn.textContent = "Reveal · 1 credit";
+    if (!completata && btn.isConnected) {
+      btn.disabled = false;
+      btn.textContent = "Reveal company · 3 credits";
+    }
   }
 }
 
 function aziendaAssente() {
+  dettaglioSeq += 1;
+  aziendaJobsSeq += 1;
   apriDettaglio(`<div class="hidden from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
     <div class="mx-auto h-12 w-12 rounded-2xl bg-brand-500 from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
     <h3 class="mt-4 text-lg font-black tracking-tight text-slate-600">Employer not disclosed</h3>
@@ -1686,7 +1914,11 @@ function aziendaAssente() {
   </div>`);
 }
 
-function chiudiDettaglio() { chiudiDialogo("dettaglio"); }
+function chiudiDettaglio() {
+  dettaglioSeq += 1;
+  aziendaJobsSeq += 1;
+  chiudiDialogo("dettaglio");
+}
 function esc(s) {
   const d = document.createElement("div");
   d.textContent = String(s ?? "");
@@ -1714,90 +1946,147 @@ function apriDettaglio(html) {
   apriDialogo("dettaglio");
 }
 async function dettaglioJob(id) {
+  const seq = ++dettaglioSeq;
   try {
     const r = await api("/portale/offerta-dettaglio", { method: "POST", body: JSON.stringify({ id }) });
+    if (seq !== dettaglioSeq) return;
     if (!r.ok) { notifica("The posting could not be opened. Retry.", "errore"); return; }
     const d = await r.json();
-  const o = d.offerta || {};
-  const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
-  const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
-  const tec = (o.technologies || []).map(t =>
-    `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(t)}</span>`).join("");
-  const logo = o.company_slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-brand-500 from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${esc((o.company || "?")[0])}</div>'">`
-    : "";
-  const linkOfferta = urlSicuro(o.url);
-  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-indigo-600 via-brand-500 to-violet-600 px-5 py-4 cursor-pointer shadow-lg shadow-indigo-500/20 transition hover:shadow-xl hover:shadow-indigo-500/25" onclick="apriAziendaDaJob(${jsArg(d.azienda_ref || "")}, ${d.azienda_rivelata ? "true" : "false"})">
-         ${logo}
-         <div class="min-w-0">
-           <b class="text-[15px] truncate block text-white">${esc(o.company || "")}</b>
-           <p class="text-[12px] font-bold text-indigo-100 group-hover:text-white transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
-         </div>
-         ${linkOfferta
-           ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-white px-5 py-2.5 text-[13px] font-bold text-brand-700 shadow-md shadow-indigo-900/20 hover:bg-indigo-50 transition">Open the original posting ↗</a>`
-           : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-white/40 px-4 py-2.5 text-[12px] font-bold text-indigo-100">🔒 source link unlocks with the profile</span>`}
-       </div>`;
-  const fatti = [
-    o.salary_text ? ["Salary", o.salary_text] : null,
-    o.hours_type ? ["Hours", o.hours_type] : null,
-    o.management_level ? ["Level", o.management_level] : null,
-    (o.languages_required || []).length ? ["Languages", o.languages_required.map(l => String(l).toUpperCase()).join(", ")] : null,
-    o.benefits ? ["Benefits", String(o.benefits).slice(0, 120)] : null,
-  ].filter(Boolean);
-  const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
-  const corpo = o.description
-    ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>`
-    : `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4">
-         <p class="text-[12.5px] font-bold text-slate-500">Full text still being indexed</p>
-         <p class="mt-1 text-[12px] text-slate-400">The essentials are already on this card — the original posting carries the full description.</p>
-       </div>`;
-  apriDettaglio(`<div class="hidden from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
-    <div class="flex items-start justify-between gap-4">
-      <div><h3 class="text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
-      <p class="mt-1 text-[13.5px] text-slate-500">${esc([citta, o.country].filter(Boolean).join(", "))}</p></div>
-      <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
-    </div>
-    <div class="mt-4 flex flex-wrap gap-2">${[
-      o.category, o.seniority, o.remote, o.employment_type,
-      o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
-      .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}${fonte}</div>
-    ${fatti.length ? `<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${fatti.map(([l, v]) =>
-      `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
-         <p class="text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${esc(l)}</p>
-         <p class="mt-0.5 text-[13px] font-bold text-slate-900 truncate" title="${esc(v)}">${esc(v)}</p>
-       </div>`).join("")}</div>` : ""}
-    ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-    ${corpo}
-    ${azienda}
-  </div>`);
+    if (seq !== dettaglioSeq) return;
+    const offerta = d.offerta || {};
+    const o = registraRivelazione({ ...offerta,
+      reveal_token: d.reveal_token || offerta.reveal_token || "",
+      reveal_group: d.reveal_group || offerta.reveal_group || "" },
+      "jobs", d.azienda_rivelata === true);
+    const rivelata = o.revealed === true;
+    const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
+    const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
+    const tec = (o.technologies || []).map(t =>
+      `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(t)}</span>`).join("");
+    const logo = rivelata
+      ? logoRivelato(o, "h-12 w-12 rounded-xl p-1 shadow-sm")
+      : iconaAziendaNascosta("h-12 w-12 !rounded-xl");
+    const linkOfferta = rivelata ? urlSicuro(o.url) : "";
+    const azienda = rivelata
+      ? `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-indigo-600 via-brand-500 to-violet-600 px-5 py-4 cursor-pointer shadow-lg shadow-indigo-500/20 transition hover:shadow-xl hover:shadow-indigo-500/25" onclick="apriAziendaDaJob(${jsArg(o.reveal_token)})">
+           ${logo}
+           <div class="min-w-0">
+             <b class="text-[15px] truncate block text-white">${esc(o.company || o.company_domain || "Company")}</b>
+             <p class="text-[12px] font-bold text-indigo-100 group-hover:text-white transition">Open the company profile →</p>
+           </div>
+           ${linkOfferta ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-white px-5 py-2.5 text-[13px] font-bold text-brand-700 shadow-md shadow-indigo-900/20 hover:bg-indigo-50 transition">Open the original posting ↗</a>` : ""}
+         </div>`
+      : `<div class="mt-5 flex flex-wrap items-center gap-4 rounded-2xl bg-slate-950 px-5 py-4">
+           ${logo}
+           <div class="min-w-0 flex-1"><b class="text-sm text-white">Company reveal</b><p class="mt-0.5 text-xs text-slate-400">3 credits once, permanent</p></div>
+           <button data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl transition">Reveal company · 3 credits</button>
+         </div>`;
+    const fatti = rivelata ? [
+      o.salary_text ? ["Salary", o.salary_text] : null,
+      o.hours_type ? ["Hours", o.hours_type] : null,
+      o.management_level ? ["Level", o.management_level] : null,
+      (o.languages_required || []).length ? ["Languages", o.languages_required.map(l => String(l).toUpperCase()).join(", ")] : null,
+      o.benefits ? ["Benefits", String(o.benefits).slice(0, 120)] : null,
+    ].filter(Boolean) : [];
+    const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
+    const corpo = !rivelata
+      ? `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4"><p class="text-[13px] font-semibold text-slate-500">Company details, job description, and source link unlock on reveal</p></div>`
+      : (o.description
+        ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">From the posting</p><div class="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-5 py-4 max-h-64 overflow-auto cov-scroll"><p class="text-[13.5px] text-slate-600 leading-relaxed whitespace-pre-wrap border-l-2 border-brand-300 pl-4">${esc(testoDesc(o.description))}</p></div>`
+        : `<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-5 py-4">
+             <p class="text-[12.5px] font-bold text-slate-500">Full text still being indexed</p>
+             <p class="mt-1 text-[12px] text-slate-400">The essentials are already on this card — the original posting carries the full description.</p>
+           </div>`);
+    apriDettaglio(`<div class="hidden from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
+      <div class="flex items-start justify-between gap-4">
+        <div><h3 class="text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
+        <p class="mt-1 text-[13.5px] text-slate-500">${esc([citta, o.country].filter(Boolean).join(", "))}</p></div>
+        <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none">×</button>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">${[
+        o.category, o.seniority, o.remote, rivelata ? o.employment_type : null,
+        o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
+        .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}${fonte}</div>
+      ${fatti.length ? `<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${fatti.map(([l, v]) =>
+        `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
+           <p class="text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${esc(l)}</p>
+           <p class="mt-0.5 text-[13px] font-bold text-slate-900 truncate" title="${esc(v)}">${esc(v)}</p>
+         </div>`).join("")}</div>` : ""}
+      ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
+      ${corpo}
+      ${azienda}
+    </div>`);
   } catch (e) {
-    if (e.message !== "401") notifica("The posting could not be opened. Retry.", "errore");
+    if (seq === dettaglioSeq && e.message !== "401") {
+      notifica("The posting could not be opened. Retry.", "errore");
+    }
   }
 }
-async function apriAziendaDaJob(ref, giaSua) {
-  if (!ref) return;
-  if (!giaSua) return dettaglioAzienda(ref);
+async function apriAziendaDaJob(revealToken, rinnova = true) {
+  const seq = ++dettaglioSeq;
+  const cached = revealInfo[revealToken];
+  if (!cached) return;
+  if (!cached.revealed) return dettaglioAzienda(revealToken);
   try {
-    const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
-    if (r.status === 404) return aziendaAssente();
-    if (!r.ok) { notifica("The company could not be opened. Retry.", "errore"); return; }
+    const r = await api("/portale/rivela-azienda", {
+      method: "POST", body: JSON.stringify({ reveal_token: revealToken }),
+    });
+    if (seq !== dettaglioSeq) return;
+    if (r.status === 400 && rinnova && cached.ats && cached.company_slug) {
+      const companyRef = `${cached.ats}:${cached.company_slug}`;
+      const refreshed = await api("/portale/token-azienda", {
+        method: "POST", body: JSON.stringify({ company_ref: companyRef }),
+      });
+      if (seq !== dettaglioSeq) return;
+      if (refreshed.ok) {
+        const fresh = await refreshed.json();
+        const token = String(fresh.reveal_token || "");
+        const group = String(fresh.reveal_group || cached.reveal_group || "");
+        const rows = revealRows[revealToken] || {};
+        for (const record of Object.values(rows)) record.reveal_token = token;
+        revealRows[token] = rows;
+        delete revealRows[revealToken];
+        revealInfo[revealToken] = { ...cached, reveal_token: token, reveal_group: group };
+        revealInfo[token] = revealInfo[revealToken];
+        document.querySelectorAll("#cerca-righe [data-reveal-token]").forEach(row => {
+          if (row.dataset.revealToken === revealToken) row.dataset.revealToken = token;
+        });
+        return apriAziendaDaJob(token, false);
+      }
+    }
+    if (!r.ok) {
+      notifica("The company could not be opened. Refresh the results and retry.", "errore");
+      return;
+    }
     const d = await r.json();
-    mostraAzienda(d.azienda || {}, ref);
+    if (seq !== dettaglioSeq) return;
+    const group = String(d.reveal_group || cached.reveal_group || "");
+    const azienda = { ...(d.azienda || {}), revealed: true,
+      reveal_token: String(d.reveal_token || revealToken), reveal_group: group };
+    revealInfo[revealToken] = { ...cached, ...azienda };
+    if (group) gruppiRivelati[group] = azienda;
+    await mostraAzienda(azienda, azienda.reveal_token);
   } catch (e) {
-    if (e.message !== "401") notifica("The company could not be opened. Retry.", "errore");
+    if (seq === dettaglioSeq && e.message !== "401") {
+      notifica("The company could not be opened. Retry.", "errore");
+    }
   }
 }
-async function mostraAzienda(a, ref) {
-  const slug = (ref || "").split(":")[1] || "";
-  const nomeAz = a.company || a.legal_name || a.website || a.domain || slug || "—";
-  const logo = slug
-    ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(slug)}" alt="" class="h-14 w-14 rounded-2xl border border-slate-200 bg-white object-contain p-1.5 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-14 w-14 rounded-2xl bg-brand-500 from-brand-500 to-mint-500 grid place-items-center text-white text-xl font-black shrink-0&quot;>${esc(nomeAz[0].toUpperCase())}</div>'">`
-    : "";
-  const dipendenti = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
+async function mostraAzienda(input, revealToken) {
+  dettaglioSeq += 1;
+  const jobsSeq = ++aziendaJobsSeq;
+  const a = { ...input, revealed: true, reveal_token: revealToken };
+  const nomeAz = a.company || a.legal_name || a.domain || a.website || "Company";
+  const logo = logoRivelato(a, "h-14 w-14 rounded-2xl p-1.5 shadow-sm")
+    || iconaAziendaNascosta("h-14 w-14 !rounded-2xl");
+  const dipendenti = a.employees > 1 ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
   const hq = a.headquarters && a.headquarters.city
     ? a.headquarters.city.charAt(0).toUpperCase() + a.headquarters.city.slice(1).toLowerCase()
     : null;
   const dominio = (a.domain || a.website || "").replace(/^'+/, "");
+  const dominioNormalizzato = dominio.replace(/^https?:\/\//i, "");
+  const linkDominio = dominioNormalizzato
+    ? "https://" + encodeURI(dominioNormalizzato).replace(/"/g, "") : "";
   const kpi = [
     [a.active_jobs, "active postings"],
     [a.jobs_posted_30d, "posted in 30 days"],
@@ -1830,7 +2119,7 @@ async function mostraAzienda(a, ref) {
       <div class="flex items-center gap-4 min-w-0">${logo}
         <div class="min-w-0"><h3 class="text-xl font-black tracking-tight truncate">${esc(nomeAz)}</h3>
         <p class="mt-1 text-[13.5px] text-slate-500">${esc([a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · "))}</p>
-        ${dominio ? `<a href="https://${encodeURI(dominio).replace(/"/g, "")}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${esc(dominio)} ↗</a>` : ""}</div>
+        ${linkDominio ? `<a href="${esc(linkDominio)}" target="_blank" rel="noopener" class="mt-0.5 inline-block text-[12.5px] font-bold text-mint-600 hover:text-mint-500 transition">${esc(dominio)} ↗</a>` : ""}</div>
       </div>
       <button onclick="chiudiDettaglio()" class="text-slate-400 hover:text-slate-700 text-xl leading-none shrink-0">×</button>
     </div>
@@ -1841,18 +2130,33 @@ async function mostraAzienda(a, ref) {
     ${sedi ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Where they hire</p><div class="mt-1">${sedi}</div>` : ""}
     <div id="az-jobs" class="mt-5"><p class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></div>
   </div>`);
-  const r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ ref }) });
+  let r;
+  try {
+    r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
+  } catch (e) {
+    if (jobsSeq === aziendaJobsSeq) {
+      const target = document.getElementById("az-jobs-lista");
+      if (target) target.textContent = "Postings could not be loaded. Close this window and retry.";
+    }
+    return;
+  }
+  if (jobsSeq !== aziendaJobsSeq) return;
   const el = document.getElementById("az-jobs-lista");
+  if (!el) return;
   if (!r.ok) { el.textContent = "Postings could not be loaded. Close this window and retry."; return; }
   const d = await r.json();
+  if (jobsSeq !== aziendaJobsSeq) return;
   el.innerHTML = (d.data || []).map(j =>
     `<div data-job="${encodeURIComponent(j.id)}" class="group -mx-2 px-2 py-1.5 border-b border-slate-50 flex justify-between gap-3 cursor-pointer rounded-lg hover:bg-brand-50/60 transition"><span class="font-semibold truncate group-hover:text-brand-600 transition">${esc(j.title)}</span><span class="text-slate-400 text-[11.5px] shrink-0">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
   el.querySelectorAll("[data-job]").forEach(n =>
     n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
 }
-function dettaglioAzienda(ref) {
-  const a = azInfo[ref] || {};
-  const dip = a.employees > 1 ? a.employees.toLocaleString("en-US") + " employees" : null;
+function dettaglioAzienda(revealToken) {
+  dettaglioSeq += 1;
+  aziendaJobsSeq += 1;
+  const a = revealInfo[revealToken] || {};
+  if (a.revealed) return apriAziendaDaJob(revealToken);
+  const dip = a.employees > 1 ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
   const pubblici = [a.industry, a.country, dip,
                     a.n_tecnologie ? a.n_tecnologie + " technologies" : null]
                    .filter(Boolean).join(" · ");
@@ -1870,9 +2174,9 @@ function dettaglioAzienda(ref) {
      </div>`).join("");
   apriDettaglio(`<div class="hidden from-brand-500 via-violet-500 to-mint-500"></div><div class="p-8">
     <div class="flex items-center gap-4">
-      <div class="skel h-14 w-14 rounded-2xl bg-brand-500 from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black shrink-0">?</div>
+      ${iconaAziendaNascosta("h-14 w-14 !rounded-2xl")}
       <div class="min-w-0 flex-1">
-        ${barra(52, 5)}
+        <b class="inline-block text-[15px] blur-[4px] select-none text-slate-400">Hidden company</b>
         ${pubblici
           ? `<p class="mt-2 text-[13.5px] text-slate-500">${esc(pubblici)}</p>`
           : `<div class="mt-2">${barra(34)}</div>`}
@@ -1891,10 +2195,10 @@ function dettaglioAzienda(ref) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>
       </div>
       <div class="min-w-0 flex-1">
-        <p class="text-[14px] font-black text-white">The full record unlocks with one credit</p>
+        <p class="text-[14px] font-black text-white">The full record unlocks with 3 credits</p>
         <p class="mt-0.5 text-[12.5px] text-slate-400">Name, domain, tech stack, locations and live postings — pay once, it's yours forever.</p>
       </div>
-      <button onclick="rivelaAzienda(${jsArg(ref)}, this)" class="rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal this company · 1 credit</button>
+      <button onclick="rivelaAzienda(${jsArg(revealToken)}, this)" class="rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-6 py-3 font-bold text-white shadow-lg shadow-violet-500/35 hover:shadow-xl hover:shadow-mint-500/45 hover:-translate-y-px transition shrink-0 flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 7.9-.8"/></svg>Reveal company · 3 credits</button>
     </div>
   </div>`);
 }
@@ -2353,6 +2657,9 @@ async function scaricaExportFiltrato() {
 
 document.querySelectorAll("[data-route-link]").forEach(link => link.addEventListener("click", () => chiudiDrawer()));
 addEventListener("hashchange", route);
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) window.location.reload();
+});
 (async () => {
   fetch(API + "/v1/demo/stats", { signal: AbortSignal.timeout(5000) })
     .then(r => r.ok ? r.json() : Promise.reject())
@@ -2375,11 +2682,10 @@ addEventListener("hashchange", route);
     }).catch(() => {});
   document.getElementById("cerca-freschezza").textContent = "the index refreshes every morning";
   await verificaGettone();
-  document.getElementById("vista-avvio").classList.add("hidden");
   if (!getTok()) { mostraLogin(); return; }
-  mostraDashboard();
   try {
     await carica();
+    mostraDashboard();
     await Promise.all([caricaSicurezza(), cerca(false)]);
   } catch (e) {
     if (e.message !== "401") notifica("Your account could not be loaded completely. Reload the page to retry.", "errore");

@@ -24,7 +24,7 @@ import re
 import secrets
 import sys
 from contextlib import contextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import psycopg
 import psycopg_pool
@@ -534,11 +534,58 @@ def spendi_per_utente(user_id: str, via: str = "export",
     return spendi_n_per_utente(user_id, 1, via=via, azione=azione, dettaglio=dettaglio)
 
 
-def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
-    azione = "posting unlock" if tipo == "job" else "company unlock"
+COSTO_COMPANY = 3
+
+
+class QuotaExplorer(Exception):
+    def __init__(self, retry_after: int, quota: str) -> None:
+        super().__init__(f"Explorer {quota} quota exhausted")
+        self.retry_after = max(1, int(retry_after))
+        self.quota = quota
+
+
+def consuma_quota_explorer(user_id: str, ip: str | None) -> None:
+    now = datetime.now(UTC)
+    minute = now.replace(second=0, microsecond=0)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         with connessione() as conn, conn.cursor() as cur:
-            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end"
+            cur.execute("SELECT subscription_status FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise ChiaveInvalida()
+            active = row[0] in ("active", "scheduled_cancel")
+            buckets = [
+                ("user_minute", user_id, minute, 20, minute + timedelta(minutes=1)),
+                ("user_day", user_id, day, 1000 if active else 150,
+                 day + timedelta(days=1)),
+            ]
+            if ip:
+                buckets.insert(1, ("ip_minute", "ip:" + ip, minute, 20,
+                                   minute + timedelta(minutes=1)))
+            for scope, subject, window_start, limit, window_end in buckets:
+                cur.execute(
+                    "INSERT INTO explorer_rate_limits "
+                    "(scope, subject, window_start, hits) VALUES (%s, %s, %s, 1) "
+                    "ON CONFLICT (scope, subject, window_start) DO UPDATE "
+                    "SET hits = explorer_rate_limits.hits + 1 RETURNING hits",
+                    (scope, subject, window_start))
+                if int(cur.fetchone()[0]) > limit:
+                    raise QuotaExplorer((window_end - now).total_seconds(), scope)
+    except QuotaExplorer:
+        raise
+    except ChiaveInvalida:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ContatoreNonDisponibile("quota Explorer non disponibile") from exc
+
+
+def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
+    azione = "posting unlock" if tipo == "job" else "company unlock"
+    costo = 1 if tipo == "job" else COSTO_COMPANY
+    try:
+        with connessione() as conn, conn.cursor() as cur:
+            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end "
                 "FROM users WHERE id = %s FOR UPDATE", (user_id,))
             ru = cur.fetchone()
             if ru is None:
@@ -552,13 +599,16 @@ def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
             if cur.fetchone():
                 return "gratis"
             rec = _spendi_account_cur(
-                cur, user_id, 1, "portale", azione, riferimento,
+                cur, user_id, costo, "portale", azione, riferimento,
                 resetta_mensile=_reset_abbonamento(ru[1], ru[2], ru[3]))
             if rec is None:
                 return "senza_crediti"
             cur.execute(
                 "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
-                "VALUES (%s, %s, %s)", (user_id, tipo, riferimento))
+                "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                (user_id, tipo, riferimento))
+            if cur.rowcount != 1:
+                raise ContatoreNonDisponibile("reveal concorrente non coerente")
             return "ok"
     except (ChiaveInvalida, CreditiEsauriti):
         return "senza_crediti"
@@ -600,7 +650,7 @@ def spendi_n_per_utente(user_id: str, n: int, via: str = "export",
         return True
     try:
         with connessione() as conn, conn.cursor() as cur:
-            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end"
+            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end "
                         "FROM users WHERE id = %s FOR UPDATE", (user_id,))
             ru = cur.fetchone()
             if ru is None or ru[0] != "active":

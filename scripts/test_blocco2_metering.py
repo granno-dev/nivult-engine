@@ -299,6 +299,7 @@ def _stub_portal_export(monkeypatch, tmp_path, active=True):
         "current_period_end": None,
     })
     monkeypatch.setattr(chiavi, "volume_per_utente", lambda _: 500_000)
+    monkeypatch.setattr(chiavi, "consuma_quota_explorer", lambda *_: None)
     monkeypatch.setattr(dati, "stato_export", lambda: {"file": {"offerte": str(path)}})
     monkeypatch.setattr(dati, "stream_export_senza_pii", lambda _: iter([b"preview"]))
     calls = _stub_service(monkeypatch, 500_000, 500_000)
@@ -309,10 +310,20 @@ def _stub_portal_export(monkeypatch, tmp_path, active=True):
 
 def test_portal_daily_bulk_is_free_at_zero_and_rate_limited(monkeypatch, tmp_path):
     calls = _stub_portal_export(monkeypatch, tmp_path)
+    hits = 0
+
+    def quota(*_):
+        nonlocal hits
+        hits += 1
+        if hits > 20:
+            raise chiavi.QuotaExplorer(60, "user_minute")
+
+    monkeypatch.setattr(chiavi, "consuma_quota_explorer", quota)
     client = _portal_export_client()
-    responses = [client.get("/portale/export/offerte") for _ in range(61)]
-    assert [r.status_code for r in responses] == [200] * 60 + [429]
-    assert calls["service"] == 60 and calls["charges"] == []
+    responses = [client.get("/portale/export/offerte") for _ in range(21)]
+    assert [r.status_code for r in responses] == [200] * 20 + [429]
+    assert responses[-1].headers["Retry-After"] == "60"
+    assert calls["service"] == 20 and calls["charges"] == []
 
 
 def test_portal_daily_bulk_still_requires_active_scale(monkeypatch, tmp_path):

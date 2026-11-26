@@ -285,18 +285,18 @@ def companies(request: Request, country: str | None = None,
         dati.aziende,
         _filtri(country=country, industry=industry, q=q, technology=technology,
                 employees_min=employees_min, employees_max=employees_max),
-        cursor, _limite_con_saldo(cliente, limit, 3))
-    _addebita(request, cliente, len(risposta["data"]), 3)
+        cursor, _limite_con_saldo(cliente, limit, chiavi.COSTO_COMPANY))
+    _addebita(request, cliente, len(risposta["data"]), chiavi.COSTO_COMPANY)
     return risposta
 
 
 @router.get("/companies/{piattaforma}/{slug}")
 def company(request: Request, piattaforma: str, slug: str, cliente=Depends(_cliente)):
-    _limite_con_saldo(cliente, 1, 3)
+    _limite_con_saldo(cliente, 1, chiavi.COSTO_COMPANY)
     azienda = dati.azienda(piattaforma, slug)
     if azienda is None:
         raise HTTPException(404, "company not found")
-    _addebita(request, cliente, 1, 3)
+    _addebita(request, cliente, 1, chiavi.COSTO_COMPANY)
     return azienda
 
 
@@ -421,8 +421,8 @@ def demo_tecnologie(request: Request, q: str = Query(default="")):
     _demo_gate(request)
     d = dati.demo_tecnologie(q)
     return {"query": q, "data": d["esempi"], "altre": d["altre"],
-            "campione": "demo pubblica: due aziende in chiaro. "
-                        "La lista intera e' nella API con chiave."}
+            "campione": "demo pubblica anonima. I nomi aziendali sono "
+                        "disponibili nella API con chiave."}
 
 
 @router.get("/demo/stats")

@@ -23,7 +23,6 @@ import re
 import os
 import secrets
 import socket
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import quote
@@ -491,7 +490,8 @@ def create_app() -> FastAPI:
     origini = [o.strip() for o in
                os.environ.get("CORS_ORIGINS", "https://nivult.com").split(",") if o.strip()]
     app.add_middleware(
-        CORSMiddleware, allow_origins=origini, allow_methods=["*"],
+        CORSMiddleware, allow_origins=origini, allow_credentials=True,
+        allow_methods=["*"],
         allow_headers=["Authorization", "Content-Type", "X-Api-Key"])
 
     @app.middleware("http")
@@ -510,7 +510,8 @@ def create_app() -> FastAPI:
         else:
             risposta = await call_next(request)
         risposta.headers.setdefault("X-Content-Type-Options", "nosniff")
-        if request.url.path.startswith("/cruscotto"):
+        if request.url.path.startswith((
+                "/cruscotto", "/portale", "/me", "/auth/consuma", "/auth/logout")):
             # dati confidenziali: mai dentro un iframe altrui (niente
             # clickjacking), niente referrer in giro, niente cache
             risposta.headers.setdefault("X-Frame-Options", "DENY")
@@ -657,7 +658,13 @@ def create_app() -> FastAPI:
                conn=Depends(connessione)):
         header = request.headers.get("Authorization", "")
         auth.revoca_sessione(conn, header[7:].strip())
-        return {"esito": "sessione revocata"}
+        risposta = JSONResponse({"esito": "sessione revocata"},
+                                headers={"Cache-Control": "no-store"})
+        # L'account usa Bearer in sessionStorage. Scada anche eventuali cookie
+        # residui di versioni precedenti, senza introdurre cookie di login.
+        risposta.delete_cookie("nv_sessione", path="/", secure=True,
+                               httponly=True, samesite="lax")
+        return risposta
 
     # ── Accesso OAuth web e app nativa ──────────────────────────────────────
     #
@@ -1848,69 +1855,125 @@ def create_app() -> FastAPI:
     # ── billing Creem (27/09/2026): checkout ospitato + webhook firmato ──
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
+    from nivult.api_clienti import explorer as _explorer
     from nivult.api_clienti import opensearch as _opensearch
     from nivult.api_clienti import vivo as _vivo
 
-    # Anti-raccolta (29/09/2026): la lettura del portale e' gratis per gli
-    # UMANI; i domini delle aziende sono il prodotto e non si portano via
-    # con la paginazione. Oltre 60 letture al minuto o 1.000 al giorno per
-    # account non c'e' navigazione, c'e' un estrattore — e per i volumi
-    # c'e' l'export a crediti. In memoria: il riavvio azzera, e' un freno
-    # gentile, non una cassaforte.
-    _colpi: dict[str, tuple[float, int, float, int]] = {}
+    def _abuso_explorer(request: Request, uid: str, motivo: str) -> None:
+        log.warning(json.dumps({"event": "explorer_abuse", "reason": motivo,
+                                "user_id": uid, "ip": _ip(request)}))
 
-    def _freno_portale(uid: str) -> None:
-        now = time.time()
-        m0, nm, g0, ng = _colpi.get(uid, (now, 0, now, 0))
-        if now - m0 >= 60:
-            m0, nm = now, 0
-        if now - g0 >= 86400:
-            g0, ng = now, 0
-        _colpi[uid] = (m0, nm + 1, g0, ng + 1)
-        if nm + 1 > 60 or ng + 1 > 1000:
-            raise HTTPException(429, "troppe letture dal portale: la "
-                                "navigazione e' libera, l'estrazione "
-                                "massiva no — per i volumi c'e' l'export")
+    def _freno_portale(request: Request, uid: str) -> None:
+        try:
+            _chiavi.consuma_quota_explorer(uid, _ip(request))
+        except _chiavi.QuotaExplorer as exc:
+            _abuso_explorer(request, uid, exc.quota)
+            raise HTTPException(
+                429, "Explorer rate limit exceeded; use the API or Filtered Export for volume",
+                headers={"Retry-After": str(exc.retry_after)}) from exc
+        except _chiavi.ChiaveInvalida as exc:
+            raise HTTPException(401, "sessione non valida") from exc
+        except _chiavi.ContatoreNonDisponibile as exc:
+            raise HTTPException(503, "Explorer quota temporarily unavailable") from exc
 
-    # I campi che consegnano il dominio: nel dettaglio gratuito si tolgono,
-    # tornano col reveal dell'azienda (29/09/2026). url e' ovvio;
-    # job_sources porta le URL dei gemelli; external_id e path ricostruiscono
-    # l'URL delle piattaforme prevedibili.
-    _CAMPI_COPERTI = ("url", "job_sources", "latitude", "longitude",
-                      "postal_code", "external_id", "path")
+    def _preview_error(request: Request, uid: str, message: str) -> HTTPException:
+        _abuso_explorer(request, uid, "pagination_cap")
+        return HTTPException(400, {"code": "preview_limit", "message": message,
+                                   "alternatives": ["/v1/jobs", "/v1/companies",
+                                                    "Filtered Export"]})
+
+    def _intero(corpo: dict, chiave: str, default: int) -> int:
+        valore = corpo.get(chiave, default)
+        if isinstance(valore, bool):
+            raise ValueError
+        return int(valore)
+
+    def _prepara_ricerca(corpo: dict, request: Request, uid: str,
+                         kind: str) -> tuple[str | None, int, int]:
+        try:
+            limite = _intero(corpo, "limit", 20)
+            offset = _intero(corpo, "offset", 0)
+            pagina = _intero(corpo, "page", offset // max(limite, 1) + 1 if offset else 1)
+        except (TypeError, ValueError) as exc:
+            raise _preview_error(request, uid, "invalid pagination") from exc
+        if limite < 1 or limite > _explorer.MAX_LIMIT:
+            raise _preview_error(request, uid, "Explorer pages contain at most 20 records")
+        if pagina < 1 or pagina > _explorer.MAX_PAGE or offset < 0 or offset > 80:
+            raise _preview_error(request, uid, "Explorer preview stops at page 5 / offset 80")
+        token = corpo.get("cursor")
+        if not token:
+            if pagina != 1 or offset:
+                raise _preview_error(request, uid, "deep paging requires the returned cursor")
+            return None, 1, limite
+        try:
+            interno, pagina_cursore = _explorer.open_cursor(token, uid, kind)
+        except _explorer.TokenError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
+        pagina_attesa = (offset // limite + 1 if offset else pagina
+                         if "page" in corpo else pagina_cursore)
+        if pagina_attesa != pagina_cursore:
+            raise _preview_error(request, uid, "cursor/page mismatch")
+        return interno, pagina_cursore, limite
+
+    def _cursore_risposta(uid: str, kind: str, interno: str | None,
+                          pagina: int) -> tuple[str | None, bool]:
+        cap = bool(interno) and pagina >= _explorer.MAX_PAGE
+        if not interno or cap:
+            return None, cap
+        return _explorer.seal_cursor(uid, kind, interno, pagina + 1), False
+
+    def _riferimento(riga: dict) -> str:
+        ats = riga.get("ats") or "unknown"
+        slug = riga.get("company_slug") or "anonymous-" + str(riga.get("id") or "")
+        return f"{ats}:{slug}"
+
+    def _controlla_origine(request: Request) -> None:
+        if request.headers.get("sec-fetch-site", "").lower() == "cross-site":
+            raise HTTPException(403, "cross-site request rejected")
+        origin = request.headers.get("origin")
+        if origin and origin not in origini:
+            raise HTTPException(403, "origin rejected")
 
     @app.post("/portale/cerca")
     async def cerca_nel_portale(request: Request, uid: str = Depends(utente)):
-        """La ricerca del portale: gratis, CON il nome dell'azienda
-        (modello TheirStack, 28/09 — l'annuncio e' pubblico alla fonte).
-        Il credito vive sul profilo azienda: ogni riga dichiara se e'
-        gia' dell'utente."""
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        filtri = {k: v for k, v in (corpo or {}).items()
+        corpo = corpo or {}
+        if any(corpo.get(k) for k in ("company", "domain", "company_domain", "company_slug")):
+            raise HTTPException(400, {"code": "company_filter_unavailable",
+                                      "message": "Use /v1/jobs for company/domain filters"})
+        _freno_portale(request, uid)
+        cursore, pagina, limite = _prepara_ricerca(corpo, request, uid, "jobs")
+        filtri = {k: v for k, v in corpo.items()
                   if k in ("country", "category", "ats", "seniority",
                            "language", "remote", "q", "technology", "dal")}
-        cur = (corpo or {}).get("cursor")
-        _freno_portale(uid)
-        if (corpo or {}).get("stato") == "chiuse":
-            righe, prossimo, totale = await run_in_threadpool(
-                _dati.cerca_chiuse_portale, filtri, cur)
-        elif filtri.get("q"):
-            righe, prossimo, totale = await run_in_threadpool(
-                _vivo.cerca_portale, filtri, cur)
-        else:
-            righe, prossimo, totale = await run_in_threadpool(
-                _dati.cerca_portale, filtri, cur)
-        rif = [f"{r['ats']}:{r['company_slug']}" for r in righe
-               if r.get("ats") and r.get("company_slug")]
-        sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", rif)
-        for r in righe:
-            r["az_rivelata"] = bool(
-                r.get("ats") and r.get("company_slug")
-                and f"{r['ats']}:{r['company_slug']}" in sue)
-        return {"data": righe, "next_cursor": prossimo, "totale": totale}
+        try:
+            if corpo.get("stato") == "chiuse":
+                righe, prossimo, totale = await run_in_threadpool(
+                    _dati.cerca_chiuse_portale, filtri, cursore, limite)
+            elif filtri.get("q"):
+                righe, prossimo, totale = await run_in_threadpool(
+                    _vivo.cerca_portale, filtri, cursore, limite)
+            else:
+                righe, prossimo, totale = await run_in_threadpool(
+                    _dati.cerca_portale, filtri, cursore, limite)
+        except ValueError as exc:
+            raise HTTPException(400, "invalid filters or cursor") from exc
+        riferimenti = [_riferimento(r) for r in righe]
+        sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", riferimenti)
+        profili = await run_in_threadpool(_dati.profili_aziende, list(sue))
+        data = []
+        for riga, rif in zip(righe, riferimenti, strict=True):
+            rivelata = rif in sue
+            token = _explorer.reveal_token(uid, rif)
+            data.append(_explorer.job_dto(riga, rivelata, token,
+                                          _explorer.reveal_group(rif),
+                                          profili.get(rif)))
+        prossimo, cap = _cursore_risposta(uid, "jobs", prossimo, pagina)
+        return {"data": data, "next_cursor": prossimo, "totale": totale,
+                "cap_reached": cap}
 
     @app.post("/portale/cerca-aziende")
     async def cerca_aziende_nel_portale(request: Request, uid: str = Depends(utente)):
@@ -1918,19 +1981,30 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        filtri = {k: v for k, v in (corpo or {}).items()
-                  if k in ("country", "industry", "technology")}
-        _freno_portale(uid)
-        righe, prossimo, totale = await run_in_threadpool(
-            _dati.cerca_aziende_portale, filtri, (corpo or {}).get("cursor"))
-        return {"data": righe, "next_cursor": prossimo, "totale": totale}
+        corpo = corpo or {}
+        if any(corpo.get(k) for k in ("q", "company", "domain", "company_domain",
+                                      "company_slug")):
+            raise HTTPException(400, {"code": "company_filter_unavailable",
+                                      "message": "Use /v1/companies for company search"})
+        _freno_portale(request, uid)
+        cursore, pagina, limite = _prepara_ricerca(corpo, request, uid, "companies")
+        filtri = {k: v for k, v in corpo.items() if k in ("country", "industry", "technology")}
+        try:
+            righe, prossimo, totale = await run_in_threadpool(
+                _dati.cerca_aziende_portale, filtri, cursore, limite)
+        except ValueError as exc:
+            raise HTTPException(400, "invalid filters or cursor") from exc
+        riferimenti = [r["ref"] for r in righe]
+        sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", riferimenti)
+        data = [_explorer.company_dto(r, r["ref"] in sue,
+                                      _explorer.reveal_token(uid, r["ref"]),
+                                      _explorer.reveal_group(r["ref"])) for r in righe]
+        prossimo, cap = _cursore_risposta(uid, "companies", prossimo, pagina)
+        return {"data": data, "next_cursor": prossimo, "totale": totale,
+                "cap_reached": cap}
 
     @app.post("/portale/offerta-dettaglio")
     async def dettaglio_offerta_portale(request: Request, uid: str = Depends(utente)):
-        """Il dettaglio dell'offerta, gratis (28/09: il datore non si
-        maschera piu', e' pubblico alla fonte). GRATIS ma non tutto: link
-        alla fonte, contatti e geo precisa tornano col reveal dell'azienda
-        (29/09 — sono il dominio, cioe' il prodotto)."""
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
@@ -1938,91 +2012,100 @@ def create_app() -> FastAPI:
         offerta_id = str((corpo or {}).get("id") or "").strip()
         if not offerta_id:
             raise HTTPException(400, "missing id")
-        _freno_portale(uid)
+        _freno_portale(request, uid)
         riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
         if riga is None:
             raise HTTPException(404, "posting not found")
-        rif = None
-        if riga.get("ats") and riga.get("company_slug"):
-            rif = f"{riga['ats']}:{riga['company_slug']}"
-        rivelata = (await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
-                    if rif else False)
-        if not rivelata:
-            for k in _CAMPI_COPERTI:
-                riga.pop(k, None)
-        return {"offerta": riga, "rivelata": True,
-                "azienda_ref": rif,
-                "azienda_rivelata": rivelata}
+        rif = _riferimento(riga)
+        rivelata = await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
+        profili = await run_in_threadpool(_dati.profili_aziende, [rif] if rivelata else [])
+        token = _explorer.reveal_token(uid, rif)
+        gruppo = _explorer.reveal_group(rif)
+        offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif))
+        return {"offerta": offerta, "rivelata": rivelata,
+                "azienda_rivelata": rivelata, "reveal_token": token,
+                "reveal_group": gruppo}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
-        try:
-            corpo = await request.json()
-        except Exception:                            # noqa: BLE001
-            corpo = {}
-        offerta_id = str((corpo or {}).get("id") or "").strip()
-        if not offerta_id:
-            raise HTTPException(400, "missing id")
-        # Si guarda prima e si paga dopo: un credito speso sul vuoto
-        # (offerta sparita dall'export di oggi) non si perdona (29/09/2026).
-        riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
-        if riga is None:
-            raise HTTPException(404, "posting not found")
-        esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "job", offerta_id)
-        if esito == "account_sospeso":
-            raise HTTPException(403, "account paused — contact support")
-        if esito == "senza_crediti":
-            raise HTTPException(429, "this month's credits are spent — top up from the dashboard")
-        if esito == "ok":
-            await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
-                                    "posting unlock", offerta_id)
-        return {"offerta": riga, "esito": esito}
+        raise HTTPException(410, "Posting unlock was retired; use company reveal tokens")
 
     @app.post("/portale/rivela-azienda")
     async def rivela_azienda_nel_portale(request: Request, uid: str = Depends(utente)):
+        _controlla_origine(request)
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        rif = str((corpo or {}).get("ref") or "").strip()
-        if not rif:
-            raise HTTPException(400, "missing ref")
-        # Si guarda prima e si paga dopo: rivelare un'azienda che il
-        # DuckDB non ha (export di oggi mancante) non deve costare
-        # nulla (29/09/2026).
+        token = str((corpo or {}).get("reveal_token") or "").strip()
+        if not token:
+            raise HTTPException(400, "missing reveal_token")
+        _freno_portale(request, uid)
+        try:
+            rif = _explorer.company_from_token(token, uid)
+        except _explorer.TokenError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
         riga = await run_in_threadpool(_dati.rivela_azienda, rif)
         if riga is None:
             raise HTTPException(404, "company not found")
-        esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "azienda", rif)
+        try:
+            esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "azienda", rif)
+        except _chiavi.ContatoreNonDisponibile as exc:
+            raise HTTPException(503, "reveal temporarily unavailable; retry with the same token") from exc
         if esito == "account_sospeso":
             raise HTTPException(403, "account paused — contact support")
         if esito == "senza_crediti":
-            raise HTTPException(429, "this month's credits are spent — " "top up from the dashboard")
+            raise HTTPException(429, "3 credits required — top up from the dashboard")
         if esito == "ok":
             await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
-                                    "company unlock", rif)
-        return {"azienda": riga, "esito": esito}
+                                    "company unlock", rif,
+                                    crediti=_chiavi.COSTO_COMPANY)
+        saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
+        return {"azienda": riga, "esito": esito,
+                "reveal_token": _explorer.reveal_token(uid, rif),
+                "reveal_group": _explorer.reveal_group(rif), "saldo": saldo}
 
-    @app.post("/portale/azienda-jobs")
-    async def jobs_dell_azienda(request: Request, uid: str = Depends(utente)):
-        """Le offerte attive di un'azienda: solo dopo il reveal."""
+    @app.post("/portale/token-azienda")
+    async def rinnova_token_azienda(request: Request, uid: str = Depends(utente)):
+        _controlla_origine(request)
         try:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        rif = str((corpo or {}).get("ref") or "").strip()
+        rif = str((corpo or {}).get("company_ref") or "").strip()
+        if not rif or len(rif) > 300 or ":" not in rif:
+            raise HTTPException(400, "invalid company_ref")
+        _freno_portale(request, uid)
         if not await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif):
             raise HTTPException(402, "reveal the company first")
-        _freno_portale(uid)
+        return {"reveal_token": _explorer.reveal_token(uid, rif),
+                "reveal_group": _explorer.reveal_group(rif)}
+
+    @app.post("/portale/azienda-jobs")
+    async def jobs_dell_azienda(request: Request, uid: str = Depends(utente)):
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        token = str((corpo or {}).get("reveal_token") or "").strip()
+        if not token:
+            raise HTTPException(400, "missing reveal_token")
+        _freno_portale(request, uid)
+        try:
+            rif = _explorer.company_from_token(token, uid)
+        except _explorer.TokenError as exc:
+            raise HTTPException(exc.status_code, str(exc)) from exc
+        if not await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif):
+            raise HTTPException(402, "reveal the company first")
         return {"data": await run_in_threadpool(_dati.azienda_jobs_portale, rif)}
 
     @app.get("/portale/export/{nome}")
-    def export_dal_portale(nome: str, uid: str = Depends(utente)):
+    def export_dal_portale(nome: str, request: Request, uid: str = Depends(utente)):
         """Daily Bulk incluso in Scale attivo: nessun addebito, ma sessione,
         rate-limit, entitlement e last_used restano controllati."""
         if nome not in ("offerte", "aziende"):
             raise HTTPException(404, "unknown export")
-        _freno_portale(uid)
+        _freno_portale(request, uid)
         attive = [k for k in _chiavi.lista_per_utente(uid)
                   if not k["revocata_il"]]
         if not attive:
@@ -2046,8 +2129,7 @@ def create_app() -> FastAPI:
     # La taratura e' il trial da 500 crediti una tantum: non deve
     # comprare la fetta massima; chi vuole di piu' paga.
     EXPORT_RIGHE_PER_CREDITO = 10
-    # le aziende valgono di piu': 1 credito a record, come il reveal
-    # singolo (03/10/2026)
+    # Export aziende filtrato: 1 credito a record; il reveal singolo ne costa 3.
     EXPORT_AZIENDE_PER_CREDITO = 1
     # il tetto tiene conto di Cloudflare: oltre i 100 secondi di attesa la
     # risposta cade; misurato il 28/09: 83k righe = ~55s di preparazione.

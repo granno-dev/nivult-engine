@@ -287,15 +287,10 @@ def offerte(filtri: dict, cursore: str | None,
 
 
 def cerca_portale(filtri: dict, cursore: str | None,
-                  limite: int = 25) -> tuple[list[dict], str | None, int]:
-    """La ricerca del portale: righe MASCHERATE (azienda e URL si
-    rivelano con un credito, il modello visto su TheirStack il 27/09).
-
-    Cercare e' gratis, rivelare no: e' il gancio che trasforma la
-    curiosita' in piano. Stessi filtri di offerte(), ma la risposta non
-    espone raw: il contenuto dell'annuncio non esce da qui."""
+                  limite: int = 20) -> tuple[list[dict], str | None, int]:
+    """Anteprima: il testo libero cerca solo nel titolo privato del datore."""
     filtri = filtri or {}
-    limite = max(1, min(int(limite or 25), 50))
+    limite = max(1, min(int(limite or 20), 20))
     # posted_at nel futuro: le «Lehre» scrivono la data d'inizio contratto
     # (guardia del 28/09 in adapters._dt); l'export di oggi e' nato prima
     # della pulizia e, con l'ordinamento DESC, quelle righe finirebbero
@@ -310,8 +305,20 @@ def cerca_portale(filtri: dict, cursore: str | None,
         dove.append("remote = $remote")
         par["remote"] = str(filtri["remote"])
     if filtri.get("q"):
-        dove.append(f"(title || ' ' || {_SEARCH_DOC}) ILIKE $q ESCAPE '\\'")
+        titolo_sicuro = ("CASE WHEN NULLIF(trim(company), '') IS NULL "
+                         "THEN '' ELSE replace(lower(coalesce(title, '')), "
+                         "lower(company), 'hidden company') END")
+        dove.append(f"({titolo_sicuro}) ILIKE $q ESCAPE '\\'")
+        dove.append("(company IS NULL OR company NOT ILIKE $q ESCAPE '\\')")
         par["q"] = _like(str(filtri["q"]))
+        q_normalizzato = re.sub(r"[^a-z0-9]+", "", str(filtri["q"]).lower())
+        if len(q_normalizzato) >= 3:
+            dove.append("(company IS NULL OR regexp_replace(lower(company), "
+                        "'[^a-z0-9]+', '', 'g') NOT ILIKE $q_brand ESCAPE '\\')")
+            dove.append("(raw->>'company_domain' IS NULL OR regexp_replace("
+                        "lower(raw->>'company_domain'), '[^a-z0-9]+', '', 'g') "
+                        "NOT ILIKE $q_brand ESCAPE '\\')")
+            par["q_brand"] = _like(q_normalizzato)
     if filtri.get("technology"):
         dove.append(_TEC.format(nome="technology"))
         par["technology"] = str(filtri["technology"])
@@ -333,19 +340,14 @@ def cerca_portale(filtri: dict, cursore: str | None,
         totale = _conn().execute(
             f"SELECT count(*) FROM offerte WHERE {' AND '.join(dove)}",
             par).fetchone()[0]
-        # la regola della vetrina (28/09): max 3 righe per datore — una
-        # bacheca sola non deve occupare la pagina e far pensare al
-        # cliente «c'e' solo quella». Chi senza azienda non si tappa
-        # (partition per id = nessun tappo). Il TOTALE resta quello
-        # pieno: la diversita' e' presentazione, non misura.
         righe = _conn().execute(
             f"""SELECT id, title, country, city, seniority, remote,
                        category, posted_at, technologies, ats,
-                       company, company_slug
+                       company, company_slug, company_domain
                   FROM (
                     SELECT id, title, country, city, seniority, remote,
                            category, posted_at, technologies, ats,
-                           company, company_slug,
+                           company, company_slug, raw->>'company_domain' AS company_domain,
                            row_number() OVER (
                              PARTITION BY coalesce(company_slug, company, id)
                              ORDER BY posted_at DESC NULLS LAST, id) AS _rn
@@ -361,7 +363,8 @@ def cerca_portale(filtri: dict, cursore: str | None,
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
               "seniority": r[4], "remote": r[5], "category": r[6],
               "posted_at": _iso(r[7]), "technologies": r[8] or [],
-              "ats": r[9], "company": r[10], "company_slug": r[11]}
+              "ats": r[9], "company": r[10], "company_slug": r[11],
+              "company_domain": r[12]}
              for r in righe], prossimo, totale)
 
 
@@ -486,18 +489,15 @@ def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
 
 
 def offerta_dettaglio_portale(offerta_id: str) -> dict | None:
-    """Il dettaglio COMPLETO dell'offerta: dal 28/09 l'identita' del
-    datore e' gratis (modello TheirStack — l'annuncio e' comunque
-    pubblico alla fonte); il prodotto in vendita e' il PROFILO azienda."""
+    """Record interno; la proiezione HTTP decide se il datore e' sbloccato."""
     return rivela_offerta(offerta_id)
 
 
 def cerca_aziende_portale(filtri: dict, cursore: str | None,
-                          limite: int = 25) -> tuple[list[dict], str | None, int]:
-    """Le aziende MASCHERATE: settore, paese, dimensione e il numero di
-    tecnologie si vedono; il nome e la chiave si rivelano a credito."""
+                          limite: int = 20) -> tuple[list[dict], str | None, int]:
+    """Record interni: l'allowlist HTTP e' applicata dal chiamante."""
     filtri = filtri or {}
-    limite = max(1, min(int(limite or 25), 50))
+    limite = max(1, min(int(limite or 20), 20))
     dove = ["company IS NOT NULL"]
     par: dict = {}
     for campo in ("country", "industry"):
@@ -524,7 +524,9 @@ def cerca_aziende_portale(filtri: dict, cursore: str | None,
             par).fetchone()[0]
         righe = _conn().execute(
             f"""SELECT ats, company, country, industry, employees,
-                       len(technologies), company_slug
+                       len(technologies), company_slug, raw->>'domain', raw->>'logo',
+                       raw->>'website', TRY_CAST(raw->>'active_jobs' AS INTEGER),
+                       raw->>'size_range'
                   FROM aziende
                  WHERE {' AND '.join(dove)}
                  ORDER BY employees DESC NULLS LAST, ats, company_slug
@@ -532,13 +534,33 @@ def cerca_aziende_portale(filtri: dict, cursore: str | None,
     prossimo = None
     if len(righe) > limite:
         righe = righe[:limite]
-        # il cursore porta slug e piattaforma, mai il nome: la
-        # mascheratura non deve svelarsi in base64
         prossimo = _cursore([righe[-1][4], righe[-1][0], righe[-1][6]])
-    # il nome resta nel conteggio delle tecnologie, mai nel payload
     return ([{"country": r[2], "industry": r[3], "employees": r[4],
-              "n_tecnologie": r[5], "ref": r[0] + ":" + r[6]}
-            for r in righe], prossimo, totale)
+              "n_tecnologie": r[5], "ref": r[0] + ":" + r[6],
+              "company": r[1], "company_slug": r[6], "ats": r[0],
+              "domain": r[7], "logo": r[8], "website": r[9],
+              "open_jobs_count": r[10], "active_jobs": r[10],
+              "employee_range": r[11]}
+             for r in righe], prossimo, totale)
+
+
+def profili_aziende(riferimenti: list[str]) -> dict[str, dict]:
+    coppie = [r.split(":", 1) for r in riferimenti if ":" in r]
+    if not coppie:
+        return {}
+    par: dict = {}
+    condizioni = []
+    for i, (ats, slug) in enumerate(coppie):
+        par[f"a{i}"], par[f"s{i}"] = ats, slug
+        condizioni.append(f"(ats = $a{i} AND company_slug = $s{i})")
+    with _lock:
+        righe = _conn().execute(
+            "SELECT ats, company_slug, raw FROM aziende WHERE "
+            + " OR ".join(condizioni), par).fetchall()
+    out = {}
+    for ats, slug, raw in righe:
+        out[f"{ats}:{slug}"] = _senza_pii(json.loads(raw))
+    return out
 
 
 def rivela_azienda(riferimento: str) -> dict | None:
@@ -611,53 +633,67 @@ def azienda_jobs_portale(riferimento: str) -> list[dict]:
 
 
 def cerca_chiuse_portale(filtri: dict, cursore: str | None,
-                         limite: int = 25) -> tuple[list[dict], str | None, int]:
-    """Le offerte CHIUSE recenti, dal flusso: mascheramento delle attive."""
+                         limite: int = 20) -> tuple[list[dict], str | None, int]:
+    """Offerte chiuse: il datore e' ricostruito dallo spine aziende."""
     filtri = filtri or {}
-    limite = max(1, min(int(limite or 25), 50))
-    dove = ["event = 'closed'"]
+    limite = max(1, min(int(limite or 20), 20))
+    azienda_sql = ("(SELECT a.company FROM aziende a WHERE a.ats = (f.raw->>'ats') "
+                   "AND a.company_slug = (f.raw->>'company_slug') LIMIT 1)")
+    dominio_sql = ("(SELECT a.raw->>'domain' FROM aziende a "
+                   "WHERE a.ats = (f.raw->>'ats') "
+                   "AND a.company_slug = (f.raw->>'company_slug') LIMIT 1)")
+    dove = ["f.event = 'closed'"]
     par: dict = {}
     if filtri.get("country"):
-        dove.append("(raw->>'country') = $country")
+        dove.append("(f.raw->>'country') = $country")
         par["country"] = str(filtri["country"])
     if filtri.get("remote"):
-        dove.append("(raw->>'remote') = $remote")
+        dove.append("(f.raw->>'remote') = $remote")
         par["remote"] = str(filtri["remote"])
     if filtri.get("q"):
-        dove.append("(raw->>'title') ILIKE $q ESCAPE '\\'")
+        titolo_sicuro = ("replace(lower(coalesce(f.raw->>'title', '')), lower("
+                         + azienda_sql + "), 'hidden company')")
+        dove.append(f"{azienda_sql} IS NOT NULL")
+        dove.append(f"({titolo_sicuro}) ILIKE $q ESCAPE '\\'")
+        dove.append(f"({azienda_sql}) NOT ILIKE $q ESCAPE '\\'")
         par["q"] = _like(str(filtri["q"]))
+        q_normalizzato = re.sub(r"[^a-z0-9]+", "", str(filtri["q"]).lower())
+        if len(q_normalizzato) >= 3:
+            dove.append("regexp_replace(lower(" + azienda_sql + "), "
+                        "'[^a-z0-9]+', '', 'g') NOT ILIKE $q_brand ESCAPE '\\'")
+            dove.append("(" + dominio_sql + " IS NULL OR regexp_replace(lower("
+                        + dominio_sql + "), '[^a-z0-9]+', '', 'g') "
+                        "NOT ILIKE $q_brand ESCAPE '\\')")
+            par["q_brand"] = _like(q_normalizzato)
     if filtri.get("technology"):
-        # nel flusso il campo si chiama skills (le technologies vengono
-        # dopo, dal modello: una riga chiusa e' il ricordo dell'ultima
-        # foto, non l'arricchimento completo)
         dove.append("list_contains(list_transform("
-                    "CAST(coalesce(raw->'skills', '[]'::json) AS VARCHAR[]), "
+                    "CAST(coalesce(f.raw->'skills', '[]'::json) AS VARCHAR[]), "
                     "lambda x: lower(x)), lower($technology))")
         par["technology"] = str(filtri["technology"])
     if cursore:
         t, cid = _leggi_cursore(cursore)
-        dove.append("(t < CAST($ct AS TIMESTAMP)"
-                    " OR (t = CAST($ct AS TIMESTAMP) AND id > $cid))")
+        dove.append("(f.t < CAST($ct AS TIMESTAMP)"
+                    " OR (f.t = CAST($ct AS TIMESTAMP) AND f.id > $cid))")
         par.update(ct=_norm_ts(t), cid=cid)
     with _lock:
         totale = _conn().execute(
-            f"SELECT count(*) FROM flusso WHERE {' AND '.join(dove)}",
+            f"SELECT count(*) FROM flusso f WHERE {' AND '.join(dove)}",
             par).fetchone()[0]
-        # anche le chiuse: max 3 righe per datore (la stessa regola
-        # della vetrina delle attive)
         righe = _conn().execute(
-            f"""SELECT id, titolo, paese, citta, t, skills, azienda, slug, fonte
+            f"""SELECT id, titolo, paese, citta, t, skills, azienda, slug, fonte,
+                       company_domain
                   FROM (
-                    SELECT id, raw->>'title' AS titolo,
-                           raw->>'country' AS paese, raw->>'city' AS citta,
-                           t, coalesce(raw->'skills', '[]'::json) AS skills,
-                           raw->>'company' AS azienda,
-                           raw->>'company_slug' AS slug, raw->>'ats' AS fonte,
+                    SELECT f.id, f.raw->>'title' AS titolo,
+                           f.raw->>'country' AS paese, f.raw->>'city' AS citta,
+                           f.t, coalesce(f.raw->'skills', '[]'::json) AS skills,
+                           {azienda_sql} AS azienda,
+                           f.raw->>'company_slug' AS slug, f.raw->>'ats' AS fonte,
+                           {dominio_sql} AS company_domain,
                            row_number() OVER (
-                             PARTITION BY coalesce(raw->>'company_slug',
-                                                   raw->>'company', id)
-                             ORDER BY t DESC, id) AS _rn
-                      FROM flusso
+                             PARTITION BY coalesce(f.raw->>'company_slug',
+                                                   f.raw->>'company', f.id)
+                             ORDER BY f.t DESC, f.id) AS _rn
+                      FROM flusso f
                      WHERE {' AND '.join(dove)})
                  WHERE _rn <= 3
                  ORDER BY t DESC, id LIMIT {limite + 1}""", par).fetchall()
@@ -668,7 +704,8 @@ def cerca_chiuse_portale(filtri: dict, cursore: str | None,
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
               "closed_at": _iso(r[4]), "category": None,
               "technologies": r[5] or [], "company": r[6],
-              "company_slug": r[7], "ats": r[8]}
+              "company_slug": r[7], "ats": r[8], "company_domain": r[9],
+              "title_requires_redaction": not bool(r[6])}
              for r in righe], prossimo, totale)
 
 
@@ -724,11 +761,7 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
 
 
 def demo_tecnologie(q: str) -> dict:
-    """La demo della vetrina pubblica: DUE aziende che assumono con la
-    tecnologia q. Il resto si sblocca con la chiave di prova: se la pagina
-    mostrasse la lista intera regaleremmo il prodotto (25/09/2026), e il
-    TOTALE esatto non si da' piu' (26/09/2026, decisione di Giuseppe): la
-    dimensione per-tecnologia e' merce, non marketing."""
+    """Demo pubblica anonima: tecnologie e metadati, mai identita' aziendali."""
     with _lock:
         righe = _conn().execute("""
             SELECT company, country, industry,
@@ -740,18 +773,16 @@ def demo_tecnologie(q: str) -> dict:
                AND company IS NOT NULL
              ORDER BY employees DESC NULLS LAST, company
              LIMIT 24""", {"q": q}).fetchall()
-    # niente tenant duplicati ne' id Wikidata non risolti («Q689791»)
     visti: set[str] = set()
     out = []
     for c, paese, settore, tec in righe:
         if c.lower() in visti or re.fullmatch(r"Q\d+", c):
             continue
         visti.add(c.lower())
-        out.append({"company": c, "country": paese, "industry": settore,
+        out.append({"country": paese, "industry": settore,
                     "technologies": list(tec)[:5]})
         if len(out) == 2:
             break
-    # «ci sono altre aziende?» si', il numero no
     return {"esempi": out, "altre": len(righe) > len(out)}
 
 
