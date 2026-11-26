@@ -885,7 +885,6 @@ function notifica(testo, tipo = "ok") {
 async function api(percorso, opz = {}) {
   try {
     const r = await fetch(API + percorso, {
-      credentials: "include",
       ...opz,
       signal: opz.signal || AbortSignal.timeout(30000),
       headers: { "Authorization": "Bearer " + getTok(),

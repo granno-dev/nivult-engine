@@ -32,6 +32,8 @@ def test_account_logout_frontend_clears_views_state_and_bfcache():
     assert "chiavi = []" in html
     assert "revealInfo, revealRows, gruppiRivelati" in html
     assert 'await api("/auth/logout", { method: "POST", credentials: "include" })' in html
+    api_helper = html[html.index("async function api("):html.index("async function verificaGettone(")]
+    assert 'credentials: "include"' not in api_helper
     assert "window.location.replace('/account')" in html
     assert re.search(r"addEventListener\('pageshow'.*if \(e\.persisted\).*reload", html,
                      re.DOTALL)
