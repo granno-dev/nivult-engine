@@ -144,8 +144,8 @@ if CHIAVE:
           chiave=CHIAVE)
     prova("coverage", "GET", "/v1/coverage", chiave=CHIAVE)
     prova("usage", "GET", "/v1/usage", chiave=CHIAVE,
-          controlla=lambda j: None if "residui" in j
-          else (_ for _ in ()).throw(AssertionError("campo residui mancante")))
+          controlla=lambda j: None if "remaining" in j and "balance" in j
+          else (_ for _ in ()).throw(AssertionError("campi remaining/balance mancanti")))
     prova("exports latest", "GET", "/v1/exports/latest", chiave=CHIAVE)
     prova("export nome sbagliato", "GET", "/v1/exports/latest/xyz",
           chiave=CHIAVE, atteso=404)

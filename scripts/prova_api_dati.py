@@ -171,10 +171,11 @@ def main() -> int:
 
     print("\n== il builder, via CLI come fara' cron ==")
     r = subprocess.run([sys.executable, "-m", "nivult.api_clienti.aggiorna",
-                        "--cartella", cartella, "--flusso-giorni", "30"],
+                        "--cartella", cartella, "--flusso-giorni", "30",
+                        "--attesa-export", "0"],
                        capture_output=True, text=True)
     verifica("python -m nivult.api_clienti.aggiorna esce 0",
-             r.returncode == 0, r.stderr.strip()[-300:])
+             r.returncode == 0, r.stderr.strip())
     db = f"{cartella}/api-clienti.duckdb"
     verifica("il db esiste", os.path.exists(db))
 
@@ -293,7 +294,7 @@ def main() -> int:
              f1[0]["event"] == "closed" and "closed_at" in f1[0])
 
     print("\n== il builder riscrive il file MENTRE lo stiamo leggendo ==")
-    meta2 = aggiorna.costruisci(cartella, 30)
+    meta2 = aggiorna.costruisci(cartella, 30, attesa_minuti=0)
     verifica("rilancio idempotente, stessi numeri",
              (meta2["offerte"], meta2["aziende"], meta2["flusso"]) == (30, 8, 5))
     verifica("il lettore con la connessione aperta continua a rispondere",
@@ -301,7 +302,7 @@ def main() -> int:
 
     print("\n== export mancanti ==")
     vuota = tempfile.mkdtemp(prefix="nivult-api-prova-vuota-")
-    meta3 = aggiorna.costruisci(vuota, 30)
+    meta3 = aggiorna.costruisci(vuota, 30, attesa_minuti=0)
     verifica("stato dichiarato", meta3["stato"] == "mancano gli export di oggi")
     dati.apri(f"{vuota}/api-clienti.duckdb")
     verifica("stato_export dal db vuoto",

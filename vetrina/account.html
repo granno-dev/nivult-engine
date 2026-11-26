@@ -569,11 +569,11 @@ body.modale-aperto { overflow: hidden; }
             <tr><td><code>/v1/jobs</code></td><td>1 credit per returned job</td><td>Every plan</td></tr>
             <tr><td><code>/v1/companies</code> and company detail</td><td>3 credits per returned company</td><td>Every plan</td></tr>
             <tr><td><code>/v1/changes</code></td><td>1 credit per returned event</td><td>Active Growth, 100K credits/month</td></tr>
-            <tr><td><code>/v1/coverage</code></td><td>1 credit per request</td><td>Every plan</td></tr>
-            <tr><td><code>/v1/exports/latest</code> and file downloads</td><td>1 credit per request</td><td>Active Scale, 500K credits/month</td></tr>
-            <tr><td><code>/v1/usage</code></td><td>1 credit per request</td><td>Every plan; 429 at zero balance</td></tr>
+            <tr><td><code>/v1/coverage</code></td><td>0 credits (rate-limited)</td><td>Every plan</td></tr>
+            <tr><td><code>/v1/exports/latest</code> and file downloads</td><td>0 credits (included)</td><td>Active Scale, 500K credits/month</td></tr>
+            <tr><td><code>/v1/usage</code></td><td>0 credits (rate-limited)</td><td>Every plan (works at zero balance)</td></tr>
           </tbody></table></div>
-          <div class="doc-note"><b>Pay per result, not per call.</b> Empty results and errors cost 0 credits. Plan or trial allowance is spent before purchased credits. Top-ups never expire and do not unlock Delta or Daily bulk.</div>
+          <div class="doc-note"><b>Pay per result, not per call.</b> Empty results and errors cost 0 credits. Usage, coverage and Daily bulk are unmetered service endpoints and return <code>X-Credits-Charged: 0</code>; authentication, rate limits and plan entitlements still apply. Plan or trial allowance is spent before purchased credits. Top-ups never expire and do not unlock Delta or Daily bulk.</div>
           <p>For direct accounts, the effective page limit is also capped by the available balance and the per-record cost.</p>
         </section>
 
@@ -673,7 +673,7 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
         <section id="doc-coverage" class="doc-section app-card p-5">
           <h2>Coverage</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/coverage</code></div>
-          <p>Returns coverage percentages from 0 to 100 for the documented set of posting and company fields measured on the latest export. It is not a schema of every response field.</p>
+          <p>Returns coverage percentages from 0 to 100 for the documented set of posting and company fields measured on the latest export. It is not a schema of every response field. Costs 0 credits on every plan, including at zero balance; key authentication and rate limits still apply.</p>
           <div class="code-block mt-3 p-4"><pre>{
   "category": 97.0,
   "description": 95.6,
@@ -687,7 +687,7 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
         <section id="doc-exports" class="doc-section app-card p-5">
           <h2>Daily exports</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest</code><span class="text-slate-400">and</span><code>/v1/exports/latest/{nome}</code></div>
-          <p>The manifest returns metadata for the latest export. File downloads return JSONL gzip and require an active Scale subscription or higher with at least 500,000 credits/month.</p>
+          <p>The manifest returns metadata for the latest export and file downloads return JSONL gzip. Both cost 0 credits and require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. Top-ups alone do not unlock this entitlement.</p>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Resource</th><th>Description</th></tr></thead><tbody>
             <tr><td><code>/v1/exports/latest</code></td><td>Latest manifest, with row counts and file paths.</td></tr>
             <tr><td><code>offerte</code></td><td>Daily postings JSONL gzip.</td></tr>
@@ -700,7 +700,7 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
         <section id="doc-usage" class="doc-section app-card p-5">
           <h2>Usage</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/usage</code></div>
-          <p>Reports current usage and balance. This endpoint itself consumes 1 credit and returns 429 when the balance is zero.</p>
+          <p>Reports current usage and balance without changing it. Costs 0 credits on every plan and remains available at zero balance; key authentication and rate limits still apply.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="usage"><button type="button" class="is-active" onclick="docCode('usage','curl')">cURL</button><button type="button" onclick="docCode('usage','python')">Python</button></div><button type="button" onclick="copyDoc('doc-usage-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-usage-code"></pre></div>
           <h3>Representative response</h3>
@@ -728,7 +728,7 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
             <tr><td>403</td><td>Required entitlement is missing.</td><td>Upgrade to Growth for Delta or Scale for bulk.</td></tr>
             <tr><td>404</td><td>Company or export not found.</td><td>Check ATS + slug or retry when the daily export is ready.</td></tr>
             <tr><td>422</td><td>Parameter validation failed.</td><td>Fix types, ranges and allowed values, e.g. limit or salary.</td></tr>
-            <tr><td>429</td><td>Insufficient credits for one result or exhausted balance.</td><td>Add credits or reduce the page size; no error charge.</td></tr>
+            <tr><td>429</td><td>Rate limit exceeded, or insufficient credits on paid data endpoints. Usage, coverage and Daily bulk never return 429 for zero balance.</td><td>Back off and honor Retry-After. For paid data, add credits or reduce the page size; no error charge.</td></tr>
             <tr><td>503</td><td>Database, counter or query timeout.</td><td>Retry with backoff; no error charge.</td></tr>
           </tbody></table></div>
           <h3>Credit error shape</h3>
@@ -1081,7 +1081,7 @@ function disegnaAccesso() {
   badge.textContent = bulkOk ? "ACTIVE" : "LOCKED";
   badge.className = `rounded-md px-2 py-1 text-[10px] font-bold ${bulkOk ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`;
   document.getElementById("daily-bulk-status").textContent = bulkOk
-    ? "Your current plan includes both full daily files. Each completed download is itemized in Usage & Logs."
+    ? "Your active Scale plan includes both full daily files at 0 credits, including at zero API balance."
     : "Requires an active Scale subscription with 500,000 credits/month. Top-ups alone do not unlock this entitlement.";
   document.getElementById("daily-bulk-actions").classList.toggle("hidden", !bulkOk);
   document.getElementById("daily-bulk-locked-panel").classList.toggle("hidden", bulkOk);
@@ -1646,7 +1646,11 @@ for (const id of ["f-remoto", "f-stato", "f-category", "f-ats", "f-seniority", "
 async function rivelaAzienda(ref, btn) {
   btn.disabled = true; btn.textContent = "…";
   try {
-    const r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+    let r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+    if (r.status === 503) {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ ref }) });
+    }
     if (r.status === 403) {
       btn.textContent = "Reveal · 1 credit";
       notifica("Your account is paused. Contact support to reactivate it.", "errore");
@@ -1723,15 +1727,15 @@ async function dettaglioJob(id) {
     ? `<img src="https://api.nivult.com/logo/${encodeURIComponent(o.company_slug)}" alt="" class="h-12 w-12 rounded-xl border border-slate-200 bg-white object-contain p-1 shadow-sm shrink-0" onerror="this.outerHTML='<div class=&quot;h-12 w-12 rounded-xl bg-brand-500 from-brand-500 to-mint-500 grid place-items-center text-white text-lg font-black shrink-0&quot;>${esc((o.company || "?")[0])}</div>'">`
     : "";
   const linkOfferta = urlSicuro(o.url);
-  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-mint-500/30 bg-brand-500 from-mint-500/10 via-white to-brand-500/5 px-5 py-4 cursor-pointer hover:border-mint-500/60 hover:shadow-lg hover:shadow-mint-500/10 transition" onclick="apriAziendaDaJob(${jsArg(d.azienda_ref || "")}, ${d.azienda_rivelata ? "true" : "false"})">
+  const azienda = `<div class="mt-6 group flex items-center gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-indigo-600 via-brand-500 to-violet-600 px-5 py-4 cursor-pointer shadow-lg shadow-indigo-500/20 transition hover:shadow-xl hover:shadow-indigo-500/25" onclick="apriAziendaDaJob(${jsArg(d.azienda_ref || "")}, ${d.azienda_rivelata ? "true" : "false"})">
          ${logo}
          <div class="min-w-0">
-           <b class="text-[15px] truncate block">${esc(o.company || "")}</b>
-           <p class="text-[12px] font-bold text-mint-600 group-hover:text-mint-500 transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
+           <b class="text-[15px] truncate block text-white">${esc(o.company || "")}</b>
+           <p class="text-[12px] font-bold text-indigo-100 group-hover:text-white transition">${d.azienda_rivelata ? "Open the company profile →" : "Company profile · 1 credit →"}</p>
          </div>
          ${linkOfferta
-           ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-brand-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-md shadow-brand-500/25 hover:bg-brand-600 transition">Open the original posting ↗</a>`
-           : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-slate-300 px-4 py-2.5 text-[12px] font-bold text-slate-400">🔒 source link unlocks with the profile</span>`}
+           ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="ml-auto shrink-0 rounded-xl bg-white px-5 py-2.5 text-[13px] font-bold text-brand-700 shadow-md shadow-indigo-900/20 hover:bg-indigo-50 transition">Open the original posting ↗</a>`
+           : `<span class="ml-auto shrink-0 rounded-xl border border-dashed border-white/40 px-4 py-2.5 text-[12px] font-bold text-indigo-100">🔒 source link unlocks with the profile</span>`}
        </div>`;
   const fatti = [
     o.salary_text ? ["Salary", o.salary_text] : null,

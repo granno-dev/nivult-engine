@@ -115,7 +115,12 @@ CONSUMI_FALLISCONO = False
 
 def _chiave(valore, kid, user_id, quota, usati=0, revocata=False, mese=OGGI):
     if user_id:
-        USERS.setdefault(user_id, {"status": "active", "extra": 0})
+        USERS.setdefault(user_id, {
+            "status": "active", "extra": 0, "subscription_status": None,
+            "subscription_plan": None, "subscription_interval": None,
+            "current_period_end": None, "creem_customer_id": None,
+            "creem_subscription_id": None,
+        })
     STORE[_sha(valore)] = {"id": kid, "label": kid, "user_id": user_id,
                            "crediti_mensili": quota, "usati_mese": usati,
                            "mese_uso": mese, "revocata": revocata}
@@ -140,8 +145,10 @@ _chiave(CHIAVE_REVOCATA, "rev-1", "u-rev", 10000, revocata=True)
 _chiave(CHIAVE_VECCHIA, "old-1", None, 10000, usati=9999, mese=date(2026, 8, 15))
 _chiave(BULK499, "b499", "u-b499", 499999)
 _chiave(BULK500, "b500", "u-b500", 500000)
-_chiave(DELTA199, "d199", "u-d199", 199999)
-_chiave(DELTA200, "d200", "u-d200", 200000)
+_chiave(DELTA199, "d199", "u-d199", 99999)
+_chiave(DELTA200, "d200", "u-d200", 100000)
+for uid in ("u-b500", "u-d200"):
+    USERS[uid].update(subscription_status="active", creem_subscription_id=f"sub-{uid}")
 _chiave("nv-extra", "extra-1", "u-extra", 1)
 USERS["u-extra"]["extra"] = 2
 _chiave("nv-account-a", "acc-a", "u-account", 10, usati=4)
@@ -171,10 +178,32 @@ def _leggi_finto(key_hash):
         return None
     if rec["user_id"] and USERS[rec["user_id"]]["status"] != "active":
         return None
-    return {k: v for k, v in rec.items() if k != "revocata"}
+    account = USERS.get(rec["user_id"], {})
+    return {**{k: v for k, v in rec.items() if k != "revocata"}, **account}
 
 
-def _addebita_finto(chiave_id, via, azione, dettaglio):
+def _servizio_finto(chiave_id):
+    rec = _record_per_id(chiave_id)
+    if rec is None or rec["revocata"]:
+        raise chiavi.ChiaveInvalida()
+    uid = rec["user_id"]
+    if uid and USERS[uid]["status"] != "active":
+        raise chiavi.ChiaveInvalida()
+    if uid:
+        quota, usati, extra = _riepilogo(uid)
+        usati_chiave = rec["usati_mese"]
+    else:
+        quota = rec["crediti_mensili"]
+        usati_chiave = 0 if rec["mese_uso"] < OGGI else rec["usati_mese"]
+        usati, extra = usati_chiave, 0
+    return {"id": rec["id"], "label": rec["label"], "user_id": uid,
+            "crediti_mensili": quota, "usati_mese": usati, "usati": usati,
+            "usati_chiave": usati_chiave, "mese_uso": OGGI,
+            "crediti_extra": extra, "residui_mensili": max(0, quota - usati),
+            "saldo": max(0, quota - usati) + extra}
+
+
+def _addebita_finto(chiave_id, via, azione, dettaglio, crediti=1):
     if CONSUMI_FALLISCONO:
         raise RuntimeError("database giu' (simulato)")
     rec = _record_per_id(chiave_id)
@@ -187,21 +216,22 @@ def _addebita_finto(chiave_id, via, azione, dettaglio):
         rec["usati_mese"], rec["mese_uso"] = 0, OGGI
     if uid:
         quota, usati, extra = _riepilogo(uid)
-        dal_mese = int(usati < quota)
-        if not dal_mese and extra <= 0:
+        dal_mese = min(crediti, max(0, quota - usati))
+        dall_extra = crediti - dal_mese
+        if dall_extra > extra:
             raise chiavi.CreditiEsauriti(quota, OGGI, extra)
         rec["usati_mese"] += dal_mese
-        USERS[uid]["extra"] -= 1 - dal_mese
+        USERS[uid]["extra"] -= dall_extra
         nuovo_extra = USERS[uid]["extra"]
         usati_dopo = usati + dal_mese
     else:
         quota = rec["crediti_mensili"]
-        if rec["usati_mese"] >= quota:
+        if rec["usati_mese"] + crediti > quota:
             raise chiavi.CreditiEsauriti(quota, OGGI)
-        rec["usati_mese"] += 1
+        rec["usati_mese"] += crediti
         usati_dopo, nuovo_extra = rec["usati_mese"], 0
-    CONSUMI.append(chiave_id)
-    REGISTRO.append((uid, via, azione, dettaglio))
+    CONSUMI.append(crediti)
+    REGISTRO.append((uid, via, azione, dettaglio, crediti))
     return {"id": rec["id"], "label": rec["label"], "user_id": uid,
             "crediti_mensili": quota, "usati_mese": usati_dopo,
             "usati": usati_dopo, "usati_chiave": rec["usati_mese"],
@@ -212,6 +242,8 @@ def _addebita_finto(chiave_id, via, azione, dettaglio):
 
 chiavi._leggi = _leggi_finto
 chiavi._addebita_chiave_db = _addebita_finto
+chiavi._servizio_chiave_db = _servizio_finto
+chiavi.saldo_per_chiave = lambda kid: _servizio_finto(kid)["saldo"]
 chiavi.volume_per_utente = lambda uid: _riepilogo(uid)[0]
 
 from fastapi import FastAPI  # noqa: E402
@@ -235,7 +267,7 @@ def prova(nome, condizione, dettaglio=""):
 
 
 def _consumi():
-    return len(CONSUMI)
+    return sum(CONSUMI)
 
 
 print("autenticazione e addebito")
@@ -252,8 +284,8 @@ r = client.get("/v1/companies/linkedin/inesistente", headers=H)
 prova("404 azienda senza addebito", r.status_code == 404 and _consumi() == prima)
 CONSUMI_FALLISCONO = True
 r = client.get("/v1/coverage", headers=H)
-prova("contatore guasto -> 503 fail closed", r.status_code == 503)
-prova("contatore guasto non registra consumi", _consumi() == prima)
+prova("coverage gratuita non chiama il contatore addebiti", r.status_code == 200)
+prova("coverage gratuita non registra consumi", _consumi() == prima)
 CONSUMI_FALLISCONO = False
 
 print("filtri, paginazione e fake vivo")
@@ -282,35 +314,41 @@ prova("next_cursor legge tutte le offerte una volta",
 print("crediti account, extra e reset")
 r = client.get("/v1/usage", headers={"X-Api-Key": CHIAVE_POVERA})
 prova("usage ha i campi esistenti e il saldo account",
-      r.status_code == 200 and r.json()["crediti_mensili"] == 2
-      and r.json()["residui"] == 1 and r.json()["saldo"] == 1)
+      r.status_code == 200 and r.json()["monthly_credits"] == 2
+      and r.json()["remaining"] == 2 and r.json()["balance"] == 2)
 client.get("/v1/usage", headers={"X-Api-Key": CHIAVE_POVERA})
 r = client.get("/v1/usage", headers={"X-Api-Key": CHIAVE_POVERA})
-prova("franchigia finita -> 429", r.status_code == 429 and "mese_uso" in r.json()["detail"])
+prova("usage ripetuto resta 200 e non si addebita",
+      r.status_code == 200 and r.json()["used"] == 0 and r.json()["balance"] == 2)
 r = client.get("/v1/usage", headers={"X-Api-Key": CHIAVE_VECCHIA})
-prova("mese vecchio riparte da zero", r.status_code == 200 and r.json()["usati"] == 1)
-for attesi in (2, 1, 0):
+prova("mese vecchio riparte da zero senza addebito",
+      r.status_code == 200 and r.json()["used"] == 0 and r.json()["balance"] == 10000)
+for _ in range(3):
     r = client.get("/v1/usage", headers={"X-Api-Key": "nv-extra"})
-    prova(f"usage con extra: saldo {attesi}", r.status_code == 200
-          and r.json()["saldo"] == attesi and r.json()["residui"] == attesi)
-prova("finiti franchigia ed extra -> 429",
-      client.get("/v1/usage", headers={"X-Api-Key": "nv-extra"}).status_code == 429)
+    prova("usage con extra: saldo invariato", r.status_code == 200
+          and r.json()["balance"] == 3 and r.json()["remaining"] == 3)
+prova("usage a franchigia ed extra esauriti resta 200",
+      client.get("/v1/usage", headers={"X-Api-Key": "nv-extra"}).status_code == 200)
 r = client.get("/v1/usage", headers={"X-Api-Key": "nv-account-a"})
 prova("usage somma anche la chiave revocata",
-      r.status_code == 200 and r.json()["usati"] == 8 and r.json()["crediti_mensili"] == 10,
+      r.status_code == 200 and r.json()["used"] == 7 and r.json()["monthly_credits"] == 10,
       r.text[:200])
 STORE[_sha("nv-account-a")]["revocata"] = True
 _chiave("nv-account-c", "acc-c", "u-account", 10)
 r = client.get("/v1/usage", headers={"X-Api-Key": "nv-account-c"})
 prova("revoca e ricreazione non azzerano il consumo",
-      r.status_code == 200 and r.json()["usati"] == 9, r.text[:200])
+      r.status_code == 200 and r.json()["used"] == 7, r.text[:200])
 r = client.get("/v1/usage", headers={"X-Api-Key": "nv-account-b"})
 prova("il saldo residuo resta condiviso fra chiavi", r.status_code == 200
-      and r.json()["usati"] == 10 and r.json()["saldo"] == 0)
-prova("quota account esaurita anche sulla nuova chiave",
-      client.get("/v1/usage", headers={"X-Api-Key": "nv-account-c"}).status_code == 429)
+      and r.json()["used"] == 7 and r.json()["balance"] == 3)
+STORE[_sha("nv-account-b")]["usati_mese"] += 3
+r = client.get("/v1/usage", headers={"X-Api-Key": "nv-account-c"})
+prova("usage a quota zero resta ispezionabile sulla nuova chiave",
+      r.status_code == 200 and r.json()["used"] == 10 and r.json()["balance"] == 0)
+prova("usage a quota zero non diventa 429",
+      client.get("/v1/usage", headers={"X-Api-Key": "nv-account-c"}).status_code == 200)
 
-print("changes: validazione, soglia 200K e RapidAPI")
+print("changes: validazione, soglia 100K e RapidAPI")
 prima = _consumi()
 prova("changes senza since -> 400 gratis", client.get("/v1/changes", headers=H).status_code == 400
       and _consumi() == prima)
@@ -318,17 +356,17 @@ prova("since malformata -> 400 gratis",
       client.get("/v1/changes", params={"since": "no"}, headers=H).status_code == 400
       and _consumi() == prima)
 r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z"}, headers=H)
-prova("delta sotto 200K -> 403 gratis", r.status_code == 403 and _consumi() == prima)
+prova("delta sotto 100K -> 403 gratis", r.status_code == 403 and _consumi() == prima)
 r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z"},
                headers={"X-Api-Key": DELTA199})
-prova("199.999 -> 403 gratis", r.status_code == 403 and _consumi() == prima)
+prova("99.999 -> 403 gratis", r.status_code == 403 and _consumi() == prima)
 r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z"},
                headers={"X-Api-Key": DELTA200})
-prova("200.000 -> 200 e un addebito", r.status_code == 200 and _consumi() == prima + 1)
+prova("100.000 -> 200 e due crediti per due eventi", r.status_code == 200 and _consumi() == prima + 2)
 os.environ["RAPIDAPI_PROXY_SECRET"] = "segreto-finto"
 RH = {"X-RapidAPI-Proxy-Secret": "segreto-finto", "X-RapidAPI-User": "buyer"}
 r = client.get("/v1/changes", params={"since": "2026-09-01T00:00:00Z"}, headers=RH)
-prova("RapidAPI conserva delta e nessun addebito", r.status_code == 200 and _consumi() == prima + 1)
+prova("RapidAPI conserva delta e nessun addebito", r.status_code == 200 and _consumi() == prima + 2)
 r = client.get("/v1/usage", headers=RH)
 prova("usage RapidAPI invariato", r.status_code == 200 and r.json()["via"] == "rapidapi")
 
@@ -339,14 +377,15 @@ r = client.get("/v1/companies/linkedin/acme", headers=H)
 prova("dettaglio azienda", r.status_code == 200 and r.json()["technologies"] == ["python", "postgres"])
 r = client.get("/v1/coverage", headers=H)
 prova("coverage invariata", r.status_code == 200 and r.json()["marca"] == "banco")
-r = client.get("/v1/exports/latest", headers=H)
-prova("manifest export", r.status_code == 200 and r.json()["data"] == "2026-09-23")
 prima = _consumi()
+r = client.get("/v1/exports/latest", headers={"X-Api-Key": BULK500})
+prova("manifest export gratuito", r.status_code == 200 and r.json()["data"] == "2026-09-23"
+      and _consumi() == prima)
 r = client.get("/v1/exports/latest/offerte", headers={"X-Api-Key": BULK499})
 prova("499.999 bulk -> 403 gratis", r.status_code == 403 and _consumi() == prima)
 r = client.get("/v1/exports/latest/offerte", headers={"X-Api-Key": BULK500})
 scaricate = gzip.decompress(r.content).decode().splitlines() if r.status_code == 200 else []
-prova("500.000 bulk -> file e un addebito", len(scaricate) == 2 and _consumi() == prima + 1)
+prova("500.000 bulk -> file senza addebito", len(scaricate) == 2 and _consumi() == prima)
 prova("bulk da file precedente senza campi PII",
       all("contact_email" not in riga and "recruiter" not in riga
           for riga in map(json.loads, scaricate)))
@@ -384,7 +423,7 @@ prova("il cap segue il monthly tier, incluso zero",
 v1._applica_rate_limit = _rate_originale
 v1._rate_limiter.clear()
 prima = _consumi()
-rate_free = [client.get("/v1/jobs", headers={"X-Api-Key": RATE_FREE_KEY})
+rate_free = [client.get("/v1/jobs", params={"limit": 1}, headers={"X-Api-Key": RATE_FREE_KEY})
              for _ in range(6)]
 prova("free API: burst 5, sesta richiesta 429",
       [r.status_code for r in rate_free] == [200, 200, 200, 200, 200, 429])
@@ -397,8 +436,8 @@ rate_paid = [client.get("/v1/usage", headers={"X-Api-Key": RATE_PAID_KEY})
              for _ in range(31)]
 prova("API pagante: burst 30, trentunesima richiesta 429",
       [r.status_code for r in rate_paid] == [200] * 30 + [429])
-prova("429 pagante non spende oltre le 30 richieste ammesse",
-      _consumi() == prima + 30)
+prova("usage resta gratuita anche durante il rate limit",
+      _consumi() == prima)
 
 from nivult.api import booking  # noqa: E402
 
@@ -409,26 +448,24 @@ class _ConnessioneFinta:
     def __exit__(self, *args):
         return False
 
+booking.database_url = lambda: "postgresql://nivult-test.invalid/test"
 booking.psycopg.connect = lambda dsn: _ConnessioneFinta()
 booking._slot_giorno = lambda conn, giorno: []
 booking_app = FastAPI()
 booking.registra(booking_app)
 booking_client = TestClient(booking_app)
-booking._rate_limiter.clear()
 slot_ip = {"CF-Connecting-IP": "203.0.113.50"}
 slot_rate = [booking_client.get("/booking/slots", params={"day": "2026-11-23"},
                                 headers=slot_ip) for _ in range(6)]
-prova("booking slots: burst 5 per IP, poi 429",
-      [r.status_code for r in slot_rate] == [200] * 5 + [429])
-booking._rate_limiter.clear()
+prova("booking slots: protocollo corrente senza il vecchio limiter",
+      [r.status_code for r in slot_rate] == [200] * 6)
 post_ip = {"CF-Connecting-IP": "203.0.113.51"}
 honeypot = {"nome": "Bot", "email": "bot@example.com",
             "starts_at": "2027-01-01T10:00:00Z", "sito": "compilato"}
 post_rate = [booking_client.post("/booking", json=honeypot, headers=post_ip)
              for _ in range(6)]
-prova("booking POST: honeypot intatto, burst 5 poi 429",
-      [r.status_code for r in post_rate] == [200] * 5 + [429]
-      and int(post_rate[-1].headers.get("Retry-After", "0")) >= 1)
+prova("booking POST: honeypot silenzioso e senza vecchio limiter",
+      [r.status_code for r in post_rate] == [200] * 6)
 
 print("demo: IP e campioni EXPORT_DIR")
 def _campione(nome, valore):

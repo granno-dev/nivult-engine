@@ -75,7 +75,7 @@ prova("/v1/coverage 200", r.status_code == 200)
 
 r = requests.get(f"{API}/v1/usage", headers=H)
 d = r.json()
-prova("/v1/usage conta le chiamate di questo banco", r.status_code == 200)
+prova("/v1/usage risponde senza addebitare la chiamata", r.status_code == 200)
 print("  usage:", json.dumps(d)[:200])
 
 print("\n== carico gentile (GET /v1/jobs?limit=100) ==")

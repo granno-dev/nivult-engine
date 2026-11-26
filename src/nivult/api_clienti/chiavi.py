@@ -394,6 +394,47 @@ def riepilogo_per_utente(user_id: str) -> dict:
         return _riepilogo_cur(cur, user_id)
 
 
+def _servizio_chiave_db(chiave_id: str) -> dict:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT k.id::text, k.label, k.crediti_mensili, k.usati_mese, "
+            "       k.mese_uso, k.user_id::text, u.status "
+            "FROM api_chiavi k LEFT JOIN users u ON u.id = k.user_id "
+            "WHERE k.id = %s AND k.revoked_at IS NULL FOR UPDATE OF k",
+            (chiave_id,))
+        r = cur.fetchone()
+        if r is None or (r[5] and r[6] != "active"):
+            raise ChiaveInvalida()
+        cur.execute(
+            "UPDATE api_chiavi SET last_used_at = now() "
+            "WHERE id = %s AND revoked_at IS NULL", (chiave_id,))
+        if cur.rowcount != 1:
+            raise ChiaveInvalida()
+        usati_chiave = 0 if _come_data(r[4]) < _mese() else int(r[3])
+        if r[5]:
+            rec = _riepilogo_cur(cur, r[5])
+        else:
+            quota = int(r[2])
+            rec = {"crediti_mensili": quota, "usati": usati_chiave,
+                   "crediti_extra": 0,
+                   "residui_mensili": max(0, quota - usati_chiave),
+                   "saldo": max(0, quota - usati_chiave), "mese_uso": _mese()}
+        return {**rec, "id": r[0], "label": r[1], "user_id": r[5],
+                "usati_chiave": usati_chiave}
+
+
+def registra_servizio_chiave(chiave_id: str) -> dict:
+    """Aggiorna solo last_used e legge il riepilogo, senza addebiti o ledger."""
+    try:
+        return _servizio_chiave_db(chiave_id)
+    except (ChiaveInvalida, ContatoreNonDisponibile):
+        raise
+    except (psycopg.errors.LockNotAvailable, psycopg_pool.PoolTimeout) as exc:
+        raise ContatoreNonDisponibile("lettura servizio non disponibile") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise ContatoreNonDisponibile("lettura servizio non disponibile") from exc
+
+
 def volume_per_utente(user_id: str) -> int:
     """Volume mensile dell'account; le ricariche una tantum non lo aumentano."""
     return int(riepilogo_per_utente(user_id)["crediti_mensili"])

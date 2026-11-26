@@ -3,9 +3,10 @@
 Il contratto pubblico usa nomi di campi inglesi; le rimozioni privacy sono
 deliberate. L'autenticazione e' separata dall'addebito per non consumare crediti
 su errori del cliente, entitlement mancante, file assente o errori del database.
-Jobs e changes costano un credito per record, companies tre. Il saldo limita
-la pagina prima della query; l'addebito atomico segue solo risposte riuscite.
-Risultati vuoti, errori e guasti del contatore non producono dati gratuiti.
+Jobs e changes costano un credito per record, companies tre. Usage, coverage,
+manifest e download Daily Bulk costano zero e restano soggetti ad auth,
+rate-limit ed entitlement. Il saldo limita solo gli endpoint dati a pagamento;
+risultati vuoti, errori e guasti del contatore non producono dati gratuiti.
 """
 from __future__ import annotations
 
@@ -130,6 +131,17 @@ def _addebita(request: Request, cliente: dict, risultati: int = 1,
             "monthly_credits": e.crediti_mensili,
             "purchased_credits": e.crediti_extra,
             "usage_month": str(e.mese_uso)})
+    except chiavi.ContatoreNonDisponibile:
+        raise HTTPException(503, "credit counter temporarily unavailable")
+
+
+def _servizio(cliente: dict) -> dict:
+    if cliente.get("via") == "rapidapi":
+        return cliente
+    try:
+        return chiavi.registra_servizio_chiave(str(cliente["id"]))
+    except chiavi.ChiaveInvalida:
+        raise HTTPException(401, "invalid or revoked API key")
     except chiavi.ContatoreNonDisponibile:
         raise HTTPException(503, "credit counter temporarily unavailable")
 
@@ -304,8 +316,9 @@ def changes(request: Request, since: str | None = None, cursor: str | None = Non
 def export_latest(request: Request, cliente=Depends(_cliente)):
     _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
     stato = dati.stato_export()
-    _addebita(request, cliente)
-    return stato
+    _servizio(cliente)
+    return JSONResponse(stato, headers={} if cliente.get("via") == "rapidapi"
+                        else {"X-Credits-Charged": "0"})
 
 
 @router.get("/exports/latest/{nome}")
@@ -321,15 +334,18 @@ def export_file(request: Request, nome: str, cliente=Depends(_cliente)):
     percorso = (stato.get("file") or {}).get(nome)
     if not percorso or not os.path.isfile(percorso):
         raise HTTPException(404, f"export '{nome}' is not available today")
-    _addebita(request, cliente)
-    return _risposta_export(percorso, os.path.basename(percorso))
+    _servizio(cliente)
+    response = _risposta_export(percorso, os.path.basename(percorso))
+    response.headers["X-Credits-Charged"] = "0"
+    return response
 
 
 @router.get("/coverage")
 def coverage(request: Request, cliente=Depends(_cliente)):
     risposta = dati.copertura()
-    _addebita(request, cliente)
-    return risposta
+    _servizio(cliente)
+    return JSONResponse(risposta, headers={} if cliente.get("via") == "rapidapi"
+                        else {"X-Credits-Charged": "0"})
 
 
 @router.get("/usage")
@@ -337,14 +353,14 @@ def usage(request: Request, cliente=Depends(_cliente)):
     if cliente.get("via") == "rapidapi":
         return {"via": "rapidapi",
                 "note": "usage quotas are managed by the RapidAPI plan"}
-    rec = _addebita(request, cliente)
+    rec = _servizio(cliente)
     mensili = int(rec["crediti_mensili"])
-    usati = int(rec.get("usati", rec["usati_mese"]))
+    usati = int(rec.get("usati", rec.get("usati_mese", 0)))
     extra = int(rec.get("crediti_extra") or 0)
     residui_mensili = max(0, mensili - usati)
     saldo = residui_mensili + extra
     periodo = cliente.get("current_period_end")
-    return {"monthly_credits": mensili, "used": usati,
+    return JSONResponse({"monthly_credits": mensili, "used": usati,
             "remaining": saldo, "usage_month": str(rec["mese_uso"]),
             "monthly_remaining": residui_mensili, "purchased_credits": extra,
             "balance": saldo, "key_credits_used": rec.get("usati_chiave", usati),
@@ -353,7 +369,8 @@ def usage(request: Request, cliente=Depends(_cliente)):
             "subscription_plan": cliente.get("subscription_plan"),
             "subscription_interval": cliente.get("subscription_interval"),
             "current_period_end": (periodo.isoformat()
-                                   if hasattr(periodo, "isoformat") else periodo)}
+                                   if hasattr(periodo, "isoformat") else periodo)},
+            headers={"X-Credits-Charged": "0"})
 
 
 _DEMO_RX = re.compile(r"^[A-Za-z0-9 .+#&()/'À-ÿ\-]{2,40}$")

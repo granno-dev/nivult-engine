@@ -3,7 +3,7 @@
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
     "version": "1.0.0",
-    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Metering is pay per result: jobs and changes cost 1 credit per returned record, companies cost 3 credits per returned record, and empty results or errors cost 0 credits. For direct accounts, the effective page limit is capped by the available balance and per-record cost. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
+    "description": "Live job postings from employer ATS systems and public employment portals, plus company records. Jobs support full-text search over titles and descriptions. Company records are keyed by ATS + company_slug. Coverage and provenance are exposed for documented, selected fields. Metering is pay per result: jobs and changes cost 1 credit per returned record, companies cost 3 credits per returned record, and empty results or errors cost 0 credits. For direct accounts, the effective page limit is capped by the available balance and per-record cost. Usage, coverage and Daily Bulk are unmetered service endpoints; authentication, rate limits and entitlements still apply. Direct API clients authenticate with X-Api-Key; RapidAPI authentication is handled by the RapidAPI proxy.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://api.nivult.com" }],
@@ -122,12 +122,12 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns metadata for the latest available export. The manifest and file downloads require an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not raise this entitlement.",
+        "description": "Returns metadata for the latest available export for 0 credits. The manifest and file downloads require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance; top-ups do not raise this entitlement. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0.",
         "responses": {
           "200": { "description": "Latest export manifest", "content": { "application/json": { "schema": { "type": "object" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
@@ -136,14 +136,14 @@
       "get": {
         "summary": "Download the latest available bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip. Daily Bulk requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups add spendable credits but do not raise this entitlement. RapidAPI does not include bulk-file downloads.",
+        "description": "Downloads offerte or aziende as JSONL gzip for 0 credits. Daily Bulk requires an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance; top-ups add spendable credits but do not raise this entitlement. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0. RapidAPI does not include bulk-file downloads.",
         "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
         "responses": {
           "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "403": { "description": "No active Scale-or-higher subscription with at least 500,000 credits/month, or RapidAPI channel" },
           "404": { "description": "Unknown export name or no export available" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
@@ -152,11 +152,11 @@
       "get": {
         "summary": "Coverage for documented fields",
         "operationId": "coverage",
-        "description": "Returns percentages from 0 to 100 for the documented set of posting and company fields measured in the latest export; it is not a schema of every response field.",
+        "description": "Returns percentages from 0 to 100 for the documented set of posting and company fields measured in the latest export; it is not a schema of every response field. Costs 0 credits on every plan and works at zero balance. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0.",
         "responses": {
           "200": { "description": "Field coverage percentages", "content": { "application/json": { "schema": { "type": "object" } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
@@ -165,11 +165,11 @@
       "get": {
         "summary": "Get current credit usage",
         "operationId": "usage",
-        "description": "Direct-account usage is shared across keys, including revoked keys. The recurring plan allowance or one-time trial allowance is spent before purchased credits. Purchased top-ups never expire and do not unlock Delta or Daily Bulk entitlements. This endpoint itself consumes one credit and returns 429 at a zero balance. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
+        "description": "Direct-account usage is shared across keys, including revoked keys. The recurring plan allowance or one-time trial allowance is spent before purchased credits. Purchased top-ups never expire and do not unlock Delta or Daily Bulk entitlements. This endpoint costs 0 credits, does not change usage and returns 200 at a zero balance. Authentication and rate limits still apply. Direct responses include X-Credits-Charged: 0. RapidAPI returns a channel note because its quotas are managed by RapidAPI.",
         "responses": {
           "200": { "description": "Direct usage or RapidAPI channel note", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/Usage" }, { "$ref": "#/components/schemas/RapidApiUsage" }] } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
@@ -188,6 +188,7 @@
       "Unauthorized": { "description": "Missing, invalid or revoked API key" },
       "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
       "CreditsExhausted": { "description": "Insufficient credits for one result, or plan/trial and purchased credits exhausted; no credits are charged for the error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreditError" } } } },
+      "RateLimited": { "description": "Request frequency exceeded the key or IP rate limit; this response is unrelated to the credit balance and no credits are charged" },
       "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; the response is JSON and no credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
     },
     "schemas": {

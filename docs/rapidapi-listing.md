@@ -117,19 +117,19 @@ If `since` predates `retention_since`, the response is HTTP 400 with `code: delt
 
 ## GET /v1/exports/latest
 
-Returns the latest available export manifest. This endpoint is authenticated and metered but does not require the direct bulk-file tier.
+Returns the latest available export manifest for 0 credits. Direct accounts require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. Authentication and rate limits still apply.
 
 ## GET /v1/exports/latest/{nome}
 
-`nome` is `offerte` or `aziende`; the response is JSONL gzip. Direct accounts require a monthly tier of at least 500,000 credits. One-time top-ups do not unlock this tier. RapidAPI does not include bulk-file downloads.
+`nome` is `offerte` or `aziende`; the response is JSONL gzip and costs 0 credits. Direct accounts require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. One-time top-ups do not unlock this entitlement. RapidAPI does not include bulk-file downloads.
 
 ## GET /v1/coverage
 
-Returns percentages from 0 to 100 for the documented set of fields measured in the latest export. It does not claim coverage for every possible response field.
+Returns percentages from 0 to 100 for the documented set of fields measured in the latest export. It does not claim coverage for every possible response field. Costs 0 credits on every direct plan and works at zero balance; authentication and rate limits still apply.
 
 ## GET /v1/usage
 
-Direct usage is account-level across keys, including revoked keys. The monthly allowance is spent before purchased credits. This endpoint itself consumes one credit and returns 429 at a zero balance. RapidAPI returns a channel note because RapidAPI manages its own quotas.
+Direct usage is account-level across keys, including revoked keys. The monthly allowance is spent before purchased credits. This endpoint costs 0 credits, does not change usage and returns 200 at a zero balance. Authentication and rate limits still apply. RapidAPI returns a channel note because RapidAPI manages its own quotas.
 
 ## Errors
 
@@ -138,7 +138,7 @@ Direct usage is account-level across keys, including revoked keys. The monthly a
 - **403** — the channel or monthly tier does not include the requested resource.
 - **404** — company, export name or file not found.
 - **422** — FastAPI parameter validation failed, such as `limit=0`, `limit=501` or a non-integer limit. Its `detail` is an array.
-- **429** — plan quota/rate limit on RapidAPI, or exhausted monthly and purchased credits on direct keys.
+- **429** — plan quota/rate limit on RapidAPI, rate limiting on direct service endpoints, or exhausted monthly and purchased credits on direct paid-data endpoints. Usage, coverage and Daily Bulk never return 429 for zero balance.
 - **503** — the direct credit counter is unavailable; the request fails closed.
 
 Unknown query parameters are ignored. Unknown filter values generally produce an empty page rather than a 422.
@@ -148,10 +148,10 @@ A direct-key credit-exhausted response has an object in `detail`:
 ```json
 {
   "detail": {
-    "errore": "monthly and purchased credits exhausted",
-    "crediti_mensili": 1000,
-    "crediti_extra": 0,
-    "mese_uso": "2026-11-01"
+    "error": "monthly and purchased credits exhausted",
+    "monthly_credits": 1000,
+    "purchased_credits": 0,
+    "usage_month": "2026-11-01"
   }
 }
 ```

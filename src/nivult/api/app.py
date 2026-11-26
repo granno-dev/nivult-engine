@@ -2016,25 +2016,24 @@ def create_app() -> FastAPI:
 
     @app.get("/portale/export/{nome}")
     def export_dal_portale(nome: str, uid: str = Depends(utente)):
-        """L'export del giorno dal portale, con la sessione: la chiave
-        non si mostra mai all'utente in chiaro dopo la creazione, e il
-        download paga un credito dal suo contatore. Sotto i 500K/mese
-        l'export bulk non e' nel piano (la soglia della landing)."""
+        """Daily Bulk incluso in Scale attivo: nessun addebito, ma sessione,
+        rate-limit, entitlement e last_used restano controllati."""
         if nome not in ("offerte", "aziende"):
             raise HTTPException(404, "unknown export")
+        _freno_portale(uid)
         attive = [k for k in _chiavi.lista_per_utente(uid)
                   if not k["revocata_il"]]
         if not attive:
             raise HTTPException(402, "create an API key first")
-        if _chiavi.volume_per_utente(uid) < 500000:
-            raise HTTPException(402, "the daily export starts at the 500K "
-                                "credits/month tier — raise your volume below")
+        abbonamento = _chiavi.abbonamento_per_utente(uid)
+        cliente = {**abbonamento, "user_id": uid,
+                   "monthly_tier": _chiavi.volume_per_utente(uid)}
+        api_clienti_v1._richiedi_volume(
+            cliente, api_clienti_v1.SOGLIA_BULK, "the daily bulk export")
         percorso = (_dati.stato_export().get("file") or {}).get(nome)
         if not percorso or not os.path.isfile(percorso):
             raise HTTPException(404, "today's export is not ready yet")
-        if not _chiavi.spendi_per_utente(uid, via="export", azione="daily export",
-                                         dettaglio=nome):
-            raise HTTPException(429, "this month's credits are spent")
+        _chiavi.registra_servizio_chiave(attive[0]["id"])
         return StreamingResponse(
             _dati.stream_export_senza_pii(percorso), media_type="application/gzip",
             headers={"Content-Disposition": "attachment; filename=\""
