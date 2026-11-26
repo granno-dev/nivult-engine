@@ -1963,7 +1963,7 @@ def create_app() -> FastAPI:
             raise HTTPException(400, "invalid filters or cursor") from exc
         riferimenti = [_riferimento(r) for r in righe]
         sue = await run_in_threadpool(_chiavi.rivelate_per_utente, uid, "azienda", riferimenti)
-        profili = await run_in_threadpool(_dati.profili_aziende, list(sue))
+        profili = await run_in_threadpool(_dati.profili_aziende, riferimenti)
         data = []
         for riga, rif in zip(righe, riferimenti, strict=True):
             rivelata = rif in sue

@@ -652,7 +652,9 @@ def test_duckdb_preview_still_finds_redacted_public_title(synthetic_duckdb):
         "public-posting-1", "public-posting-2", "disjoint-domain-posting",
     }
     secret_row = next(row for row in rows if row["id"] == "public-posting-1")
-    _assert_zero_leak(explorer.job_dto(secret_row, False, "token", "group"))
+    reference = f"{secret_row['ats']}:{secret_row['company_slug']}"
+    profile = dati.profili_aziende([reference])[reference]
+    _assert_zero_leak(explorer.job_dto(secret_row, False, "token", "group", profile))
 
 
 def test_duckdb_closed_real_shape_resolves_company_and_redacts_unknown(

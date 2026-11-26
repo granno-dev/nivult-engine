@@ -343,11 +343,11 @@ def cerca_portale(filtri: dict, cursore: str | None,
         righe = _conn().execute(
             f"""SELECT id, title, country, city, seniority, remote,
                        category, posted_at, technologies, ats,
-                       company, company_slug, company_domain
+                       company, company_slug
                   FROM (
                     SELECT id, title, country, city, seniority, remote,
                            category, posted_at, technologies, ats,
-                           company, company_slug, raw->>'company_domain' AS company_domain,
+                           company, company_slug,
                            row_number() OVER (
                              PARTITION BY coalesce(company_slug, company, id)
                              ORDER BY posted_at DESC NULLS LAST, id) AS _rn
@@ -363,8 +363,7 @@ def cerca_portale(filtri: dict, cursore: str | None,
     return ([{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
               "seniority": r[4], "remote": r[5], "category": r[6],
               "posted_at": _iso(r[7]), "technologies": r[8] or [],
-              "ats": r[9], "company": r[10], "company_slug": r[11],
-              "company_domain": r[12]}
+              "ats": r[9], "company": r[10], "company_slug": r[11]}
              for r in righe], prossimo, totale)
 
 
