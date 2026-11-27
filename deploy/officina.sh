@@ -40,6 +40,9 @@ while [ $# -gt 0 ]; do case "$1" in
 # script). Una scritta in testa non ferma niente, questa si': con deploy
 # si esce subito. La riparazione resta provabile con --senza-deploy.
 if [ "$DEPLOY" -eq 1 ]; then
+  DETTAGLIO="deploy automatico disattivato il 22/09/2026; riparazione non avviata"
+  (cd "$BASE" && "$PY" -m nivult.ats.officina saltata "$PID" "$MOTIVO" "$DETTAGLIO") || \
+    echo "officina: impossibile registrare lo stato saltata" >&2
   echo "officina: deploy via bare disinnescato il 22/09/2026; usa --senza-deploy per provare una riparazione." >&2
   exit 1
 fi
@@ -53,7 +56,11 @@ diario() { T=$(mktemp); printf %s "$2" > "$T"; cd "$BASE" && "$PY" -m nivult.ats
 # --- limiti di frequenza --------------------------------------------------
 ULT=/tmp/nivult-officina-$PID.ultima; CONTA=/tmp/nivult-officina.giorno; oggi=$(date +%Y%m%d)
 if [ -f "$ULT" ] && [ $(( $(date +%s) - $(cat "$ULT") )) -lt 21600 ]; then log "gia' aperta meno di 6h fa: salto"; exit 0; fi
-if [ "$(grep -c "^$oggi$" "$CONTA" 2>/dev/null || true)" -ge 6 ]; then log "sei officine oggi: basta"; telegram "🔧 Officina: sesta richiesta di oggi ($PID), mi fermo. Serve una mano umana."; exit 0; fi
+n_oggi=0
+if [ -f "$CONTA" ]; then
+    n_oggi=$(grep -Fx -c -- "$oggi" "$CONTA" 2>/dev/null || true)
+fi
+if [ "${n_oggi:-0}" -ge 6 ]; then log "sei officine oggi: basta"; telegram "🔧 Officina: sesta richiesta di oggi ($PID), mi fermo. Serve una mano umana."; exit 0; fi
 date +%s > "$ULT"; echo "$oggi" >> "$CONTA"
 export CLAUDE_CODE_OAUTH_TOKEN=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' /opt/nivult/.env | cut -d= -f2-)
 [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || { log "gettone Claude assente"; telegram "🔧 Officina su $PID: il gettone di Claude manca (scade settembre 2027)."; exit 1; }

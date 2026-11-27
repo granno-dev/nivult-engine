@@ -393,6 +393,10 @@ def main(argv=None) -> int:
     if cmd == "bocciata":
         _registra(pid, argv[2] if len(argv) > 2 else "", "bocciata", None, argv[3] if len(argv) > 3 else "", 0)
         return 0
+    if cmd == "saltata":
+        _registra(pid, argv[2] if len(argv) > 2 else "", "saltata", None,
+                  argv[3] if len(argv) > 3 else "", 0)
+        return 0
     print(__doc__); return 2
 
 
