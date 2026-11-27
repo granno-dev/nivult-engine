@@ -2153,21 +2153,65 @@ def create_app() -> FastAPI:
             headers={"Content-Disposition": "attachment; filename=\""
                      + os.path.basename(percorso) + "\""})
 
-    # ── l'export filtrato del portale: stima il costo, poi scarica ──
-    # Il prezzo (28/09/2026): 1 credito ogni 10 righe, per eccesso.
-    # La taratura e' il trial da 500 crediti una tantum: non deve
-    # comprare la fetta massima; chi vuole di piu' paga.
-    EXPORT_RIGHE_PER_CREDITO = 10
-    # Export aziende filtrato: 1 credito a record; il reveal singolo ne costa 3.
-    EXPORT_AZIENDE_PER_CREDITO = 1
+    # ── l'export filtrato del portale: stessa tariffa della Public API ──
+    EXPORT_COSTO_POSTING = 1
+    EXPORT_COSTO_COMPANY = 3
     # il tetto tiene conto di Cloudflare: oltre i 100 secondi di attesa la
     # risposta cade; misurato il 28/09: 83k righe = ~55s di preparazione.
     EXPORT_TETTO_RIGHE = 100_000
 
-    def _prezzo_export(righe: int, tipo: str = "postings") -> int:
-        per = (EXPORT_AZIENDE_PER_CREDITO if tipo == "companies"
-               else EXPORT_RIGHE_PER_CREDITO)
-        return -(-righe // per) if righe else 0
+    def _max_rows_export(corpo: dict) -> int:
+        presenti = [(k, corpo[k]) for k in ("max_rows", "limit")
+                    if k in corpo and corpo[k] is not None]
+        if not presenti:
+            return EXPORT_TETTO_RIGHE
+        convertiti = []
+        for nome, valore in presenti:
+            if isinstance(valore, bool) or (
+                    isinstance(valore, float) and not valore.is_integer()):
+                raise HTTPException(400, f"{nome} must be an integer")
+            try:
+                n = int(valore)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(400, f"{nome} must be an integer") from exc
+            if not 1 <= n <= EXPORT_TETTO_RIGHE:
+                raise HTTPException(
+                    400, f"{nome} must be between 1 and {EXPORT_TETTO_RIGHE}")
+            convertiti.append(n)
+        if len(set(convertiti)) != 1:
+            raise HTTPException(400, "max_rows and limit must match when both are sent")
+        return convertiti[0]
+
+    def _preventivo_export(tipo: str, matching_rows: int, saldo: int,
+                           max_rows: int) -> dict:
+        unit_cost = EXPORT_COSTO_COMPANY if tipo == "companies" else EXPORT_COSTO_POSTING
+        export_rows = min(matching_rows, max_rows)
+        exact_cost = export_rows * unit_cost
+        return {
+            "matching_rows": matching_rows,
+            "export_rows": export_rows,
+            "unit_cost": unit_cost,
+            "exact_cost": exact_cost,
+            "affordable_rows": saldo // unit_cost,
+            "max_allowed_rows": EXPORT_TETTO_RIGHE,
+            "max_rows": max_rows,
+            "balance_after_export": saldo - exact_cost,
+            # Campi legacy mantenuti durante l'aggiornamento del portale.
+            "righe": matching_rows, "crediti": exact_cost, "saldo": saldo,
+            "tipo": tipo, "tetto": EXPORT_TETTO_RIGHE,
+            "troppo": matching_rows > EXPORT_TETTO_RIGHE,
+        }
+
+    def _crediti_insufficienti_export(preventivo: dict) -> HTTPException:
+        return HTTPException(402, {
+            "error": "insufficient_credits",
+            "message": f"this export costs {preventivo['exact_cost']} credits; "
+                       f"your balance is {preventivo['saldo']}",
+            "required_credits": preventivo["exact_cost"],
+            "balance": preventivo["saldo"],
+            "affordable_rows": preventivo["affordable_rows"],
+            "max_allowed_rows": preventivo["max_allowed_rows"],
+        })
 
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
@@ -2175,8 +2219,11 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        tipo = "companies" if (corpo or {}).get("tipo") == "companies" else "postings"
-        filtri = {k: v for k, v in (corpo or {}).items()
+        if not isinstance(corpo, dict):
+            corpo = {}
+        tipo = "companies" if corpo.get("tipo") == "companies" else "postings"
+        max_rows = _max_rows_export(corpo)
+        filtri = {k: v for k, v in corpo.items()
                   if k in ("country", "technology", "dal") and v}
         if tipo == "companies":
             righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
@@ -2184,12 +2231,7 @@ def create_app() -> FastAPI:
             stima = _opensearch.conteggio if _opensearch.attivo() else _dati.stima_export
             righe = await run_in_threadpool(stima, filtri)
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
-        return {"righe": righe, "crediti": _prezzo_export(righe, tipo),
-                "saldo": saldo, "tipo": tipo,
-                "per_credito": (EXPORT_AZIENDE_PER_CREDITO if tipo == "companies"
-                                else EXPORT_RIGHE_PER_CREDITO),
-                "tetto": EXPORT_TETTO_RIGHE,
-                "troppo": righe > EXPORT_TETTO_RIGHE}
+        return _preventivo_export(tipo, righe, saldo, max_rows)
 
     @app.post("/portale/export/scarica")
     async def scarica_export_portale(request: Request, uid: str = Depends(utente)):
@@ -2197,51 +2239,73 @@ def create_app() -> FastAPI:
             corpo = await request.json()
         except Exception:                            # noqa: BLE001
             corpo = {}
-        tipo = "companies" if (corpo or {}).get("tipo") == "companies" else "postings"
-        filtri = {k: v for k, v in (corpo or {}).items()
+        if not isinstance(corpo, dict):
+            corpo = {}
+        tipo = "companies" if corpo.get("tipo") == "companies" else "postings"
+        max_rows = _max_rows_export(corpo)
+        filtri = {k: v for k, v in corpo.items()
                   if k in ("country", "technology", "dal") and v}
         # DuckDB e Postgres qui sotto sono chiamate SINCROME e pesanti:
-        # sul thread dell'event loop un export lento inchioda TUTTA l'API
-        # (misurato il 28/09/2026: API muta 10 minuti per un download da
-        # 937 righe). Si girano al pool di thread.
+        # sul thread dell'event loop un export lento inchioda TUTTA l'API.
         if tipo == "companies":
             righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
         else:
             righe = await run_in_threadpool(_dati.stima_export, filtri)
-        if righe > EXPORT_TETTO_RIGHE:
-            raise HTTPException(413, f"this slice has {righe} rows — past the "
-                                f"{EXPORT_TETTO_RIGHE}-row ceiling. Narrow the "
-                                "filters or ask us about the full feed")
-        # Prima si SCRIVE il file, poi si paga: se la scrittura fallisce
-        # nessun credito bruciato; se il saldo non basta, il file si butta.
+        saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
+        preventivo = _preventivo_export(tipo, righe, saldo, max_rows)
+        if preventivo["export_rows"] == 0:
+            raise HTTPException(404, "no rows match these filters — 0 credits charged")
+        if saldo < preventivo["exact_cost"]:
+            raise _crediti_insufficienti_export(preventivo)
+
+        # Il file viene completato prima dell'addebito: errori di generazione
+        # non bruciano crediti e il costo finale usa solo le righe scritte.
         import tempfile
         fd, percorso = tempfile.mkstemp(suffix=".jsonl.gz",
                                         prefix="export-portale-")
         os.close(fd)
+
+        def _pulisci_export_temp():
+            try:
+                os.unlink(percorso)
+            except FileNotFoundError:
+                return
+            except OSError:
+                log.warning("cleanup export temporaneo non riuscito: %s", percorso,
+                            exc_info=True)
+
         try:
             scrivi = (_dati.scrivi_export_aziende if tipo == "companies"
                       else _dati.scrivi_export)
             scritte = await run_in_threadpool(
-                scrivi, filtri, percorso, EXPORT_TETTO_RIGHE)
-        except Exception:                            # noqa: BLE001
-            os.unlink(percorso)
+                scrivi, filtri, percorso, preventivo["export_rows"])
+            if scritte > preventivo["export_rows"]:
+                raise HTTPException(
+                    500, "export row limit was not enforced — 0 credits charged")
+            if scritte == 0:
+                raise HTTPException(404, "no rows match these filters — 0 credits charged")
+            costo = scritte * preventivo["unit_cost"]
+            try:
+                pagato = await run_in_threadpool(
+                    _chiavi.spendi_n_per_utente, uid, costo,
+                    via="export", azione="filtered export",
+                    dettaglio=f"{scritte} rows" + (f" · {filtri}" if filtri else ""))
+            except _chiavi.ContatoreNonDisponibile as exc:
+                raise HTTPException(503, "billing temporarily unavailable; retry") from exc
+            if not pagato:
+                saldo_attuale = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
+                effettivo = _preventivo_export(tipo, scritte, saldo_attuale, scritte)
+                raise _crediti_insufficienti_export(effettivo)
+            sfondo = BackgroundTasks()
+            sfondo.add_task(_pulisci_export_temp)
+            return FileResponse(
+                percorso, media_type="application/gzip",
+                filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
+                background=sfondo,
+                headers={"X-Credits-Charged": str(costo), "X-Export-Rows": str(scritte)})
+        except BaseException:
+            _pulisci_export_temp()
             raise
-        if scritte == 0:
-            os.unlink(percorso)
-            raise HTTPException(404, "no rows match these filters")
-        costo = _prezzo_export(scritte, tipo)
-        if not await run_in_threadpool(
-                _chiavi.spendi_n_per_utente, uid, costo,
-                via="export", azione="filtered export",
-                dettaglio=f"{scritte} rows" + (f" · {filtri}" if filtri else "")):
-            os.unlink(percorso)
-            raise HTTPException(429, "not enough credits for this export: "
-                                f"it costs {costo}")
-        sfondo = BackgroundTasks()
-        sfondo.add_task(lambda p: os.path.exists(p) and os.unlink(p), percorso)
-        return FileResponse(percorso, media_type="application/gzip",
-                            filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
-                            background=sfondo)
 
     def _bel_nome(rif: str) -> str:
         """Dal rif tecnico a un nome presentabile, quando il record non si

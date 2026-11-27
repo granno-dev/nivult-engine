@@ -813,7 +813,7 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
               <div class="flex items-start justify-between gap-4"><div class="flex items-center gap-3"><span class="icon-chip chip-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></span><div><h2 class="text-sm font-bold">Filtered JSONL export</h2><p class="mt-1 text-xs text-slate-500">A filtered slice of active postings or company records.</p></div></div><button type="button" onclick="apriExport()" class="app-btn app-btn-primary shrink-0">Build a download</button></div>
               <ol class="mt-5 grid sm:grid-cols-3 gap-3">
                 <li class="rounded-xl border border-blue-100 bg-white/75 p-4"><span class="text-[11px] font-bold text-brand-600">01</span><p class="mt-1 text-xs font-bold">Filter</p><p class="mt-1 text-[11px] text-slate-500">Country, technology and posted-after.</p></li>
-                <li class="rounded-xl border border-blue-100 bg-white/75 p-4"><span class="text-[11px] font-bold text-brand-600">02</span><p class="mt-1 text-xs font-bold">See exact cost</p><p class="mt-1 text-[11px] text-slate-500">Portal pricing: 1 credit / 10 jobs or 1 credit / company.</p></li>
+                <li class="rounded-xl border border-blue-100 bg-white/75 p-4"><span class="text-[11px] font-bold text-brand-600">02</span><p class="mt-1 text-xs font-bold">See exact cost</p><p class="mt-1 text-[11px] text-slate-500">Same rate as API: 1 credit / job or 3 credits / company.</p></li>
                 <li class="rounded-xl border border-blue-100 bg-white/75 p-4"><span class="text-[11px] font-bold text-brand-600">03</span><p class="mt-1 text-xs font-bold">Download</p><p class="mt-1 text-[11px] text-slate-500">Complete records in JSONL, with no charge on empty results.</p></li>
               </ol>
               <div class="mt-4 flex flex-wrap items-center gap-2"><span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Presets</span><button type="button" onclick="apriExport({technology:'SAP'})" class="app-btn app-btn-secondary !min-h-8 !py-1">SAP, everywhere</button><button type="button" onclick="apriExport({country:'DE'})" class="app-btn app-btn-secondary !min-h-8 !py-1">Everything in Germany</button><button type="button" onclick="apriExport({dal: trentaGiorniFa()})" class="app-btn app-btn-secondary !min-h-8 !py-1">Posted in the last 30 days</button></div>
@@ -888,28 +888,51 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
             </div>
           </div>
           <p id="ex-cosa" class="text-[12px] text-slate-400 -mt-1">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
+          <div>
+            <div class="flex items-center justify-between gap-3 mb-1.5"><label for="ex-max-rows" class="block text-[13px] font-bold text-slate-700">Max rows</label><span class="text-[11px] text-slate-400">Up to 100,000 per download</span></div>
+            <div class="grid grid-cols-[1fr_112px] gap-2">
+              <div class="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1" aria-label="Max rows presets">
+                <button id="ex-max-100" type="button" onclick="exImpostaMax('100')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">100</button>
+                <button id="ex-max-500" type="button" onclick="exImpostaMax('500')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">500</button>
+                <button id="ex-max-1000" type="button" onclick="exImpostaMax('1000')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">1,000</button>
+                <button id="ex-max-all" type="button" onclick="exImpostaMax('')" class="rounded-lg px-2 py-2 text-xs font-bold bg-white text-slate-900 shadow-sm">All</button>
+              </div>
+              <input id="ex-max-rows" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="All" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+            </div>
+            <p class="mt-1.5 text-[11px] leading-4 text-slate-400">All selects the freshest records, up to the per-download ceiling.</p>
+          </div>
         </div>
 
         <div class="mt-6 overflow-hidden rounded-2xl bg-slate-950 shadow-lg shadow-slate-900/20">
           <div class="flex items-center justify-between gap-3 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Your slice</span>
+            <span class="text-xs font-medium text-slate-400">Matching slice</span>
             <span id="ex-righe" class="text-[15px] font-bold tabular-nums text-white">—</span>
           </div>
           <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span id="ex-prezzo-label" class="text-xs font-medium text-slate-400">Price · 1 credit / 10 job records</span>
+            <span class="text-xs font-medium text-slate-400">Exporting</span>
+            <span class="text-right"><span id="ex-export-righe" class="text-[15px] font-bold tabular-nums text-white">—</span><span id="ex-export-note" class="hidden ml-1 text-[11px] font-medium text-slate-400">most recent</span></span>
+          </div>
+          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
+            <span id="ex-prezzo-label" class="text-xs font-medium text-slate-400">Exact cost · 1 credit / job</span>
             <span id="ex-costo" class="text-[15px] font-bold tabular-nums text-brand-400">—</span>
           </div>
           <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Your balance</span>
+            <span class="text-xs font-medium text-slate-400">Balance after export</span>
             <span id="ex-saldo" class="text-[15px] font-bold tabular-nums text-mint-400">—</span>
           </div>
         </div>
-        <p class="mt-3 text-center text-[11px] leading-5 text-slate-400">Portal filtered export pricing. Public API: 1 credit/job · 3 credits/company.</p>
+        <p class="mt-3 text-center text-[11px] leading-5 text-slate-400">Same rate as API · 1 credit/job · 3 credits/company</p>
+        <p id="ex-cap-nota" class="hidden mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold leading-5 text-amber-800"></p>
 
-        <p id="ex-avviso" class="hidden mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed"></p>
+        <div id="ex-avviso" role="alert" class="hidden mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed">
+          <p id="ex-avviso-testo"></p>
+          <div id="ex-avviso-azioni" class="hidden mt-3 flex flex-wrap items-center gap-3">
+            <button id="ex-fit" type="button" onclick="exFitBalance()" class="hidden rounded-lg border border-amber-300 bg-white/70 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-white">Fit my balance</button>
+            <a id="ex-ricarica" href="#billing" onclick="vaiAllaRicarica(); return false" class="hidden font-bold text-violet-700 underline underline-offset-2">Top up credits</a>
+          </div>
+        </div>
 
-        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-px transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0 flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Download</button>
-        <button id="ex-ricarica" onclick="vaiAllaRicarica()" class="hidden mt-3 w-full rounded-xl border-2 border-violet-500/50 text-violet-600 hover:bg-violet-50 transition py-3 font-bold">Top up to download this slice →</button>
+        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-px transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0 flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span id="ex-vai-label">Download</span></button>
         <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
       </div>
     </div>
@@ -2764,6 +2787,22 @@ function trentaGiorniFa() {
   return d.toISOString().slice(0, 10);
 }
 let exTipoCorrente = "postings";
+function exFmt(n) { return Number(n || 0).toLocaleString("en-US"); }
+function exAggiornaPreset() {
+  const value = document.getElementById("ex-max-rows").value;
+  for (const preset of ["100", "500", "1000", ""]) {
+    const id = preset ? "ex-max-" + preset : "ex-max-all";
+    const active = value === preset;
+    document.getElementById(id).className = "rounded-lg px-2 py-2 text-xs font-bold " +
+      (active ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800");
+    document.getElementById(id).setAttribute("aria-pressed", String(active));
+  }
+}
+function exImpostaMax(value) {
+  document.getElementById("ex-max-rows").value = value;
+  exAggiornaPreset();
+  stimaExport();
+}
 function exScegliTipo(t) {
   exTipoCorrente = t;
   const on = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900";
@@ -2774,8 +2813,8 @@ function exScegliTipo(t) {
   document.getElementById("ex-cosa").textContent = t === "companies"
     ? "Each row is one company: name, tech stack, locations, size, active postings and 30-day hiring pace."
     : "Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.";
-  document.getElementById("ex-prezzo-label").textContent =
-    t === "companies" ? "Price · 1 credit = 1 company record" : "Price · 1 credit / 10 job records";
+  document.getElementById("ex-prezzo-label").textContent = t === "companies"
+    ? "Exact cost · 3 credits / company" : "Exact cost · 1 credit / job";
   stimaExport();
 }
 function apriExport(pre) {
@@ -2785,6 +2824,10 @@ function apriExport(pre) {
   sel.value = "";
   document.getElementById("ex-tec").value = "";
   document.getElementById("ex-dal").value = "";
+  document.getElementById("ex-max-rows").value = pre && pre.max_rows ? String(pre.max_rows) : "";
+  document.getElementById("ex-nota").textContent = "";
+  exDati = null;
+  exAggiornaPreset();
   if (pre) {
     if (pre.country) sel.value = pre.country;
     if (pre.technology) document.getElementById("ex-tec").value = pre.technology;
@@ -2799,72 +2842,102 @@ function filtriExport() {
   const p = document.getElementById("ex-paese").value;
   const t = document.getElementById("ex-tec").value.trim();
   const d = document.getElementById("ex-dal").value;
+  const maxRows = document.getElementById("ex-max-rows").value.trim();
   if (p) f.country = p;
   if (t) f.technology = t;
   if (d && exTipoCorrente === "postings") f.dal = d;
+  if (maxRows) f.max_rows = Number(maxRows);
   return f;
 }
-function euroPer(crediti) {
-  return Math.max(40, Math.ceil(crediti / 1000) * 4);
+function exResetRiepilogo(value) {
+  for (const id of ["ex-righe", "ex-export-righe", "ex-costo", "ex-saldo"])
+    document.getElementById(id).textContent = value;
+}
+function exMostraAvviso(testo, neutral = false) {
+  const avviso = document.getElementById("ex-avviso");
+  avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed " +
+    (neutral ? "bg-slate-50 border border-slate-200 text-slate-600"
+             : "bg-amber-50 border border-amber-200 text-amber-800");
+  document.getElementById("ex-avviso-testo").textContent = testo;
+}
+function exAggiornaPulsante() {
+  if (!exDati) return;
+  document.getElementById("ex-vai-label").textContent = "Download " +
+    exFmt(exDati.export_rows) + " rows · " + exFmt(exDati.exact_cost) + " credits";
 }
 async function stimaExport() {
   const seq = ++exStimaSeq;
-  const avviso = document.getElementById("ex-avviso");
   const vai = document.getElementById("ex-vai");
-  const ricarica = document.getElementById("ex-ricarica");
-  ["ex-righe", "ex-costo", "ex-saldo"].forEach(id =>
-    document.getElementById(id).textContent = "…");
-  vai.disabled = true; vai.classList.add("hidden");
-  ricarica.classList.add("hidden"); avviso.classList.add("hidden");
+  exDati = null;
+  exResetRiepilogo("…");
+  vai.disabled = true;
+  document.getElementById("ex-vai-label").textContent = "Checking exact cost…";
+  for (const id of ["ex-avviso", "ex-avviso-azioni", "ex-fit", "ex-ricarica", "ex-export-note", "ex-cap-nota"])
+    document.getElementById(id).classList.add("hidden");
   let r;
   try { r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) }); }
   catch (e) {
     if (seq !== exStimaSeq) return;
-    ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—");
-    avviso.textContent = "The estimate could not be loaded. Check your connection and retry.";
-    avviso.classList.remove("hidden");
+    exResetRiepilogo("—");
+    document.getElementById("ex-vai-label").textContent = "Download";
+    exMostraAvviso("The estimate could not be loaded. Check your connection and retry.");
     return;
   }
   if (seq !== exStimaSeq) return;
   if (!r.ok) {
-    ["ex-righe", "ex-costo", "ex-saldo"].forEach(id => document.getElementById(id).textContent = "—");
-    avviso.textContent = "The estimate could not be loaded. Retry in a moment.";
-    avviso.classList.remove("hidden");
+    exResetRiepilogo("—");
+    document.getElementById("ex-vai-label").textContent = "Download";
+    let message = "The estimate could not be loaded. Retry in a moment.";
+    try {
+      const error = await r.json();
+      if (r.status === 400 && typeof error.detail === "string") message = error.detail;
+    } catch (e) { /* response without a JSON error body */ }
+    exMostraAvviso(message);
     return;
   }
   const d = await r.json();
   if (seq !== exStimaSeq) return;
   exDati = d;
-  const unita = d.tipo === "companies" ? " companies" : " rows";
-  document.getElementById("ex-righe").textContent = d.righe.toLocaleString("en-US") + unita;
-  document.getElementById("ex-costo").textContent = d.crediti.toLocaleString("en-US") + " credits";
+  document.getElementById("ex-righe").textContent = exFmt(d.matching_rows) + " rows";
+  document.getElementById("ex-export-righe").textContent = exFmt(d.export_rows) + " rows";
+  document.getElementById("ex-costo").textContent = exFmt(d.exact_cost) + " credits";
+  if (d.export_rows < d.matching_rows) document.getElementById("ex-export-note").classList.remove("hidden");
+  if (!document.getElementById("ex-max-rows").value && d.matching_rows > d.max_allowed_rows) {
+    const capNota = document.getElementById("ex-cap-nota");
+    capNota.textContent = "All is limited to " + exFmt(d.max_allowed_rows) + " rows per export. Only the " +
+      exFmt(d.export_rows) + " most recent records will be downloaded, not all " +
+      exFmt(d.matching_rows) + " matching rows.";
+    capNota.classList.remove("hidden");
+  }
   const saldoEl = document.getElementById("ex-saldo");
-  saldoEl.textContent = d.saldo.toLocaleString("en-US") + " credits";
-  saldoEl.className = "text-[15px] font-black tabular-nums " + (d.saldo >= d.crediti ? "text-mint-400" : "text-rose-400");
-  if (d.righe === 0) {
-    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-slate-50 border border-slate-200 text-slate-600";
-    avviso.textContent = "No rows match these filters. Change the country or technology — no credits will be used.";
-    avviso.classList.remove("hidden");
+  saldoEl.textContent = exFmt(d.balance_after_export) + " credits";
+  saldoEl.className = "text-[15px] font-black tabular-nums " +
+    (d.balance_after_export >= 0 ? "text-mint-400" : "text-amber-400");
+  exAggiornaPulsante();
+  if (d.export_rows === 0) {
+    exMostraAvviso("No rows match these filters. Change the country or technology — 0 credits will be used.", true);
     return;
   }
-  if (d.troppo) {
-    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-amber-50 border border-amber-200 text-amber-800";
-    avviso.innerHTML = "This slice is <b>" + d.righe.toLocaleString("en-US") + " rows</b> — past the " + d.tetto.toLocaleString("en-US") +
-      "-row ceiling for a browser download. Narrow the filters, or <a class='underline font-bold' href='mailto:hello@nivult.com?subject=Full%20feed'>ask us about the full feed</a>.";
-    avviso.classList.remove("hidden");
+  if (d.saldo < d.exact_cost) {
+    const mancano = d.exact_cost - d.saldo;
+    exMostraAvviso("You're short " + exFmt(mancano) + " credits for this download. " +
+      (d.affordable_rows > 0 ? "Fit it to your balance or top up to continue."
+                             : "Top up with at least " + d.unit_cost + " credits to download one record."));
+    document.getElementById("ex-avviso-azioni").classList.remove("hidden");
+    if (d.matching_rows > d.affordable_rows && d.affordable_rows > 0) {
+      const fit = document.getElementById("ex-fit");
+      fit.textContent = "Fit my balance (" + exFmt(d.affordable_rows) + " rows)";
+      fit.classList.remove("hidden");
+    }
+    document.getElementById("ex-ricarica").classList.remove("hidden");
     return;
   }
-  if (d.saldo < d.crediti) {
-    const mancano = d.crediti - d.saldo;
-    avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed bg-rose-50 border border-rose-200 text-rose-700";
-    avviso.innerHTML = "You're short <b>" + mancano.toLocaleString("en-US") + " credits</b> for this slice.";
-    avviso.classList.remove("hidden");
-    ricarica.textContent = "Top up €" + euroPer(mancano) + " to download this slice →";
-    ricarica.classList.remove("hidden");
-    return;
-  }
-  vai.classList.remove("hidden");
   vai.disabled = false;
+}
+function exFitBalance() {
+  if (!exDati || exDati.affordable_rows < 1) return;
+  const rows = Math.min(exDati.affordable_rows, exDati.max_allowed_rows);
+  exImpostaMax(String(rows));
 }
 function vaiAiCrediti() {
   chiudiDettaglio(false);
@@ -2883,36 +2956,45 @@ function vaiAiPiani() {
 }
 function vaiAllaRicarica() {
   if (exDati) {
-    const mancano = exDati.crediti - exDati.saldo;
+    const mancano = exDati.exact_cost - exDati.saldo;
     setTopup(Math.max(10000, Math.ceil(mancano / 1000) * 1000));
   }
   chiudiExport();
   vaiAiCrediti();
 }
-["ex-paese", "ex-tec", "ex-dal"].forEach(id =>
+["ex-paese", "ex-tec", "ex-dal", "ex-max-rows"].forEach(id =>
   document.getElementById(id).addEventListener("input", () => {
+    if (id === "ex-max-rows") exAggiornaPreset();
     clearTimeout(exStimaTimer); exStimaTimer = setTimeout(stimaExport, 350);
   }));
 async function scaricaExportFiltrato() {
   const btn = document.getElementById("ex-vai");
   const nota = document.getElementById("ex-nota");
-  btn.disabled = true; btn.textContent = "Preparing the file…"; nota.textContent = "";
+  if (btn.disabled) return;
+  btn.disabled = true;
+  document.getElementById("ex-vai-label").textContent = "Preparing the file…";
+  nota.textContent = "";
   let r;
   try {
     r = await api("/portale/export/scarica", { method: "POST", body: JSON.stringify(filtriExport()) });
   } catch (e) {
-    nota.textContent = "The download could not start — no credits spent. Check your connection and retry.";
-    btn.disabled = false; btn.textContent = "Download →";
+    nota.textContent = "The download could not start. Check Recent activity before retrying.";
+    btn.disabled = false;
+    exAggiornaPulsante();
     return;
   }
-  if (r.status === 429) {
+  if (r.status === 402) {
     await stimaExport();
-    btn.textContent = "Download →";
+    return;
+  }
+  if (r.status === 404) {
+    await stimaExport();
     return;
   }
   if (!r.ok) {
-    nota.textContent = "The download failed before charging you — no credits spent. Retry in a moment.";
-    btn.disabled = false; btn.textContent = "Download →";
+    nota.textContent = "The download failed before the file was delivered. Retry in a moment.";
+    btn.disabled = false;
+    exAggiornaPulsante();
     return;
   }
   const blob = await r.blob();
@@ -2921,7 +3003,8 @@ async function scaricaExportFiltrato() {
   a.download = "nivult-export.jsonl.gz";
   a.click();
   URL.revokeObjectURL(a.href);
-  btn.disabled = false; btn.textContent = "Download →";
+  btn.disabled = false;
+  exAggiornaPulsante();
   chiudiExport();
   await carica();
 }

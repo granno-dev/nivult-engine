@@ -408,7 +408,7 @@ def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
     """Le offerte: vedi _scrivi_export."""
     dove, par = _dove_export(filtri)
     return _scrivi_export("offerte", dove, par, percorso, tetto,
-                          "posted_at DESC NULLS LAST, id")
+                          "posted_at DESC NULLS LAST, id DESC")
 
 
 def _dove_export_aziende(filtri: dict) -> tuple[str, dict]:
@@ -437,25 +437,23 @@ def scrivi_export_aziende(filtri: dict, percorso: str,
     """Lo spine aziende filtrato, una riga per datore — il record intero
     con stack, sedi, dimensione e conteggi (03/10/2026)."""
     dove, par = _dove_export_aziende(filtri)
-    return _scrivi_export("aziende", dove, par, percorso, tetto,
-                          "employees DESC NULLS LAST, ats, company_slug")
+    ordine = ("TRY_CAST(raw->>'jobs_posted_30d' AS INTEGER) DESC NULLS LAST, "
+              "TRY_CAST(raw->>'active_jobs' AS INTEGER) DESC NULLS LAST, "
+              "ats, company_slug")
+    return _scrivi_export("aziende", dove, par, percorso, tetto, ordine)
 
 
 def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
                    tetto: int, ordine: str) -> int:
-    """Scrive il JSONL filtrato e torna le righe scritte. Il download
-    del portale: la riga intera, gia' pagata in crediti.
+    """Scrive al massimo `tetto` righe JSONL, nell'ordine richiesto.
 
-    La strada misurata il 28/09/2026 (due OOM-kill e un box in ginocchio
-    per impararla): `SELECT raw` filtrata fa leggere a DuckDB l'intera
-    colonna da 17 GB; fetchall di una fetta grossa materializza ~25 KB a
-    riga in RAM python (83k righe = 2,3 GB). Quindi: una TEMP TABLE su
-    una CONNESSIONE DEDICATA (il build da ~1 min non tiene il lock delle
-    ricerche), che sotto memory_limit svuota su disco, poi lettura a
-    pezzi da 10.000 — RSS misurato 1,8 GB e stabile. Se `tetto` e' >0 e
-    le righe lo superano, alza ValueError: il chiamante ha gia' rifiutato
-    la stima, questa e' la cintura."""
+    La TEMP TABLE su una connessione dedicata evita il lock delle ricerche
+    e permette a DuckDB di svuotare su disco; la lettura resta a pezzi da
+    10.000 per non materializzare l'intero export in RAM. `tetto=0` conserva
+    il significato originale di nessun limite per gli altri chiamanti."""
     import gzip
+    if isinstance(tetto, bool) or not isinstance(tetto, int) or tetto < 0:
+        raise ValueError("tetto export non valido")
     nome = f"ex_{int(time.time() * 1000)}"   # solo cifre: nome sicuro
     tmp = os.path.join(os.path.dirname(os.path.abspath(_percorso)), "duckdb-tmp")
     os.makedirs(tmp, exist_ok=True)
@@ -465,12 +463,10 @@ def _scrivi_export(tabella: str, dove: str, par: dict, percorso: str,
         con.execute("SET threads = 4")
         con.execute("SET temp_directory = '" + tmp.replace("'", "''") + "'")
         con.execute("SET TimeZone = 'UTC'")
+        limite = f" LIMIT {tetto}" if tetto else ""
         con.execute(
             f"CREATE TEMP TABLE {nome} AS SELECT raw FROM {tabella} "
-            f"WHERE {dove} ORDER BY {ordine}", par)
-        tot = con.execute(f"SELECT count(*) FROM {nome}").fetchone()[0]
-        if tetto and tot > tetto:
-            raise ValueError(f"export oltre il tetto ({tetto} righe)")
+            f"WHERE {dove} ORDER BY {ordine}{limite}", par)
         scritte = 0
         with gzip.open(percorso, "wt", encoding="utf-8") as f:
             while True:
