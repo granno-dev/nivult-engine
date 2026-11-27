@@ -121,11 +121,14 @@ def _addebita(request: Request, cliente: dict, risultati: int = 1,
         request.state.rapidapi_credits = crediti
         return cliente
     if crediti == 0:
+        request.state.api_credits_charged = 0
         return {**cliente, "addebitati": 0}
     try:
-        return chiavi.addebita_chiave(
+        addebito = chiavi.addebita_chiave(
             str(cliente["id"]), via="api", azione=request.url.path,
             dettaglio=str(request.url.query)[:200] or None, crediti=crediti)
+        request.state.api_credits_charged = crediti
+        return addebito
     except chiavi.ChiaveInvalida:
         raise HTTPException(401, "invalid or revoked API key")
     except chiavi.CreditiEsauriti as e:
@@ -138,12 +141,22 @@ def _addebita(request: Request, cliente: dict, risultati: int = 1,
         raise HTTPException(503, "credit counter temporarily unavailable")
 
 
+def _endpoint_pagato(percorso: str) -> bool:
+    return (percorso in ("/v1/jobs", "/v1/companies", "/v1/changes")
+            or (percorso.startswith("/v1/companies/")
+                and len(percorso.split("/")) == 5))
+
+
 async def billing_rapidapi(request: Request, call_next):
     response = await call_next(request)
-    if (getattr(request.state, "rapidapi_autenticato", False)
-            and response.status_code < 500):
-        crediti = max(0, int(getattr(request.state, "rapidapi_credits", 0)))
-        response.headers["X-RapidAPI-Billing"] = f"Credits={crediti}"
+    rapidapi = getattr(request.state, "rapidapi_autenticato", False)
+    if rapidapi:
+        if response.status_code < 500:
+            crediti = max(0, int(getattr(request.state, "rapidapi_credits", 0)))
+            response.headers["X-RapidAPI-Billing"] = f"Credits={crediti}"
+    elif _endpoint_pagato(request.url.path):
+        crediti = max(0, int(getattr(request.state, "api_credits_charged", 0)))
+        response.headers["X-Credits-Charged"] = str(crediti)
     return response
 
 
@@ -201,9 +214,17 @@ def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
+def _normalizza_ats(valore: str | None) -> str | None:
+    if valore is None:
+        return None
+    token = ["bundesanstellung" if v.strip().lower() == "bundesagentur"
+             else v.strip() for v in valore.split(",") if v.strip()]
+    return ",".join(token)
+
+
 def _filtri(**coppie) -> dict:
-    if coppie.get("ats") == "bundesagentur":
-        coppie["ats"] = "bundesanstellung"
+    for campo in ("ats", "exclude_ats"):
+        coppie[campo] = _normalizza_ats(coppie.get(campo))
     return {k: v for k, v in coppie.items() if v is not None}
 
 
@@ -217,6 +238,24 @@ def _numero_salario(valore: str | None, campo: str) -> float | None:
     if not math.isfinite(numero) or numero < 0:
         raise HTTPException(400, f"{campo} must be finite and non-negative")
     return numero
+
+
+def _valida_employees(minimo: str | None, massimo: str | None) -> tuple[int | None, int | None]:
+    valori = []
+    for valore, campo in ((minimo, "employees_min"), (massimo, "employees_max")):
+        if valore is None:
+            valori.append(None)
+            continue
+        try:
+            numero = int(valore)
+        except ValueError:
+            raise HTTPException(400, f"{campo} must be an integer")
+        if numero < 0:
+            raise HTTPException(400, f"{campo} must be a non-negative integer")
+        valori.append(numero)
+    if valori[0] is not None and valori[1] is not None and valori[0] > valori[1]:
+        raise HTTPException(400, "employees_min cannot exceed employees_max")
+    return valori[0], valori[1]
 
 
 def _valida_jobs_v2(source_type: str | None, has_salary: str | None,
@@ -277,14 +316,15 @@ def jobs(request: Request, country: str | None = None, category: str | None = No
 @router.get("/companies")
 def companies(request: Request, country: str | None = None,
               industry: str | None = None, q: str | None = None,
-              technology: str | None = None, employees_min: int | None = None,
-              employees_max: int | None = None,
+              technology: str | None = None, employees_min: str | None = None,
+              employees_max: str | None = None,
               limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
               cursor: str | None = None, cliente=Depends(_cliente)):
+    minimo, massimo = _valida_employees(employees_min, employees_max)
     risposta = _pagina(
         dati.aziende,
         _filtri(country=country, industry=industry, q=q, technology=technology,
-                employees_min=employees_min, employees_max=employees_max),
+                employees_min=minimo, employees_max=massimo),
         cursor, _limite_con_saldo(cliente, limit, chiavi.COSTO_COMPANY))
     _addebita(request, cliente, len(risposta["data"]), chiavi.COSTO_COMPANY)
     return risposta
@@ -325,10 +365,22 @@ def changes(request: Request, since: str | None = None, cursor: str | None = Non
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
 
 
+_ALIAS_EXPORT = {"jobs": "offerte", "companies": "aziende"}
+_NOMI_FILE_EXPORT = {"offerte": "nivult-jobs.jsonl.gz",
+                     "aziende": "nivult-companies.jsonl.gz"}
+
+
+def _manifest_pubblico(stato: dict) -> dict:
+    pubblico = {k: v for k, v in stato.items()
+                if k not in ("file_offerte", "file_aziende")}
+    pubblico["file"] = {nome: f"/v1/exports/latest/{nome}" for nome in NOMI_EXPORT}
+    return pubblico
+
+
 @router.get("/exports/latest")
 def export_latest(request: Request, cliente=Depends(_cliente)):
     _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
-    stato = dati.stato_export()
+    stato = _manifest_pubblico(dati.stato_export())
     _servizio(cliente)
     return JSONResponse(stato, headers={} if cliente.get("via") == "rapidapi"
                         else {"X-Credits-Charged": "0"})
@@ -339,16 +391,17 @@ def export_file(request: Request, nome: str, cliente=Depends(_cliente)):
     if cliente.get("via") == "rapidapi":
         raise HTTPException(403, "the daily bulk export is not part of the "
                                  "RapidAPI plans — write to hello@nivult.com")
-    if nome not in NOMI_EXPORT:
+    canonico = _ALIAS_EXPORT.get(nome, nome)
+    if canonico not in NOMI_EXPORT:
         raise HTTPException(404, "unknown export: allowed values are "
-                                 + ", ".join(NOMI_EXPORT))
+                                 + ", ".join((*NOMI_EXPORT, *_ALIAS_EXPORT)))
     _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
     stato = dati.stato_export()
-    percorso = (stato.get("file") or {}).get(nome)
+    percorso = (stato.get("file") or {}).get(canonico)
     if not percorso or not os.path.isfile(percorso):
         raise HTTPException(404, f"export '{nome}' is not available today")
     _servizio(cliente)
-    response = _risposta_export(percorso, os.path.basename(percorso))
+    response = _risposta_export(percorso, _NOMI_FILE_EXPORT[canonico])
     response.headers["X-Credits-Charged"] = "0"
     return response
 

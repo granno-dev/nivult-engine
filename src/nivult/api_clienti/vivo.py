@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -150,9 +151,33 @@ _SEARCH_DOC = ("to_tsvector('simple', j.title || ' ' || "
                "NULLIF(j.raw->>'ShortDescriptionStr', ''), ''))")
 
 
+def _token(valore, trasforma=None) -> list[str]:
+    token = [v.strip() for v in str(valore).split(",") if v.strip()]
+    return [trasforma(v) if trasforma else v for v in token]
+
+
+def _keyword_sql(dove: list[str], par: dict, campo: str, colonna: str,
+                 valore, trasforma=None) -> None:
+    valori = _token(valore, trasforma)
+    if not valori:
+        dove.append("FALSE")
+        return
+    dove.append(f"{colonna} = ANY(%({campo})s)")
+    par[campo] = valori
+
+
+def _alias_ats(valore: str) -> str:
+    slug = valore.lower()
+    return "bundesanstellung" if slug == "bundesagentur" else slug
+
+
+def _dominio(valore: str) -> str:
+    dominio = re.sub(r"^https?://", "", valore.strip().lower())
+    return dominio.removeprefix("www.").split("/", 1)[0]
+
+
 def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
-    """I filtri della lista, identici a dati.offerte. Ogni valore e' un
-    PARAMETRO: mai concatenato, mai."""
+    """Filtri OpenSearch equivalenti; ogni valore resta parametrizzato."""
     dove = ["j.expired_at IS NULL",
             "(j.posted_at IS NULL OR j.posted_at <= now())",
             # un annuncio per chiave di dedup: il piu' vecchio del gruppo,
@@ -165,18 +190,65 @@ def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
             "        < (COALESCE(j.created_at, j.posted_at, j.fetched_at),"
             "           j.id))"]
     par: dict = {}
-    for campo, colonna in (("country", "j.country"), ("category", "x.family"),
-                           ("ats", "j.platform_id"),
-                           ("seniority", "j.seniority"),
-                           ("language", "j.lang")):
-        if filtri.get(campo):
-            dove.append(f"{colonna} = %({campo})s")
-            par[campo] = str(filtri[campo])
+    for campo, colonna, trasforma in (
+            ("country", "j.country", str.upper), ("category", "x.family", None),
+            ("ats", "j.platform_id", _alias_ats),
+            ("seniority", "j.seniority", str.lower),
+            ("language", "j.lang", str.lower)):
+        if filtri.get(campo) is not None:
+            _keyword_sql(dove, par, campo, colonna, filtri[campo], trasforma)
     if filtri.get("remote") is not None:
-        v = filtri["remote"]
-        par["remote"] = {True: "remote", False: "onsite"}.get(v, str(v)) \
-            if isinstance(v, bool) else str(v)
-        dove.append("j.remote = %(remote)s")
+        valore = filtri["remote"]
+        if isinstance(valore, bool):
+            valore = "remote" if valore else "onsite"
+        _keyword_sql(dove, par, "remote", "j.remote", valore, str.lower)
+    for campo, colonna, trasforma in (
+            ("company_slug", "j.slug", str.lower),
+            ("city", "j.city", None),
+            ("employment_type", "j.employment_type", str.lower),
+            ("department", "j.department", None),
+            ("salary_currency", "j.salary_currency", str.upper)):
+        if filtri.get(campo) is not None:
+            _keyword_sql(dove, par, campo, colonna, filtri[campo], trasforma)
+    if filtri.get("source_type") is not None:
+        _keyword_sql(dove, par, "source_type", SOURCE_TYPE_SQL,
+                     filtri["source_type"], str.lower)
+    if filtri.get("company_domain") is not None:
+        valori = [v for v in _token(filtri["company_domain"], _dominio) if v]
+        if valori:
+            dove.append("NULLIF(ltrim(co.site_domain, ''), '') = ANY(%(company_domain)s)")
+            par["company_domain"] = valori
+    if filtri.get("state") is not None:
+        valori = _token(filtri["state"])
+        dove.append("EXISTS (SELECT 1 FROM offerte_dettagli filtro_stato "
+                    "WHERE filtro_stato.job_id = j.id "
+                    "AND filtro_stato.state = ANY(%(state)s))" if valori else "FALSE")
+        if valori:
+            par["state"] = valori
+    if filtri.get("skills") is not None:
+        valori = _token(filtri["skills"])
+        dove.append("EXISTS (SELECT 1 FROM unnest(j.skills) AS filtro_skill(skill) "
+                    "WHERE filtro_skill.skill = ANY(%(skills)s))" if valori else "FALSE")
+        if valori:
+            par["skills"] = valori
+    if filtri.get("exclude_ats"):
+        valori = _token(filtri["exclude_ats"], _alias_ats)
+        if valori:
+            dove.append("(j.platform_id IS NULL OR NOT j.platform_id = ANY(%(exclude_ats)s))")
+            par["exclude_ats"] = valori
+    if filtri.get("company"):
+        dove.append("to_tsvector('simple', coalesce((" + COMPANY_SQL + "), '')) "
+                    "@@ plainto_tsquery('simple', %(company)s)")
+        par["company"] = str(filtri["company"])
+    if filtri.get("has_salary") is not None:
+        condizione = "(j.salary_min IS NOT NULL OR j.salary_max IS NOT NULL)"
+        dove.append(condizione if filtri["has_salary"] else f"NOT {condizione}")
+    if filtri.get("salary_min") is not None:
+        dove.append("j.salary_min >= %(salary_min)s")
+        par["salary_min"] = float(filtri["salary_min"])
+    if filtri.get("salary_max") is not None:
+        dove.append("j.salary_max <= %(salary_max)s")
+        par["salary_max"] = float(filtri["salary_max"])
     if filtri.get("q"):
         if portale:
             titolo_sicuro = ("CASE WHEN NULLIF(btrim((" + COMPANY_SQL + ")), '') IS NULL "
@@ -201,12 +273,30 @@ def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
         else:
             dove.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)")
         par["q"] = str(filtri["q"])
+    if filtri.get("title"):
+        dove.append("to_tsvector('simple', coalesce(j.title, '')) "
+                    "@@ plainto_tsquery('simple', %(title)s)")
+        par["title"] = str(filtri["title"])
+    if filtri.get("q_any"):
+        keywords = _token(filtri["q_any"])
+        if len(keywords) > 15:
+            raise ValueError("q_any accepts at most 15 comma-separated keywords")
+        alternative = []
+        for i, keyword in enumerate(keywords):
+            nome = f"q_any_{i}"
+            alternative.append(f"{_SEARCH_DOC} @@ plainto_tsquery('simple', %({nome})s)")
+            par[nome] = keyword
+        if alternative:
+            dove.append("(" + " OR ".join(alternative) + ")")
     if filtri.get("technology"):
-        dove.append("tr.tecnologia = lower(%(technology)s)")
-        par["technology"] = str(filtri["technology"])
+        valori = _token(filtri["technology"], str.lower)
+        _keyword_sql(dove, par, "technology", "tr.tecnologia", valori and ",".join(valori))
     if filtri.get("dal"):
         dove.append("j.posted_at >= %(dal)s::timestamptz")
         par["dal"] = _norm_ts(filtri["dal"])
+    if filtri.get("posted_before"):
+        dove.append("j.posted_at < %(posted_before)s::timestamptz")
+        par["posted_before"] = _norm_ts(filtri["posted_before"])
     return " AND ".join(dove), par
 
 
@@ -395,25 +485,33 @@ def offerte(filtri: dict, cursore: str | None,
             par["pts"] = _norm_ts(ts)
     # Con una tecnologia si parte dall'indice normalizzato gia' ordinato:
     # niente espansione JSONB e niente ordinamento di tutti i candidati.
+    serve_azienda = portale or any(filtri.get(campo) is not None for campo in (
+        "source_type", "company", "company_domain"))
     join_azienda = ("LEFT JOIN ats_companies co ON co.platform_id = j.platform_id "
-                    "AND co.slug = j.slug" if portale else "")
-    selezione = f"""SELECT j.id, {data_pubblicazione} AS posted_at
+                    "AND co.slug = j.slug" if serve_azienda else "")
+    distinta = "DISTINCT " if con_tecnologia else ""
+    selezione = f"""SELECT {distinta}j.id, {data_pubblicazione} AS posted_at
                       FROM {sorgente}
                       LEFT JOIN job_classifications x ON x.job_id = j.id
                       {join_azienda}
                      WHERE {dove}"""
     if testo_separato:
-        paese = str(filtri.get("country") or "")
-        filtro_paese = "AND j.country = %(country)s" if paese else ""
+        paesi = _token(filtri["country"], str.upper) \
+            if filtri.get("country") is not None else []
+        filtro_paese = "AND j.country = ANY(%(country)s)" if paesi else ""
         selezione = f"""WITH matched AS MATERIALIZED (
-            SELECT j.id, j.posted_at, j.country, j.duplicate_key,
-                   j.created_at, j.fetched_at, j.expired_at
+            SELECT j.id, j.title, j.posted_at, j.country, j.duplicate_key,
+                   j.created_at, j.fetched_at, j.expired_at, j.platform_id,
+                   j.slug, j.seniority, j.lang, j.remote, j.city,
+                   j.employment_type, j.department, j.skills, j.salary_min,
+                   j.salary_max, j.salary_currency, j.raw
               FROM ats_jobs j
              WHERE j.expired_at IS NULL {filtro_paese}
                AND {_SEARCH_DOC} @@ plainto_tsquery('simple', %(q)s)
         )
         SELECT j.id, j.posted_at FROM matched j
           LEFT JOIN job_classifications x ON x.job_id = j.id
+          {join_azienda}
          WHERE {dove}"""
         par["q"] = str(filtri["q"])
     elif filtri.get("q"):
