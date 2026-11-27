@@ -3,12 +3,14 @@ from __future__ import annotations
 import html
 import json
 import re
+import subprocess
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "vetrina" / "account.html").read_text()
+OPENAPI = json.loads((ROOT / "vetrina" / "openapi.json").read_text())
 
 
 def section(section_id: str) -> str:
@@ -111,7 +113,8 @@ class ApiDocsTest(unittest.TestCase):
         self.assertNotIn("v2 parameters", jobs)
         for marker in (
                 "Data%20%26%20Analytics", "technology</code> versus <code>skills",
-                "ats=bundesagentur", "case-sensitive", "exclude_ats", "token lists",
+                "ats=greenhouse,Bundesagentur", "case-insensitively", "exclude_ats",
+                "comma-separated lists", "exclusion wins", "complete schema sample",
                 "salary_min &gt;= N", "salary_max &lt;= N", "null <code>salary_min",
                 "null <code>salary_max", "not annualized", "not normalized for gross or net",
                 "salary_period", "not implicitly add", "annual gross", "return 400",
@@ -152,7 +155,10 @@ class ApiDocsTest(unittest.TestCase):
         self.assertIn("do not comma-OR", companies)
         self.assertIn("no industry discovery endpoint", companies)
         self.assertIn("Optional empty or null top-level fields are omitted", companies)
-        for marker in ("employees_source", "industry_source", "company_name_source", "size_range_source"):
+        for marker in (
+                "employees_source", "industry_source", "company_name_source", "size_range_source",
+                "employees_min &lt;= employees_max", "Negative values, non-integer values",
+                "inverted ranges return HTTP <code>400</code>"):
             self.assertIn(marker, companies)
         summary = EXAMPLES["companies-page"]["data"][0]
         detail = EXAMPLES["company-detail"]
@@ -212,17 +218,25 @@ class ApiDocsTest(unittest.TestCase):
         manifest = EXAMPLES["export-manifest"]
         raw_keys = {
             "stato", "data_export", "offerte", "aziende", "flusso", "flusso_giorni",
-            "flusso_dal", "file_offerte", "file_aziende", "generato_at",
+            "flusso_dal", "generato_at",
         }
         self.assertEqual(set(manifest), raw_keys | {"data", "righe", "file"})
         self.assertEqual(manifest["data"], manifest["data_export"])
         self.assertEqual(manifest["righe"]["offerte"], manifest["offerte"])
-        self.assertEqual(manifest["file"]["offerte"], manifest["file_offerte"])
+        self.assertEqual(manifest["file"], {
+            "offerte": "/v1/exports/latest/offerte",
+            "aziende": "/v1/exports/latest/aziende",
+        })
         exports = section("doc-exports")
-        self.assertIn("Server paths are not URLs", exports)
-        self.assertIn("offerte</code></td><td>Daily job postings", exports)
-        self.assertIn("aziende</code></td><td>Daily companies", exports)
-        self.assertIn("/v1/exports/latest/{nome}", exports)
+        for marker in (
+                "jobs</code> (recommended)", "companies</code> (recommended)",
+                "nivult-jobs.jsonl.gz", "nivult-companies.jsonl.gz",
+                "fully backward-compatible aliases", "API-relative download paths",
+                "Call these paths on the BASE URL", "/v1/exports/latest/{nome}"):
+            self.assertIn(marker, exports)
+        self.assertNotIn("/opt/", exports)
+        self.assertNotIn("file_offerte", exports)
+        self.assertNotIn("file_aziende", exports)
 
     def test_usage_scale_arithmetic_and_all_fields(self):
         usage = EXAMPLES["usage-scale"]
@@ -247,7 +261,8 @@ class ApiDocsTest(unittest.TestCase):
         for marker in (
                 "2 requests/second", "15 requests/second", "5 requests", "30 requests",
                 "in process", "Per API key", "RapidAPI", "X-Credits-Charged: 0",
-                "Paid direct routes do not emit", "Only rate-limit 429 responses",
+                "X-Credits-Charged: N", "Every direct paid response",
+                "Actual credits charged to this request", "Only rate-limit 429 responses",
                 "X-RapidAPI-Billing: Credits=N", "Content-Disposition", "X-RateLimit-*",
                 "X-Content-Type-Options: nosniff", "Strict-Transport-Security",
                 "X-Export-Rows", "X-Download-Id", "Inspect the JSON body before retrying",
@@ -260,8 +275,9 @@ class ApiDocsTest(unittest.TestCase):
         insufficient = EXAMPLES["insufficient-credit-error"]["detail"]
         self.assertEqual(insufficient["error"], "insufficient credits for one result")
         errors = section("doc-errors")
-        self.assertIn("Salary validation is 400", errors)
+        self.assertIn("Salary and employee-range validation is 400", errors)
         self.assertIn("FastAPI typed parameter validation", errors)
+        self.assertNotIn("non-integer <code>employees_min</code>", errors)
         for status in ("400", "401", "403", "404", "422", "429", "503"):
             self.assertIn(f"<td>{status}</td>", errors)
         self.assertIn("What to do", errors)
@@ -274,6 +290,198 @@ class ApiDocsTest(unittest.TestCase):
                 ".doc-section .code-block { max-width: 100%; }", "overflow-wrap: anywhere",
                 "@media (max-width: 960px)"):
             self.assertIn(marker, css)
+
+
+class ExecutableExamplesTest(unittest.TestCase):
+    def test_every_python_example_compiles(self):
+        examples = re.findall(r"python: `(?P<code>.*?)`\n  \}", DOC_EXAMPLES, re.DOTALL)
+        self.assertEqual(len(examples), 7)
+        for index, code in enumerate(examples):
+            with self.subTest(example=index):
+                compile(code, f"account-example-{index}.py", "exec")
+
+    def test_every_curl_example_parses_in_bash(self):
+        examples = re.findall(r"curl: `(?P<code>.*?)`,\n    python:", DOC_EXAMPLES, re.DOTALL)
+        self.assertEqual(len(examples), 7)
+        for index, code in enumerate(examples):
+            with self.subTest(example=index):
+                code = re.sub(r"\$\{[^}]+\}", "2026-11-27T00:00:00.000Z", code)
+                result = subprocess.run(
+                    ["bash", "-n"], input=code, text=True, capture_output=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_every_inline_script_passes_node_check(self):
+        scripts = []
+        for attrs, code in re.findall(
+                r"<script(?P<attrs>[^>]*)>(?P<code>.*?)</script>", HTML, re.DOTALL):
+            if "src=" not in attrs and "application/ld+json" not in attrs:
+                scripts.append(code)
+        self.assertTrue(scripts)
+        for index, code in enumerate(scripts):
+            with self.subTest(script=index):
+                result = subprocess.run(
+                    ["node", "--check", "-"], input=code, text=True,
+                    capture_output=True, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_export_and_delta_examples_use_current_contract(self):
+        exports = DOC_EXAMPLES[DOC_EXAMPLES.index("exports: {"):DOC_EXAMPLES.index("usage: {")]
+        for marker in (
+                "/v1/exports/latest/jobs", "/v1/exports/latest/companies",
+                "nivult-jobs.jsonl.gz", "nivult-companies.jsonl.gz",
+                'for name in ("jobs", "companies")'):
+            self.assertIn(marker, exports)
+        changes = DOC_EXAMPLES[DOC_EXAMPLES.index("changes: {"):DOC_EXAMPLES.index("exports: {")]
+        self.assertIn("limit=5", changes)
+        self.assertIn('"limit": 5', changes)
+        self.assertNotIn("limit=100", changes)
+        self.assertNotIn('"limit": 100', changes)
+
+
+class OpenApiTest(unittest.TestCase):
+    def resolve(self, reference):
+        self.assertTrue(reference.startswith("#/"), reference)
+        current = OPENAPI
+        for part in reference[2:].split("/"):
+            part = part.replace("~1", "/").replace("~0", "~")
+            self.assertIn(part, current, reference)
+            current = current[part]
+        return current
+
+    def response(self, path, status):
+        operation = OPENAPI["paths"][path]["get"]
+        response = operation["responses"][status]
+        return self.resolve(response["$ref"]) if "$ref" in response else response
+
+    def test_openapi_structure_and_every_reference_resolve(self):
+        self.assertTrue(OPENAPI["openapi"].startswith("3."))
+        operation_ids = set()
+
+        def walk(value):
+            if isinstance(value, dict):
+                if "$ref" in value:
+                    self.assertIsInstance(value["$ref"], str)
+                    self.resolve(value["$ref"])
+                for child in value.values():
+                    walk(child)
+            elif isinstance(value, list):
+                for child in value:
+                    walk(child)
+
+        walk(OPENAPI)
+        for path, item in OPENAPI["paths"].items():
+            self.assertTrue(path.startswith("/v1/"))
+            self.assertIn("get", item)
+            operation = item["get"]
+            self.assertNotIn(operation["operationId"], operation_ids)
+            operation_ids.add(operation["operationId"])
+            self.assertIsInstance(operation["responses"], dict)
+            self.assertTrue(operation["responses"])
+            for status, response in operation["responses"].items():
+                self.assertRegex(status, r"^[1-5]\d\d$")
+                resolved = self.resolve(response["$ref"]) if "$ref" in response else response
+                self.assertIn("description", resolved)
+                for parameter in operation.get("parameters", []):
+                    if "$ref" not in parameter:
+                        self.assertIn(parameter["in"], ("query", "path"))
+                        self.assertIn("name", parameter)
+                        self.assertIn("schema", parameter)
+
+    def test_all_twelve_v1_paths_are_documented(self):
+        self.assertEqual(set(OPENAPI["paths"]), {
+            "/v1/jobs", "/v1/companies", "/v1/companies/{piattaforma}/{slug}",
+            "/v1/changes", "/v1/exports/latest", "/v1/exports/latest/{nome}",
+            "/v1/coverage", "/v1/usage", "/v1/demo/tecnologie", "/v1/demo/stats",
+            "/v1/demo/sample-export", "/v1/demo/export-campione",
+        })
+        for path in OPENAPI["paths"]:
+            if "/demo/" in path:
+                self.assertEqual(OPENAPI["paths"][path]["get"]["security"], [])
+
+    def test_jobs_parameter_surface_is_complete(self):
+        parameters = OPENAPI["paths"]["/v1/jobs"]["get"]["parameters"]
+        names = set()
+        for parameter in parameters:
+            parameter = self.resolve(parameter["$ref"]) if "$ref" in parameter else parameter
+            names.add(parameter["name"])
+        self.assertEqual(names, {
+            "country", "category", "ats", "exclude_ats", "seniority", "remote", "language",
+            "q", "q_any", "title", "technology", "source_type", "company", "company_slug",
+            "company_domain", "city", "state", "employment_type", "department", "skills",
+            "salary_currency", "has_salary", "salary_min", "salary_max", "posted_after",
+            "posted_before", "dal", "limit", "cursor",
+        })
+        limit = self.resolve("#/components/parameters/PageLimit")["schema"]
+        self.assertEqual((limit["default"], limit["minimum"], limit["maximum"]), (100, 1, 500))
+        self.assertIn("capped at 25", self.resolve("#/components/parameters/PageLimit")["description"])
+
+    def test_export_manifest_aliases_and_no_filesystem_paths(self):
+        serialized = json.dumps(OPENAPI)
+        self.assertNotIn("/opt/", serialized)
+        self.assertNotIn("file_offerte", serialized)
+        self.assertNotIn("file_aziende", serialized)
+        parameter = OPENAPI["paths"]["/v1/exports/latest/{nome}"]["get"]["parameters"][0]
+        self.assertEqual(parameter["schema"]["enum"], ["jobs", "companies", "offerte", "aziende"])
+        response = self.response("/v1/exports/latest", "200")
+        example = response["content"]["application/json"]["example"]
+        self.assertEqual(example["file"], {
+            "offerte": "/v1/exports/latest/offerte",
+            "aziende": "/v1/exports/latest/aziende",
+        })
+        download = self.response("/v1/exports/latest/{nome}", "200")
+        self.assertIn("Content-Disposition", download["headers"])
+
+    def test_paid_and_unmetered_credit_headers(self):
+        paid = (
+            "/v1/jobs", "/v1/companies", "/v1/companies/{piattaforma}/{slug}", "/v1/changes",
+        )
+        for path in paid:
+            for status in OPENAPI["paths"][path]["get"]["responses"]:
+                with self.subTest(path=path, status=status):
+                    self.assertIn("X-Credits-Charged", self.response(path, status)["headers"])
+        for path in ("/v1/exports/latest", "/v1/exports/latest/{nome}", "/v1/coverage", "/v1/usage"):
+            with self.subTest(path=path):
+                self.assertIn("X-Credits-Charged", self.response(path, "200")["headers"])
+
+    def test_retry_after_is_limited_to_rate_limit_429(self):
+        for path, item in OPENAPI["paths"].items():
+            for status in item["get"]["responses"]:
+                headers = self.response(path, status).get("headers", {})
+                if status != "429":
+                    self.assertNotIn("Retry-After", headers, path)
+        self.assertNotIn("Retry-After", self.response("/v1/demo/stats", "429").get("headers", {}))
+        self.assertIn("Retry-After", self.response("/v1/jobs", "429")["headers"])
+        self.assertIn("only for rate limits", self.response("/v1/jobs", "429")["description"])
+
+    def test_employee_ranges_and_error_contract(self):
+        parameters = OPENAPI["paths"]["/v1/companies"]["get"]["parameters"]
+        for name in ("employees_min", "employees_max"):
+            parameter = next(parameter for parameter in parameters if parameter["name"] == name)
+            self.assertEqual(parameter["schema"]["minimum"], 0)
+            self.assertIn("400", parameter["description"])
+        error = self.response("/v1/companies", "400")
+        self.assertIn("employee", error["description"])
+        validation = self.response("/v1/companies", "422")
+        self.assertNotIn("non-integer employees", validation["description"])
+
+    def test_scale_usage_delta_and_credit_error_schemas(self):
+        example = self.response("/v1/usage", "200")["content"]["application/json"]["example"]
+        self.assertEqual(example["monthly_credits"], 500000)
+        self.assertEqual(example["subscription_plan"], "scale")
+        self.assertEqual(example["balance"], example["monthly_remaining"] + example["purchased_credits"])
+        self.assertEqual(len(OPENAPI["components"]["schemas"]["Usage"]["required"]), 13)
+        changes = self.response("/v1/changes", "200")["content"]["application/json"]["example"]
+        self.assertEqual({event["event"] for event in changes["data"]}, {"new", "updated", "closed"})
+        credit = OPENAPI["components"]["schemas"]["CreditError"]["properties"]["detail"]
+        insufficient = OPENAPI["components"]["schemas"]["InsufficientCreditError"]["properties"]["detail"]
+        self.assertIn("monthly_credits", credit["required"])
+        self.assertIn("purchased_credits", credit["required"])
+        self.assertIn("usage_month", credit["required"])
+        self.assertNotIn("remaining", insufficient["required"] and credit["required"])
+        retention = OPENAPI["components"]["schemas"]["DeltaRetentionResponse"]["properties"]["detail"]
+        self.assertEqual(len(retention["required"]), 7)
 
 
 if __name__ == "__main__":

@@ -735,7 +735,7 @@ body.modale-aperto { overflow: hidden; }
             <tr><td><code>posted_before</code></td><td>ISO 8601 date or timestamp; exclusive (<code>posted_at &lt; value</code>).</td><td><code>posted_before=2026-12-01T00:00:00Z</code></td></tr>
             <tr><td><code>dal</code></td><td>Legacy string alias used only when <code>posted_after</code> is absent; same inclusive semantics.</td><td><code>dal=2026-11-01</code></td></tr>
           </tbody></table></div>
-          <div class="doc-note"><b>One narrow ATS alias only:</b> exact, standalone, case-sensitive <code>ats=bundesagentur</code> maps to <code>bundesanstellung</code>. The alias is not applied to <code>exclude_ats</code>, to other casing, or inside comma-separated token lists. For portable queries, use the returned slug <code>bundesanstellung</code>.</div>
+          <div class="doc-note"><b>ATS alias:</b> <code>bundesagentur</code> maps to <code>bundesanstellung</code> case-insensitively, token by token, including inside comma-separated lists such as <code>ats=greenhouse,Bundesagentur</code>. The normalization applies to both <code>ats</code> and <code>exclude_ats</code>. If the same slug appears in both parameters, directly or through the alias, exclusion wins.</div>
           <h3>Pagination</h3>
           <p>There is no <code>total_count</code>. Follow the opaque keyset cursor until it is null; start with <code>limit=5</code> to cap initial spend and use Coverage for field availability.</p>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
@@ -747,7 +747,7 @@ body.modale-aperto { overflow: hidden; }
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="jobs"><button type="button" class="is-active" onclick="docCode('jobs','curl')">cURL</button><button type="button" onclick="docCode('jobs','python')">Python</button></div><button type="button" onclick="copyDoc('doc-jobs-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-jobs-code"></pre></div>
           <h3>Full representative job page</h3>
-          <p>This record has observed salary, so estimate fields are omitted. Optional top-level fields whose values are null, empty strings or empty arrays are omitted in real job and company records; clients must use <code>.get()</code> or equivalent rather than assume every key exists.</p>
+          <p>The JSON below is a complete schema sample, independent of the Paris / SAP / mid / €45k–65k filters in the query above. This record has observed salary, so estimate fields are omitted. Optional top-level fields whose values are null, empty strings or empty arrays are omitted in real job and company records; clients must use <code>.get()</code> or equivalent rather than assume every key exists.</p>
           <div class="code-block mt-3 p-4"><pre data-json-example="jobs-page">{
   "data": [
     {
@@ -841,11 +841,12 @@ body.modale-aperto { overflow: hidden; }
             <tr><td><code>industry</code></td><td>String; exact industry value. There is no industry discovery endpoint.</td><td><code>industry=Distribution of gaseous fuels</code></td></tr>
             <tr><td><code>q</code></td><td>String; case-insensitive substring search on company name.</td><td><code>q=italgas</code></td></tr>
             <tr><td><code>technology</code></td><td>String; case-insensitive exact match on the company-level normalized technology aggregate.</td><td><code>technology=Kubernetes</code></td></tr>
-            <tr><td><code>employees_min</code></td><td>Integer; <code>employees &gt;= N</code>. Missing employee counts do not match.</td><td><code>employees_min=500</code></td></tr>
-            <tr><td><code>employees_max</code></td><td>Integer; <code>employees &lt;= N</code>. Missing employee counts do not match.</td><td><code>employees_max=5000</code></td></tr>
+            <tr><td><code>employees_min</code></td><td>Integer <code>&gt;= 0</code>; <code>employees &gt;= N</code>. Missing employee counts do not match.</td><td><code>employees_min=500</code></td></tr>
+            <tr><td><code>employees_max</code></td><td>Integer <code>&gt;= 0</code>; <code>employees &lt;= N</code>. Missing employee counts do not match.</td><td><code>employees_max=5000</code></td></tr>
             <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500; tier and <code>floor(balance / 3)</code> can lower it.</td><td><code>limit=25</code></td></tr>
             <tr><td><code>cursor</code></td><td>Opaque keyset string from <code>next_cursor</code>; keep filters unchanged.</td><td><code>cursor=WyJJdGFsZ2FzIiwiYmFtYm9vaHIiLCJpdGFsZ2FzIl0=</code></td></tr>
           </tbody></table></div>
+          <p>When both employee bounds are present, <code>employees_min &lt;= employees_max</code> is required. Negative values, non-integer values and inverted ranges return HTTP <code>400</code> with a string <code>{"detail": "..."}</code> error.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="companies"><button type="button" class="is-active" onclick="docCode('companies','curl')">cURL</button><button type="button" onclick="docCode('companies','python')">Python</button></div><button type="button" onclick="copyDoc('doc-companies-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-companies-code"></pre></div>
           <h3>Representative company page</h3>
@@ -979,7 +980,7 @@ body.modale-aperto { overflow: hidden; }
           <p>Synchronizes a local job index for 1 credit per returned event. It requires the Delta entitlement: an active Growth-or-higher subscription with at least 100,000 credits/month. Top-ups do not unlock it.</p>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and semantics</th><th>Example</th></tr></thead><tbody>
             <tr><td><code>since</code></td><td>Required ISO 8601 timestamp. Return events at or after this time within retained history.</td><td><code>since=2026-11-27T08:00:00Z</code></td></tr>
-            <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500; tier and balance can lower it.</td><td><code>limit=100</code></td></tr>
+            <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500; tier and balance can lower it.</td><td><code>limit=5</code></td></tr>
             <tr><td><code>cursor</code></td><td>Opaque keyset cursor for this response stream. It is not the next <code>since</code>.</td><td><code>cursor=WyIyMDI2LTExLTI3VDA5OjAwOjAwIiwiMDFLQkMwTSJd</code></td></tr>
           </tbody></table></div>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Event</th><th>Record semantics</th><th>Client action</th></tr></thead><tbody>
@@ -1138,13 +1139,14 @@ body.modale-aperto { overflow: hidden; }
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest</code></div>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest/{nome}</code></div>
           <p>The manifest and gzip JSONL downloads cost 0 credits, including at zero API balance, but require the Bulk entitlement: an active Scale-or-higher subscription with at least 500,000 credits/month. Top-ups alone do not unlock it.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th><code>{nome}</code> value</th><th>Download</th><th>Response</th></tr></thead><tbody>
-            <tr><td><code>offerte</code></td><td>Daily job postings</td><td><code>application/gzip</code>, one job JSON object per line after decompression</td></tr>
-            <tr><td><code>aziende</code></td><td>Daily companies</td><td><code>application/gzip</code>, one company JSON object per line after decompression</td></tr>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th><code>{nome}</code> value</th><th>Download</th><th>Response and filename</th></tr></thead><tbody>
+            <tr><td><code>jobs</code> (recommended)</td><td>Daily job postings</td><td><code>application/gzip</code>, one job JSON object per line after decompression; <code>Content-Disposition: attachment; filename="nivult-jobs.jsonl.gz"</code></td></tr>
+            <tr><td><code>companies</code> (recommended)</td><td>Daily companies</td><td><code>application/gzip</code>, one company JSON object per line after decompression; <code>Content-Disposition: attachment; filename="nivult-companies.jsonl.gz"</code></td></tr>
           </tbody></table></div>
+          <p><code>offerte</code> and <code>aziende</code> remain fully backward-compatible aliases for <code>jobs</code> and <code>companies</code>, respectively, with the same entitlement, content and download filenames.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="exports"><button type="button" class="is-active" onclick="docCode('exports','curl')">cURL</button><button type="button" onclick="docCode('exports','python')">Python</button></div><button type="button" onclick="copyDoc('doc-exports-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-exports-code"></pre></div>
-          <h3>Manifest: raw metadata and HTTP aliases</h3>
+          <h3>Manifest: raw metadata and API-relative download paths</h3>
           <div class="code-block mt-3 p-4"><pre data-json-example="export-manifest">{
   "stato": "ok",
   "data_export": "2026-11-27",
@@ -1153,8 +1155,6 @@ body.modale-aperto { overflow: hidden; }
   "flusso": 150000,
   "flusso_giorni": 7,
   "flusso_dal": "2026-11-20T00:00:00+00:00",
-  "file_offerte": "/opt/nivult/exports/offerte-2026-11-27.jsonl.gz",
-  "file_aziende": "/opt/nivult/exports/aziende-2026-11-27.jsonl.gz",
   "generato_at": "2026-11-27T05:30:00+00:00",
   "data": "2026-11-27",
   "righe": {
@@ -1163,20 +1163,19 @@ body.modale-aperto { overflow: hidden; }
     "flusso": 150000
   },
   "file": {
-    "offerte": "/opt/nivult/exports/offerte-2026-11-27.jsonl.gz",
-    "aziende": "/opt/nivult/exports/aziende-2026-11-27.jsonl.gz"
+    "offerte": "/v1/exports/latest/offerte",
+    "aziende": "/v1/exports/latest/aziende"
   }
 }</pre></div>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody>
             <tr><td><code>stato</code>, <code>data_export</code>, <code>generato_at</code></td><td>string</td><td>Raw status, export date and generation timestamp.</td></tr>
             <tr><td><code>offerte</code>, <code>aziende</code>, <code>flusso</code>, <code>flusso_giorni</code></td><td>integer</td><td>Raw row counts and configured Delta retention.</td></tr>
             <tr><td><code>flusso_dal</code></td><td>ISO 8601 timestamp string</td><td>Earliest retained Delta event.</td></tr>
-            <tr><td><code>file_offerte</code>, <code>file_aziende</code></td><td>string</td><td>Raw server filesystem paths.</td></tr>
             <tr><td><code>data</code></td><td>string</td><td>HTTP alias for <code>data_export</code>.</td></tr>
             <tr><td><code>righe</code></td><td>object</td><td>HTTP alias with <code>offerte</code>, <code>aziende</code> and <code>flusso</code> integer counts.</td></tr>
-            <tr><td><code>file</code></td><td>object</td><td>HTTP alias with <code>offerte</code> and <code>aziende</code> server paths.</td></tr>
+            <tr><td><code>file.offerte</code>, <code>file.aziende</code></td><td>string</td><td>API-relative download paths, ready to call on the base URL.</td></tr>
           </tbody></table></div>
-          <div class="doc-note"><b>Server paths are not URLs.</b> Do not fetch <code>file_offerte</code> or <code>file.offerte</code> directly. Download through the fixed API paths <code>/v1/exports/latest/offerte</code> and <code>/v1/exports/latest/aziende</code>. Download responses include <code>Content-Disposition</code> with the filename.</div>
+          <div class="doc-note"><b>Call these paths on the BASE URL.</b> For example, append <code>file.offerte</code> to <code>https://api.nivult.com</code> to download through <code>https://api.nivult.com/v1/exports/latest/offerte</code>. These are API paths, not filesystem locations. Both Italian paths and the recommended English aliases <code>jobs</code> and <code>companies</code> are available.</div>
         </section>
 
         <section id="doc-usage" class="doc-section app-card p-5">
@@ -1227,8 +1226,8 @@ body.modale-aperto { overflow: hidden; }
           <p>There are no <code>X-RateLimit-*</code> headers. Leave client-side capacity for bursts and implement exponential backoff for temporary failures.</p>
           <h3>Headers you can rely on</h3>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Header</th><th>When it appears</th><th>Meaning</th></tr></thead><tbody>
-            <tr><td><code>X-Credits-Charged: 0</code></td><td>Direct usage, coverage, export manifest and bulk downloads only</td><td>Explicit unmetered service response.</td></tr>
-            <tr><td><code>X-Credits-Charged</code> absent</td><td>Direct paid <code>/v1/jobs</code>, <code>/v1/companies</code>, company detail and <code>/v1/changes</code></td><td>Paid direct routes do not emit a per-response charge header; inspect <code>count_page</code> and <code>/v1/usage</code>.</td></tr>
+            <tr><td><code>X-Credits-Charged: N</code></td><td>Every direct paid response: <code>/v1/jobs</code>, <code>/v1/companies</code>, <code>/v1/companies/{piattaforma}/{slug}</code> and <code>/v1/changes</code></td><td>Actual credits charged to this request. It is <code>0</code> on empty pages and managed errors (<code>400</code>, <code>404</code>, <code>422</code>, <code>429</code>, <code>503</code>).</td></tr>
+            <tr><td><code>X-Credits-Charged: 0</code></td><td>Successful direct usage, coverage, export manifest and bulk download responses</td><td>Explicit unmetered service response.</td></tr>
             <tr><td><code>Retry-After</code></td><td>Only rate-limit 429 responses</td><td>Seconds to wait before retrying. Credit 429 responses do not include it.</td></tr>
             <tr><td><code>X-RapidAPI-Billing: Credits=N</code></td><td>RapidAPI responses below status 500</td><td>Credits assigned to that marketplace call, including 0.</td></tr>
             <tr><td><code>Content-Disposition</code></td><td>File downloads</td><td>Attachment filename supplied by the server.</td></tr>
@@ -1264,11 +1263,11 @@ body.modale-aperto { overflow: hidden; }
           <h2>Errors &amp; pagination</h2>
           <p>Errors and empty results cost 0 credits. Read the HTTP status and JSON body, fix the cause, then retry only when the table says retrying can help.</p>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Status</th><th>Meaning</th><th>What to do</th></tr></thead><tbody>
-            <tr><td>400</td><td>Invalid date, cursor, <code>source_type</code>, <code>has_salary</code>, salary number/range, too many <code>q_any</code> terms, or expired Delta retention.</td><td>Correct the parameter. Salary validation is 400. On <code>delta_retention_exceeded</code>, run a full resync.</td></tr>
+            <tr><td>400</td><td>Invalid date, cursor, <code>source_type</code>, <code>has_salary</code>, salary number/range, invalid <code>employees_min</code>/<code>employees_max</code> values or range, too many <code>q_any</code> terms, or expired Delta retention.</td><td>Correct the parameter. Salary and employee-range validation is 400. On <code>delta_retention_exceeded</code>, run a full resync.</td></tr>
             <tr><td>401</td><td>Missing, invalid or revoked API key.</td><td>Send an active key in <code>X-Api-Key</code>; create a replacement if needed.</td></tr>
             <tr><td>403</td><td>Required Delta or Bulk subscription entitlement is missing.</td><td>Upgrade to an eligible active plan; top-ups alone do not help.</td></tr>
-            <tr><td>404</td><td>Company or export not found, or unknown export name.</td><td>Check <code>piattaforma + slug</code>, use <code>offerte</code> or <code>aziende</code>, or retry when the daily export is ready.</td></tr>
-            <tr><td>422</td><td>FastAPI typed parameter validation failed, such as <code>limit=0</code> or a non-integer <code>employees_min</code>.</td><td>Fix types and constraints from the <code>detail</code> array. Do not confuse this with salary validation, which is 400.</td></tr>
+            <tr><td>404</td><td>Company or export not found, or unknown export name.</td><td>Check <code>piattaforma + slug</code>, use <code>jobs</code> or <code>companies</code> (or the legacy <code>offerte</code>/<code>aziende</code> aliases), or retry when the daily export is ready.</td></tr>
+            <tr><td>422</td><td>FastAPI typed parameter validation failed, such as <code>limit=0</code> or a non-integer <code>limit</code>.</td><td>Fix types and constraints from the <code>detail</code> array. Salary and employee-range validation is 400, not 422.</td></tr>
             <tr><td>429</td><td>Rate limit or insufficient direct credits. There is no 402 on <code>/v1</code>.</td><td>For rate limits, honor <code>Retry-After</code> and back off. For credits, stop immediately and never retry automatically; add credits or change plan first.</td></tr>
             <tr><td>503</td><td>Database, credit counter or query timeout.</td><td>Retry with exponential backoff and jitter; narrow an expensive query if it times out repeatedly.</td></tr>
           </tbody></table></div>
@@ -3492,7 +3491,7 @@ print(company["company"], company.get("industry"))`
   changes: {
     curl: `curl --fail-with-body --silent --show-error \
   -H "X-Api-Key: $NIVULT_API_KEY" \
-  "https://api.nivult.com/v1/changes?since=${new Date(Date.now() - 3600000).toISOString()}&limit=100"`,
+  "https://api.nivult.com/v1/changes?since=${new Date(Date.now() - 3600000).toISOString()}&limit=5"`,
     python: `import os
 import requests
 
@@ -3501,7 +3500,7 @@ response = requests.get(
     headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
     params={
         "since": "${new Date(Date.now() - 3600000).toISOString()}",
-        "limit": 100,
+        "limit": 5,
     },
     timeout=30,
 )
@@ -3518,13 +3517,13 @@ print("Next cursor:", page["next_cursor"])`
 
 curl --fail-with-body --silent --show-error \
   -H "X-Api-Key: $NIVULT_API_KEY" \
-  "https://api.nivult.com/v1/exports/latest/offerte" \
-  --output nivult-offerte.jsonl.gz
+  "https://api.nivult.com/v1/exports/latest/jobs" \
+  --output nivult-jobs.jsonl.gz
 
 curl --fail-with-body --silent --show-error \
   -H "X-Api-Key: $NIVULT_API_KEY" \
-  "https://api.nivult.com/v1/exports/latest/aziende" \
-  --output nivult-aziende.jsonl.gz`,
+  "https://api.nivult.com/v1/exports/latest/companies" \
+  --output nivult-companies.jsonl.gz`,
     python: `import os
 from pathlib import Path
 import requests
@@ -3537,7 +3536,7 @@ manifest = session.get(base + "/v1/exports/latest", timeout=30)
 manifest.raise_for_status()
 print(manifest.json())
 
-for name in ("offerte", "aziende"):
+for name in ("jobs", "companies"):
     with session.get(
         base + f"/v1/exports/latest/{name}", stream=True, timeout=120
     ) as response:

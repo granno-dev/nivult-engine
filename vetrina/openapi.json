@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Nivult Job Postings & Company Intelligence",
-    "version": "1.2.0",
-    "description": "Direct Nivult API for 6.3M+ active job postings and 73,000+ company records across 240+ countries and 65 ATS platforms, plus public employment sources. Jobs and changes cost 1 credit per returned record, companies cost 3 credits, and empty results or errors cost 0 credits. Usage, coverage, export manifest, and Daily Bulk are unmetered service endpoints; authentication, rate limits, and entitlements still apply. Company records are keyed by ATS + company_slug. Coverage and provenance apply to documented, selected fields.",
+    "version": "1.3.0",
+    "description": "Direct Nivult API for active job postings and company records. Jobs and changes cost 1 credit per returned record, companies cost 3 credits, and empty results or managed errors cost 0 credits. Usage, coverage, export manifest and Daily Bulk are unmetered service endpoints; authentication, rate limits and entitlements still apply. Public demo endpoints are explicitly marked as anonymous.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://api.nivult.com", "description": "Direct Nivult API" }],
@@ -13,40 +13,42 @@
       "get": {
         "summary": "Search live job postings",
         "operationId": "jobs",
-        "description": "Active postings with keyset pagination. Direct accounts pay 1 credit per returned job. q requires all search terms in the title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated OR values. Unknown query parameters are ignored.",
+        "description": "Active postings with keyset pagination. Direct accounts pay 1 credit per returned job. q requires all search terms in title or description; q_any matches at least one of up to 15 comma-separated keywords. Keyword filters accept comma-separated OR values. Unknown query parameters are ignored.",
         "parameters": [
           { "name": "country", "in": "query", "schema": { "type": "string", "example": "US,DE" }, "description": "ISO 3166-1 alpha-2 country code; comma-separated values are ORed" },
-          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against extracted, normalized technologies; comma-separated values are ORed" },
-          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. bundesagentur is accepted as an alias for bundesanstellung only when used alone." },
-          { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Exclude these source platform slugs; comma-separated values are supported. If the same value appears in ats and exclude_ats, it is excluded." },
-          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Comma-separated values are ORed" },
-          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "Comma-separated values are ORed" },
-          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote,hybrid" }, "description": "remote, hybrid or onsite; comma-separated values are ORed" },
-          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en,it" }, "description": "Comma-separated values are ORed" },
-          { "name": "q", "in": "query", "schema": { "type": "string", "example": "MBSE SysML" }, "description": "Full-text search over job title and description; all terms are required (AND)" },
-          { "name": "q_any", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML,CATIA" }, "description": "At least one comma-separated keyword must match the title or description (OR); maximum 15 keywords. Can be combined with q." },
-          { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to the job title; all terms are required (AND)" },
-          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
-          { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-11-24T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
-          { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR" },
-          { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Full-text match on employer name" },
+          { "name": "category", "in": "query", "schema": { "type": "string", "example": "Technology,Sales" }, "description": "Job family; comma-separated values are ORed" },
+          { "name": "ats", "in": "query", "schema": { "type": "string", "example": "workday,greenhouse" }, "description": "Source platform slug; comma-separated values are ORed. bundesagentur maps to bundesanstellung case-insensitively, token by token, also inside lists." },
+          { "name": "exclude_ats", "in": "query", "schema": { "type": "string", "example": "jsonld,indeed" }, "description": "Source slugs to exclude, with the same bundesagentur normalization as ats. If a slug appears in both parameters, directly or through the alias, exclusion wins." },
+          { "name": "seniority", "in": "query", "schema": { "type": "string", "example": "mid,senior" }, "description": "intern, junior, mid, senior, lead or head; comma-separated OR" },
+          { "name": "remote", "in": "query", "schema": { "type": "string", "example": "remote,hybrid" }, "description": "remote, hybrid or onsite; comma-separated OR" },
+          { "name": "language", "in": "query", "schema": { "type": "string", "example": "en,it" }, "description": "Posting language; comma-separated OR" },
+          { "name": "q", "in": "query", "schema": { "type": "string", "example": "MBSE SysML" }, "description": "Full-text search over title and description; all terms are required (AND)" },
+          { "name": "q_any", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML,CATIA" }, "description": "At least one comma-separated keyword must match title or description (OR); maximum 15. Can be combined with q." },
+          { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to title; all terms are required (AND)" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "SAP,Teamcenter" }, "description": "Case-insensitive exact match against normalized technologies; comma-separated OR" },
+          { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR. Invalid values return 400." },
+          { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Employer-name full text; all terms are ANDed" },
           { "name": "company_slug", "in": "query", "schema": { "type": "string" }, "description": "Employer/source slug; comma-separated OR" },
           { "name": "company_domain", "in": "query", "schema": { "type": "string", "example": "dixonvalve.com" }, "description": "Employer domain; scheme, www and path are removed; comma-separated OR" },
-          { "name": "city", "in": "query", "schema": { "type": "string" }, "description": "City; comma-separated OR" },
-          { "name": "state", "in": "query", "schema": { "type": "string" }, "description": "State/region; comma-separated OR" },
-          { "name": "employment_type", "in": "query", "schema": { "type": "string" }, "description": "Employment type; comma-separated OR" },
-          { "name": "department", "in": "query", "schema": { "type": "string" }, "description": "Department; comma-separated OR" },
-          { "name": "skills", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML" }, "description": "Skills; comma-separated OR" },
-          { "name": "salary_currency", "in": "query", "schema": { "type": "string", "example": "usd" }, "description": "Salary currency; comma-separated OR" },
-          { "name": "has_salary", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Whether salary_min or salary_max is present" },
-          { "name": "salary_min", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range lower bound on the observed salary_min field" },
-          { "name": "salary_max", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Range upper bound on the observed salary_max field" },
+          { "name": "city", "in": "query", "schema": { "type": "string", "example": "Berlin,Paris" }, "description": "City; comma-separated OR" },
+          { "name": "state", "in": "query", "schema": { "type": "string", "example": "Berlin,Bavaria" }, "description": "State/region; comma-separated OR" },
+          { "name": "employment_type", "in": "query", "schema": { "type": "string", "example": "full_time,contract" }, "description": "full_time, part_time, contract, temporary, internship or apprenticeship; comma-separated OR" },
+          { "name": "department", "in": "query", "schema": { "type": "string" }, "description": "Exact source department; comma-separated OR" },
+          { "name": "skills", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML" }, "description": "Exact extracted skills; comma-separated OR" },
+          { "name": "salary_currency", "in": "query", "schema": { "type": "string", "example": "EUR,USD" }, "description": "Source salary currency; comma-separated OR" },
+          { "name": "has_salary", "in": "query", "schema": { "type": "string", "enum": ["true", "false"] }, "description": "Whether salary_min or salary_max is present. Other values return 400." },
+          { "name": "salary_min", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Observed salary_min >= N; null values do not match. Invalid or negative values and inverted ranges return 400." },
+          { "name": "salary_max", "in": "query", "schema": { "type": "number", "minimum": 0 }, "description": "Observed salary_max <= N; null values do not match. Invalid or negative values and inverted ranges return 400." },
+          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-11-01T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
+          { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-12-01T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
+          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-11-01" }, "description": "Legacy alias for posted_after, used only when posted_after is absent" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
           "200": {
-            "description": "A page of postings",
+            "description": "A page of postings; X-Credits-Charged equals count_page",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/JobPage" },
               "example": {
@@ -62,11 +64,11 @@
               }
             } }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "422": { "$ref": "#/components/responses/ValidationError" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
-          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+          "400": { "$ref": "#/components/responses/PaidBadRequest" },
+          "401": { "$ref": "#/components/responses/PaidUnauthorized" },
+          "422": { "$ref": "#/components/responses/PaidValidationError" },
+          "429": { "$ref": "#/components/responses/PaidTooManyRequests" },
+          "503": { "$ref": "#/components/responses/PaidCounterUnavailable" }
         }
       }
     },
@@ -74,39 +76,39 @@
       "get": {
         "summary": "Search company records",
         "operationId": "companies",
-        "description": "Company records keyed by ATS + company_slug. Direct accounts pay 3 credits per returned company. q searches company name. country filters the company record, not each posting location. technology filters the exported company-level technology aggregate.",
+        "description": "Company records keyed by ATS + company_slug. Direct accounts pay 3 credits per returned company. Filters are single-value and ANDed.",
         "parameters": [
-          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" } },
+          { "name": "country", "in": "query", "schema": { "type": "string", "example": "DE" }, "description": "Exact country of the company record" },
           { "name": "industry", "in": "query", "schema": { "type": "string" }, "description": "Exact industry value" },
-          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Case-insensitive company-name search" },
-          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" } },
-          { "name": "employees_min", "in": "query", "schema": { "type": "integer", "example": 500 } },
-          { "name": "employees_max", "in": "query", "schema": { "type": "integer", "example": 5000 } },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Case-insensitive company-name substring search" },
+          { "name": "technology", "in": "query", "schema": { "type": "string", "example": "Kubernetes" }, "description": "Case-insensitive exact match on the company-level technology aggregate" },
+          { "name": "employees_min", "in": "query", "schema": { "type": "integer", "minimum": 0, "example": 500 }, "description": "employees >= N. Negative, non-integer and inverted ranges return 400 with a string detail." },
+          { "name": "employees_max", "in": "query", "schema": { "type": "integer", "minimum": 0, "example": 5000 }, "description": "employees <= N and >= employees_min when both are present. Negative, non-integer and inverted ranges return 400 with a string detail." },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
           "200": {
-            "description": "A page of companies",
+            "description": "A page of companies; X-Credits-Charged equals 3 times count_page",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/CompanyPage" },
               "example": {
                 "data": [{
                   "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
-                  "domain": "italgas.it", "active_jobs": 92,
+                  "country": "IT", "domain": "italgas.it", "active_jobs": 92, "employees": 4200,
                   "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
-                  "legal_name": "ITALGAS S.P.A.", "size_range": "1001-5000",
-                  "size_range_source": "pdl (free dataset)"
+                  "size_range": "1001-5000", "size_range_source": "registro"
                 }],
                 "next_cursor": null, "count_page": 1
               }
             } }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "422": { "$ref": "#/components/responses/ValidationError" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
-          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+          "400": { "$ref": "#/components/responses/PaidBadRequest" },
+          "401": { "$ref": "#/components/responses/PaidUnauthorized" },
+          "422": { "$ref": "#/components/responses/PaidValidationError" },
+          "429": { "$ref": "#/components/responses/PaidTooManyRequests" },
+          "503": { "$ref": "#/components/responses/PaidCounterUnavailable" }
         }
       }
     },
@@ -114,30 +116,52 @@
       "get": {
         "summary": "Get one company record",
         "operationId": "companyDetail",
-        "description": "Returns one company record for 3 direct credits when found. Missing companies and other errors cost 0 credits.",
+        "description": "Returns one full company object for 3 direct credits when found. Missing companies and managed errors cost 0 credits.",
         "parameters": [
-          { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier" },
+          { "name": "piattaforma", "in": "path", "required": true, "schema": { "type": "string" }, "description": "ATS/source identifier from the record's ats" },
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Employer slug within that ATS" }
         ],
         "responses": {
           "200": {
-            "description": "The company record",
+            "description": "The unwrapped company record; X-Credits-Charged is 3",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/Company" },
               "example": {
-                "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas",
-                "domain": "italgas.it", "active_jobs": 92,
-                "industry": "Distribution of gaseous fuels", "industry_source": "wikidata",
-                "legal_name": "ITALGAS S.P.A.", "legal_form": "Società Per Azioni",
-                "registration_id": "815600F25FF44EF1FA76", "founded": "2016-05-31",
-                "size_range": "1001-5000", "size_range_source": "pdl (free dataset)"
+                "ats": "bamboohr", "company_slug": "italgas", "company": "Italgas", "country": "IT",
+                "domain": "italgas.it", "active_jobs": 92, "employees": 4200,
+                "employees_scope": "group", "employees_source": "registro",
+                "employees_legal_entity": 3800, "employees_legal_entity_band": "1001-5000",
+                "employees_legal_entity_source": "registro", "industry": "Distribution of gaseous fuels",
+                "industry_source": "wikidata", "industry_mix_share": 0.82,
+                "legal_name": "ITALGAS S.P.A.", "legal_form": "Società per azioni",
+                "legal_form_code": "SPA", "registration_id": "815600F25FF44EF1FA76",
+                "lei": "815600F25FF44EF1FA76", "founded": "2016-05-31", "founded_source": "registro",
+                "size_range": "1001-5000", "size_range_source": "registro",
+                "company_name_source": "company_site", "jobs_posted_30d": 18, "n_locations": 2,
+                "headquarters": {
+                  "country": "IT", "state": "Piedmont", "city": "Turin", "street": "Via XX Settembre 1",
+                  "zipcode": "10121", "full_address": "Via XX Settembre 1, 10121 Turin TO, Italy",
+                  "latitude": 45.0703, "longitude": 7.6869, "source": "company_site"
+                },
+                "description": "Italgas operates gas distribution infrastructure and related digital services in Italy.",
+                "description_source": "company_site",
+                "locations": [
+                  { "city": "Turin", "country": "IT", "state": "Piedmont", "offerte": 54, "is_primary": true },
+                  { "city": "Milan", "country": "IT", "state": "Lombardy", "offerte": 38, "is_primary": false }
+                ],
+                "languages": ["it", "en"], "external_urls": ["https://www.linkedin.com/company/italgas"],
+                "keywords": { "famiglie": ["Energy", "Engineering"], "tecnologie": ["Kubernetes", "Python"] },
+                "top_skills": [{ "skill": "project management", "jobs": 12 }],
+                "technologies": [{ "technology": "Kubernetes", "active_jobs": 4, "jobs": 9,
+                  "first_verified_at": "2026-08-12T10:00:00+00:00", "last_verified_at": "2026-11-27T05:00:00+00:00" }]
               }
             } }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "description": "Company not found" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
-          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+          "401": { "$ref": "#/components/responses/PaidUnauthorized" },
+          "404": { "$ref": "#/components/responses/PaidNotFound" },
+          "429": { "$ref": "#/components/responses/PaidTooManyRequests" },
+          "503": { "$ref": "#/components/responses/PaidCounterUnavailable" }
         }
       }
     },
@@ -145,34 +169,53 @@
       "get": {
         "summary": "Delta feed: new, updated and closed events",
         "operationId": "changes",
-        "description": "Delta history is retained for seven days and costs 1 direct credit per returned event. Requires an active Growth subscription or higher with at least 100,000 credits/month; top-ups do not unlock it. next_cursor paginates the current response; use an ISO timestamp from the previous sync for the next since value.",
+        "description": "Delta history costs 1 direct credit per returned event and requires an active Growth subscription or higher with at least 100,000 credits/month. Default retention is seven days, but the effective boundary is metadata-driven.",
         "parameters": [
-          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp within retained history" },
+          { "name": "since", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" }, "description": "ISO 8601 timestamp within retained history; missing or malformed values return 400" },
           { "$ref": "#/components/parameters/PageLimit" },
           { "$ref": "#/components/parameters/Cursor" }
         ],
         "responses": {
           "200": {
-            "description": "A page of events",
+            "description": "A page of Delta events; X-Credits-Charged equals count_page",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/ChangePage" },
               "example": {
-                "data": [{
-                  "event": "updated", "id": "01JABC123", "title": "Data Engineer",
-                  "ats": "greenhouse", "company_slug": "example-gmbh",
-                  "url": "https://boards.greenhouse.io/example/jobs/123",
-                  "updated_at": "2026-11-25T10:30:00+00:00"
-                }],
-                "next_cursor": null, "count_page": 1
+                "data": [
+                  { "event": "new", "id": "01JABC123", "title": "Data Engineer", "ats": "greenhouse",
+                    "company_slug": "example-gmbh", "url": "https://boards.greenhouse.io/example/jobs/123",
+                    "country": "DE", "posted_at": "2026-11-20T00:00:00+00:00", "source_type": "direct" },
+                  { "event": "updated", "id": "01JABC123", "title": "Data Engineer", "ats": "greenhouse",
+                    "company_slug": "example-gmbh", "company": "Example GmbH", "country": "DE", "city": "Berlin",
+                    "category": "Data & Analytics", "has_salary": true, "salary_min": 75000,
+                    "salary_max": 95000, "salary_currency": "EUR", "employment_type": "full_time",
+                    "technologies": ["Python", "Snowflake"], "updated_at": "2026-11-25T10:30:00+00:00",
+                    "url": "https://boards.greenhouse.io/example/jobs/123", "source_type": "direct" },
+                  { "event": "closed", "id": "01JABC456", "title": "Analytics Engineer", "ats": "workday",
+                    "company_slug": "example-gmbh", "country": "FR", "posted_at": "2026-10-15T09:00:00+00:00",
+                    "closed_at": "2026-11-27T08:50:00+00:00",
+                    "url": "https://example.wd3.myworkdayjobs.com/job/1234567" }
+                ],
+                "next_cursor": null, "count_page": 3
               }
             } }
           },
-          "400": { "description": "Missing/malformed since, invalid cursor, or expired retention window; retention errors require resync", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/ErrorResponse" }, { "$ref": "#/components/schemas/DeltaRetentionResponse" }] } } } },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active direct Growth-or-higher subscription with at least 100,000 credits/month" },
-          "422": { "$ref": "#/components/responses/ValidationError" },
-          "429": { "$ref": "#/components/responses/CreditsExhausted" },
-          "503": { "$ref": "#/components/responses/CounterUnavailable" }
+          "400": {
+            "description": "Missing/malformed since, invalid cursor or expired retention; X-Credits-Charged is 0",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+            "content": { "application/json": {
+              "schema": { "oneOf": [
+                { "$ref": "#/components/schemas/ErrorResponse" },
+                { "$ref": "#/components/schemas/DeltaRetentionResponse" }
+              ] }
+            } }
+          },
+          "401": { "$ref": "#/components/responses/PaidUnauthorized" },
+          "403": { "$ref": "#/components/responses/PaidForbidden" },
+          "422": { "$ref": "#/components/responses/PaidValidationError" },
+          "429": { "$ref": "#/components/responses/PaidTooManyRequests" },
+          "503": { "$ref": "#/components/responses/PaidCounterUnavailable" }
         }
       }
     },
@@ -180,21 +223,27 @@
       "get": {
         "summary": "Get the latest export manifest",
         "operationId": "exportManifest",
-        "description": "Returns the latest export manifest for 0 direct credits, including at zero balance. Requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not unlock it. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
+        "description": "Returns the latest export manifest for 0 direct credits, including at zero balance. Requires an active Scale subscription or higher with at least 500,000 credits/month.",
         "responses": {
           "200": {
-            "description": "Latest export manifest",
+            "description": "Latest export manifest with API-relative download paths; X-Credits-Charged is 0",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/ExportManifest" },
               "example": {
-                "data": "2026-11-26",
+                "stato": "ok", "data_export": "2026-11-27", "offerte": 6372345, "aziende": 73008,
+                "flusso": 150000, "flusso_giorni": 7, "flusso_dal": "2026-11-20T00:00:00+00:00",
+                "generato_at": "2026-11-27T05:30:00+00:00", "data": "2026-11-27",
                 "righe": { "offerte": 6372345, "aziende": 73008, "flusso": 150000 },
-                "file": { "offerte": "/exports/offerte.jsonl.gz", "aziende": "/exports/aziende.jsonl.gz" }
+                "file": {
+                  "offerte": "/v1/exports/latest/offerte",
+                  "aziende": "/v1/exports/latest/aziende"
+                }
               }
             } }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active direct Scale-or-higher subscription with at least 500,000 credits/month" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
@@ -204,13 +253,24 @@
       "get": {
         "summary": "Download the latest bulk export",
         "operationId": "exportFile",
-        "description": "Downloads offerte or aziende as JSONL gzip for 0 direct credits, including at zero balance. Requires an active Scale subscription or higher with at least 500,000 credits/month; top-ups do not unlock it. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
-        "parameters": [{ "name": "nome", "in": "path", "required": true, "schema": { "type": "string", "enum": ["offerte", "aziende"] } }],
+        "description": "Downloads gzip JSONL for 0 direct credits. jobs and companies are recommended; offerte and aziende are fully backward-compatible aliases with identical content and filenames. Requires an active Scale subscription or higher with at least 500,000 credits/month.",
+        "parameters": [{
+          "name": "nome", "in": "path", "required": true,
+          "schema": { "type": "string", "enum": ["jobs", "companies", "offerte", "aziende"] },
+          "description": "jobs/offerte download nivult-jobs.jsonl.gz; companies/aziende download nivult-companies.jsonl.gz"
+        }],
         "responses": {
-          "200": { "description": "The gzip export", "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } } },
+          "200": {
+            "description": "The gzip export; X-Credits-Charged is 0 and Content-Disposition contains the uniform filename",
+            "headers": {
+              "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" },
+              "Content-Disposition": { "$ref": "#/components/headers/DownloadDisposition" }
+            },
+            "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } }
+          },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "description": "No active direct Scale-or-higher subscription with at least 500,000 credits/month" },
-          "404": { "description": "Unknown export name or no export available" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
@@ -220,15 +280,27 @@
       "get": {
         "summary": "Coverage for documented fields",
         "operationId": "coverage",
-        "description": "Returns percentages from 0 to 100 for documented fields measured in the latest export. Costs 0 direct credits and works at zero balance. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
+        "description": "Returns fill-rate percentages from 0 to 100 measured in the latest export. Company fields are nested under aziende, never under company:* keys. Costs 0 direct credits.",
         "responses": {
           "200": {
-            "description": "Field coverage percentages; company fields are nested under aziende",
+            "description": "Field coverage percentages; X-Credits-Charged is 0",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/Coverage" },
               "example": {
-                "description": 95.4, "country": 89.4, "seniority": 56.7,
-                "aziende": { "domain": 70.0, "industry": 62.0 }
+                "salary_observed": 23.2, "salary_estimate": 31.4, "description": 95.6,
+                "language": 88.1, "category": 97.0, "country": 89.4, "skills": 72.5,
+                "employment_type": 64.3, "seniority": 56.7, "remote": 52.4, "technologies": 68.9,
+                "summary": 41.8, "benefits": 37.2, "shift_schedule": 4.6, "work_hours": 8.7,
+                "management_level": 19.3, "valid_through": 28.4, "state": 61.2, "geo": 34.8,
+                "job_sources": 17.9, "department": 44.1, "salary_text": 21.7,
+                "aziende": {
+                  "country": 96.2, "domain": 70.0, "website": 68.4, "industry": 62.0,
+                  "size_range": 58.3, "employees": 55.7, "legal_name": 42.8, "legal_form": 39.6,
+                  "registration_id": 37.1, "founded": 31.5, "headquarters": 64.9,
+                  "description": 48.6, "technologies": 73.4, "top_skills": 81.0,
+                  "locations": 57.2, "external_urls": 29.8, "lei": 18.4, "languages": 91.3
+                }
               }
             } }
           },
@@ -242,18 +314,19 @@
       "get": {
         "summary": "Get current credit usage",
         "operationId": "usage",
-        "description": "Direct usage is shared across keys, including revoked keys. The recurring plan or one-time trial allowance is spent before purchased credits. This endpoint costs 0 credits, does not change usage, and returns 200 at zero balance. Authentication and rate limits still apply. Successful responses include X-Credits-Charged: 0.",
+        "description": "Direct usage is account-wide across current and revoked keys. The recurring plan or one-time trial allowance is spent before purchased credits. Costs 0 direct credits and works at zero balance.",
         "responses": {
           "200": {
-            "description": "Direct usage",
+            "description": "Current usage and balance; X-Credits-Charged is 0",
+            "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/Usage" },
               "example": {
-                "monthly_credits": 100000, "used": 12500, "remaining": 87500,
-                "usage_month": "2026-11-01", "monthly_remaining": 87500,
-                "purchased_credits": 0, "balance": 87500, "key_credits_used": 400,
-                "account_monthly_credits": 100000, "subscription_status": "active",
-                "subscription_plan": "growth", "subscription_interval": "month",
+                "monthly_credits": 500000, "used": 125000, "remaining": 400000,
+                "usage_month": "2026-11-01", "monthly_remaining": 375000,
+                "purchased_credits": 25000, "balance": 400000, "key_credits_used": 4000,
+                "account_monthly_credits": 500000, "subscription_status": "active",
+                "subscription_plan": "scale", "subscription_interval": "month",
                 "current_period_end": "2026-12-01T00:00:00+00:00"
               }
             } }
@@ -263,77 +336,375 @@
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }
       }
+    },
+    "/v1/demo/tecnologie": {
+      "get": {
+        "summary": "Anonymous technology demo",
+        "operationId": "demoTechnologies",
+        "security": [],
+        "parameters": [{
+          "name": "q", "in": "query", "required": true,
+          "schema": { "type": "string", "minLength": 2, "maxLength": 40,
+            "pattern": "^[A-Za-z0-9 .+#&()/'À-ÿ\\-]+$", "example": "SAP" },
+          "description": "Two to forty accepted characters; invalid input returns 400"
+        }],
+        "responses": {
+          "200": {
+            "description": "Anonymous examples without company identities",
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/DemoTechnologies" },
+              "example": {
+                "query": "SAP", "data": [{ "country": "DE", "industry": "Software",
+                  "technologies": ["SAP HANA", "SAP S/4HANA"] }],
+                "altre": true,
+                "campione": "demo pubblica anonima. I nomi aziendali sono disponibili nella API con chiave."
+              }
+            } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "429": { "$ref": "#/components/responses/DemoRateLimited" }
+        }
+      }
+    },
+    "/v1/demo/stats": {
+      "get": {
+        "summary": "Anonymous dataset statistics",
+        "operationId": "demoStats",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Current public dataset counters",
+            "headers": { "Cache-Control": { "schema": { "type": "string", "example": "no-store" } } },
+            "content": { "application/json": {
+              "schema": { "$ref": "#/components/schemas/DemoStats" },
+              "example": {
+                "offerte": 6372345, "aziende": 73008, "paesi": 240, "piattaforme": 65,
+                "nuove_24h": 150000, "cambiamenti_24h": 165000, "chiuse_storico": 800000,
+                "copertura": { "country": 89.4 }, "copertura_aziende": { "domain": 70.0 }
+              }
+            } }
+          },
+          "429": { "$ref": "#/components/responses/DemoRateLimited" }
+        }
+      }
+    },
+    "/v1/demo/sample-export": {
+      "get": {
+        "summary": "Download an anonymous sample export",
+        "operationId": "demoSampleExport",
+        "security": [],
+        "parameters": [
+          { "name": "tipo", "in": "query", "schema": { "type": "string", "enum": ["offerte", "aziende"], "default": "offerte" }, "description": "Legacy Italian sample selector; used when type is absent" },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["jobs", "companies"] }, "description": "Recommended English selector; takes precedence over tipo" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gzip JSONL sample; filename is nivult-campione-offerte.jsonl.gz or nivult-campione-aziende.jsonl.gz",
+            "headers": { "Content-Disposition": { "$ref": "#/components/headers/SampleDownloadDisposition" } },
+            "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/DemoRateLimited" }
+        }
+      }
+    },
+    "/v1/demo/export-campione": {
+      "get": {
+        "summary": "Legacy alias for the anonymous sample export",
+        "operationId": "demoExportCampione",
+        "security": [],
+        "parameters": [
+          { "name": "tipo", "in": "query", "schema": { "type": "string", "enum": ["offerte", "aziende"], "default": "offerte" } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["jobs", "companies"] } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Same gzip JSONL sample and filename as /v1/demo/sample-export",
+            "headers": { "Content-Disposition": { "$ref": "#/components/headers/SampleDownloadDisposition" } },
+            "content": { "application/gzip": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/DemoRateLimited" }
+        }
+      }
     }
   },
   "components": {
     "securitySchemes": {
       "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key", "description": "Direct Nivult API key" }
     },
+    "headers": {
+      "CreditsCharged": {
+        "description": "Actual direct credits charged by this request; 0 for empty pages and managed errors. Paid direct endpoints emit it on every response; unmetered service endpoints emit 0 on success.",
+        "schema": { "type": "string", "pattern": "^\\d+$", "example": "0" }
+      },
+      "RetryAfter": {
+        "description": "Seconds to wait, present only when the 429 is a rate-limit response, never for credit errors",
+        "schema": { "type": "string", "example": "1" }
+      },
+      "DownloadDisposition": {
+        "description": "attachment; filename=\"nivult-jobs.jsonl.gz\" for jobs/offerte or attachment; filename=\"nivult-companies.jsonl.gz\" for companies/aziende",
+        "schema": { "type": "string", "example": "attachment; filename=\"nivult-jobs.jsonl.gz\"" }
+      },
+      "SampleDownloadDisposition": {
+        "description": "attachment; filename=\"nivult-campione-offerte.jsonl.gz\" or attachment; filename=\"nivult-campione-aziende.jsonl.gz\"",
+        "schema": { "type": "string", "example": "attachment; filename=\"nivult-campione-offerte.jsonl.gz\"" }
+      }
+    },
     "parameters": {
-      "PageLimit": { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 }, "description": "Requested page size. Direct free/trial accounts up to 1,000 monthly credits are capped at 25 records/page, 2 requests/second, burst 5. Other direct accounts use up to 500 records/page, 15 requests/second, burst 30. Effective limit is also capped by available balance divided by per-record cost." },
-      "Cursor": { "name": "cursor", "in": "query", "schema": { "type": "string" }, "description": "Opaque keyset cursor from next_cursor" }
+      "PageLimit": {
+        "name": "limit", "in": "query",
+        "schema": { "type": "integer", "default": 100, "minimum": 1, "maximum": 500 },
+        "description": "Requested page size. Direct accounts at or below 1,000 monthly credits are capped at 25 records/page, 2 requests/second and burst 5. Higher-volume accounts use up to 500 records/page, 15 requests/second and burst 30. Available balance divided by per-record cost can further lower the effective limit."
+      },
+      "Cursor": {
+        "name": "cursor", "in": "query", "schema": { "type": "string" },
+        "description": "Opaque keyset cursor copied unchanged from next_cursor; invalid cursors return 400"
+      }
     },
     "responses": {
-      "BadRequest": { "description": "Invalid date, cursor, source_type, has_salary, salary bound, salary range, or more than 15 q_any terms", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-      "Unauthorized": { "description": "Missing, invalid or revoked API key" },
-      "ValidationError": { "description": "FastAPI parameter validation failed, for example limit=0 or a non-integer limit", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } } },
-      "CreditsExhausted": { "description": "Insufficient or exhausted direct credits, or backend rate limit", "content": { "application/json": { "schema": { "oneOf": [{ "$ref": "#/components/schemas/CreditError" }, { "$ref": "#/components/schemas/InsufficientCreditError" }, { "$ref": "#/components/schemas/ErrorResponse" }] } } } },
-      "RateLimited": { "description": "Request frequency exceeded the key or IP rate limit; unrelated to credit balance and no credits are charged", "headers": { "Retry-After": { "schema": { "type": "string" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
-      "CounterUnavailable": { "description": "Credit counter or database temporarily unavailable, including query timeout; no direct credit is charged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+      "BadRequest": {
+        "description": "Invalid request parameter",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "PaidBadRequest": {
+        "description": "Invalid date, cursor, source_type, has_salary, salary/employee bound or range, or more than 15 q_any terms; X-Credits-Charged is 0",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing, invalid or revoked API key",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "PaidUnauthorized": {
+        "description": "Missing, invalid or revoked API key; X-Credits-Charged is 0",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "Forbidden": {
+        "description": "Required product entitlement is missing",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "PaidForbidden": {
+        "description": "Required Delta entitlement is missing; X-Credits-Charged is 0",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "NotFound": {
+        "description": "Requested company, export or sample is not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "PaidNotFound": {
+        "description": "Company not found; X-Credits-Charged is 0",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "ValidationError": {
+        "description": "FastAPI typed parameter validation failed, for example limit=0 or a non-integer limit",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } }
+      },
+      "PaidValidationError": {
+        "description": "FastAPI typed parameter validation failed; X-Credits-Charged is 0. Salary and employee-range errors use 400 instead.",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorResponse" } } }
+      },
+      "PaidTooManyRequests": {
+        "description": "Rate limit, exhausted credits or insufficient credits for one result. Retry-After is present only for rate limits; credit errors have an object detail and must not be retried automatically.",
+        "headers": {
+          "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" },
+          "Retry-After": { "$ref": "#/components/headers/RetryAfter" }
+        },
+        "content": { "application/json": {
+          "schema": { "oneOf": [
+            { "$ref": "#/components/schemas/CreditError" },
+            { "$ref": "#/components/schemas/InsufficientCreditError" },
+            { "$ref": "#/components/schemas/ErrorResponse" }
+          ] }
+        } }
+      },
+      "RateLimited": {
+        "description": "Request frequency exceeded the key or IP rate limit; no credits are charged",
+        "headers": { "Retry-After": { "$ref": "#/components/headers/RetryAfter" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "DemoRateLimited": {
+        "description": "More than 30 anonymous demo requests in one minute from this IP; the demo response does not include Retry-After",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "CounterUnavailable": {
+        "description": "Credit counter temporarily unavailable. Database or query-timeout failures produce 503 only on routes that explicitly handle them.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      },
+      "PaidCounterUnavailable": {
+        "description": "Credit counter temporarily unavailable, or a handled database/query failure; X-Credits-Charged is 0",
+        "headers": { "X-Credits-Charged": { "$ref": "#/components/headers/CreditsCharged" } },
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+      }
     },
     "schemas": {
       "Job": {
         "type": "object",
-        "required": ["id", "title", "ats", "company_slug", "url"],
+        "required": ["id", "source_type", "has_salary"],
         "properties": {
           "id": { "type": "string" }, "title": { "type": "string" },
           "ats": { "type": "string" }, "company_slug": { "type": "string" },
           "company": { "type": ["string", "null"] }, "url": { "type": "string" },
+          "source_type": { "type": "string", "enum": ["direct", "aggregator", "staffing", "public_board"] },
           "company_domain": { "type": ["string", "null"] },
           "country": { "type": ["string", "null"] }, "city": { "type": ["string", "null"] },
           "location": { "type": ["string", "null"] }, "state": { "type": ["string", "null"] },
+          "postal_code": { "type": ["string", "null"] },
           "language": { "type": ["string", "null"] }, "seniority": { "type": ["string", "null"] },
           "remote": { "type": ["string", "null"] }, "category": { "type": ["string", "null"] },
           "employment_type": { "type": ["string", "null"] }, "department": { "type": ["string", "null"] },
-          "description": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] }, "summary": { "type": ["string", "null"] },
+          "summary_source": { "type": ["string", "null"] },
+          "external_id": { "type": ["string", "null"] },
+          "hours_type": { "type": ["string", "null"] }, "duration_type": { "type": ["string", "null"] },
+          "management_level": { "type": ["string", "null"] },
+          "shift_schedule": { "type": ["string", "null"] }, "work_hours": { "type": ["string", "null"] },
           "skills": { "type": "array", "items": { "type": "string" } },
           "technologies": { "type": "array", "items": { "type": "string" } },
+          "languages_required": { "type": "array", "items": { "type": "string" } },
+          "benefits": { "type": "array", "items": { "type": "string" } },
           "has_salary": { "type": "boolean" },
           "salary_min": { "type": ["number", "null"] }, "salary_max": { "type": ["number", "null"] },
-          "salary_currency": { "type": ["string", "null"] },
+          "salary_currency": { "type": ["string", "null"] }, "salary_period": { "type": ["string", "null"] },
+          "salary_source": { "type": ["string", "null"] }, "salary_text": { "type": ["string", "null"] },
+          "salary_is_estimate": { "type": ["boolean", "null"] },
+          "salary_estimate_min": { "type": ["number", "null"] },
+          "salary_estimate_median": { "type": ["number", "null"] },
+          "salary_estimate_max": { "type": ["number", "null"] },
+          "salary_estimate_currency": { "type": ["string", "null"] },
+          "salary_estimate_basis": { "type": ["string", "null"] },
           "posted_at": { "type": ["string", "null"] }, "first_seen": { "type": ["string", "null"] },
           "last_seen": { "type": ["string", "null"] }, "updated_at": { "type": ["string", "null"] },
-          "source_type": { "type": "string", "enum": ["direct", "aggregator", "staffing", "public_board"] }
+          "valid_through": { "type": ["string", "null"] },
+          "posted_at_estimated": { "type": ["boolean", "null"] },
+          "is_decision_maker": { "type": ["boolean", "null"] },
+          "is_urgently_hiring": { "type": ["boolean", "null"] },
+          "is_easy_apply": { "type": ["boolean", "null"] },
+          "applicants_count": { "type": ["integer", "null"] },
+          "geo": {
+            "type": ["object", "null"],
+            "properties": {
+              "latitude": { "type": "number" }, "longitude": { "type": "number" },
+              "source": { "type": ["string", "null"] }
+            }
+          },
+          "job_sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }, "ats": { "type": ["string", "null"] },
+                "company_slug": { "type": ["string", "null"] }, "url": { "type": ["string", "null"] },
+                "posted_at": { "type": ["string", "null"] }, "status": { "type": ["string", "null"] }
+              }
+            }
+          }
         },
         "additionalProperties": true
       },
+      "CompanyLocation": {
+        "type": "object",
+        "properties": {
+          "city": { "type": ["string", "null"] }, "country": { "type": ["string", "null"] },
+          "state": { "type": ["string", "null"] }, "offerte": { "type": "integer" },
+          "is_primary": { "type": "boolean" }
+        }
+      },
+      "CompanyHeadquarters": {
+        "type": "object",
+        "properties": {
+          "country": { "type": ["string", "null"] }, "state": { "type": ["string", "null"] },
+          "city": { "type": ["string", "null"] }, "street": { "type": ["string", "null"] },
+          "zipcode": { "type": ["string", "null"] }, "full_address": { "type": ["string", "null"] },
+          "latitude": { "type": ["number", "null"] }, "longitude": { "type": ["number", "null"] },
+          "source": { "type": ["string", "null"] }
+        }
+      },
+      "CompanyTechnology": {
+        "type": "object",
+        "properties": {
+          "technology": { "type": "string" }, "active_jobs": { "type": ["integer", "null"] },
+          "jobs": { "type": ["integer", "null"] },
+          "first_verified_at": { "type": ["string", "null"] },
+          "last_verified_at": { "type": ["string", "null"] }
+        }
+      },
       "Company": {
         "type": "object",
-        "required": ["ats", "company_slug", "company"],
+        "required": ["ats", "company_slug"],
         "properties": {
           "ats": { "type": "string" }, "company_slug": { "type": "string" },
-          "company": { "type": "string" }, "country": { "type": ["string", "null"] },
+          "company": { "type": ["string", "null"] }, "country": { "type": ["string", "null"] },
           "domain": { "type": ["string", "null"] }, "website": { "type": ["string", "null"] },
-          "active_jobs": { "type": "integer" }, "employees": { "type": ["integer", "null"] },
-          "industry": { "type": ["string", "null"] }, "industry_source": { "type": ["string", "null"] },
-          "legal_name": { "type": ["string", "null"] }, "legal_form": { "type": ["string", "null"] },
-          "registration_id": { "type": ["string", "null"] }, "founded": { "type": ["string", "null"] },
-          "size_range": { "type": ["string", "null"] }, "size_range_source": { "type": ["string", "null"] },
+          "logo": { "type": ["string", "null"] }, "description": { "type": ["string", "null"] },
+          "description_source": { "type": ["string", "null"] },
+          "active_jobs": { "type": ["integer", "null"] },
+          "open_jobs_count": { "type": ["integer", "null"] },
           "jobs_posted_30d": { "type": ["integer", "null"] },
-          "locations": { "type": "array", "items": { "type": "object" } },
-          "technologies": { "type": "array", "items": { "type": "object" } }
+          "n_locations": { "type": ["integer", "null"] },
+          "employees": { "type": ["integer", "null"] },
+          "employees_scope": { "type": ["string", "null"] },
+          "employees_source": { "type": ["string", "null"] },
+          "employees_legal_entity": { "type": ["integer", "null"] },
+          "employees_legal_entity_band": { "type": ["string", "null"] },
+          "employees_legal_entity_source": { "type": ["string", "null"] },
+          "industry": { "type": ["string", "null"] }, "industry_source": { "type": ["string", "null"] },
+          "industry_mix_share": { "type": ["number", "null"] },
+          "legal_name": { "type": ["string", "null"] }, "legal_form": { "type": ["string", "null"] },
+          "legal_form_code": { "type": ["string", "null"] },
+          "registration_id": { "type": ["string", "null"] }, "lei": { "type": ["string", "null"] },
+          "founded": { "type": ["string", "null"] }, "founded_source": { "type": ["string", "null"] },
+          "size_range": { "type": ["string", "null"] }, "size_range_source": { "type": ["string", "null"] },
+          "company_name_source": { "type": ["string", "null"] },
+          "languages": { "type": "array", "items": { "type": "string" } },
+          "external_urls": { "type": "array", "items": { "type": "string" } },
+          "top_skills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "skill": { "type": "string" }, "jobs": { "type": "integer" } }
+            }
+          },
+          "keywords": {
+            "type": "object",
+            "properties": {
+              "famiglie": { "type": "array", "items": { "type": "string" } },
+              "tecnologie": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "locations": { "type": "array", "items": { "$ref": "#/components/schemas/CompanyLocation" } },
+          "headquarters": { "$ref": "#/components/schemas/CompanyHeadquarters" },
+          "technologies": { "type": "array", "items": { "$ref": "#/components/schemas/CompanyTechnology" } }
         },
         "additionalProperties": true
       },
       "Change": {
         "type": "object",
         "required": ["event", "id"],
+        "description": "new is a sparse discovery event; updated is a full current active-job snapshot plus updated_at; closed is a sparse closure event with closed_at. Additional Job fields may be present, especially on updated.",
         "properties": {
           "event": { "type": "string", "enum": ["new", "updated", "closed"] },
           "id": { "type": "string" }, "title": { "type": ["string", "null"] },
           "ats": { "type": ["string", "null"] }, "company_slug": { "type": ["string", "null"] },
-          "url": { "type": ["string", "null"] }, "posted_at": { "type": ["string", "null"] },
-          "updated_at": { "type": ["string", "null"] }, "closed_at": { "type": ["string", "null"] }
+          "company": { "type": ["string", "null"] }, "company_domain": { "type": ["string", "null"] },
+          "url": { "type": ["string", "null"] }, "source_type": { "type": ["string", "null"] },
+          "country": { "type": ["string", "null"] }, "city": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] }, "language": { "type": ["string", "null"] },
+          "seniority": { "type": ["string", "null"] }, "remote": { "type": ["string", "null"] },
+          "category": { "type": ["string", "null"] }, "employment_type": { "type": ["string", "null"] },
+          "department": { "type": ["string", "null"] },
+          "skills": { "type": "array", "items": { "type": "string" } },
+          "technologies": { "type": "array", "items": { "type": "string" } },
+          "has_salary": { "type": ["boolean", "null"] },
+          "salary_min": { "type": ["number", "null"] }, "salary_max": { "type": ["number", "null"] },
+          "salary_currency": { "type": ["string", "null"] },
+          "posted_at": { "type": ["string", "null"] }, "first_seen": { "type": ["string", "null"] },
+          "last_seen": { "type": ["string", "null"] }, "updated_at": { "type": ["string", "null"] },
+          "closed_at": { "type": ["string", "null"] }
         },
         "additionalProperties": true
       },
@@ -341,45 +712,77 @@
         "type": "object", "required": ["data", "next_cursor", "count_page"],
         "properties": {
           "data": { "type": "array", "items": { "$ref": "#/components/schemas/Job" } },
-          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer", "minimum": 0 }
         }
       },
       "CompanyPage": {
         "type": "object", "required": ["data", "next_cursor", "count_page"],
         "properties": {
           "data": { "type": "array", "items": { "$ref": "#/components/schemas/Company" } },
-          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer", "minimum": 0 }
         }
       },
       "ChangePage": {
         "type": "object", "required": ["data", "next_cursor", "count_page"],
         "properties": {
           "data": { "type": "array", "items": { "$ref": "#/components/schemas/Change" } },
-          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer" }
+          "next_cursor": { "type": ["string", "null"] }, "count_page": { "type": "integer", "minimum": 0 }
         }
       },
       "ExportManifest": {
         "type": "object",
+        "required": ["data", "righe", "file"],
         "properties": {
+          "stato": { "type": ["string", "null"] }, "data_export": { "type": ["string", "null"] },
+          "offerte": { "type": ["integer", "null"] }, "aziende": { "type": ["integer", "null"] },
+          "flusso": { "type": ["integer", "null"] }, "flusso_giorni": { "type": ["integer", "null"] },
+          "flusso_dal": { "type": ["string", "null"] }, "generato_at": { "type": ["string", "null"] },
           "data": { "type": ["string", "null"] },
-          "righe": { "type": "object", "properties": { "offerte": { "type": ["integer", "null"] }, "aziende": { "type": ["integer", "null"] }, "flusso": { "type": ["integer", "null"] } } },
-          "file": { "type": "object", "properties": { "offerte": { "type": ["string", "null"] }, "aziende": { "type": ["string", "null"] } } }
+          "righe": {
+            "type": "object",
+            "required": ["offerte", "aziende", "flusso"],
+            "properties": {
+              "offerte": { "type": ["integer", "null"] }, "aziende": { "type": ["integer", "null"] },
+              "flusso": { "type": ["integer", "null"] }
+            }
+          },
+          "file": {
+            "type": "object",
+            "required": ["offerte", "aziende"],
+            "properties": {
+              "offerte": { "type": "string", "example": "/v1/exports/latest/offerte" },
+              "aziende": { "type": "string", "example": "/v1/exports/latest/aziende" }
+            },
+            "description": "API-relative paths to append to https://api.nivult.com, not filesystem paths"
+          }
         },
         "additionalProperties": true
       },
       "Coverage": {
         "type": "object",
-        "properties": { "aziende": { "type": "object", "additionalProperties": { "type": "number" } } },
-        "additionalProperties": { "type": "number" }
+        "properties": {
+          "aziende": {
+            "type": "object",
+            "description": "Company field fill rates nested under aziende; no company:* keys",
+            "additionalProperties": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "additionalProperties": { "type": "number", "minimum": 0, "maximum": 100 }
       },
-      "ErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "string" } } },
-      "ValidationErrorResponse": { "type": "object", "required": ["detail"], "properties": { "detail": { "type": "array", "items": { "type": "object" } } } },
+      "ErrorResponse": {
+        "type": "object", "required": ["detail"],
+        "properties": { "detail": { "type": "string" } }
+      },
+      "ValidationErrorResponse": {
+        "type": "object", "required": ["detail"],
+        "properties": { "detail": { "type": "array", "items": { "type": "object" } } }
+      },
       "CreditError": {
         "type": "object", "required": ["detail"],
         "properties": {
           "detail": {
             "type": "object",
-            "required": ["error"],
+            "required": ["error", "monthly_credits", "purchased_credits", "usage_month"],
             "properties": {
               "error": { "type": "string", "example": "monthly and purchased credits exhausted" },
               "monthly_credits": { "type": "integer" }, "purchased_credits": { "type": "integer" },
@@ -392,7 +795,8 @@
         "type": "object", "required": ["detail"],
         "properties": {
           "detail": {
-            "type": "object", "required": ["error", "remaining", "credits_per_record"],
+            "type": "object",
+            "required": ["error", "remaining", "credits_per_record"],
             "properties": {
               "error": { "type": "string", "example": "insufficient credits for one result" },
               "remaining": { "type": "integer" }, "credits_per_record": { "type": "integer" }
@@ -405,6 +809,7 @@
         "properties": {
           "detail": {
             "type": "object",
+            "required": ["code", "error", "message", "since", "retention_since", "action", "resync_required"],
             "properties": {
               "code": { "type": "string", "example": "delta_retention_exceeded" },
               "error": { "type": "string", "example": "delta_retention_exceeded" },
@@ -418,17 +823,47 @@
       },
       "Usage": {
         "type": "object",
-        "required": ["monthly_credits", "used", "remaining", "usage_month", "monthly_remaining", "purchased_credits", "balance", "key_credits_used", "account_monthly_credits"],
+        "required": ["monthly_credits", "used", "remaining", "usage_month", "monthly_remaining", "purchased_credits", "balance", "key_credits_used", "account_monthly_credits", "subscription_status", "subscription_plan", "subscription_interval", "current_period_end"],
         "properties": {
           "monthly_credits": { "type": "integer" }, "used": { "type": "integer" },
-          "remaining": { "type": "integer", "description": "Total remaining credits, including purchased credits" },
-          "usage_month": { "type": "string", "format": "date" }, "monthly_remaining": { "type": "integer" },
-          "purchased_credits": { "type": "integer" }, "balance": { "type": "integer" },
-          "key_credits_used": { "type": "integer" }, "account_monthly_credits": { "type": "integer" },
+          "remaining": { "type": "integer", "description": "monthly_remaining + purchased_credits" },
+          "usage_month": { "type": "string", "format": "date" },
+          "monthly_remaining": { "type": "integer" }, "purchased_credits": { "type": "integer" },
+          "balance": { "type": "integer" }, "key_credits_used": { "type": "integer" },
+          "account_monthly_credits": { "type": "integer" },
           "subscription_status": { "type": ["string", "null"] },
           "subscription_plan": { "type": ["string", "null"] },
           "subscription_interval": { "type": ["string", "null"] },
           "current_period_end": { "type": ["string", "null"] }
+        }
+      },
+      "DemoTechnologies": {
+        "type": "object",
+        "required": ["query", "data", "altre", "campione"],
+        "properties": {
+          "query": { "type": "string" },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "country": { "type": ["string", "null"] }, "industry": { "type": ["string", "null"] },
+                "technologies": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "altre": { "type": "boolean" }, "campione": { "type": "string" }
+        }
+      },
+      "DemoStats": {
+        "type": "object",
+        "properties": {
+          "offerte": { "type": "integer" }, "aziende": { "type": "integer" },
+          "paesi": { "type": "integer" }, "piattaforme": { "type": ["integer", "null"] },
+          "nuove_24h": { "type": ["integer", "null"] },
+          "cambiamenti_24h": { "type": ["integer", "null"] },
+          "chiuse_storico": { "type": ["integer", "null"] },
+          "copertura": { "type": "object" }, "copertura_aziende": { "type": "object" }
         }
       }
     }
