@@ -2468,7 +2468,8 @@ def create_app() -> FastAPI:
                 e["logo"] = loghi.get(e["dettaglio"]) or _logo_rif(e["dettaglio"])
             elif e["azione"] == "filtered export" and e["download_id"]:
                 unita = "company" if e["tipo_export"] == "companies" else "job"
-                e["titolo"] = f"{e['righe_export']} {unita} records"
+                plurale = "s" if e["righe_export"] != 1 else ""
+                e["titolo"] = f"{e['righe_export']} {unita} record{plurale}"
             elif e["azione"] == "posting unlock" and e["dettaglio"]:
                 try:
                     o = _vivo.rivela_offerta(e["dettaglio"])

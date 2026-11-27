@@ -216,7 +216,7 @@ def test_saved_export_redownload_is_free_identical_and_owner_only(
         pg_account, portal_client, monkeypatch):
     uid = pg_account(20)
     other_uid = pg_account(20)
-    _stub_export(monkeypatch, 10)
+    _stub_export(monkeypatch, 1)
     client = portal_client(uid)
     response = client.post("/portale/export/scarica",
                            json={"tipo": "postings", "max_rows": 10})
@@ -239,7 +239,7 @@ def test_saved_export_redownload_is_free_identical_and_owner_only(
     activity = client.get("/portale/uso")
     assert activity.status_code == 200
     event = next(e for e in activity.json()["eventi"] if e["download_id"] == download_id)
-    assert event["titolo"] == "10 job records"
+    assert event["titolo"] == "1 job record"
     assert _billing_state(uid) == before
 
 
