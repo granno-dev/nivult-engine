@@ -436,3 +436,10 @@ def test_export_modal_copy_controls_and_server_quote_contract():
     assert "d.matching_rows > d.max_allowed_rows" in export_script
     assert 'if (r.status === 402) {\n    await stimaExport();' in export_script
     assert "avviso.innerHTML" not in export_script
+
+
+def test_account_startup_keeps_topup_pricing_helper():
+    html = (ROOT / "vetrina" / "account.html").read_text()
+    assert "function euroPer(crediti)" in html
+    assert "const e = euroPer(c)" in html
+    assert html.index("function euroPer(crediti)") < html.index("aggiornaBuy();")

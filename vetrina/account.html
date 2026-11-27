@@ -1529,6 +1529,9 @@ async function manageSubscription() {
 }
 
 const bsl = document.getElementById("buy-slider");
+function euroPer(crediti) {
+  return Math.max(40, Math.ceil(crediti / 1000) * 4);
+}
 function aggiornaBuy() {
   const c = Number(bsl.value);
   const e = euroPer(c);
