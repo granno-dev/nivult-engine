@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import re
@@ -119,8 +120,7 @@ def _title_pattern(candidate: str) -> str:
     return r"[^\w]+".join(re.escape(word) for word in words)
 
 
-def safe_title(title, company=None, domain=None) -> str:
-    result = str(title or "")
+def _identity_candidates(company, domain) -> set[str]:
     company = str(company or "").strip()
     candidates = {company, _brand(domain)}
     words = re.findall(r"[^\W_]+", company, flags=re.UNICODE)
@@ -131,14 +131,59 @@ def safe_title(title, company=None, domain=None) -> str:
         words.pop()
     if words:
         candidates.add(" ".join(words))
-    for candidate in sorted((c for c in candidates if len(c) >= 3), key=len, reverse=True):
+    return {c for c in candidates if len(c) >= 3}
+
+
+def _redact_identity(text: str, company=None, domain=None, slug=None) -> str:
+    result = text
+    candidates = _identity_candidates(company, domain)
+    if slug and len(str(slug)) >= 3:
+        candidates.add(str(slug))
+    for candidate in sorted(candidates, key=len, reverse=True):
         pattern = _title_pattern(candidate)
         if pattern:
             result = re.sub(r"(?<!\w)" + pattern + r"(?!\w)", "Hidden company",
                             result, flags=re.IGNORECASE)
+    return result
+
+
+def safe_title(title, company=None, domain=None, slug=None) -> str:
+    result = _redact_identity(str(title or ""), company, domain, slug)
     result = re.sub(r"(?:Hidden company)(?:\s*[-–—|:]\s*Hidden company)+",
                     "Hidden company", result, flags=re.IGNORECASE)
     return re.sub(r"\s{2,}", " ", result).strip(" -–—|:") or "Hidden company"
+
+
+def _hide_contact_number(match) -> str:
+    value = match.group(0)
+    digits = re.sub(r"\D", "", value)
+    return "[contact hidden]" if 9 <= len(digits) <= 15 else value
+
+
+def sanitized_description(description, company=None, domain=None, slug=None) -> str:
+    text = re.sub(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", " ",
+                  str(description or ""), flags=re.IGNORECASE | re.DOTALL)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", text))
+    text = re.sub(r"(?:https?:)?//[^\s<>]+|www\.[^\s<>]+", "[link hidden]", text,
+                  flags=re.IGNORECASE)
+    text = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+                  "[contact hidden]", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(?i)\b(?:phone|tel(?:ephone)?|telefono|telefon|mobile|cellulare)"
+        r"\s*[:+]?\s*\+?[\d\s()./-]{7,}", "[contact hidden]", text)
+    text = re.sub(r"(?<!\w)\+?\d[\d\s()./-]{7,}\d", _hide_contact_number, text)
+    text = _redact_identity(text, company, domain, slug)
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def description_preview(description, company=None, domain=None, slug=None) -> str:
+    text = sanitized_description(description, company, domain, slug)
+    if len(text) <= 520:
+        return text
+    cut = text[:520]
+    boundary = max(cut.rfind(". "), cut.rfind("\n"), cut.rfind(" "))
+    return cut[:boundary if boundary >= 240 else 520].rstrip() + "…"
 
 
 _JOB_SAFE = (
@@ -161,7 +206,7 @@ _JOB_REVEALED = _JOB_SAFE + (
 
 
 def job_dto(row: dict, revealed: bool, token: str, group: str,
-            profile: dict | None = None) -> dict:
+            profile: dict | None = None, job_revealed: bool = False) -> dict:
     source = dict(row)
     if profile:
         source["company"] = profile.get("company") or source.get("company")
@@ -176,15 +221,26 @@ def job_dto(row: dict, revealed: bool, token: str, group: str,
                            or not (source.get("company") or source.get("company_domain")))
         out["title"] = ("Hidden company" if nascondi_titolo
                         else safe_title(source.get("title"), source.get("company"),
-                                        source.get("company_domain")))
+                                        source.get("company_domain"), source.get("company_slug")))
+        if job_revealed and source.get("description"):
+            out["description"] = sanitized_description(
+                source["description"], source.get("company"), source.get("company_domain"),
+                source.get("company_slug"))
     out.update({"revealed": revealed, "az_rivelata": revealed,
+                "job_revealed": revealed or job_revealed,
                 "reveal_token": token, "reveal_group": group})
     return out
 
 
 def detail_dto(row: dict, revealed: bool, token: str, group: str,
-               profile: dict | None = None) -> dict:
-    return job_dto(row, revealed, token, group, profile)
+               profile: dict | None = None, job_revealed: bool = False) -> dict:
+    out = job_dto(row, revealed, token, group, profile, job_revealed)
+    if not revealed and not job_revealed:
+        preview = description_preview(row.get("description"), row.get("company"),
+                                      row.get("company_domain"), row.get("company_slug"))
+        if preview:
+            out["description_preview"] = preview
+    return out
 
 
 _COMPANY_SAFE = ("country", "industry", "employees", "employee_range",

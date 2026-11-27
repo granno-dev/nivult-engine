@@ -2019,17 +2019,56 @@ def create_app() -> FastAPI:
             raise HTTPException(404, "posting not found")
         rif = _riferimento(riga)
         rivelata = await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
+        job_rivelata = rivelata or await run_in_threadpool(
+            _chiavi.e_rivelata, uid, "job", offerta_id)
         profili = await run_in_threadpool(_dati.profili_aziende, [rif] if rivelata else [])
         token = _explorer.reveal_token(uid, rif)
         gruppo = _explorer.reveal_group(rif)
-        offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif))
-        return {"offerta": offerta, "rivelata": rivelata,
-                "azienda_rivelata": rivelata, "reveal_token": token,
-                "reveal_group": gruppo}
+        offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif),
+                                       job_rivelata)
+        return {"offerta": offerta, "rivelata": job_rivelata,
+                "job_rivelata": job_rivelata, "azienda_rivelata": rivelata,
+                "reveal_token": token, "reveal_group": gruppo}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
-        raise HTTPException(410, "Posting unlock was retired; use company reveal tokens")
+        _controlla_origine(request)
+        try:
+            corpo = await request.json()
+        except Exception:                            # noqa: BLE001
+            corpo = {}
+        offerta_id = str((corpo or {}).get("id") or "").strip()
+        if not offerta_id:
+            raise HTTPException(400, "missing id")
+        _freno_portale(request, uid)
+        riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
+        if riga is None:
+            raise HTTPException(404, "posting not found")
+        rif = _riferimento(riga)
+        rivelata = await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
+        if rivelata:
+            esito = "gratis"
+        else:
+            try:
+                esito = await run_in_threadpool(
+                    _chiavi.rivela_per_utente, uid, "job", offerta_id)
+            except _chiavi.ContatoreNonDisponibile as exc:
+                raise HTTPException(503, "job unlock temporarily unavailable") from exc
+            if esito == "account_sospeso":
+                raise HTTPException(403, "account paused — contact support")
+            if esito == "senza_crediti":
+                raise HTTPException(429, "1 credit required — top up from the dashboard")
+            if esito == "ok":
+                await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
+                                        "posting unlock", offerta_id)
+        token = _explorer.reveal_token(uid, rif)
+        gruppo = _explorer.reveal_group(rif)
+        profili = await run_in_threadpool(_dati.profili_aziende, [rif] if rivelata else [])
+        offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif), True)
+        saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
+        return {"offerta": offerta, "esito": esito, "saldo": saldo,
+                "rivelata": True, "job_rivelata": True, "azienda_rivelata": rivelata,
+                "reveal_token": token, "reveal_group": gruppo}
 
     @app.post("/portale/rivela-azienda")
     async def rivela_azienda_nel_portale(request: Request, uid: str = Depends(utente)):

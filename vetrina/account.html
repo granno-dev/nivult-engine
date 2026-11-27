@@ -526,7 +526,7 @@ body.modale-aperto { overflow: hidden; }
         <section id="explorer" data-view="explorer" aria-label="Explorer and API" class="hidden">
           <div class="flex flex-wrap items-center gap-3">
             <div class="explorer-tabs" role="tablist" aria-label="Explorer view"><button id="explorer-query" type="button" role="tab" aria-selected="true" onclick="cambiaExplorer('query')" class="explorer-tab is-active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>Query Explorer</button><button id="explorer-reference" type="button" role="tab" aria-selected="false" onclick="cambiaExplorer('reference')" class="explorer-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12a2 2 0 0 1 2 2v16l-7-4-7 4z"/></svg>API Reference</button></div>
-            <p class="text-xs text-slate-500">Browsing is free · revealing a company costs 3 credits, once</p>
+            <p class="text-xs text-slate-500">Free previews · full single job text 1 credit once · company reveal 3 credits once, permanent, with company jobs &amp; source</p>
           </div>
 
           <div id="explorer-query-panel" class="mt-4">
@@ -1654,7 +1654,9 @@ function registraRivelazione(record, kind, rivelata = record.revealed === true) 
   const previous = rows[rowKey] || {};
   let merged = { ...previous, ...record, explorer_kind: kind, explorer_key: rowKey,
     reveal_token: revealToken, reveal_group: group,
-    revealed: rivelata === true || previous.revealed === true };
+    revealed: rivelata === true || previous.revealed === true,
+    job_rivelata: record.job_rivelata === true || previous.job_rivelata === true
+      || rivelata === true || previous.revealed === true };
   if (group && gruppiRivelati[group]) merged = unisciAziendaRivelata(merged, gruppiRivelati[group]);
   if (revealToken) {
     rows[rowKey] = merged;
@@ -1908,6 +1910,45 @@ function aggiornaSaldoDopoRivelazione(saldo) {
   }
   carica().catch(() => {});
 }
+async function rivelaJob(id, btn) {
+  if (btn.disabled) return;
+  let completata = false;
+  const seq = ++dettaglioSeq;
+  aziendaJobsSeq += 1;
+  btn.disabled = true; btn.textContent = "Unlocking…";
+  try {
+    let r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
+    if (r.status === 503) {
+      await new Promise(resolve => setTimeout(resolve, 400));
+      r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
+    }
+    if (!r.ok && seq !== dettaglioSeq) return;
+    if (r.status === 429) {
+      notifica(r.headers.get("Retry-After")
+        ? "Too many unlock requests. Wait a moment and retry."
+        : "You need 1 credit to unlock this job. Top up your balance and retry.", "errore");
+      return;
+    }
+    if (r.status === 404) {
+      notifica("This posting is no longer available. Refresh the results and retry.", "errore");
+      return;
+    }
+    if (!r.ok) { notifica("The full job could not be unlocked. Retry.", "errore"); return; }
+    const d = await r.json();
+    aggiornaSaldoDopoRivelazione(d.saldo);
+    completata = true;
+    if (seq === dettaglioSeq) await dettaglioJob(id);
+  } catch (e) {
+    if (seq === dettaglioSeq && !completata && e.message !== "401") {
+      notifica("The full job could not be unlocked. Retry.", "errore");
+    }
+  } finally {
+    if (!completata && btn.isConnected) {
+      btn.disabled = false;
+      btn.textContent = "Unlock full job · 1 credit";
+    }
+  }
+}
 async function rivelaAzienda(revealToken, btn) {
   let completata = false;
   const seq = ++dettaglioSeq;
@@ -2026,9 +2067,11 @@ async function dettaglioJob(id) {
     const offerta = d.offerta || {};
     const o = registraRivelazione({ ...offerta,
       reveal_token: d.reveal_token || offerta.reveal_token || "",
-      reveal_group: d.reveal_group || offerta.reveal_group || "" },
+      reveal_group: d.reveal_group || offerta.reveal_group || "",
+      job_rivelata: d.job_rivelata === true || d.azienda_rivelata === true || offerta.job_rivelata === true },
       "jobs", d.azienda_rivelata === true);
     const rivelata = o.revealed === true;
+    const jobRivelata = o.job_rivelata === true || rivelata;
     const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
     const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
     const tec = (o.technologies || []).map(t =>
@@ -2053,11 +2096,11 @@ async function dettaglioJob(id) {
            <div class="company-reveal-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
            <div class="company-reveal-copy">
              <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company reveal</p>
-             <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Unlock the company behind this posting</h4>
-             <p class="mt-1 text-[12.5px] leading-5 text-slate-600">View the company profile, complete job description and original source.</p>
-             <span class="company-reveal-meta">3 credits once · permanent access</span>
+             <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Reveal the company behind this posting</h4>
+             <p class="mt-1 text-[12.5px] leading-5 text-slate-600">Get the company identity and profile, original posting source, and full text for this and all company jobs.</p>
+             <span class="company-reveal-meta">3 credits once · permanent access · all company jobs</span>
            </div>
-           <button type="button" data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="app-btn app-btn-primary">Reveal company · 3 credits</button>
+           <button type="button" data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="app-btn app-btn-secondary">Reveal company · 3 credits</button>
          </div>`;
     const fatti = rivelata ? [
       o.salary_text ? ["Salary", o.salary_text] : null,
@@ -2067,21 +2110,31 @@ async function dettaglioJob(id) {
       o.benefits ? ["Benefits", String(o.benefits).slice(0, 120)] : null,
     ].filter(Boolean) : [];
     const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
-    const corpo = !rivelata
-      ? `<section class="locked-posting-card mt-5" aria-label="Locked posting content">
-           <div class="flex items-start gap-3">
-             <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-400" aria-hidden="true"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
-             <div><p class="company-section-title">From the posting</p><h4 class="mt-1 text-[13.5px] font-extrabold text-slate-800">The complete posting is locked</h4>
-             <p class="mt-1 text-[12.5px] leading-5 text-slate-500">Reveal the company to read the full description and follow the source link.</p></div>
-           </div>
-           <div class="mt-3 flex flex-wrap gap-2 pl-0 sm:pl-12"><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Full description</span><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Original source</span><span class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600">Company details</span></div>
+    const anteprima = `<section class="locked-posting-card posting-preview-card mt-5" aria-label="Free posting preview">
+         <div class="flex flex-wrap items-start justify-between gap-3">
+           <div><p class="company-section-title">Posting preview</p><h4 class="mt-1 text-[14px] font-extrabold text-slate-800">Read the essentials before unlocking</h4></div>
+           <span class="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-emerald-700">Free to open</span>
+         </div>
+         <div class="mt-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3.5">
+           <p class="whitespace-pre-wrap text-[13.5px] leading-6 text-slate-600">${esc(o.description_preview || "Preview text is not available for this posting.")}</p>
+         </div>
+         <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200/80 pt-4">
+           <div class="min-w-0 flex-1 basis-56"><p class="text-[12.5px] font-extrabold text-slate-800">Full text for this one job</p><p class="mt-1 text-[12px] leading-5 text-slate-500">1 credit once, permanently. Get the complete sanitized text; company names, links and contacts stay hidden.</p></div>
+           <button type="button" onclick="rivelaJob(${jsArg(o.id)}, this)" class="app-btn app-btn-primary w-full sm:w-auto">Unlock full job · 1 credit</button>
+         </div>
+         <p class="mt-3 text-[11px] leading-5 text-slate-400">Opening this preview is free. Credits are used only when you explicitly choose an unlock.</p>
+       </section>`;
+    const testoCompleto = o.description
+      ? `<section class="mt-5" aria-label="Full posting text">
+           <div class="flex flex-wrap items-center justify-between gap-2"><p class="company-section-title">From the posting</p><span class="rounded-lg bg-brand-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-brand-600">${rivelata ? "Full original text" : "Full job unlocked"}</span></div>
+           <div class="mt-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 cov-scroll"><p class="whitespace-pre-wrap border-l-2 border-brand-300 pl-4 text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(o.description))}</p></div>
+           ${rivelata ? "" : '<p class="mt-2 text-[11.5px] leading-5 text-slate-500">Company names, links and contacts remain hidden in this job text.</p>'}
          </section>`
-      : (o.description
-        ? `<p class="company-section mt-5 company-section-title">From the posting</p><div class="mt-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 cov-scroll"><p class="whitespace-pre-wrap border-l-2 border-brand-300 pl-4 text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(o.description))}</p></div>`
-        : `<div class="locked-posting-card mt-5">
-             <p class="text-[12.5px] font-bold text-slate-600">Full text still being indexed</p>
-             <p class="mt-1 text-[12px] leading-5 text-slate-500">The essentials are already on this card — the original posting carries the full description.</p>
-           </div>`);
+      : `<div class="locked-posting-card mt-5">
+           <p class="text-[12.5px] font-bold text-slate-600">Full text is not available for this posting</p>
+           <p class="mt-1 text-[12px] leading-5 text-slate-500">${rivelata ? "Open the original posting for the latest source content." : "The preview and posting metadata remain available here."}</p>
+         </div>`;
+    const corpo = jobRivelata ? testoCompleto : anteprima;
     apriDettaglio(`<div class="p-5 sm:p-8">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0"><h3 class="break-words text-xl font-black tracking-tight">${esc(o.title || "")}</h3>

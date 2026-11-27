@@ -141,10 +141,13 @@ def _walk_json(value):
 
 
 def _assert_zero_leak(payload) -> None:
+    preview_allowed = False
     for key, _ in _walk_json(payload):
         assert str(key).casefold() not in FORBIDDEN_KEYS
+        preview_allowed = preview_allowed or str(key) == "description_preview"
     serialized = json.dumps(payload, ensure_ascii=False).casefold()
-    for secret in SECRET_VALUES:
+    secrets = SECRET_VALUES - {DESCRIPTION_MARKER} if preview_allowed else SECRET_VALUES
+    for secret in secrets:
         assert secret.casefold() not in serialized
 
 
@@ -847,3 +850,81 @@ def test_postgres_full_http_reveal_has_one_three_credit_ledger_row(
     assert second.json()["esito"] == "gratis"
     assert second.json()["saldo"] == 0
     assert _billing_state(dsn, uid) == before
+
+
+def test_free_description_preview_is_real_but_identity_and_contacts_are_redacted():
+    row = _secret_job()
+    row["description"] = (
+        "<p>Zephyr Quantum Labs is hiring. Visit https://zephyrquantum.example/jobs "
+        "or email hiring@zephyrquantum.example. Phone: +39 02 1234 5678.</p>"
+        "<p>Internal slug zephyr-quantum-7f3e-secret. Telefono: 02 1234 5678. "
+        "Logo: //cdn.example.net/logo.svg</p>"
+        "<p>You will build reliable data platforms with Python.</p>")
+    dto = explorer.detail_dto(row, False, "token", "group")
+    preview = dto["description_preview"]
+    assert "You will build" in preview or len(preview) <= 520
+    assert "Zephyr Quantum Labs" not in preview
+    assert "zephyrquantum.example" not in preview
+    assert "hiring@zephyrquantum.example" not in preview
+    assert "+39 02 1234 5678" not in preview
+    assert "02 1234 5678" not in preview
+    assert "zephyr-quantum-7f3e-secret" not in preview
+    assert "cdn.example.net" not in preview
+    assert "description" not in dto and "url" not in dto
+    assert dto["job_revealed"] is False
+    full = explorer.detail_dto(row, False, "token", "group", job_revealed=True)["description"]
+    for text in (preview, full):
+        assert "zephyr-quantum-7f3e-secret" not in text
+        assert "cdn.example.net" not in text
+        assert "02 1234 5678" not in text
+
+
+def test_one_credit_job_dto_has_full_sanitized_text_without_company_bypass():
+    row = _secret_job()
+    dto = explorer.detail_dto(row, False, "token", "group", job_revealed=True)
+    assert dto["job_revealed"] is True and dto["revealed"] is False
+    assert "description" in dto
+    assert COMPANY not in dto["description"]
+    assert "company" not in dto and "company_domain" not in dto
+    assert "url" not in dto and "apply_url" not in dto
+    assert "description_preview" not in dto
+
+
+def test_http_job_unlock_charges_one_credit_and_returns_no_company_identity(
+        monkeypatch, portal_client):
+    revealed = set()
+    _stub_projection(monkeypatch, revealed)
+    calls = []
+    monkeypatch.setattr(chiavi, "rivela_per_utente",
+                        lambda *args: calls.append(args) or "ok")
+    monkeypatch.setattr(chiavi, "registra_uso", lambda *args, **kwargs: None)
+    monkeypatch.setattr(chiavi, "saldo_per_utente", lambda uid: 499)
+    response = portal_client().post("/portale/rivela", json={"id": "public-posting-1"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls == [(UID_A, "job", "public-posting-1")]
+    assert payload["saldo"] == 499 and payload["job_rivelata"] is True
+    assert payload["azienda_rivelata"] is False
+    assert "description" in payload["offerta"]
+    serialized = json.dumps(payload)
+    assert COMPANY not in serialized and DOMAIN not in serialized
+    assert SLUG not in serialized and APPLY not in serialized
+    assert payload["offerta"]["revealed"] is False
+    assert "url" not in payload["offerta"]
+
+
+def test_postgres_job_unlock_is_permanent_and_costs_exactly_one(pg_accounts):
+    dsn = os.environ["TEST_DATABASE_URL"]
+    uid = pg_accounts(balance=3)
+    reference = f"job-unlock-{uuid.uuid4()}"
+    assert chiavi.rivela_per_utente(uid, "job", reference) == "ok"
+    assert chiavi.saldo_per_utente(uid) == 2
+    assert chiavi.rivela_per_utente(uid, "job", reference) == "gratis"
+    assert chiavi.saldo_per_utente(uid) == 2
+    with psycopg.connect(dsn) as connection:
+        used, count, credits = connection.execute(
+            "SELECT k.usati_mese, count(u.id), coalesce(sum(u.crediti), 0) "
+            "FROM api_chiavi k LEFT JOIN portale_uso u "
+            "ON u.user_id = k.user_id AND u.azione = 'posting unlock' "
+            "WHERE k.user_id = %s GROUP BY k.usati_mese", (uid,)).fetchone()
+    assert (used, count, credits) == (1, 1, 1)
