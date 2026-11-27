@@ -1160,11 +1160,14 @@ function disegnaAccesso() {
   const attivo = hasActiveSubscription();
   const nomi = { starter: "Starter", growth: "Growth", scale: "Scale", business: "Business" };
   const piano = nomi[abbonamento.subscription_plan] || "Subscription";
+  const legacyTrial = !attivo && volume > 500;
+  const trialNome = legacyTrial ? "Legacy one-time trial" : "One-time trial";
   document.getElementById("access-volume").textContent = volume.toLocaleString("en-US") + " credits";
-  document.getElementById("access-volume-note").textContent = attivo ? "monthly allowance" : "one-time trial";
+  document.getElementById("access-volume-note").textContent = attivo ? "monthly allowance"
+    : (legacyTrial ? "historical allowance · new trials: 500 credits" : "one-time trial");
   document.getElementById("subscription-summary").textContent = attivo
     ? `${piano} · ${abbonamento.subscription_interval === "year" ? "Annual" : "Monthly"} · ${abbonamento.subscription_status === "scheduled_cancel" ? "cancellation scheduled" : "active"}`
-    : "One-time trial · no active subscription";
+    : `${trialNome} · no active subscription${legacyTrial ? " · new accounts receive 500 credits" : ""}`;
   const fine = abbonamento.current_period_end
     ? new Date(abbonamento.current_period_end).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "";
@@ -1178,7 +1181,7 @@ function disegnaAccesso() {
   document.getElementById("manage-subscription").classList.toggle("hidden", !abbonamento.creem_customer_id);
   document.getElementById("overview-plan-name").textContent = attivo
     ? `${piano} · ${abbonamento.subscription_interval === "year" ? "Annual" : "Monthly"}`
-    : "One-time trial";
+    : trialNome;
   const deltaOk = attivo && volume >= 100000, bulkOk = attivo && volume >= 500000;
   const entitlement = (label, enabled) => `<span class="entitlement ${enabled ? "is-active" : "is-locked"}">${enabled ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 4 4L19 6"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'}<span>${label}</span>${enabled ? "" : "<span class=\"text-slate-400\">Locked</span>"}</span>`;
   document.getElementById("overview-plan-entitlements").innerHTML = entitlement("API", true) + entitlement("Delta feed", deltaOk) + entitlement("Daily bulk", bulkOk);
@@ -1602,6 +1605,30 @@ async function scaricaDaily(nome) {
     await carica();
   } catch (e) {
     if (e.message !== "401") notifica("The export could not be downloaded. Retry.", "errore");
+  } finally {
+    buttons.forEach(btn => btn.disabled = false);
+  }
+}
+async function scaricaExportRecente(downloadId) {
+  const buttons = document.querySelectorAll("[data-export-download]");
+  buttons.forEach(btn => btn.disabled = true);
+  try {
+    const r = await api("/portale/export-file/" + encodeURIComponent(downloadId));
+    if (!r.ok) {
+      notifica(r.status === 410 ? "This saved report is no longer available." : "The saved report could not be downloaded. Retry.", "errore");
+      return;
+    }
+    const blob = await r.blob();
+    const disposition = r.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = match ? match[1] : "nivult-export.jsonl.gz";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    notifica("Report download started · 0 credits");
+  } catch (e) {
+    if (e.message !== "401") notifica("The saved report could not be downloaded. Retry.", "errore");
   } finally {
     buttons.forEach(btn => btn.disabled = false);
   }
@@ -2542,7 +2569,8 @@ function labelAzione(action) {
 function eventoCompatto(e) {
   const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
   const detail = e.titolo || e.dettaglio || labelAzione(e.azione);
-  return `<div class="flex items-center gap-3 px-5 py-3 text-xs transition-colors hover:bg-slate-50"><span class="w-20 shrink-0 text-[11px] text-slate-400">${esc(new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}</span><span class="activity-badge ${cls}">${nome}</span><span class="min-w-0 flex-1 truncate font-medium text-slate-700" title="${esc(detail)}">${esc(detail)}</span><span class="ml-auto shrink-0 rounded-md bg-slate-50 px-1.5 py-0.5 font-bold tabular-nums text-slate-500">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></div>`;
+  const retry = e.download_id ? `<button type="button" data-export-download onclick="scaricaExportRecente(${jsArg(e.download_id)})" class="shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-40">Download again · 0 credits</button>` : "";
+  return `<div class="flex items-center gap-3 px-5 py-3 text-xs transition-colors hover:bg-slate-50"><span class="w-20 shrink-0 text-[11px] text-slate-400">${esc(new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}</span><span class="w-24 shrink-0"><span class="activity-badge ${cls}">${nome}</span></span><span class="min-w-0 flex-1 truncate font-medium text-slate-700" title="${esc(detail)}">${esc(detail)}</span>${retry}<span class="ml-auto shrink-0 rounded-md bg-slate-50 px-1.5 py-0.5 font-bold tabular-nums text-slate-500">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></div>`;
 }
 async function caricaUso() {
   const seq = ++usoSeq;
@@ -2597,7 +2625,8 @@ function disegnaUso() {
   document.getElementById("activity-log-full").innerHTML = eventi.length ? eventi.map((e, index) => {
     const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
     const action = e.via === "api" ? e.azione : labelAzione(e.azione), detail = e.titolo || e.dettaglio || "—";
-    return `<details class="activity-event" ${index === 0 ? "open" : ""}><summary><span class="text-[11px] text-slate-500">${esc(_quando(e.at))}</span><span class="activity-badge ${cls}">${nome}</span><span class="text-xs font-medium text-slate-700">${esc(action)}</span><span class="truncate text-xs text-slate-500" title="${esc(detail)}">${esc(detail)}</span><span class="justify-self-end rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-600">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></summary><dl class="activity-detail"><div><dt>Timestamp</dt><dd>${esc(_quando(e.at))}</dd></div><div><dt>Channel</dt><dd>${esc(nome)}</dd></div><div><dt>Event</dt><dd>${esc(action)}</dd></div><div><dt>Request details</dt><dd><code>${esc(detail)}</code></dd></div><div><dt>Credits deducted</dt><dd>${plurUso(e.crediti || 0, "credit")}</dd></div><div><dt>Entry type</dt><dd>Itemized event from the account activity ledger</dd></div></dl></details>`;
+    const retry = e.download_id ? `<div><dt>Saved report</dt><dd><button type="button" data-export-download onclick="scaricaExportRecente(${jsArg(e.download_id)})" class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-40">Download again · 0 credits</button></dd></div>` : "";
+    return `<details class="activity-event" ${index === 0 ? "open" : ""}><summary><span class="text-[11px] text-slate-500">${esc(_quando(e.at))}</span><span class="activity-badge ${cls}">${nome}</span><span class="text-xs font-medium text-slate-700">${esc(action)}</span><span class="truncate text-xs text-slate-500" title="${esc(detail)}">${esc(detail)}</span><span class="justify-self-end rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-600">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></summary><dl class="activity-detail"><div><dt>Timestamp</dt><dd>${esc(_quando(e.at))}</dd></div><div><dt>Channel</dt><dd>${esc(nome)}</dd></div><div><dt>Event</dt><dd>${esc(action)}</dd></div><div><dt>Request details</dt><dd><code>${esc(detail)}</code></dd></div><div><dt>Credits deducted</dt><dd>${plurUso(e.crediti || 0, "credit")}</dd></div>${retry}<div><dt>Entry type</dt><dd>Itemized event from the account activity ledger</dd></div></dl></details>`;
   }).join("") : `<p class="px-5 py-8 text-center text-xs text-slate-400">No activity yet. API calls, unlocks and exports will appear here as they happen.</p>`;
   const nonDet = document.getElementById("usage-non-itemized");
   nonDet.classList.toggle("hidden", !(d.non_dettagliati > 0));

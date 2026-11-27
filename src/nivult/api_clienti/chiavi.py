@@ -28,6 +28,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import psycopg
 import psycopg_pool
+from psycopg.types.json import Json
 
 log = logging.getLogger("nivult.api_clienti.chiavi")
 
@@ -157,11 +158,12 @@ def verifica(chiave: str) -> dict:
 
 
 def _registra_uso_cur(cur, user_id: str, via: str, azione: str,
-                      dettaglio: str | None, crediti: int) -> None:
+                      dettaglio: str | None, crediti: int) -> int:
     cur.execute(
         "INSERT INTO portale_uso (user_id, via, azione, dettaglio, crediti) "
-        "VALUES (%s, %s, %s, %s, %s)",
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
         (user_id, via, azione, (dettaglio or "")[:300], crediti))
+    return int(cur.fetchone()[0])
 
 
 def _riepilogo_da_righe(righe: list[dict], extra: int,
@@ -229,11 +231,12 @@ def _spendi_account_cur(cur, user_id: str, n: int, via: str, azione: str,
                     (dall_extra, user_id, dall_extra))
         if cur.rowcount != 1:
             raise ContatoreNonDisponibile("saldo extra cambiato durante l'addebito")
-    _registra_uso_cur(cur, user_id, via, azione, dettaglio, n)
+    uso_id = _registra_uso_cur(cur, user_id, via, azione, dettaglio, n)
 
     usati_chiave = (dal_mese if resetta_mensile and _come_data(target["mese_uso"]) < mese
                     else int(target["usati_mese"]) + dal_mese)
     return {"id": target["id"], "label": target["label"], "user_id": user_id,
+            "uso_id": uso_id,
             "crediti_mensili": prima["crediti_mensili"],
             "usati_mese": prima["usati"] + dal_mese,
             "usati": prima["usati"] + dal_mese,
@@ -669,6 +672,54 @@ def spendi_n_per_utente(user_id: str, n: int, via: str = "export",
         if isinstance(exc, ContatoreNonDisponibile):
             raise
         raise ContatoreNonDisponibile("addebito account non disponibile") from exc
+
+
+def spendi_export_archiviato_per_utente(
+        user_id: str, n: int, dettaglio: str, percorso: str, filename: str,
+        tipo: str, filtri: dict, righe: int) -> dict | None:
+    """Addebito, ledger e file recuperabile committano insieme."""
+    if (isinstance(n, bool) or not isinstance(n, int) or not 0 < n <= 2_000_000_000
+            or tipo not in ("postings", "companies") or righe < 1
+            or not percorso or not filename):
+        raise ValueError("export archiviato non valido")
+    try:
+        with connessione() as conn, conn.cursor() as cur:
+            cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end "
+                        "FROM users WHERE id = %s FOR UPDATE", (user_id,))
+            ru = cur.fetchone()
+            if ru is None or ru[0] != "active":
+                return None
+            rec = _spendi_account_cur(
+                cur, user_id, n, "export", "filtered export", dettaglio,
+                resetta_mensile=_reset_abbonamento(ru[1], ru[2], ru[3]))
+            if rec is None:
+                return None
+            cur.execute(
+                "INSERT INTO portale_export_files "
+                "(usage_id, user_id, percorso, filename, tipo, righe, filtri) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id::text",
+                (rec["uso_id"], user_id, percorso, filename, tipo, righe, Json(filtri)))
+            return {"download_id": cur.fetchone()[0], "saldo": rec["saldo"]}
+    except ChiaveInvalida:
+        return None
+    except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, ContatoreNonDisponibile):
+            raise
+        raise ContatoreNonDisponibile("archiviazione export non disponibile") from exc
+
+
+def export_file_per_utente(user_id: str, download_id: str) -> dict | None:
+    with connessione() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT id::text, percorso, filename, tipo, righe, filtri, created_at "
+            "FROM portale_export_files WHERE id = %s AND user_id = %s",
+            (download_id, user_id))
+        r = cur.fetchone()
+    if r is None:
+        return None
+    return {"download_id": r[0], "percorso": r[1], "filename": r[2],
+            "tipo": r[3], "righe": r[4], "filtri": r[5],
+            "created_at": r[6].isoformat()}
 
 
 def saldo_per_utente(user_id: str) -> int:

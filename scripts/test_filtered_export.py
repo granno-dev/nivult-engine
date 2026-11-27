@@ -39,6 +39,7 @@ def pg_account(monkeypatch):
     previous_pool = chiavi._pool
     chiavi.configura_pool(None)
     monkeypatch.setattr(chiavi, "_URL", dsn)
+    monkeypatch.setenv("DATABASE_URL", dsn)
     created = []
 
     def create(balance: int) -> str:
@@ -89,6 +90,7 @@ def portal_client(monkeypatch, tmp_path):
 
     monkeypatch.setenv("B2B_ENABLED", "1")
     monkeypatch.setenv("CORS_ORIGINS", "https://portal.test")
+    monkeypatch.setenv("PORTAL_EXPORT_DIR", str(tmp_path / "archive"))
     monkeypatch.setattr(opensearch, "attivo", lambda: False)
     original_mkstemp = tempfile.mkstemp
 
@@ -185,7 +187,9 @@ def test_filtered_export_charges_api_unit_rate_and_emits_exact_rows(
     assert response.headers["X-Export-Rows"] == str(rows)
     assert len(_jsonl(response)) == rows
     assert _billing_state(uid) == (cost, 0, 1, cost)
-    assert list(tmp_path.iterdir()) == []
+    assert response.headers["X-Download-Id"]
+    assert list(tmp_path.glob("export-portale-*")) == []
+    assert len(list((tmp_path / "archive").glob("*.jsonl.gz"))) == 1
 
 
 def test_filtered_export_limit_alias_caps_quote_file_and_charge(
@@ -206,6 +210,37 @@ def test_filtered_export_limit_alias_caps_quote_file_and_charge(
     assert calls == [10]
     assert len(_jsonl(response)) == 10
     assert _billing_state(uid) == (10, 0, 1, 10)
+
+
+def test_saved_export_redownload_is_free_identical_and_owner_only(
+        pg_account, portal_client, monkeypatch):
+    uid = pg_account(20)
+    other_uid = pg_account(20)
+    _stub_export(monkeypatch, 10)
+    client = portal_client(uid)
+    response = client.post("/portale/export/scarica",
+                           json={"tipo": "postings", "max_rows": 10})
+    assert response.status_code == 200
+    download_id = response.headers["X-Download-Id"]
+    before = _billing_state(uid)
+
+    again = client.get(f"/portale/export-file/{download_id}",
+                       headers={"Origin": "https://portal.test"})
+    assert again.status_code == 200
+    assert again.content == response.content
+    assert again.headers["X-Credits-Charged"] == "0"
+    assert "Content-Disposition" in again.headers["Access-Control-Expose-Headers"]
+    assert _billing_state(uid) == before
+
+    other = portal_client(other_uid)
+    assert other.get(f"/portale/export-file/{download_id}").status_code == 404
+    assert client.get("/portale/export-file/not-a-uuid").status_code == 400
+
+    activity = client.get("/portale/uso")
+    assert activity.status_code == 200
+    event = next(e for e in activity.json()["eventi"] if e["download_id"] == download_id)
+    assert event["titolo"] == "10 job records"
+    assert _billing_state(uid) == before
 
 
 @pytest.mark.parametrize(("kind", "balance"), [("postings", 0), ("companies", 0)])
@@ -266,7 +301,7 @@ def test_filtered_export_failed_atomic_charge_reports_actual_row_cost(
         pg_account, portal_client, monkeypatch, tmp_path):
     uid = pg_account(100)
     _stub_export(monkeypatch, 100, written=7)
-    monkeypatch.setattr(chiavi, "spendi_n_per_utente", lambda *args, **kwargs: False)
+    monkeypatch.setattr(chiavi, "spendi_export_archiviato_per_utente", lambda *args, **kwargs: False)
     client = portal_client(uid)
     response = client.post("/portale/export/scarica",
                            json={"tipo": "postings", "max_rows": 100})
@@ -274,7 +309,8 @@ def test_filtered_export_failed_atomic_charge_reports_actual_row_cost(
     assert response.json()["detail"]["required_credits"] == 7
     assert response.json()["detail"]["balance"] == 100
     assert _billing_state(uid) == (0, 0, 0, 0)
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("export-portale-*")) == []
+    assert not list((tmp_path / "archive").glob("*.jsonl.gz"))
 
 
 def test_filtered_export_all_is_capped_at_max_allowed_rows(
@@ -302,7 +338,8 @@ def test_filtered_export_generation_failure_rolls_back_all_charges(
     response = client.post("/portale/export/scarica", json={"tipo": "postings"})
     assert response.status_code == 500
     assert _billing_state(uid) == (0, 0, 0, 0)
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("export-portale-*")) == []
+    assert not list((tmp_path / "archive").glob("*.jsonl.gz"))
 
 
 def test_filtered_export_rejects_writer_that_exceeds_approved_limit(
@@ -318,7 +355,8 @@ def test_filtered_export_rejects_writer_that_exceeds_approved_limit(
                            json={"tipo": "postings", "max_rows": 10})
     assert response.status_code == 500
     assert _billing_state(uid) == (0, 0, 0, 0)
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("export-portale-*")) == []
+    assert not list((tmp_path / "archive").glob("*.jsonl.gz"))
 
 
 def test_filtered_export_unexpected_billing_error_cleans_temporary_file(
@@ -329,12 +367,13 @@ def test_filtered_export_unexpected_billing_error_cleans_temporary_file(
     def failing_charge(*_args, **_kwargs):
         raise RuntimeError("synthetic billing failure")
 
-    monkeypatch.setattr(chiavi, "spendi_n_per_utente", failing_charge)
+    monkeypatch.setattr(chiavi, "spendi_export_archiviato_per_utente", failing_charge)
     client = portal_client(uid)
     response = client.post("/portale/export/scarica", json={"tipo": "postings"})
     assert response.status_code == 500
     assert _billing_state(uid) == (0, 0, 0, 0)
-    assert list(tmp_path.iterdir()) == []
+    assert list(tmp_path.glob("export-portale-*")) == []
+    assert not list((tmp_path / "archive").glob("*.jsonl.gz"))
 
 
 @pytest.mark.parametrize("value", [0, -1, 100_001, True, 1.5, "not-a-number"])
@@ -448,3 +487,17 @@ def test_account_startup_keeps_topup_pricing_helper():
     assert "function euroPer(crediti)" in html
     assert "const e = euroPer(c)" in html
     assert html.index("function euroPer(crediti)") < html.index("aggiornaBuy();")
+
+
+def test_saved_report_activity_alignment_and_legacy_trial_copy():
+    html = (ROOT / "vetrina" / "account.html").read_text()
+    compact = html[html.index("function eventoCompatto("):html.index("async function caricaUso(")]
+    assert "scaricaExportRecente" in compact
+    assert 'class="w-24 shrink-0"' in compact
+    assert "Download again · 0 credits" in compact
+    assert "async function scaricaExportRecente(downloadId)" in html
+    assert 'api("/portale/export-file/" + encodeURIComponent(downloadId))' in html
+    assert 'const legacyTrial = !attivo && volume > 500' in html
+    assert '"Legacy one-time trial"' in html
+    assert "new accounts receive 500 credits" in html
+    assert "new trials: 500 credits" in html

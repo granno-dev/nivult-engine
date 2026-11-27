@@ -22,6 +22,7 @@ import ipaddress
 import re
 import os
 import secrets
+import shutil
 import socket
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -492,7 +493,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware, allow_origins=origini, allow_credentials=True,
         allow_methods=["*"],
-        allow_headers=["Authorization", "Content-Type", "X-Api-Key"])
+        allow_headers=["Authorization", "Content-Type", "X-Api-Key"],
+        expose_headers=["Content-Disposition", "X-Credits-Charged",
+                        "X-Export-Rows", "X-Download-Id"])
 
     @app.middleware("http")
     async def intestazioni_sicurezza(request: Request, call_next):
@@ -2264,15 +2267,20 @@ def create_app() -> FastAPI:
         fd, percorso = tempfile.mkstemp(suffix=".jsonl.gz",
                                         prefix="export-portale-")
         os.close(fd)
+        archivio = None
+        addebito_fatto = False
 
-        def _pulisci_export_temp():
-            try:
-                os.unlink(percorso)
-            except FileNotFoundError:
-                return
-            except OSError:
-                log.warning("cleanup export temporaneo non riuscito: %s", percorso,
-                            exc_info=True)
+        def _pulisci_export_temp(include_archivio: bool = True):
+            for path in (percorso, archivio if include_archivio else None):
+                if not path:
+                    continue
+                try:
+                    os.unlink(path)
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    log.warning("cleanup export temporaneo non riuscito: %s", path,
+                                exc_info=True)
 
         try:
             scrivi = (_dati.scrivi_export_aziende if tipo == "companies"
@@ -2285,27 +2293,51 @@ def create_app() -> FastAPI:
             if scritte == 0:
                 raise HTTPException(404, "no rows match these filters — 0 credits charged")
             costo = scritte * preventivo["unit_cost"]
+            filename = f"nivult-{tipo}-{scritte}-righe.jsonl.gz"
+            directory = os.environ.get("PORTAL_EXPORT_DIR", "/opt/nivult/exports/filtered")
+            os.makedirs(directory, exist_ok=True)
+            archivio = os.path.join(directory, secrets.token_hex(16) + ".jsonl.gz")
+            await run_in_threadpool(shutil.move, percorso, archivio)
             try:
                 pagato = await run_in_threadpool(
-                    _chiavi.spendi_n_per_utente, uid, costo,
-                    via="export", azione="filtered export",
-                    dettaglio=f"{scritte} rows" + (f" · {filtri}" if filtri else ""))
+                    _chiavi.spendi_export_archiviato_per_utente, uid, costo,
+                    dettaglio=f"{scritte} rows" + (f" · {filtri}" if filtri else ""),
+                    percorso=archivio, filename=filename, tipo=tipo,
+                    filtri=filtri, righe=scritte)
             except _chiavi.ContatoreNonDisponibile as exc:
                 raise HTTPException(503, "billing temporarily unavailable; retry") from exc
             if not pagato:
                 saldo_attuale = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
                 effettivo = _preventivo_export(tipo, scritte, saldo_attuale, scritte)
                 raise _crediti_insufficienti_export(effettivo)
-            sfondo = BackgroundTasks()
-            sfondo.add_task(_pulisci_export_temp)
+            addebito_fatto = True
             return FileResponse(
-                percorso, media_type="application/gzip",
-                filename=f"nivult-{tipo}-{scritte}-righe.jsonl.gz",
-                background=sfondo,
-                headers={"X-Credits-Charged": str(costo), "X-Export-Rows": str(scritte)})
+                archivio, media_type="application/gzip", filename=filename,
+                headers={"X-Credits-Charged": str(costo), "X-Export-Rows": str(scritte),
+                         "X-Download-Id": pagato["download_id"]})
         except BaseException:
-            _pulisci_export_temp()
+            _pulisci_export_temp(include_archivio=not addebito_fatto)
             raise
+
+    @app.get("/portale/export-file/{download_id}")
+    def scarica_export_archiviato(download_id: str, request: Request,
+                                  uid: str = Depends(utente)):
+        _freno_portale(request, uid)
+        try:
+            download_id = str(UUID(download_id))
+        except ValueError as exc:
+            raise HTTPException(400, "invalid download id") from exc
+        record = _chiavi.export_file_per_utente(uid, download_id)
+        if record is None:
+            raise HTTPException(404, "export not found")
+        if not os.path.isfile(record["percorso"]):
+            raise HTTPException(410, "this export is no longer available")
+        return FileResponse(
+            record["percorso"], media_type="application/gzip",
+            filename=record["filename"],
+            headers={"X-Credits-Charged": "0",
+                     "X-Export-Rows": str(record["righe"]),
+                     "X-Download-Id": record["download_id"]})
 
     def _bel_nome(rif: str) -> str:
         """Dal rif tecnico a un nome presentabile, quando il record non si
@@ -2377,12 +2409,15 @@ def create_app() -> FastAPI:
                 per_giorno = [{"giorno": str(r[0]), "crediti": r[1]}
                               for r in cur.fetchall()]
                 cur.execute(
-                    "SELECT at, via, azione, dettaglio, crediti "
-                    "FROM portale_uso WHERE user_id = %s "
-                    "ORDER BY at DESC LIMIT 60", (uid,))
+                    "SELECT u.at, u.via, u.azione, u.dettaglio, u.crediti, "
+                    "       f.id::text, f.tipo, f.righe "
+                    "FROM portale_uso u "
+                    "LEFT JOIN portale_export_files f ON f.usage_id = u.id "
+                    "WHERE u.user_id = %s ORDER BY u.at DESC LIMIT 60", (uid,))
                 eventi = [{"at": r[0].isoformat(), "via": r[1],
-                           "azione": r[2], "dettaglio": r[3],
-                           "crediti": r[4]} for r in cur.fetchall()]
+                           "azione": r[2], "dettaglio": r[3], "crediti": r[4],
+                           "download_id": r[5], "tipo_export": r[6],
+                           "righe_export": r[7]} for r in cur.fetchall()]
                 cur.execute(
                     "SELECT riferimento, revealed_at FROM portale_rivelazioni "
                     "WHERE user_id = %s AND tipo = 'azienda' "
@@ -2431,6 +2466,9 @@ def create_app() -> FastAPI:
             if e["azione"] == "company unlock" and e["dettaglio"]:
                 e["titolo"] = nomi.get(e["dettaglio"]) or _bel_nome(e["dettaglio"])
                 e["logo"] = loghi.get(e["dettaglio"]) or _logo_rif(e["dettaglio"])
+            elif e["azione"] == "filtered export" and e["download_id"]:
+                unita = "company" if e["tipo_export"] == "companies" else "job"
+                e["titolo"] = f"{e['righe_export']} {unita} records"
             elif e["azione"] == "posting unlock" and e["dettaglio"]:
                 try:
                     o = _vivo.rivela_offerta(e["dettaglio"])
