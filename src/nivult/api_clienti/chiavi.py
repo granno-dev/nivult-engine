@@ -581,8 +581,12 @@ def consuma_quota_explorer(user_id: str, ip: str | None) -> None:
 
 
 def rivela_per_utente(user_id: str, tipo: str, riferimento: str) -> str:
-    azione = "posting unlock" if tipo == "job" else "company unlock"
-    costo = 1 if tipo == "job" else COSTO_COMPANY
+    if tipo == "job":
+        return "non_disponibile"
+    if tipo != "azienda":
+        raise ValueError("tipo reveal non valido")
+    azione = "company unlock"
+    costo = COSTO_COMPANY
     try:
         with connessione() as conn, conn.cursor() as cur:
             cur.execute("SELECT status, subscription_status, creem_subscription_id, current_period_end "

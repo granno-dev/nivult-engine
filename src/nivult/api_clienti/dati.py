@@ -37,6 +37,8 @@ import zlib
 
 import duckdb
 
+from .explorer import clean_company_name, employer_key
+
 log = logging.getLogger("nivult.api_clienti.dati")
 
 PERCORSO = os.environ.get("API_CLIENTI_DB",
@@ -523,9 +525,13 @@ def cerca_aziende_portale(filtri: dict, cursore: str | None,
             par).fetchone()[0]
         righe = _conn().execute(
             f"""SELECT ats, company, country, industry, employees,
-                       len(technologies), company_slug, raw->>'domain', raw->>'logo',
-                       raw->>'website', TRY_CAST(raw->>'active_jobs' AS INTEGER),
-                       raw->>'size_range'
+                       len(technologies), technologies, company_slug,
+                       raw->>'domain', raw->>'logo', raw->>'website',
+                       TRY_CAST(raw->>'active_jobs' AS INTEGER),
+                       COALESCE(raw->>'size_range', raw->>'employee_range') AS size_range,
+                       TRY_CAST(raw->>'jobs_posted_30d' AS INTEGER),
+                       CAST(raw->'languages' AS VARCHAR[]) AS languages,
+                       raw->>'source_type'
                   FROM aziende
                  WHERE {' AND '.join(dove)}
                  ORDER BY employees DESC NULLS LAST, ats, company_slug
@@ -533,56 +539,155 @@ def cerca_aziende_portale(filtri: dict, cursore: str | None,
     prossimo = None
     if len(righe) > limite:
         righe = righe[:limite]
-        prossimo = _cursore([righe[-1][4], righe[-1][0], righe[-1][6]])
+        prossimo = _cursore([righe[-1][4], righe[-1][0], righe[-1][7]])
     return ([{"country": r[2], "industry": r[3], "employees": r[4],
-              "n_tecnologie": r[5], "ref": r[0] + ":" + r[6],
-              "company": r[1], "company_slug": r[6], "ats": r[0],
-              "domain": r[7], "logo": r[8], "website": r[9],
-              "open_jobs_count": r[10], "active_jobs": r[10],
-              "employee_range": r[11]}
+              "n_tecnologie": r[5], "technologies": r[6] or [],
+              "ref": r[0] + ":" + r[7], "company": r[1], "company_slug": r[7],
+              "ats": r[0], "domain": r[8], "logo": r[9], "website": r[10],
+              "open_jobs_count": r[11], "active_jobs": r[11],
+              "employee_range": r[12], "jobs_posted_30d": r[13],
+              "languages": r[14] or [], "source_type": r[15]}
              for r in righe], prossimo, totale)
 
 
-def profili_aziende(riferimenti: list[str]) -> dict[str, dict]:
-    coppie = [r.split(":", 1) for r in riferimenti if ":" in r]
-    if not coppie:
+def _parse_company_ref(riferimento: str) -> tuple[str, str, str | None] | None:
+    ats, separator, rest = str(riferimento or "").partition(":")
+    slug, marker, employer = rest.partition("::employer:")
+    if not separator or not ats or not slug:
+        return None
+    if marker and (not employer or not employer.isalnum()):
+        return None
+    return ats, slug, employer if marker else None
+
+
+def board_multi_employer(riferimento: str) -> bool:
+    parti = _parse_company_ref(riferimento)
+    if not parti or parti[2] is not None:
+        return False
+    ats, slug, _ = parti
+    with _lock:
+        count = _conn().execute(
+            "SELECT count(DISTINCT company) FROM offerte "
+            "WHERE ats = $a AND company_slug = $s AND company IS NOT NULL",
+            {"a": ats, "s": slug}).fetchone()[0]
+    return int(count) > 1
+
+
+def _profili_scoped(riferimenti: list[str]) -> dict[str, dict]:
+    parsed = [(riferimento, _parse_company_ref(riferimento))
+              for riferimento in riferimenti]
+    scoped = [(riferimento, parti) for riferimento, parti in parsed
+              if parti and parti[2] is not None]
+    if not scoped:
         return {}
+    basi = sorted({(parti[0], parti[1]) for _, parti in scoped})
     par: dict = {}
     condizioni = []
-    for i, (ats, slug) in enumerate(coppie):
+    for i, (ats, slug) in enumerate(basi):
         par[f"a{i}"], par[f"s{i}"] = ats, slug
         condizioni.append(f"(ats = $a{i} AND company_slug = $s{i})")
     with _lock:
         righe = _conn().execute(
-            "SELECT ats, company_slug, raw FROM aziende WHERE "
-            + " OR ".join(condizioni), par).fetchall()
+            """SELECT ats, company_slug, company, country, count(*) AS n,
+                      count(*) FILTER (
+                        WHERE posted_at >= current_timestamp - INTERVAL '30 days') AS recent
+                 FROM offerte
+                WHERE company IS NOT NULL AND (""" + " OR ".join(condizioni) + """)
+                GROUP BY ats, company_slug, company, country""", par).fetchall()
+        base_profiles = {}
+        names_by_ats: dict[str, set[str]] = {}
+        for riferimento, (ats, slug, employer) in scoped:
+            matching = [r for r in righe if r[0] == ats and r[1] == slug
+                        and employer_key(r[2]) == employer]
+            if not matching:
+                continue
+            ordered = sorted(matching, key=lambda r: (
+                -int(r[4]), clean_company_name(r[2]), str(r[2]), str(r[3] or "")))
+            nome = clean_company_name(ordered[0][2])
+            paese = next((r[3] for r in ordered if r[3]), None)
+            active = sum(int(r[4]) for r in matching)
+            recent = sum(int(r[5]) for r in matching)
+            base_profiles[riferimento] = (
+                {"company": nome, "ats": ats, "company_slug": slug,
+                 "country": paese, "active_jobs": active, "open_jobs_count": active,
+                 "active_postings_count": active, "posted_30d_count": recent,
+                 "jobs_posted_30d": recent, "profilo": "snello",
+                 "_source_company": ordered[0][2]},
+                nome, paese, employer)
+            names_by_ats.setdefault(ats, set()).update(
+                [nome.casefold(), *(str(r[2]).casefold() for r in matching)])
+        candidate_par: dict = {}
+        candidate_conditions = []
+        for i, (ats, names) in enumerate(sorted(names_by_ats.items())):
+            candidate_par[f"ca{i}"] = ats
+            name_conditions = []
+            for j, name in enumerate(sorted(names)):
+                candidate_par[f"cn{i}_{j}"] = name
+                name_conditions.append(f"lower(company) = $cn{i}_{j}")
+            candidate_conditions.append(
+                f"(ats = $ca{i} AND (" + " OR ".join(name_conditions) + "))")
+        candidate = []
+        if candidate_conditions:
+            candidate = _conn().execute(
+                "SELECT ats, company, country, raw FROM aziende WHERE "
+                + " OR ".join(candidate_conditions), candidate_par).fetchall()
     out = {}
-    for ats, slug, raw in righe:
-        out[f"{ats}:{slug}"] = _senza_pii(json.loads(raw))
+    for riferimento, (base, nome, paese, employer) in base_profiles.items():
+        ats = base["ats"]
+        profiles = [raw for candidate_ats, company, country, raw in candidate
+                    if candidate_ats == ats and employer_key(company) == employer
+                    and not (paese and country and country != paese)]
+        if len(profiles) == 1:
+            profile = _senza_pii(json.loads(profiles[0]))
+            out[riferimento] = {
+                **base, **profile, "company": nome,
+                "active_jobs": base["active_jobs"],
+                "open_jobs_count": base["open_jobs_count"],
+                "active_postings_count": base["active_postings_count"],
+                "posted_30d_count": base["posted_30d_count"],
+                "jobs_posted_30d": base["jobs_posted_30d"]}
+        else:
+            out[riferimento] = base
+    return out
+
+
+def profili_aziende(riferimenti: list[str]) -> dict[str, dict]:
+    parsed = [(riferimento, _parse_company_ref(riferimento))
+              for riferimento in riferimenti]
+    direct = [(riferimento, parti) for riferimento, parti in parsed
+              if parti and parti[2] is None]
+    out = {}
+    if direct:
+        par: dict = {}
+        condizioni = []
+        for i, (_, (ats, slug, _)) in enumerate(direct):
+            par[f"a{i}"], par[f"s{i}"] = ats, slug
+            condizioni.append(f"(ats = $a{i} AND company_slug = $s{i})")
+        with _lock:
+            righe = _conn().execute(
+                "SELECT ats, company_slug, raw FROM aziende WHERE "
+                + " OR ".join(condizioni), par).fetchall()
+        for ats, slug, raw in righe:
+            out[f"{ats}:{slug}"] = _senza_pii(json.loads(raw))
+    out.update(_profili_scoped(riferimenti))
     return out
 
 
 def rivela_azienda(riferimento: str) -> dict | None:
-    """L'azienda intera, per chi ha pagato: nome, dominio, scheda.
-
-    I portali nazionali hanno slug fittizi (jobboerse, pole-emploi,
-    platsbanken…): la riga in `aziende` non esiste perche' l'azienda non
-    e' il portale. Il ripiego per nome resta nello stesso ATS e nello
-    stesso paese dell'offerta, e viene accettato solo se identifica UNA
-    scheda. Altrimenti si risponde con la scheda snella esplicita, mai
-    col profilo di un omonimo globale. Solo quando nemmeno il nome esiste
-    (annunci anonimi dei PUP) si torna None: quello e' un 404 vero.
-    """
-    try:
-        ats, slug = riferimento.split(":", 1)
-    except ValueError:
+    """L'azienda intera, con il datore obbligatorio per i riferimenti scoped."""
+    parti = _parse_company_ref(riferimento)
+    if parti is None:
         return None
+    ats, slug, employer = parti
+    if employer is not None:
+        return _profili_scoped([riferimento]).get(riferimento)
+    multi = board_multi_employer(riferimento)
     with _lock:
         r = _conn().execute(
             "SELECT raw FROM aziende WHERE ats = $a AND company_slug = $s "
             "LIMIT 1", {"a": ats, "s": slug}).fetchone()
         if r:
-            return _senza_pii(json.loads(r[0]))
+            return {**_senza_pii(json.loads(r[0])), "_multi_employer": multi}
         nome_r = _conn().execute(
             """SELECT company, count(*) AS n FROM offerte
                 WHERE ats = $a AND company_slug = $s AND company IS NOT NULL
@@ -608,25 +713,40 @@ def rivela_azienda(riferimento: str) -> dict | None:
             " AND lower(company) = lower($n) AND " + vincolo_paese +
             " LIMIT 2", par).fetchall()
         if len(candidate) == 1:
-            return _senza_pii(json.loads(candidate[0][0]))
+            return {**_senza_pii(json.loads(candidate[0][0])), "_multi_employer": multi}
         return {"company": nome, "ats": ats, "company_slug": slug,
                 "country": paese, "active_jobs": int(nome_r[1]),
-                "profilo": "snello"}
+                "profilo": "snello", "_multi_employer": multi}
 
 
 def azienda_jobs_portale(riferimento: str) -> list[dict]:
-    """Le offerte attive di un'azienda rivelata (titolo, luogo, data)."""
-    try:
-        ats, slug = riferimento.split(":", 1)
-    except ValueError:
+    """Le offerte attive dell'azienda rivelata (titolo, luogo, data)."""
+    parti = _parse_company_ref(riferimento)
+    if parti is None:
         return []
+    ats, slug, employer = parti
+    profilo = None
+    if employer is not None:
+        profilo = _profili_scoped([riferimento]).get(riferimento)
+        if not profilo:
+            return []
     with _lock:
-        righe = _conn().execute(
-            """SELECT id, title, country, city, category, posted_at
-                 FROM offerte
-                WHERE ats = $a AND company_slug = $s
-                ORDER BY posted_at DESC NULLS LAST LIMIT 50""",
-            {"a": ats, "s": slug}).fetchall()
+        if employer is None:
+            righe = _conn().execute(
+                """SELECT id, title, country, city, category, posted_at, company
+                     FROM offerte
+                    WHERE ats = $a AND company_slug = $s
+                    ORDER BY posted_at DESC NULLS LAST LIMIT 50""",
+                {"a": ats, "s": slug}).fetchall()
+        else:
+            nome = profilo.get("_source_company") or profilo["company"]
+            righe = _conn().execute(
+                """SELECT id, title, country, city, category, posted_at, company
+                     FROM offerte
+                    WHERE ats = $a AND company_slug = $s
+                      AND lower(company) = lower($n)
+                    ORDER BY posted_at DESC NULLS LAST LIMIT 50""",
+                {"a": ats, "s": slug, "n": nome}).fetchall()
     return [{"id": r[0], "title": r[1], "country": r[2], "city": r[3],
              "category": r[4], "posted_at": _iso(r[5])} for r in righe]
 

@@ -197,53 +197,68 @@ body { background: #F5F4EF; }
 .cov-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .cov-scroll::-webkit-scrollbar-track { background: transparent; }
 .cov-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
-.company-logo { position: relative; display: inline-grid; place-items: center; overflow: hidden; isolation: isolate; flex-shrink: 0; border: 1px solid #D9E2EF; background: #FFFFFF; color: #2549B8; box-shadow: 0 3px 10px rgba(15,23,42,.05); }
-.company-logo-monogram { display: grid; width: 100%; height: 100%; place-items: center; background: linear-gradient(135deg,#EEF4FF,#ECFDF5); font-size: 1rem; font-weight: 800; line-height: 1; }
+.company-logo { position: relative; display: inline-grid; place-items: center; overflow: hidden; isolation: isolate; flex-shrink: 0; border: 1px solid #E2E8F0; background: #FFFFFF; color: #3730A3; box-shadow: 0 3px 10px rgba(15,23,42,.05); }
+.company-logo-monogram { display: grid; width: 100%; height: 100%; place-items: center; background: #EEF2FF; font-size: 1rem; font-weight: 800; line-height: 1; }
 .company-logo-image { position: absolute; inset: 0; display: none; box-sizing: border-box; width: 100%; height: 100%; padding: inherit; background: #FFFFFF; object-fit: contain; }
 .company-logo-image.is-loaded { display: block; }
-.company-reveal-card { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; border: 1px solid #C7D8F5; border-radius: 16px; background: linear-gradient(125deg,#EEF4FF 0%,#F6F7FF 52%,#ECFDF5 100%); padding: 1.1rem; box-shadow: 0 8px 22px rgba(47,93,224,.07); }
-.company-reveal-icon { display: grid; width: 44px; height: 44px; flex-shrink: 0; place-items: center; border: 1px solid #C7D8F5; border-radius: 13px; background: rgba(255,255,255,.85); color: #2F5DE0; box-shadow: 0 4px 12px rgba(47,93,224,.08); }
-.company-reveal-icon svg { width: 20px; height: 20px; }
-.company-reveal-copy { min-width: 200px; flex: 1; }
-.company-reveal-meta { display: inline-flex; align-items: center; gap: .35rem; margin-top: .65rem; border: 1px solid rgba(15,191,154,.20); border-radius: 8px; background: rgba(255,255,255,.72); padding: .3rem .5rem; color: #047857; font-size: 11px; font-weight: 750; }
-.company-summary-card { border: 1px solid #D8E3F2; border-radius: 16px; background: linear-gradient(120deg,#FFFFFF,#F7FAFF 65%,#F1FDF8); box-shadow: 0 8px 22px rgba(15,23,42,.055); }
-.locked-posting-card { border: 1px dashed #C7D2E4; border-radius: 16px; background: linear-gradient(120deg,#F8FAFC,#F5F8FF); padding: 1.1rem; }
-.modal-close { display: inline-grid; width: 36px; height: 36px; flex-shrink: 0; place-items: center; border: 1px solid #DFE7F1; border-radius: 11px; background: rgba(255,255,255,.88); color: #64748B; transition: border-color .15s,color .15s,background .15s; }
-.modal-close:hover { border-color: #AFC8FF; background: #FFFFFF; color: #2549B8; }
+.modal-close { display: inline-grid; width: 36px; height: 36px; flex-shrink: 0; place-items: center; border: 1px solid #E2E8F0; border-radius: 10px; background: #FFFFFF; color: #64748B; transition: border-color .15s,color .15s,background .15s; }
+.modal-close:hover { border-color: #2563EB; background: #F8FAFC; color: #2563EB; }
 .modal-close svg { width: 17px; height: 17px; }
-.company-profile-header { border-bottom: 1px solid #DCE6F2; background: linear-gradient(125deg,#EEF4FF 0%,#FAFBFF 55%,#ECFDF5 100%); padding: 1.35rem; }
-.company-profile-body { padding: 1.35rem; }
-.company-kpi { min-width: 0; border: 1px solid #DFE7F1; border-radius: 14px; background: #FFFFFF; padding: .85rem .7rem; box-shadow: 0 3px 10px rgba(15,23,42,.035); }
-.company-kpi-value { color: #0F172A; font-size: 1.2rem; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
-.company-kpi-label { margin-top: .3rem; color: #64748B; font-size: 9.5px; font-weight: 750; letter-spacing: .07em; line-height: 1.35; text-transform: uppercase; }
-.company-section { margin-top: 1.35rem; }
-.company-section-title { color: #64748B; font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
-.company-tech-list { display: grid; gap: .55rem; margin-top: .65rem; }
-.company-tech-row { border: 1px solid #E2E8F0; border-radius: 11px; background: #FFFFFF; padding: .65rem .75rem; }
-.company-tech-track { height: 5px; margin-top: .55rem; overflow: hidden; border-radius: 99px; background: #E8EEF6; }
-.company-tech-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#3B6EF6,#0FBF9A); }
-.company-location-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; border-bottom: 1px solid #EDF1F6; padding: .65rem .1rem; }
-.company-location-row:last-child { border-bottom: 0; }
-.company-job-row { display: flex; flex-direction: column; gap: .3rem; margin: 0 -.5rem; cursor: pointer; border-bottom: 1px solid #EDF1F6; border-radius: 9px; padding: .7rem .5rem; transition: background .15s; }
-.company-job-row:hover { background: #F5F8FF; }
+#explorer { background: #F8FAFC; }
+.explorer-result { border: 1px solid #E2E8F0; background: #FFFFFF; color: #0F172A; transition: border-color .15s,box-shadow .15s; }
+.explorer-result:hover, .explorer-result:focus-visible { border-color: #C7D2FE; box-shadow: 0 5px 16px rgba(15,23,42,.06); }
+.explorer-lock-pill, .explorer-source-pill, .explorer-aggregator-pill { display: inline-flex; align-items: center; border-radius: 6px; padding: .2rem .45rem; font-size: 10px; font-weight: 700; line-height: 1.35; }
+.explorer-lock-pill { border: 1px solid #E2E8F0; background: #F1F5F9; color: #475569; }
+.explorer-source-pill { border: 1px solid #E2E8F0; background: #FFFFFF; color: #64748B; }
+.explorer-aggregator-pill, .drawer-warning { border: 1px solid #FDE68A; background: #FFFBEB; color: #B45309; }
+.explorer-tech-core, .drawer-tech-core { border: 1px solid #C7D2FE; background: #EEF2FF; color: #3730A3; }
+.explorer-tech-generic, .drawer-tech-generic { border: 1px solid #E2E8F0; background: #F1F5F9; color: #475569; }
+.explorer-quick { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; border: 1px solid #2563EB; border-radius: 8px; background: #2563EB; padding: .35rem .65rem; color: #FFFFFF; font-size: 11px; font-weight: 750; white-space: nowrap; transition: background .15s,border-color .15s; }
+.explorer-quick:hover { border-color: #1D4ED8; background: #1D4ED8; }
+.explorer-quick:disabled { border-color: #E2E8F0; background: #F1F5F9; color: #64748B; cursor: not-allowed; }
+.explorer-unlocked { display: inline-flex; align-items: center; border: 1px solid #A7F3D0; border-radius: 8px; background: #ECFDF5; padding: .4rem .65rem; color: #047857; font-size: 11px; font-weight: 750; white-space: nowrap; }
+.explorer-drawer-shell { pointer-events: none; }
+.explorer-drawer-backdrop { position: absolute; inset: 0; pointer-events: auto; background: rgba(248,250,252,.58); }
+.explorer-drawer { position: absolute; inset: 0 0 0 auto; width: min(680px,58vw); height: 100vh; pointer-events: auto; overflow: hidden; border-left: 1px solid #E2E8F0; background: #F8FAFC; color: #0F172A; box-shadow: -18px 0 48px rgba(15,23,42,.14); transform: translateX(100%); transition: transform 200ms ease; }
+.explorer-drawer-shell.is-open .explorer-drawer { transform: translateX(0); }
+.explorer-drawer-scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+.explorer-drawer-sticky { position: sticky; z-index: 5; top: 0; border-bottom: 1px solid #E2E8F0; background: rgba(255,255,255,.98); }
+.explorer-drawer-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; border-top: 1px solid #F1F5F9; padding: 6px 20px 10px; }
+.explorer-drawer-tab { min-width: 0; border-radius: 8px; padding: .55rem .35rem; color: #64748B; font-size: 11px; font-weight: 700; line-height: 1.25; }
+.explorer-drawer-tab:hover { background: #F1F5F9; color: #0F172A; }
+.explorer-drawer-tab[aria-selected="true"] { background: #EEF2FF; color: #3730A3; }
+.drawer-status { display: inline-flex; align-items: center; border: 1px solid #E2E8F0; border-radius: 999px; background: #F1F5F9; padding: .25rem .55rem; color: #475569; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.drawer-status.is-unlocked { border-color: #A7F3D0; background: #ECFDF5; color: #047857; }
+.drawer-primary { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: .45rem; border: 1px solid #2563EB; border-radius: 9px; background: #2563EB; padding: .5rem .8rem; color: #FFFFFF; font-size: 12px; font-weight: 750; white-space: nowrap; transition: background .15s,border-color .15s; }
+.drawer-primary:hover { border-color: #1D4ED8; background: #1D4ED8; }
+.drawer-primary:disabled { border-color: #E2E8F0; background: #F1F5F9; color: #64748B; cursor: not-allowed; }
+.drawer-secondary { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: .35rem; border: 1px solid #E2E8F0; border-radius: 8px; background: #FFFFFF; padding: .45rem .7rem; color: #475569; font-size: 11px; font-weight: 700; }
+.drawer-secondary:hover { border-color: #C7D2FE; color: #2563EB; }
+.drawer-card { border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: 1rem; }
+.drawer-subtle { border: 1px solid #E2E8F0; border-radius: 12px; background: #F1F5F9; padding: 1rem; }
+.drawer-section-title { color: #64748B; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.drawer-kpi { min-width: 0; border: 1px solid #E2E8F0; border-radius: 10px; background: #FFFFFF; padding: .75rem; }
+.drawer-kpi-value { color: #0F172A; font-size: 1rem; font-weight: 800; overflow-wrap: anywhere; }
+.drawer-kpi-label { margin-top: .2rem; color: #64748B; font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.drawer-description { white-space: pre-wrap; overflow-wrap: anywhere; color: #475569; font-size: 13px; line-height: 1.75; }
 .company-domain { overflow-wrap: anywhere; }
-@media (max-width: 639px) {
-  .company-reveal-card { align-items: flex-start; }
-  .company-reveal-copy { min-width: 0; flex-basis: calc(100% - 60px); }
-  .company-reveal-card .app-btn { width: 100%; }
-  .company-profile-header, .company-profile-body { padding: 1.1rem; }
+.company-location-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; border-bottom: 1px solid #F1F5F9; padding: .6rem 0; }
+.company-location-row:last-child { border-bottom: 0; }
+.company-job-row { display: flex; width: 100%; flex-direction: column; gap: .3rem; border-bottom: 1px solid #F1F5F9; background: #FFFFFF; padding: .75rem .25rem; text-align: left; transition: background .15s; }
+.company-job-row:hover { background: #F8FAFC; }
+@media (min-width: 640px) { .company-job-row { flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; } }
+@media (max-width: 767px) {
+  .explorer-drawer { width: 100vw; border-left: 0; }
+  .explorer-drawer-tabs { padding-right: 12px; padding-left: 12px; }
+  .explorer-drawer-tab { font-size: 10px; }
 }
-@media (min-width: 640px) {
-  .company-profile-header { padding: 1.5rem 1.75rem; }
-  .company-profile-body { padding: 1.5rem 1.75rem 1.75rem; }
-  .company-job-row { flex-direction: row; align-items: center; justify-content: space-between; gap: .75rem; }
-}
+@media (prefers-reduced-motion: reduce) { .explorer-drawer { transition: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin .8s linear infinite; }
 @keyframes skel-pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
 .skel { animation: skel-pulse 1.8s ease-in-out infinite; }
 #account-sidebar { transition: transform .2s ease; }
-#dettaglio-box, #export-modale > div:last-child { animation: modalIn .18s ease-out; }
+#export-modale > div:last-child { animation: modalIn .18s ease-out; }
 @keyframes modalIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 3px solid #5E8BFF; outline-offset: 3px; }
 body.modale-aperto { overflow: hidden; }
@@ -253,7 +268,7 @@ body.modale-aperto { overflow: hidden; }
 .notifica.ok { background: #047857; }
 [hidden] { display: none !important; }
 @media (max-width: 639px) { #notifiche { left: 1rem; right: 1rem; } }
-@media (prefers-reduced-motion: reduce) { .skel, .spinner, #dettaglio-box, #export-modale > div:last-child { animation: none; } #account-sidebar { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .skel, .spinner, #export-modale > div:last-child { animation: none; } #account-sidebar { transition: none; } }
 </style>
 </head>
 <body class="text-slate-900 font-sans antialiased min-h-screen">
@@ -526,7 +541,7 @@ body.modale-aperto { overflow: hidden; }
         <section id="explorer" data-view="explorer" aria-label="Explorer and API" class="hidden">
           <div class="flex flex-wrap items-center gap-3">
             <div class="explorer-tabs" role="tablist" aria-label="Explorer view"><button id="explorer-query" type="button" role="tab" aria-selected="true" onclick="cambiaExplorer('query')" class="explorer-tab is-active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>Query Explorer</button><button id="explorer-reference" type="button" role="tab" aria-selected="false" onclick="cambiaExplorer('reference')" class="explorer-tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h12a2 2 0 0 1 2 2v16l-7-4-7 4z"/></svg>API Reference</button></div>
-            <p class="text-xs text-slate-500">Free previews · full single job text 1 credit once · company reveal 3 credits once, permanent, with company jobs &amp; source</p>
+            <p class="text-xs text-slate-500">Preview · 0 credits · Reveal company · 3 credits once · Permanent access to the company profile, tech stack and all postings</p>
           </div>
 
           <div id="explorer-query-panel" class="mt-4">
@@ -538,7 +553,7 @@ body.modale-aperto { overflow: hidden; }
               <button id="filtri-toggle" type="button" onclick="toggleFiltri()" aria-expanded="false" aria-controls="filtri-gruppo" class="app-btn app-btn-secondary mt-4 w-full sm:hidden">Show filters</button>
               <div id="filtri-pannello" class="hidden sm:block">
                 <div id="filtri-gruppo" class="hidden sm:grid md:grid-cols-2 xl:grid-cols-5 gap-3 mt-4">
-                  <div><label for="f-q" class="app-label">Search</label><input id="f-q" type="text" aria-label="Redacted job title" placeholder="Redacted job title" class="app-input"></div>
+                  <div><label for="f-q" class="app-label">Search</label><input id="f-q" type="text" aria-label="Job title" placeholder="Job title" class="app-input"></div>
                   <div><label for="f-tec" class="app-label">Technology</label><input id="f-tec" type="text" aria-label="Technology" placeholder="SAP, Python…" class="app-input"></div>
                   <div class="relative"><label for="f-paese" class="app-label">Country</label><input id="f-paese" type="text" placeholder="Any country" autocomplete="off" role="combobox" aria-label="Country" aria-autocomplete="list" aria-controls="f-paese-lista" aria-expanded="false" class="app-input"><div id="f-paese-lista" role="listbox" aria-label="Countries" class="hidden absolute z-20 mt-1.5 w-full max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-xl cov-scroll"></div></div>
                   <div><label for="f-remoto" class="app-label">Workplace</label><select id="f-remoto" aria-label="Workplace" class="app-input"><option value="">Any workplace</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="onsite">On site</option></select></div>
@@ -554,7 +569,7 @@ body.modale-aperto { overflow: hidden; }
                     <div><label for="f-dal" class="app-label">Posted since</label><input id="f-dal" type="date" class="app-input"></div>
                   </div>
                 </details>
-                <div class="mt-2 flex flex-wrap items-center gap-2"><p id="f-q-help" class="text-[11px] text-slate-400">Open Explorer searches redacted job titles only; recently closed postings search titles.</p><button id="pulisci" type="button" onclick="pulisciFiltri()" class="hidden app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Clear filters</button></div><p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2"><p id="f-q-help" class="text-[11px] text-slate-400">Open Explorer searches job titles only; recently closed postings search titles.</p><button id="pulisci" type="button" onclick="pulisciFiltri()" class="hidden app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Clear filters</button></div><p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
               </div>
             </article>
 
@@ -568,7 +583,10 @@ body.modale-aperto { overflow: hidden; }
             <article class="app-card mt-3 p-3 sm:p-4"><div id="cerca-righe" aria-live="polite" class="grid gap-2 content-start"></div><div id="cerca-cap" role="status" class="hidden mt-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-xs leading-5 text-slate-600"><b class="text-slate-900">Preview limit reached.</b> Explorer shows up to 5 pages of 20 results. For deeper access, use <code>/v1/jobs</code> or <code>/v1/companies</code>, or <a href="#exports" class="font-bold text-brand-600">Filtered Export</a>.</div><div class="mt-3 flex justify-center"><button id="cerca-altro" type="button" onclick="cercaAncora()" class="hidden app-btn app-btn-secondary">Load more</button></div></article>
           </div>
 
-          <div id="dettaglio" role="dialog" aria-modal="true" aria-label="Posting and company details" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4"><div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiDettaglio()"></div><div class="relative w-full h-full sm:h-auto max-w-2xl max-h-full sm:max-h-[85vh] overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl" id="dettaglio-box"></div></div>
+          <div id="dettaglio" hidden role="dialog" aria-modal="false" aria-label="Job and company Explorer" class="hidden explorer-drawer-shell fixed inset-0 z-[60]">
+            <button type="button" class="explorer-drawer-backdrop" onclick="chiudiDettaglio()" aria-label="Close Explorer drawer" tabindex="-1"></button>
+            <aside id="dettaglio-box" class="explorer-drawer" aria-label="Posting and company details"></aside>
+          </div>
 
           <div id="explorer-reference-panel" class="hidden mt-4">
 
@@ -971,6 +989,7 @@ const ROUTE_TITLES = { overview: "Overview", explorer: "Explorer & API", exports
 const LEGACY_ROUTES = { "account-overview": "overview", explore: "explorer", "api-quickstart": "explorer", "usage-security": "settings" };
 let drawerFocus = null;
 function route() {
+  chiudiDettaglio(false);
   const raw = location.hash.slice(1);
   let current = LEGACY_ROUTES[raw] || raw || "overview";
   if (!ROUTES.includes(current)) current = "overview";
@@ -1290,6 +1309,9 @@ function pulisciStatoAccount() {
   drawerFocus = null;
   dialogoAttivo = null;
   focusPrimaDelDialogo = null;
+  dettaglioCorrente = null;
+  focusPrimaDelDettaglio = null;
+  focusDettaglioFallback = null;
   cursore = null;
   tab = "jobs";
   clearTimeout(cercaTimer);
@@ -1569,6 +1591,7 @@ function filtri() {
 }
 let apiLanguage = "curl";
 function cambiaExplorer(view) {
+  chiudiDettaglio(false);
   const query = view === "query";
   document.getElementById("explorer-query-panel").classList.toggle("hidden", !query);
   document.getElementById("explorer-reference-panel").classList.toggle("hidden", query);
@@ -1616,23 +1639,64 @@ function copiaRichiestaApi(btn) {
     if (ok) { copiaFatta = true; aggiornaOnboarding(); btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); }
   });
 }
-const ATS_INFO = {
-  greenhouse: ["GH", "#24a47c"], lever: ["Lv", "#f0653a"],
-  workday: ["Wd", "#2261b5"], smartrecruiters: ["SR", "#14957a"],
-  ashby: ["As", "#7c5cf0"], icims: ["iC", "#3a6ea5"],
-  teamtailor: ["TT", "#e0508c"], successfactors: ["SF", "#0a6ed1"],
-  recruitee: ["Rc", "#e11d48"], workable: ["Wk", "#0ea5e9"],
-  bamboohr: ["Bh", "#73a51d"], jazzhr: ["Jz", "#f97316"],
-  personio: ["Pe", "#0369a1"], breezyhr: ["Bz", "#f59e0b"],
-  reed: ["Re", "#cf102d"], arbeitsagentur: ["AA", "#1d4ed8"],
-  agenzie: ["Ag", "#d97706"], jsonld: ["◆", "#64748b"],
-};
-function chipAts(ats) {
-  if (!ats) return "";
-  const [mono, colore] = ATS_INFO[ats] || [ats.slice(0, 2), "#64748b"];
-  return `<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-100 bg-slate-50 px-2 py-1" title="source: ${esc(ats)}">
-    <img src="loghi-ats/${encodeURIComponent(ats)}.png" alt="" class="h-4 w-4 rounded-sm object-contain" onerror="this.outerHTML='<span class=&quot;grid place-items-center h-4 w-4 rounded text-white text-[9px] font-black&quot; style=&quot;background:${esc(colore)}&quot;>${esc(mono)}</span>'">
-    <span class="text-[11px] font-semibold text-slate-500">${esc(ats)}</span></span>`;
+function sourceLabel(record) {
+  return String(record.source_label || (record.is_aggregator === true ? "Job aggregator" : "Direct Career Site"));
+}
+function sourceBadge(record) {
+  return `<span class="explorer-source-pill">${esc(sourceLabel(record))}</span>${record.is_aggregator === true ? '<span class="explorer-aggregator-pill">Aggregator</span>' : ""}`;
+}
+function tecnologieNormalizzate(input) {
+  const output = [], seen = new Set();
+  const add = (item, fallback = "core") => {
+    const name = String(typeof item === "string" ? item : (item?.name || item?.technology || "")).trim();
+    if (!name) return;
+    const rawGroup = typeof item === "object" && item ? item.group : fallback;
+    const group = rawGroup === "productivity" || fallback === "productivity" ? "productivity" : "core";
+    const key = group + ":" + name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push({ ...(typeof item === "object" && item ? item : {}), name, group });
+  };
+  if (Array.isArray(input)) input.forEach(item => add(item));
+  else if (input && typeof input === "object") {
+    for (const [group, items] of Object.entries(input)) {
+      const fallback = group === "productivity" ? "productivity" : "core";
+      if (Array.isArray(items)) items.forEach(item => add(item, fallback));
+      else if (items && typeof items === "object") {
+        if (items.name || items.technology) add(items, fallback);
+        else Object.values(items).forEach(item => {
+          if (Array.isArray(item)) item.forEach(value => add(value, fallback));
+          else add(item, fallback);
+        });
+      }
+    }
+  }
+  return output;
+}
+function techChip(tech, extra = "") {
+  return `<span class="${tech.group === "core" ? "explorer-tech-core" : "explorer-tech-generic"} inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold ${extra}">${esc(tech.name)}</span>`;
+}
+function companyName(record) {
+  return record.name || record.company || record.legal_name || record.company_domain || record.domain || record.website || "Company";
+}
+function companySize(record) {
+  return record.company_size || record.company_size_band || record.size_range || record.employee_range
+    || (record.employees > 1 ? Number(record.employees).toLocaleString("en-US") + " employees" : "");
+}
+function companyAbout(record) { return record.about || record.description || ""; }
+function numericField(record, names) {
+  for (const name of names) {
+    if (record[name] !== null && record[name] !== undefined && record[name] !== "" && Number.isFinite(Number(record[name]))) return Number(record[name]);
+  }
+  return null;
+}
+function companyActiveJobs(record) { return numericField(record, ["active_postings_count", "active_jobs"]); }
+function companyPosted30(record) { return numericField(record, ["posted_30d_count", "jobs_posted_30d"]); }
+function companyLocationsCount(record) { return numericField(record, ["locations_count", "n_locations"]); }
+function companyLocations(record) { return Array.isArray(record.locations) ? record.locations : (Array.isArray(record.n_locations) ? record.n_locations : []); }
+function saldoDisponibile() { return Number(saldoAccount.saldo ?? 0); }
+function aziendaPerContesto(record) {
+  return (record.reveal_group && gruppiRivelati[record.reveal_group]) || revealInfo[record.reveal_token] || null;
 }
 function unisciAziendaRivelata(record, azienda) {
   if (record.explorer_kind === "companies") {
@@ -1641,7 +1705,8 @@ function unisciAziendaRivelata(record, azienda) {
       explorer_key: record.explorer_key, revealed: true };
   }
   return { ...record, revealed: true,
-    company: azienda.company || record.company,
+    name: azienda.name || azienda.company || record.name,
+    company: azienda.name || azienda.company || record.company,
     company_domain: azienda.domain || azienda.company_domain || record.company_domain,
     logo_url: azienda.logo || azienda.logo_url || record.logo_url,
     company_slug: azienda.company_slug || record.company_slug };
@@ -1655,7 +1720,7 @@ function registraRivelazione(record, kind, rivelata = record.revealed === true) 
   let merged = { ...previous, ...record, explorer_kind: kind, explorer_key: rowKey,
     reveal_token: revealToken, reveal_group: group,
     revealed: rivelata === true || previous.revealed === true,
-    job_rivelata: record.job_rivelata === true || previous.job_rivelata === true
+    job_revealed: record.job_revealed === true || previous.job_revealed === true
       || rivelata === true || previous.revealed === true };
   if (group && gruppiRivelati[group]) merged = unisciAziendaRivelata(merged, gruppiRivelati[group]);
   if (revealToken) {
@@ -1663,8 +1728,10 @@ function registraRivelazione(record, kind, rivelata = record.revealed === true) 
     revealRows[revealToken] = rows;
     const info = revealInfo[revealToken] || {};
     const identity = kind === "companies" ? merged : (merged.revealed ? {
-      company: merged.company, company_domain: merged.company_domain,
+      ...(gruppiRivelati[group] || {}),
+      name: merged.name, company: merged.company, company_domain: merged.company_domain,
       logo_url: merged.logo_url, company_slug: merged.company_slug, ats: merged.ats,
+      company_ref: merged.company_ref,
     } : {});
     revealInfo[revealToken] = { ...info, ...identity, reveal_token: revealToken,
       reveal_group: group, revealed: info.revealed === true || merged.revealed === true };
@@ -1676,8 +1743,7 @@ function iconaAziendaNascosta(className) {
 }
 function logoRivelato(record, className) {
   if (record.revealed !== true) return "";
-  const identity = String(record.company || record.legal_name || record.company_domain
-    || record.domain || record.website || "Company").trim();
+  const identity = String(companyName(record)).trim();
   const monogramSource = identity.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
   const initial = (monogramSource.match(/[\p{L}\p{N}]/u) || ["C"])[0].toUpperCase();
   const local = record.company_slug
@@ -1708,61 +1774,65 @@ document.addEventListener("error", event => {
   }
 }, true);
 function pulsanteChiusuraDettaglio() {
-  return `<button type="button" onclick="chiudiDettaglio()" class="modal-close" aria-label="Close details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
+  return `<button id="dettaglio-close" type="button" onclick="chiudiDettaglio()" class="modal-close" aria-label="Close details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
 }
 function aggiornaRigheRivelate(group) {
+  const active = document.activeElement;
+  const activeRow = active?.closest?.("#cerca-righe [data-explorer-key]");
+  const focusKey = activeRow?.dataset.explorerKey || "";
+  const focusToken = activeRow?.dataset.revealToken || "";
   document.querySelectorAll("#cerca-righe [data-reveal-token]").forEach(row => {
     if (row.dataset.revealGroup !== group) return;
     const record = (revealRows[row.dataset.revealToken] || {})[row.dataset.explorerKey];
     if (!record) return;
     row.outerHTML = record.explorer_kind === "companies" ? rigaAzienda(record) : rigaJob(record);
   });
+  if (focusKey) {
+    const restored = [...document.querySelectorAll("#cerca-righe [data-explorer-key]")].find(row =>
+      row.dataset.explorerKey === focusKey && row.dataset.revealToken === focusToken);
+    restored?.focus({ preventScroll: true });
+  }
+}
+function quickRevealButton(record, kind, jobId = "") {
+  if (record.revealed === true) return '<span class="explorer-unlocked">Unlocked ✓</span>';
+  const disabled = saldoDisponibile() < 3;
+  return `<button type="button" data-job-id="${esc(jobId)}" data-explorer-kind="${esc(kind)}" onclick="event.stopPropagation();rivelaAzienda(${jsArg(record.reveal_token)}, this)" class="explorer-quick" ${disabled ? 'disabled title="Need 3 credits to reveal"' : ""}>Reveal · 3cr</button>`;
 }
 function rigaJob(input) {
   const o = registraRivelazione(input, "jobs");
-  const tec = (o.technologies || []).slice(0, 4).map(t =>
-    `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${esc(t)}</span>`).join("");
-  const chiusa = o.closed_at ? `<span class="rounded-md bg-slate-900/5 text-slate-500 px-2 py-0.5 text-[10.5px] font-black">CLOSED</span>` : "";
-  const logo = o.revealed
-    ? logoRivelato(o, "h-9 w-9 rounded-lg p-0.5")
-    : iconaAziendaNascosta("h-9 w-9");
-  const nomeAz = o.revealed ? (o.company || o.company_domain || "") : "";
-  const az = o.revealed && nomeAz
-    ? `<span class="font-semibold text-slate-600 hover:text-brand-600 transition" onclick="event.stopPropagation();apriAziendaDaJob(${jsArg(o.reveal_token)})">${esc([nomeAz, o.company_domain && o.company_domain !== nomeAz ? o.company_domain : null].filter(Boolean).join(" · "))}</span> · `
-    : `<span class="inline-block blur-[4px] select-none text-slate-400">Hidden company</span> · `;
-  return `<div data-explorer-kind="jobs" data-explorer-key="${esc(o.explorer_key)}" data-reveal-token="${esc(o.reveal_token)}" data-reveal-group="${esc(o.reveal_group)}" class="premium-action flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-brand-300 cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob(${jsArg(o.id)})">
+  const tec = tecnologieNormalizzate(o.technologies).slice(0, 3).map(t => techChip(t)).join("");
+  const chiusa = o.closed_at ? '<span class="explorer-lock-pill">CLOSED</span>' : "";
+  const logo = o.revealed ? logoRivelato(o, "h-9 w-9 rounded-lg p-0.5") : iconaAziendaNascosta("h-9 w-9");
+  const company = o.revealed
+    ? `<span class="font-semibold text-slate-600">${esc(companyName(o))}</span>`
+    : '<span class="explorer-lock-pill">Hidden company</span>';
+  return `<div role="button" tabindex="0" aria-label="Inspect ${esc(o.title || "job")}" data-job-id="${esc(o.id)}" data-explorer-kind="jobs" data-explorer-key="${esc(o.explorer_key)}" data-reveal-token="${esc(o.reveal_token)}" data-reveal-group="${esc(o.reveal_group)}" class="explorer-result flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer" id="row-${esc(o.id)}" onclick="dettaglioJob(${jsArg(o.id)})">
     ${logo}
     <div class="min-w-0 flex-1">
-      <b class="text-[14px] block truncate">${esc(o.title || "—")} ${chiusa}</b>
-      <div class="text-[12px] text-slate-500 mt-0.5 truncate">${az}${esc([o.category, [o.city, o.country].filter(Boolean).join(", "), o.remote].filter(Boolean).join(" · "))}</div>
-      <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}</div>
+      <div class="flex items-center gap-2"><b class="min-w-0 truncate text-[14px]">${esc(o.title || "—")}</b>${chiusa}</div>
+      <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500">${company}<span>${esc([o.category, [o.city, o.country].filter(Boolean).join(", "), o.work_mode || o.remote].filter(Boolean).join(" · "))}</span></div>
+      <div class="mt-1.5 flex gap-1.5 flex-wrap">${tec}${sourceBadge(o)}</div>
     </div>
-    <div class="shrink-0">${chipAts(o.ats)}</div>
+    <div class="shrink-0" onclick="event.stopPropagation()">${quickRevealButton(o, "jobs", o.id)}</div>
   </div>`;
 }
 function rigaAzienda(input) {
   const a = registraRivelazione(input, "companies");
-  const nomeAz = a.revealed ? (a.company || a.domain || a.website || "Company") : "Hidden company";
-  const logo = a.revealed
-    ? logoRivelato(a, "h-10 w-10 rounded-xl p-1")
-    : iconaAziendaNascosta("h-10 w-10 !rounded-xl");
-  const dipendenti = a.employees ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
+  const nomeAz = a.revealed ? companyName(a) : "Company preview";
+  const logo = a.revealed ? logoRivelato(a, "h-10 w-10 rounded-xl p-1") : iconaAziendaNascosta("h-10 w-10 !rounded-xl");
   const dominio = a.revealed ? (a.domain || a.website) : null;
-  return `<div data-explorer-kind="companies" data-explorer-key="${esc(a.explorer_key)}" data-reveal-token="${esc(a.reveal_token)}" data-reveal-group="${esc(a.reveal_group)}" class="premium-action flex items-center gap-4 flex-wrap rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-mint-500/50 cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.reveal_token)})">
+  return `<div role="button" tabindex="0" aria-label="Inspect ${esc(nomeAz)}" data-explorer-kind="companies" data-explorer-key="${esc(a.explorer_key)}" data-reveal-token="${esc(a.reveal_token)}" data-reveal-group="${esc(a.reveal_group)}" class="explorer-result flex items-center gap-3 flex-wrap rounded-xl px-4 py-3 cursor-pointer" onclick="dettaglioAzienda(${jsArg(a.reveal_token)})">
     ${logo}
     <div class="min-w-0 flex-1">
-      <b class="text-[14px] ${a.revealed ? "text-slate-800" : "blur-[4px] select-none text-slate-400"}">${esc(nomeAz)}</b>
-      <div class="text-[12px] text-slate-500 mt-0.5">${esc([dominio, a.industry, a.country, dipendenti].filter(Boolean).join(" · "))}</div>
+      <div class="flex items-center gap-2"><b class="truncate text-[14px] text-slate-800">${esc(nomeAz)}</b>${a.revealed ? "" : '<span class="explorer-lock-pill">Hidden company</span>'}</div>
+      <div class="mt-1 text-[12px] text-slate-500">${esc([dominio, a.industry, a.country, companySize(a)].filter(Boolean).join(" · "))}</div>
+      <div class="mt-1.5 flex flex-wrap gap-1.5"><span class="explorer-tech-generic inline-flex rounded-md px-2 py-0.5 text-[10.5px] font-bold">${Number(a.n_tecnologie || tecnologieNormalizzate(a.technologies).length).toLocaleString("en-US")} technologies</span>${sourceBadge(a)}</div>
     </div>
-    <div class="flex items-center gap-3 shrink-0" onclick="event.stopPropagation()">
-      <span class="rounded-md bg-mint-500/10 text-mint-600 px-2 py-0.5 text-[11px] font-bold">${a.n_tecnologie || 0} technologies</span>
-      ${a.revealed
-        ? `<span class="rounded-md bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[11px] font-bold">Revealed</span>`
-        : `<button onclick="rivelaAzienda(${jsArg(a.reveal_token)}, this)" class="rounded-lg bg-brand-500 from-brand-500 via-violet-500 to-mint-500 px-3.5 py-1.5 text-[11.5px] font-bold text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/35 hover:-translate-y-px transition">Reveal company · 3 credits</button>`}
-    </div>
+    <div class="shrink-0" onclick="event.stopPropagation()">${quickRevealButton(a, "companies")}</div>
   </div>`;
 }
 function cambiaTab(t) {
+  chiudiDettaglio(false);
   tab = t;
   const on = "rounded-lg px-4 py-1.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900";
   const off = "rounded-lg px-4 py-1.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-900";
@@ -1770,11 +1840,11 @@ function cambiaTab(t) {
   document.getElementById("tab-az").className = t === "az" ? on : off;
   document.getElementById("tab-jobs").setAttribute("aria-selected", String(t === "jobs"));
   document.getElementById("tab-az").setAttribute("aria-selected", String(t === "az"));
-  document.getElementById("f-q").placeholder = t === "jobs" ? "Redacted job title…" : "Industry (exact)…";
-  document.getElementById("f-q").setAttribute("aria-label", t === "jobs" ? "Redacted job title" : "Industry (exact)");
+  document.getElementById("f-q").placeholder = t === "jobs" ? "Job title…" : "Industry (exact)…";
+  document.getElementById("f-q").setAttribute("aria-label", t === "jobs" ? "Job title" : "Industry (exact)");
   document.getElementById("f-q-help").textContent = t === "jobs"
-    ? "Open Explorer searches redacted job titles only; recently closed postings search titles."
-    : "Industry filters company records. Redacted job title search is available in Jobs.";
+    ? "Open Explorer searches job titles only; recently closed postings search titles."
+    : "Industry filters company records. Job title search is available in Jobs.";
   document.getElementById("f-stato").style.display = t === "jobs" ? "" : "none";
   document.getElementById("f-remoto").style.display = t === "jobs" ? "" : "none";
   document.getElementById("f-tec-help").style.display = t === "jobs" ? "" : "none";
@@ -1910,51 +1980,24 @@ function aggiornaSaldoDopoRivelazione(saldo) {
   }
   carica().catch(() => {});
 }
-async function rivelaJob(id, btn) {
-  if (btn.disabled) return;
-  let completata = false;
-  const seq = ++dettaglioSeq;
-  aziendaJobsSeq += 1;
-  btn.disabled = true; btn.textContent = "Unlocking…";
-  try {
-    let r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
-    if (r.status === 503) {
-      await new Promise(resolve => setTimeout(resolve, 400));
-      r = await api("/portale/rivela", { method: "POST", body: JSON.stringify({ id }) });
-    }
-    if (!r.ok && seq !== dettaglioSeq) return;
-    if (r.status === 429) {
-      notifica(r.headers.get("Retry-After")
-        ? "Too many unlock requests. Wait a moment and retry."
-        : "You need 1 credit to unlock this job. Top up your balance and retry.", "errore");
-      return;
-    }
-    if (r.status === 404) {
-      notifica("This posting is no longer available. Refresh the results and retry.", "errore");
-      return;
-    }
-    if (!r.ok) { notifica("The full job could not be unlocked. Retry.", "errore"); return; }
-    const d = await r.json();
-    aggiornaSaldoDopoRivelazione(d.saldo);
-    completata = true;
-    if (seq === dettaglioSeq) await dettaglioJob(id);
-  } catch (e) {
-    if (seq === dettaglioSeq && !completata && e.message !== "401") {
-      notifica("The full job could not be unlocked. Retry.", "errore");
-    }
-  } finally {
-    if (!completata && btn.isConnected) {
-      btn.disabled = false;
-      btn.textContent = "Unlock full job · 1 credit";
-    }
-  }
-}
 async function rivelaAzienda(revealToken, btn) {
+  if (btn.disabled) return;
+  if (saldoDisponibile() < 3) { notifica("Need 3 credits to reveal", "errore"); return; }
   let completata = false;
   const seq = ++dettaglioSeq;
   aziendaJobsSeq += 1;
   const jobId = btn.dataset.jobId || "";
-  btn.disabled = true; btn.textContent = "Revealing…";
+  const kind = btn.dataset.explorerKind || (jobId ? "jobs" : "companies");
+  if (!dettaglioCorrente || dettaglioCorrente.revealToken !== revealToken) {
+    const cachedRows = revealRows[revealToken] || {};
+    const rowKey = `${kind}:${kind === "jobs" ? jobId : "company"}`;
+    const record = cachedRows[rowKey] || revealInfo[revealToken] || { reveal_token: revealToken };
+    dettaglioCorrente = contestoBase(kind, record, jobId);
+    apriDettaglio(drawerLoading(), { resetScroll: true });
+  }
+  const quick = btn.classList.contains("explorer-quick");
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner inline-block h-3 w-3 rounded-full border-2 border-current border-t-transparent"></span>${quick ? "Revealing…" : "Revealing company…"}`;
   try {
     let r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
     if (r.status === 503) {
@@ -1962,26 +2005,18 @@ async function rivelaAzienda(revealToken, btn) {
       r = await api("/portale/rivela-azienda", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
     }
     if (!r.ok && seq !== dettaglioSeq) return;
-    if (r.status === 400) {
-      notifica("This reveal is invalid or has expired. Refresh the results and retry.", "errore");
-      return;
-    }
-    if (r.status === 403) {
-      notifica("This reveal is not available to your account, or your account is paused. Contact support if the problem persists.", "errore");
-      return;
-    }
+    if (r.status === 400) { notifica("This reveal is invalid or has expired. Refresh the results and retry.", "errore"); return; }
+    if (r.status === 403) { notifica("This reveal is not available to your account, or your account is paused. Contact support if the problem persists.", "errore"); return; }
     if (r.status === 429) {
-      notifica(r.headers.get("Retry-After")
-        ? "Too many reveal requests. Wait a moment and retry."
-        : "You have no credits left, or the reveal rate limit was reached. Top up if needed or retry shortly.", "errore");
+      notifica(r.headers.get("Retry-After") ? "Too many reveal requests. Wait a moment and retry." : "Need 3 credits to reveal. Top up if needed or retry shortly.", "errore");
       return;
     }
-    if (r.status === 404) { aziendaAssente(); return; }
+    if (r.status === 404) { if (seq === dettaglioSeq) aziendaAssente(); return; }
     if (!r.ok) { notifica("The company could not be revealed. Retry.", "errore"); return; }
     const d = await r.json();
     const token = String(d.reveal_token || revealToken);
     const previous = revealInfo[revealToken] || {};
-    const group = String(d.reveal_group || previous.reveal_group || "");
+    const group = String(d.reveal_group || previous.reveal_group || dettaglioCorrente?.revealGroup || "");
     const azienda = { ...(d.azienda || {}), revealed: true, reveal_token: token,
       reveal_group: group, explorer_kind: "companies" };
     if (group) gruppiRivelati[group] = azienda;
@@ -1998,37 +2033,84 @@ async function rivelaAzienda(revealToken, btn) {
     aggiornaRigheRivelate(group);
     aggiornaSaldoDopoRivelazione(d.saldo);
     completata = true;
+    notifica("Company unlocked · Permanent access");
     if (seq === dettaglioSeq) {
-      if (jobId) await dettaglioJob(jobId);
+      if (jobId) await dettaglioJob(jobId, { revealRefresh: true });
       else await mostraAzienda(azienda, token);
     }
   } catch (e) {
-    if (seq === dettaglioSeq && !completata && e.message !== "401") {
-      notifica("The company could not be revealed. Retry.", "errore");
-    }
+    if (seq === dettaglioSeq && !completata && e.message !== "401") notifica("The company could not be revealed. Retry.", "errore");
   } finally {
     if (!completata && btn.isConnected) {
-      btn.disabled = false;
-      btn.textContent = "Reveal company · 3 credits";
+      btn.disabled = saldoDisponibile() < 3;
+      btn.textContent = quick ? "Reveal · 3cr" : "Reveal company · 3 credits";
     }
   }
 }
 
-function aziendaAssente() {
-  dettaglioSeq += 1;
-  aziendaJobsSeq += 1;
-  apriDettaglio(`<div class="hidden from-slate-300 via-slate-200 to-slate-300"></div><div class="p-8 text-center">
-    <div class="mx-auto h-12 w-12 rounded-2xl bg-brand-500 from-slate-200 to-slate-100 grid place-items-center text-slate-400 text-xl font-black">?</div>
-    <h3 class="mt-4 text-lg font-black tracking-tight text-slate-600">Employer not disclosed</h3>
-    <p class="mt-2 text-[13.5px] text-slate-500">This posting comes through a channel that anonymizes the employer —<br>many national job portals do. There is no company profile to unlock,<br>so <b>no credit was charged</b>.</p>
-    <button onclick="chiudiDettaglio()" class="mt-5 rounded-xl border border-slate-200 px-6 py-3 font-bold text-slate-600 hover:border-slate-400 transition">Close</button>
-  </div>`);
+let dettaglioCorrente = null;
+let focusPrimaDelDettaglio = null;
+let focusDettaglioFallback = null;
+function dettaglioVisibile() {
+  const el = document.getElementById("dettaglio");
+  return Boolean(el && !el.hidden && !el.classList.contains("hidden"));
 }
-
-function chiudiDettaglio() {
+function contestoBase(kind, record, jobId = "") {
+  const revealToken = String(record.reveal_token || "");
+  const revealGroup = String(record.reveal_group || "");
+  return { kind, jobId: String(jobId || record.id || ""), revealToken, revealGroup,
+    companyKey: revealGroup || String(record.company_slug || revealToken), tab: "job", record,
+    companyRef: String(record.company_ref || ""),
+    company: record.revealed ? aziendaPerContesto(record) : null,
+    companyLoaded: Boolean(revealGroup && gruppiRivelati[revealGroup]),
+    companyJobs: [], companyJobsLoaded: false, companyJobsLoading: false,
+    companyJobsFilter: "", companyJobsShowAll: false };
+}
+function apriDettaglio(html, options = {}) {
+  const drawer = document.getElementById("dettaglio"), box = document.getElementById("dettaglio-box");
+  const wasOpen = dettaglioVisibile(), active = document.activeElement;
+  const previousScroll = document.getElementById("dettaglio-scroll")?.scrollTop || 0;
+  const focusState = wasOpen && box.contains(active) ? { id: active.id || "", key: active.dataset?.focusKey || "" } : null;
+  if (!wasOpen) {
+    focusPrimaDelDettaglio = active;
+    const row = active?.closest?.("#cerca-righe [data-explorer-key]");
+    focusDettaglioFallback = row ? { key: row.dataset.explorerKey, token: row.dataset.revealToken } : null;
+  }
+  box.innerHTML = html;
+  if (!wasOpen) mostraVistaAccount("dettaglio", true);
+  requestAnimationFrame(() => {
+    drawer.classList.add("is-open");
+    const scroll = document.getElementById("dettaglio-scroll");
+    if (scroll) scroll.scrollTop = options.resetScroll ? 0 : previousScroll;
+    if (!wasOpen) {
+      document.getElementById("dettaglio-close")?.focus({ preventScroll: true });
+      return;
+    }
+    let target = focusState?.id ? document.getElementById(focusState.id) : null;
+    if (!target && focusState?.key) target = [...box.querySelectorAll("[data-focus-key]")].find(el => el.dataset.focusKey === focusState.key);
+    if (!target && dettaglioCorrente) target = document.getElementById("drawer-tab-" + dettaglioCorrente.tab);
+    target?.focus({ preventScroll: true });
+  });
+}
+function chiudiDettaglio(restoreFocus = true) {
   dettaglioSeq += 1;
   aziendaJobsSeq += 1;
-  chiudiDialogo("dettaglio");
+  const drawer = document.getElementById("dettaglio");
+  if (!drawer) return;
+  const wasOpen = dettaglioVisibile();
+  drawer.classList.remove("is-open");
+  mostraVistaAccount("dettaglio", false);
+  dettaglioCorrente = null;
+  if (restoreFocus && wasOpen) {
+    let target = focusPrimaDelDettaglio?.isConnected ? focusPrimaDelDettaglio : null;
+    if (!target && focusDettaglioFallback) {
+      target = [...document.querySelectorAll("#cerca-righe [data-explorer-key]")].find(row =>
+        row.dataset.explorerKey === focusDettaglioFallback.key && row.dataset.revealToken === focusDettaglioFallback.token);
+    }
+    target?.focus({ preventScroll: true });
+  }
+  focusPrimaDelDettaglio = null;
+  focusDettaglioFallback = null;
 }
 function esc(s) {
   const d = document.createElement("div");
@@ -2049,14 +2131,37 @@ function testoDesc(s) {
                 .replace(/\n{3,}/g, "\n\n").trim();
 }
 function urlSicuro(u) {
-  u = String(u || "");
-  return /^https:\/\//i.test(u) ? u : "";
+  try {
+    const url = new URL(String(u || ""));
+    return ["http:", "https:"].includes(url.protocol) && url.hostname ? url.href : "";
+  } catch (e) { return ""; }
 }
-function apriDettaglio(html) {
-  document.getElementById("dettaglio-box").innerHTML = html;
-  apriDialogo("dettaglio");
+function drawerLoading() {
+  return `<div class="explorer-drawer-scroll"><div class="explorer-drawer-sticky px-5 py-4"><div class="flex items-center justify-between"><b>Loading Explorer…</b>${pulsanteChiusuraDettaglio()}</div></div><div class="p-6" role="status"><span class="spinner inline-block h-5 w-5 rounded-full border-2 border-slate-300 border-t-blue-600"></span><span class="ml-2 text-sm text-slate-500">Loading posting details…</span></div></div>`;
 }
-async function dettaglioJob(id) {
+function revealValueCard(record) {
+  const count = companyActiveJobs(record) ?? 0;
+  return `<div class="drawer-subtle mt-4"><p class="text-[13px] font-bold text-slate-900">3 credits once · Permanent access to company profile, tech stack, and all ${count} postings</p><p class="mt-1 text-[12px] leading-5 text-slate-500">One company unlock. No additional charge to revisit its full postings or company data.</p></div>`;
+}
+function revealButtonMarkup(context) {
+  const low = saldoDisponibile() < 3;
+  return `<div><button type="button" data-focus-key="reveal" data-job-id="${esc(context.jobId)}" data-explorer-kind="${esc(context.kind)}" onclick="rivelaAzienda(${jsArg(context.revealToken)}, this)" class="drawer-primary" ${low ? "disabled" : ""}>Reveal company · 3 credits</button>${low ? '<div class="drawer-warning mt-2 rounded-lg px-3 py-2 text-[11px]"><b>Need 3 credits to reveal</b> · <a href="#billing" class="font-bold underline" onclick="chiudiDettaglio();vaiAiCrediti();return false;">Top up credits</a></div>' : ""}</div>`;
+}
+function aziendaAssente() {
+  dettaglioSeq += 1;
+  aziendaJobsSeq += 1;
+  apriDettaglio(`<div class="explorer-drawer-scroll"><div class="explorer-drawer-sticky px-5 py-4"><div class="flex items-center justify-between"><b>Company unavailable</b>${pulsanteChiusuraDettaglio()}</div></div><div class="p-6 text-center"><h3 class="text-lg font-bold text-slate-700">Employer not disclosed</h3><p class="mt-2 text-[13px] leading-6 text-slate-500">This source does not provide a company profile to unlock. No credits were charged.</p><button onclick="chiudiDettaglio()" class="drawer-secondary mt-5">Close</button></div></div>`);
+}
+async function dettaglioJob(id, options = {}) {
+  const sameJob = dettaglioCorrente?.kind === "jobs" && dettaglioCorrente.jobId === String(id);
+  if (!sameJob) {
+    let cached = { id };
+    for (const rows of Object.values(revealRows)) {
+      if (rows[`jobs:${id}`]) { cached = rows[`jobs:${id}`]; break; }
+    }
+    dettaglioCorrente = contestoBase("jobs", cached, id);
+    apriDettaglio(drawerLoading(), { resetScroll: true });
+  } else if (options.revealRefresh) dettaglioCorrente.tab = "job";
   const seq = ++dettaglioSeq;
   try {
     const r = await api("/portale/offerta-dettaglio", { method: "POST", body: JSON.stringify({ id }) });
@@ -2065,104 +2170,131 @@ async function dettaglioJob(id) {
     const d = await r.json();
     if (seq !== dettaglioSeq) return;
     const offerta = d.offerta || {};
-    const o = registraRivelazione({ ...offerta,
-      reveal_token: d.reveal_token || offerta.reveal_token || "",
-      reveal_group: d.reveal_group || offerta.reveal_group || "",
-      job_rivelata: d.job_rivelata === true || d.azienda_rivelata === true || offerta.job_rivelata === true },
-      "jobs", d.azienda_rivelata === true);
-    const rivelata = o.revealed === true;
-    const jobRivelata = o.job_rivelata === true || rivelata;
-    const NON_SEDI = ["onsite", "on-site", "remote", "hybrid", "telecommute", "various", "multiple"];
-    const citta = o.city && !NON_SEDI.includes(String(o.city).toLowerCase()) ? o.city : null;
-    const tec = (o.technologies || []).map(t =>
-      `<span class="rounded-lg bg-mint-500/10 text-mint-600 px-2.5 py-1 text-[12px] font-bold">${esc(t)}</span>`).join("");
-    const logo = rivelata
-      ? logoRivelato(o, "h-12 w-12 rounded-xl p-1 shadow-sm")
-      : iconaAziendaNascosta("h-12 w-12 !rounded-xl");
-    const linkOfferta = rivelata ? urlSicuro(o.url) : "";
-    const dominioAzienda = rivelata ? String(o.company_domain || "") : "";
-    const azienda = rivelata
-      ? `<div class="company-summary-card group mt-6 flex flex-wrap items-center gap-4 p-4 sm:px-5 cursor-pointer transition hover:border-brand-300 hover:shadow-lg" onclick="apriAziendaDaJob(${jsArg(o.reveal_token)})">
-           ${logo}
-           <div class="min-w-0 flex-1 basis-48">
-             <p class="text-[10px] font-bold uppercase tracking-[0.11em] text-brand-600">Revealed company</p>
-             <b class="mt-0.5 block break-words text-[15px] text-slate-900">${esc(o.company || o.company_domain || "Company")}</b>
-             ${dominioAzienda && dominioAzienda !== o.company ? `<p class="company-domain mt-0.5 text-[12px] font-medium text-slate-500">${esc(dominioAzienda)}</p>` : ""}
-             <p class="mt-1.5 text-[12px] font-bold text-brand-600 group-hover:text-brand-700 transition">Open company profile <span aria-hidden="true">→</span></p>
-           </div>
-           ${linkOfferta ? `<a href="${esc(linkOfferta)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Open original posting in a new tab" class="app-btn app-btn-secondary w-full sm:ml-auto sm:w-auto">Open original posting<svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M10 14 19 5M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>` : ""}
-         </div>`
-      : `<div class="company-reveal-card mt-5">
-           <div class="company-reveal-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
-           <div class="company-reveal-copy">
-             <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company reveal</p>
-             <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Reveal the company behind this posting</h4>
-             <p class="mt-1 text-[12.5px] leading-5 text-slate-600">Get the company identity and profile, original posting source, and full text for this and all company jobs.</p>
-             <span class="company-reveal-meta">3 credits once · permanent access · all company jobs</span>
-           </div>
-           <button type="button" data-job-id="${esc(o.id)}" onclick="rivelaAzienda(${jsArg(o.reveal_token)}, this)" class="app-btn app-btn-secondary">Reveal company · 3 credits</button>
-         </div>`;
-    const fatti = rivelata ? [
-      o.salary_text ? ["Salary", o.salary_text] : null,
-      o.hours_type ? ["Hours", o.hours_type] : null,
-      o.management_level ? ["Level", o.management_level] : null,
-      (o.languages_required || []).length ? ["Languages", o.languages_required.map(l => String(l).toUpperCase()).join(", ")] : null,
-      o.benefits ? ["Benefits", String(o.benefits).slice(0, 120)] : null,
-    ].filter(Boolean) : [];
-    const fonte = o.ats ? `<span class="rounded-lg bg-slate-100 text-slate-500 px-2.5 py-1 text-[12px] font-bold">via ${esc(o.ats)}</span>` : "";
-    const anteprima = `<section class="locked-posting-card posting-preview-card mt-5" aria-label="Free posting preview">
-         <div class="flex flex-wrap items-start justify-between gap-3">
-           <div><p class="company-section-title">Posting preview</p><h4 class="mt-1 text-[14px] font-extrabold text-slate-800">Read the essentials before unlocking</h4></div>
-           <span class="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-emerald-700">Free to open</span>
-         </div>
-         <div class="mt-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3.5">
-           <p class="whitespace-pre-wrap text-[13.5px] leading-6 text-slate-600">${esc(o.description_preview || "Preview text is not available for this posting.")}</p>
-         </div>
-         <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200/80 pt-4">
-           <div class="min-w-0 flex-1 basis-56"><p class="text-[12.5px] font-extrabold text-slate-800">Full text for this one job</p><p class="mt-1 text-[12px] leading-5 text-slate-500">1 credit once, permanently. Get the complete sanitized text; company names, links and contacts stay hidden.</p></div>
-           <button type="button" onclick="rivelaJob(${jsArg(o.id)}, this)" class="app-btn app-btn-primary w-full sm:w-auto">Unlock full job · 1 credit</button>
-         </div>
-         <p class="mt-3 text-[11px] leading-5 text-slate-400">Opening this preview is free. Credits are used only when you explicitly choose an unlock.</p>
-       </section>`;
-    const testoCompleto = o.description
-      ? `<section class="mt-5" aria-label="Full posting text">
-           <div class="flex flex-wrap items-center justify-between gap-2"><p class="company-section-title">From the posting</p><span class="rounded-lg bg-brand-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-brand-600">${rivelata ? "Full original text" : "Full job unlocked"}</span></div>
-           <div class="mt-2 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50/70 px-5 py-4 cov-scroll"><p class="whitespace-pre-wrap border-l-2 border-brand-300 pl-4 text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(o.description))}</p></div>
-           ${rivelata ? "" : '<p class="mt-2 text-[11.5px] leading-5 text-slate-500">Company names, links and contacts remain hidden in this job text.</p>'}
-         </section>`
-      : `<div class="locked-posting-card mt-5">
-           <p class="text-[12.5px] font-bold text-slate-600">Full text is not available for this posting</p>
-           <p class="mt-1 text-[12px] leading-5 text-slate-500">${rivelata ? "Open the original posting for the latest source content." : "The preview and posting metadata remain available here."}</p>
-         </div>`;
-    const corpo = jobRivelata ? testoCompleto : anteprima;
-    apriDettaglio(`<div class="p-5 sm:p-8">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0"><h3 class="break-words text-xl font-black tracking-tight">${esc(o.title || "")}</h3>
-        <p class="mt-1 text-[13.5px] text-slate-500">${esc([citta, o.country].filter(Boolean).join(", "))}</p></div>
-        ${pulsanteChiusuraDettaglio()}
-      </div>
-      <div class="mt-4 flex flex-wrap gap-2">${[
-        o.category, o.seniority, o.remote, rivelata ? o.employment_type : null,
-        o.posted_at ? "posted " + String(o.posted_at).slice(0, 10) : null].filter(Boolean)
-        .map(x => `<span class="rounded-lg bg-brand-50 text-brand-600 px-2.5 py-1 text-[12px] font-bold">${esc(x)}</span>`).join("")}${fonte}</div>
-      ${fatti.length ? `<div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">${fatti.map(([l, v]) =>
-        `<div class="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3">
-           <p class="text-[9.5px] font-bold uppercase tracking-[0.1em] text-slate-400">${esc(l)}</p>
-           <p class="mt-0.5 text-[13px] font-bold text-slate-900 truncate" title="${esc(v)}">${esc(v)}</p>
-         </div>`).join("")}</div>` : ""}
-      ${tec ? `<p class="mt-5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Technologies</p><div class="mt-2 flex flex-wrap gap-2">${tec}</div>` : ""}
-      ${corpo}
-      ${azienda}
-    </div>`);
+    const o = registraRivelazione({ ...offerta, id: offerta.id || id,
+      company_ref: d.company_ref || offerta.company_ref || dettaglioCorrente?.companyRef || "",
+      reveal_token: d.reveal_token || offerta.reveal_token || dettaglioCorrente?.revealToken || "",
+      reveal_group: d.reveal_group || offerta.reveal_group || dettaglioCorrente?.revealGroup || "",
+      job_revealed: d.job_revealed === true || offerta.job_revealed === true },
+      "jobs", d.azienda_rivelata === true || d.revealed === true || offerta.revealed === true);
+    const previous = dettaglioCorrente;
+    const next = contestoBase("jobs", o, id);
+    const sameCompany = previous?.companyKey === next.companyKey;
+    dettaglioCorrente = { ...next, tab: options.revealRefresh ? "job" : (previous?.tab || "job"),
+      company: aziendaPerContesto(o) || next.company,
+      companyJobs: sameCompany ? (previous?.companyJobs || []) : [],
+      companyJobsLoaded: sameCompany && previous?.companyJobsLoaded === true,
+      companyJobsFilter: sameCompany ? (previous?.companyJobsFilter || "") : "",
+      companyJobsShowAll: sameCompany && previous?.companyJobsShowAll === true };
+    renderDrawer();
   } catch (e) {
-    if (seq === dettaglioSeq && e.message !== "401") {
-      notifica("The posting could not be opened. Retry.", "errore");
-    }
+    if (seq === dettaglioSeq && e.message !== "401") notifica("The posting could not be opened. Retry.", "errore");
   }
 }
+function languageList(record) {
+  const values = Array.isArray(record.languages) ? record.languages : String(record.languages || "").split(",");
+  return values.map(value => String(value).trim()).filter(Boolean);
+}
+function companySignals(record) {
+  const active = companyActiveJobs(record), posted = companyPosted30(record), languages = languageList(record);
+  const signals = [
+    [companySize(record), "Company size"], [record.industry, "Industry"],
+    [active === null ? "" : active.toLocaleString("en-US"), "Active postings"],
+    [posted === null ? "" : posted.toLocaleString("en-US"), "Posted in 30 days"],
+    [languages.map(value => value.toUpperCase()).join(", "), "Languages"],
+  ].filter(([value]) => value !== "" && value !== null && value !== undefined);
+  return signals.length ? `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">${signals.map(([value, label]) => `<div class="drawer-kpi"><p class="drawer-kpi-value">${esc(value)}</p><p class="drawer-kpi-label">${esc(label)}</p></div>`).join("")}</div>` : '<p class="text-[12px] text-slate-500">Company signals are not available for this posting.</p>';
+}
+function drawerHeader(context) {
+  const record = context.record || {}, unlocked = record.revealed === true;
+  const company = context.company || {};
+  const active = companyActiveJobs(company) ?? companyActiveJobs(record) ?? context.companyJobs.length;
+  const title = context.kind === "jobs" ? (record.title || "Job posting") : (unlocked ? companyName(record) : "Company preview");
+  const metadata = context.kind === "jobs" ? [record.category, record.seniority, record.work_mode || record.remote,
+    record.country, record.employment_type, record.posted_at ? "Posted " + String(record.posted_at).slice(0, 10) : null] : [record.industry, record.country, companySize(record)];
+  const tabs = [["job", "This Job"], ["company", "Company Profile"], ["tech", "Tech Stack"], ["jobs", `Active Jobs (${active})`]];
+  return `<div class="px-5 pb-4 pt-4 sm:px-6"><div class="flex items-start gap-3"><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2"><span class="drawer-status ${unlocked ? "is-unlocked" : ""}">${unlocked ? "Unlocked · Permanent" : "Preview · 0 credits"}</span>${sourceBadge(record)}</div><h2 id="drawer-title" class="mt-2 break-words text-[20px] font-extrabold leading-7 tracking-tight text-slate-900">${esc(title)}</h2><p class="mt-1 text-[12px] leading-5 text-slate-500">${esc(metadata.filter(Boolean).join(" · "))}</p></div>${pulsanteChiusuraDettaglio()}</div>${!unlocked && context.tab === "job" ? `<div class="mt-3">${revealButtonMarkup(context)}</div>` : ""}</div><div class="explorer-drawer-tabs" role="tablist" aria-label="Explorer details">${tabs.map(([id, label]) => `<button id="drawer-tab-${id}" type="button" role="tab" aria-selected="${context.tab === id}" aria-controls="drawer-panel" onclick="cambiaDettaglioTab(${jsArg(id)})" class="explorer-drawer-tab">${esc(label)}</button>`).join("")}</div>`;
+}
+function techPreview(record) {
+  const technologies = tecnologieNormalizzate(record.technologies);
+  const core = technologies.filter(tech => tech.group === "core"), productivity = technologies.filter(tech => tech.group === "productivity");
+  if (!technologies.length) return "";
+  return `<section class="drawer-card mt-4"><p class="drawer-section-title">Technology signals</p>${core.length ? `<p class="mt-3 text-[11px] font-bold text-slate-600">Core &amp; Vertical Tech</p><div class="mt-2 flex flex-wrap gap-1.5">${core.map(tech => techChip(tech)).join("")}</div>` : ""}${productivity.length ? `<p class="mt-3 text-[11px] font-bold text-slate-500">Office &amp; Productivity</p><div class="mt-2 flex flex-wrap gap-1.5">${productivity.map(tech => techChip(tech)).join("")}</div>` : ""}</section>`;
+}
+function jobPreview(context) {
+  const record = context.record || {};
+  return `${context.kind === "companies" ? '<div class="drawer-card mb-4"><p class="text-[13px] font-bold text-slate-800">Select a posting after unlock</p><p class="mt-1 text-[12px] leading-5 text-slate-500">This Job opens each company posting inline without closing the drawer.</p></div>' : ""}<section class="drawer-card" aria-label="Structured job preview"><div class="flex items-center justify-between gap-3"><p class="drawer-section-title">Anonymous company signals</p>${record.is_aggregator === true ? '<span class="explorer-aggregator-pill">Aggregator</span>' : ""}</div><div class="mt-3">${companySignals(record)}</div></section>${techPreview(record)}${revealValueCard(record)}`;
+}
+function copiaDominio(btn) {
+  const domain = String(dettaglioCorrente?.record.company_domain || dettaglioCorrente?.company?.domain || "");
+  copiaTesto(domain).then(ok => { if (ok) { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy domain", 1600); } });
+}
+function copiaCurlOfferta(btn) {
+  const record = dettaglioCorrente?.record || {};
+  const params = new URLSearchParams({ title: String(record.title || ""), limit: "1" });
+  const curl = `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" "${API}/v1/jobs?${params.toString()}"`;
+  copiaTesto(curl).then(ok => { if (ok) { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy API cURL", 1600); } });
+}
+function jobFull(context) {
+  const record = context.record || {}, company = context.company || record;
+  const original = urlSicuro(record.url) || urlSicuro(record.source_url);
+  const description = testoDesc(record.description);
+  const domain = record.company_domain || company.domain || "";
+  return `<div class="mb-4 flex flex-wrap gap-2">${original ? `<a href="${esc(original)}" target="_blank" rel="noopener" class="drawer-primary">Open original posting ↗</a>` : ""}${domain ? '<button type="button" class="drawer-secondary" onclick="copiaDominio(this)">Copy domain</button>' : ""}<button type="button" class="drawer-secondary" onclick="copiaCurlOfferta(this)">Copy API cURL</button></div><section class="drawer-card" aria-label="Full posting description"><p class="drawer-section-title">Full job description</p>${description ? `<div class="drawer-description mt-3">${esc(description)}</div>` : '<p class="mt-3 text-[13px] text-slate-500">Full text is not available for this posting. Use the original source link when available.</p>'}</section><section class="drawer-card mt-4"><div class="flex items-center gap-3">${logoRivelato(company, "h-12 w-12 rounded-xl p-1")}<div class="min-w-0 flex-1"><p class="drawer-section-title">Company</p><b class="mt-1 block truncate text-[14px]">${esc(companyName(company))}</b><p class="company-domain text-[11px] text-slate-500">${esc(company.domain || record.company_domain || "")}</p></div><button type="button" class="drawer-secondary" onclick="cambiaDettaglioTab('company')">View profile</button></div></section>`;
+}
+function lockedCompanyPanel(context) {
+  const labels = { company: "Company Profile", tech: "Tech Stack", jobs: "Active Jobs" };
+  return `<section class="drawer-card"><p class="drawer-section-title">${esc(labels[context.tab] || "Company data")}</p><h3 class="mt-2 text-[16px] font-bold">Hidden company</h3><p class="mt-2 text-[13px] leading-6 text-slate-500">Reveal once for permanent access to the company profile, grouped technology stack, original postings and every active job.</p><div class="mt-4">${revealButtonMarkup(context)}</div></section>${revealValueCard(context.record)}`;
+}
+function companySelectionPanel(context) {
+  const company = context.company || context.record;
+  return `<section class="drawer-card"><div class="flex items-center gap-3">${logoRivelato(company, "h-12 w-12 rounded-xl p-1")}<div><p class="drawer-section-title">Company unlocked</p><h3 class="mt-1 text-[16px] font-bold">${esc(companyName(company))}</h3></div></div><p class="mt-3 text-[13px] leading-6 text-slate-500">Choose an active posting to read it inline in This Job, or review the permanent company profile and technology stack.</p><button type="button" class="drawer-primary mt-4" onclick="cambiaDettaglioTab('jobs')">Browse active postings</button></section>`;
+}
+function renderDrawer(options = {}) {
+  const context = dettaglioCorrente;
+  if (!context) return;
+  const unlocked = context.record?.revealed === true;
+  let panel;
+  if (context.tab === "job") panel = unlocked ? (context.kind === "companies" ? companySelectionPanel(context) : jobFull(context)) : jobPreview(context);
+  else if (!unlocked) panel = lockedCompanyPanel(context);
+  else if (context.tab === "company") panel = companyProfilePanel(context);
+  else if (context.tab === "tech") panel = companyTechPanel(context);
+  else panel = companyJobsPanel(context);
+  apriDettaglio(`<div id="dettaglio-scroll" class="explorer-drawer-scroll"><header class="explorer-drawer-sticky">${drawerHeader(context)}</header><main id="drawer-panel" role="tabpanel" aria-labelledby="drawer-tab-${context.tab}" class="p-5 sm:p-6">${panel}</main></div>`, options);
+}
+function cambiaDettaglioTab(nextTab) {
+  if (!dettaglioCorrente || !["job", "company", "tech", "jobs"].includes(nextTab)) return;
+  if (dettaglioCorrente.tab !== "jobs" && nextTab === "jobs") dettaglioCorrente.companyJobsShowAll = false;
+  if (dettaglioCorrente.tab === "jobs" && nextTab !== "jobs") aziendaJobsSeq += 1;
+  dettaglioCorrente.tab = nextTab;
+  renderDrawer({ resetScroll: true });
+  if (dettaglioCorrente.record?.revealed === true && nextTab !== "job") {
+    if (!dettaglioCorrente.company || !dettaglioCorrente.companyLoaded) apriAziendaDaJob(dettaglioCorrente.revealToken);
+    else if (nextTab === "jobs" && !dettaglioCorrente.companyJobsLoaded) caricaAziendaJobs();
+  }
+}
+document.addEventListener("keydown", event => {
+  if (!dettaglioVisibile() || dialogoAttivo) return;
+  if (event.key === "Escape") { event.preventDefault(); chiudiDettaglio(); return; }
+  if (!["ArrowUp", "ArrowDown"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target.closest("input, textarea, select, [contenteditable='true'], [role='textbox']")) return;
+  const rows = [...document.querySelectorAll("#cerca-righe > [data-job-id]")].filter(row => row.getClientRects().length > 0);
+  if (!rows.length) return;
+  event.preventDefault();
+  const current = rows.findIndex(row => row.dataset.jobId === dettaglioCorrente?.jobId);
+  const next = event.key === "ArrowDown" ? Math.min(rows.length - 1, current + 1) : Math.max(0, current < 0 ? rows.length - 1 : current - 1);
+  dettaglioJob(rows[next].dataset.jobId);
+});
+document.getElementById("cerca-righe").addEventListener("keydown", event => {
+  if (!["Enter", " "].includes(event.key) || event.target.closest("button, a, input, select, textarea")) return;
+  const row = event.target.closest("[data-explorer-kind]");
+  if (!row) return;
+  event.preventDefault();
+  if (row.dataset.explorerKind === "jobs") dettaglioJob(row.dataset.jobId);
+  else dettaglioAzienda(row.dataset.revealToken);
+});
 async function apriAziendaDaJob(revealToken, rinnova = true) {
   const seq = ++dettaglioSeq;
-  const cached = revealInfo[revealToken];
+  const cached = revealInfo[revealToken] || dettaglioCorrente?.company;
   if (!cached) return;
   if (!cached.revealed) return dettaglioAzienda(revealToken);
   try {
@@ -2171,7 +2303,8 @@ async function apriAziendaDaJob(revealToken, rinnova = true) {
     });
     if (seq !== dettaglioSeq) return;
     if (r.status === 400 && rinnova && cached.ats && cached.company_slug) {
-      const companyRef = `${cached.ats}:${cached.company_slug}`;
+      const companyRef = String(cached.company_ref || dettaglioCorrente?.companyRef
+        || `${cached.ats}:${cached.company_slug}`);
       const refreshed = await api("/portale/token-azienda", {
         method: "POST", body: JSON.stringify({ company_ref: companyRef }),
       });
@@ -2189,162 +2322,155 @@ async function apriAziendaDaJob(revealToken, rinnova = true) {
         document.querySelectorAll("#cerca-righe [data-reveal-token]").forEach(row => {
           if (row.dataset.revealToken === revealToken) row.dataset.revealToken = token;
         });
+        if (dettaglioCorrente?.revealToken === revealToken) {
+          dettaglioCorrente.revealToken = token;
+          dettaglioCorrente.revealGroup = group;
+          dettaglioCorrente.companyKey = group || dettaglioCorrente.companyKey;
+        }
         return apriAziendaDaJob(token, false);
       }
     }
-    if (!r.ok) {
-      notifica("The company could not be opened. Refresh the results and retry.", "errore");
-      return;
-    }
+    if (!r.ok) { notifica("The company could not be opened. Refresh the results and retry.", "errore"); return; }
     const d = await r.json();
     if (seq !== dettaglioSeq) return;
     const group = String(d.reveal_group || cached.reveal_group || "");
-    const azienda = { ...(d.azienda || {}), revealed: true,
-      reveal_token: String(d.reveal_token || revealToken), reveal_group: group };
-    revealInfo[revealToken] = { ...cached, ...azienda };
+    const token = String(d.reveal_token || revealToken);
+    const azienda = { ...(d.azienda || {}), revealed: true, reveal_token: token, reveal_group: group };
+    revealInfo[token] = { ...cached, ...azienda };
     if (group) gruppiRivelati[group] = azienda;
-    await mostraAzienda(azienda, azienda.reveal_token);
+    if (dettaglioCorrente && [revealToken, token].includes(dettaglioCorrente.revealToken)) {
+      dettaglioCorrente.revealToken = token;
+      dettaglioCorrente.revealGroup = group;
+      dettaglioCorrente.companyKey = group || dettaglioCorrente.companyKey;
+      dettaglioCorrente.company = azienda;
+      dettaglioCorrente.companyLoaded = true;
+      dettaglioCorrente.record = dettaglioCorrente.kind === "companies"
+        ? { ...dettaglioCorrente.record, ...azienda } : unisciAziendaRivelata(dettaglioCorrente.record, azienda);
+      renderDrawer();
+      if (dettaglioCorrente.tab === "jobs" && !dettaglioCorrente.companyJobsLoaded) await caricaAziendaJobs();
+    } else await mostraAzienda(azienda, token);
   } catch (e) {
     if (seq === dettaglioSeq && e.message !== "401") {
       notifica("The company could not be opened. Retry.", "errore");
     }
   }
 }
+function companyProfilePanel(context) {
+  const a = context.company || context.record, locations = companyLocations(a);
+  const active = companyActiveJobs(a), posted = companyPosted30(a);
+  const locationCount = companyLocationsCount(a) ?? locations.length;
+  const locationKpi = locationCount > 0 ? [locationCount, "Locations"] : (a.country ? [a.country, "Country"] : null);
+  const kpis = [[active, "Active postings"], [posted, "Posted in 30 days"], locationKpi, [companySize(a) || null, "Company size"]]
+    .filter(item => item && item[0] !== null && item[0] !== undefined && item[0] !== "");
+  const languages = languageList(a);
+  const domain = String(a.domain || a.website || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  const domainLink = domain ? urlSicuro("https://" + domain) : "";
+  return `<section class="drawer-card"><div class="flex items-start gap-3">${logoRivelato(a, "h-16 w-16 rounded-2xl p-1.5")}<div class="min-w-0"><p class="drawer-section-title">Company profile</p><h3 class="mt-1 break-words text-[20px] font-extrabold">${esc(companyName(a))}</h3>${domainLink ? `<a href="${esc(domainLink)}" target="_blank" rel="noopener" class="company-domain mt-1 inline-block text-[12px] font-bold text-blue-600">${esc(domain)} ↗</a>` : ""}</div></div>${kpis.length ? `<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">${kpis.map(([value, label]) => `<div class="drawer-kpi"><p class="drawer-kpi-value">${esc(value)}</p><p class="drawer-kpi-label">${esc(label)}</p></div>`).join("")}</div>` : ""}<div class="mt-4 flex flex-wrap gap-1.5">${a.industry ? `<span class="explorer-tech-generic rounded-md px-2 py-1 text-[11px] font-bold">${esc(a.industry)}</span>` : ""}${languages.map(language => `<span class="explorer-tech-core rounded-md px-2 py-1 text-[11px] font-bold">${esc(language.toUpperCase())}</span>`).join("")}</div></section>${companyAbout(a) ? `<section class="drawer-card mt-4"><p class="drawer-section-title">About</p><div class="drawer-description mt-3">${esc(testoDesc(companyAbout(a)))}</div></section>` : ""}${locations.length && locationCount > 0 ? `<section class="drawer-card mt-4"><p class="drawer-section-title">Where they hire</p><div class="mt-2">${locations.map(location => `<div class="company-location-row"><span class="text-[12px] font-semibold text-slate-700">${esc([location.city, location.country].filter(Boolean).join(", "))}</span><span class="text-[11px] text-slate-500">${esc(location.offerte || location.jobs || "")} jobs</span></div>`).join("")}</div></section>` : ""}`;
+}
+function companyTechPanel(context) {
+  const technologies = tecnologieNormalizzate((context.company || context.record).technologies);
+  const core = technologies.filter(tech => tech.group === "core"), productivity = technologies.filter(tech => tech.group === "productivity");
+  const coreRows = core.map(tech => {
+    const count = numericField(tech, ["active_jobs", "jobs"]);
+    return `<div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2.5"><span class="text-[13px] font-bold text-indigo-800">${esc(tech.name)}</span>${count === null ? "" : `<span class="text-[11px] font-bold text-indigo-700">${count} jobs</span>`}</div>`;
+  }).join("");
+  return `<section class="drawer-card"><p class="drawer-section-title">Core &amp; Vertical Tech</p><p class="mt-1 text-[12px] text-slate-500">Role-defining and domain-specific technologies, ordered first.</p>${coreRows || '<p class="mt-3 text-[13px] text-slate-500">No core technologies are listed.</p>'}</section>${productivity.length ? `<details class="drawer-subtle mt-4"><summary class="cursor-pointer text-[12px] font-bold text-slate-600">Office &amp; Productivity (${productivity.length})</summary><div class="mt-3 flex flex-wrap gap-1.5">${productivity.map(tech => techChip(tech)).join("")}</div></details>` : ""}`;
+}
+function companyJobsListMarkup(context) {
+  const query = context.companyJobsFilter.trim().toLowerCase();
+  const filtered = context.companyJobs.filter(job => !query || [job.title, job.location, job.city, job.country].some(value => String(value || "").toLowerCase().includes(query)));
+  const visible = context.companyJobsShowAll ? filtered : filtered.slice(0, 15);
+  const rows = visible.map(job => `<button type="button" class="company-job-row" onclick="dettaglioJob(${jsArg(job.id)})"><span class="min-w-0 text-[13px] font-semibold text-slate-700">${esc(job.title || "Job posting")}</span><span class="shrink-0 text-[11px] text-slate-500">${esc([job.location || [job.city, job.country].filter(Boolean).join(", "), job.posted_at ? String(job.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></button>`).join("");
+  return `${rows || '<p class="py-5 text-center text-[12px] text-slate-500">No postings match this filter.</p>'}${!context.companyJobsShowAll && filtered.length > 15 ? `<button type="button" class="drawer-secondary mt-3 w-full" onclick="mostraTuttiAziendaJobs()">Show all ${filtered.length}</button>` : ""}`;
+}
+function disegnaAziendaJobs() {
+  const target = document.getElementById("az-jobs-lista");
+  if (target && dettaglioCorrente) target.innerHTML = companyJobsListMarkup(dettaglioCorrente);
+}
+function filtraAziendaJobs(value) {
+  if (!dettaglioCorrente) return;
+  dettaglioCorrente.companyJobsFilter = String(value || "");
+  dettaglioCorrente.companyJobsShowAll = false;
+  disegnaAziendaJobs();
+}
+function mostraTuttiAziendaJobs() {
+  if (!dettaglioCorrente) return;
+  dettaglioCorrente.companyJobsShowAll = true;
+  disegnaAziendaJobs();
+  document.getElementById("company-jobs-filter")?.focus({ preventScroll: true });
+}
+function companyJobsPanel(context) {
+  const total = context.companyJobs.length || companyActiveJobs(context.company || context.record) || 0;
+  let content;
+  if (context.companyJobsError) content = `<p class="py-4 text-center text-[12px] text-slate-500">Postings could not be loaded.</p><button type="button" class="drawer-secondary w-full" onclick="caricaAziendaJobs()">Retry</button>`;
+  else if (!context.companyJobsLoaded) content = '<p class="py-5 text-center text-[12px] text-slate-500" role="status">Loading active postings…</p>';
+  else content = companyJobsListMarkup(context);
+  return `<section class="drawer-card"><label for="company-jobs-filter" class="drawer-section-title">Active postings</label><input id="company-jobs-filter" type="search" value="${esc(context.companyJobsFilter)}" oninput="filtraAziendaJobs(this.value)" placeholder="Filter ${total} postings..." class="app-input mt-2"><div id="az-jobs-lista" class="mt-3">${content}</div></section>`;
+}
+function companyJobsContextValid(jobsSeq, revealToken, companyKey) {
+  return jobsSeq === aziendaJobsSeq && dettaglioCorrente
+    && dettaglioCorrente.revealToken === revealToken && dettaglioCorrente.companyKey === companyKey;
+}
+async function caricaAziendaJobs() {
+  const context = dettaglioCorrente;
+  if (!context || context.record?.revealed !== true) return;
+  const revealToken = context.revealToken, companyKey = context.companyKey, jobsSeq = ++aziendaJobsSeq;
+  context.companyJobsLoading = true;
+  context.companyJobsError = "";
+  try {
+    const r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
+    if (!companyJobsContextValid(jobsSeq, revealToken, companyKey)) return;
+    if (r.status === 400) {
+      await apriAziendaDaJob(revealToken);
+      if (companyJobsContextValid(jobsSeq, revealToken, companyKey) && !context.companyJobsLoaded) {
+        context.companyJobsLoading = false;
+        context.companyJobsError = "unavailable";
+        if (context.tab === "jobs") renderDrawer();
+      }
+      return;
+    }
+    if (!r.ok) throw new Error("company jobs");
+    const d = await r.json();
+    if (!companyJobsContextValid(jobsSeq, revealToken, companyKey)) return;
+    context.companyJobs = (Array.isArray(d.data) ? d.data : []).slice(0, 50);
+    context.companyJobsLoaded = true;
+    context.companyJobsLoading = false;
+    if (context.tab === "jobs") disegnaAziendaJobs();
+  } catch (e) {
+    if (!companyJobsContextValid(jobsSeq, revealToken, companyKey)) return;
+    context.companyJobsLoading = false;
+    context.companyJobsError = "unavailable";
+    if (context.tab === "jobs") renderDrawer();
+    if (e.message !== "401" && e.message !== "company jobs") notifica("Postings could not be loaded. Retry.", "errore");
+  }
+}
 async function mostraAzienda(input, revealToken) {
   dettaglioSeq += 1;
-  const jobsSeq = ++aziendaJobsSeq;
+  aziendaJobsSeq += 1;
   const a = { ...input, revealed: true, reveal_token: revealToken };
-  const nomeAz = a.company || a.legal_name || a.domain || a.website || "Company";
-  const logo = logoRivelato(a, "h-16 w-16 rounded-2xl p-1.5");
-  const dipendenti = a.employees > 1 ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
-  const hq = a.headquarters && a.headquarters.city
-    ? a.headquarters.city.charAt(0).toUpperCase() + a.headquarters.city.slice(1).toLowerCase()
-    : null;
-  const dominio = (a.domain || a.website || "").replace(/^'+/, "");
-  const dominioNormalizzato = dominio.replace(/^https?:\/\//i, "");
-  const linkDominio = dominioNormalizzato
-    ? urlSicuro("https://" + encodeURI(dominioNormalizzato).replace(/"/g, "")) : "";
-  const kpi = [
-    [a.active_jobs, "active postings"],
-    [a.jobs_posted_30d, "posted in 30 days"],
-    [a.n_locations, "locations"],
-    [a.size_range || null, "company size"],
-  ].filter(([v]) => v !== null && v !== undefined && v !== "").map(([v, l]) =>
-    `<div class="company-kpi text-center">
-       <p class="company-kpi-value tabular-nums">${esc(v)}</p>
-       <p class="company-kpi-label">${esc(l)}</p>
-     </div>`).join("");
-  const chips = [
-    a.founded ? "founded " + String(a.founded).slice(0, 4) : null,
-    a.legal_name ? "legal: " + a.legal_name : null,
-  ].filter(Boolean).map(x => `<span class="rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12px] font-bold text-brand-700">${esc(x)}</span>`).join("")
-    + (a.languages || []).map(l => `<span class="rounded-lg border border-mint-500/15 bg-mint-500/10 px-2.5 py-1 text-[12px] font-bold text-mint-600">${esc(String(l).toUpperCase())}</span>`).join("")
-    + (((a.keywords || {}).famiglie) || []).map(f => `<span class="rounded-lg border border-violet-500/15 bg-violet-500/10 px-2.5 py-1 text-[12px] font-bold text-violet-600">${esc(f)}</span>`).join("");
-  const techs = (a.technologies || []).slice(0, 40);
-  const conteggiTec = techs.map(t => {
-    const n = Number(t.active_jobs || t.jobs || 0);
-    return Number.isFinite(n) ? n : 0;
-  });
-  const maxTec = Math.max(1, ...conteggiTec);
-  const tec = techs.map((t, index) => {
-    const n = conteggiTec[index];
-    return `<div class="company-tech-row">
-      <div class="flex flex-wrap items-center justify-between gap-2"><span class="min-w-0 break-words text-[13px] font-bold text-slate-800">${esc(t.technology)}</span><span class="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11.5px] font-bold text-slate-700 tabular-nums">${n} jobs</span></div>
-      <div class="company-tech-track" aria-hidden="true"><span style="width:${Math.round(n / maxTec * 100)}%"></span></div>
-    </div>`;
-  }).join("");
-  const sedi = (a.locations || []).slice(0, 8).map(l =>
-    `<div class="company-location-row"><span class="min-w-0 break-words text-[13px] font-semibold text-slate-700">${esc([l.city, l.country].filter(Boolean).join(", "))}</span><span class="shrink-0 rounded-md bg-slate-50 px-2 py-0.5 text-[11.5px] font-bold text-slate-600 tabular-nums">${esc(l.offerte || "")} jobs</span></div>`).join("");
-  apriDettaglio(`<div class="company-profile-header">
-    <div class="flex items-start gap-3 sm:gap-4">
-      <div class="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center">${logo}
-        <div class="min-w-0"><p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company profile</p>
-        <h3 class="mt-1 break-words text-xl font-black tracking-tight text-slate-900 sm:text-2xl">${esc(nomeAz)}</h3>
-        ${linkDominio ? `<a href="${esc(linkDominio)}" target="_blank" rel="noopener" class="company-domain mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-brand-600 hover:text-brand-700 transition">${esc(dominioNormalizzato)}<svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M10 14 19 5M19 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg></a>` : ""}
-        <p class="mt-1.5 text-[13px] leading-5 text-slate-600">${esc([a.industry, hq || a.country, dipendenti].filter(Boolean).join(" · "))}</p></div>
-      </div>
-      ${pulsanteChiusuraDettaglio()}
-    </div>
-  </div>
-  <div class="company-profile-body">
-    ${kpi ? `<div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">${kpi}</div>` : ""}
-    ${chips ? `<div class="mt-4 flex flex-wrap gap-2">${chips}</div>` : ""}
-    ${a.description ? `<section class="company-section"><p class="company-section-title">About</p><p class="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-slate-600">${esc(testoDesc(a.description))}</p></section>` : ""}
-    ${tec ? `<section class="company-section"><p class="company-section-title">Technology stack</p><div class="company-tech-list max-h-64 overflow-auto pr-1 cov-scroll">${tec}</div></section>` : ""}
-    ${sedi ? `<section class="company-section"><p class="company-section-title">Where they hire</p><div class="mt-1">${sedi}</div></section>` : ""}
-    <section id="az-jobs" class="company-section"><p class="company-section-title">Active postings</p><div id="az-jobs-lista" class="mt-2 text-[13px] text-slate-500">loading…</div></section>
-  </div>`);
-  let r;
-  try {
-    r = await api("/portale/azienda-jobs", { method: "POST", body: JSON.stringify({ reveal_token: revealToken }) });
-  } catch (e) {
-    if (jobsSeq === aziendaJobsSeq) {
-      const target = document.getElementById("az-jobs-lista");
-      if (target) target.textContent = "Postings could not be loaded. Close this window and retry.";
-    }
-    return;
-  }
-  if (jobsSeq !== aziendaJobsSeq) return;
-  const el = document.getElementById("az-jobs-lista");
-  if (!el) return;
-  if (!r.ok) { el.textContent = "Postings could not be loaded. Close this window and retry."; return; }
-  const d = await r.json();
-  if (jobsSeq !== aziendaJobsSeq) return;
-  el.innerHTML = (d.data || []).map(j =>
-    `<div data-job="${encodeURIComponent(j.id)}" class="company-job-row group"><span class="min-w-0 font-semibold text-slate-700 group-hover:text-brand-600 transition sm:flex-1 sm:truncate">${esc(j.title)}</span><span class="shrink-0 text-[11.5px] font-medium text-slate-500">${esc([[j.city, j.country].filter(Boolean).join(", "), j.posted_at ? String(j.posted_at).slice(0, 10) : null].filter(Boolean).join(" · "))}</span></div>`).join("") || "no active postings today";
-  el.querySelectorAll("[data-job]").forEach(n =>
-    n.addEventListener("click", () => dettaglioJob(decodeURIComponent(n.dataset.job))));
+  if (!dettaglioCorrente || dettaglioCorrente.revealToken !== revealToken) dettaglioCorrente = contestoBase("companies", a);
+  dettaglioCorrente.revealToken = revealToken;
+  dettaglioCorrente.revealGroup = String(a.reveal_group || dettaglioCorrente.revealGroup || "");
+  dettaglioCorrente.companyKey = dettaglioCorrente.revealGroup || dettaglioCorrente.companyKey;
+  dettaglioCorrente.company = a;
+  dettaglioCorrente.companyLoaded = true;
+  dettaglioCorrente.record = dettaglioCorrente.kind === "companies"
+    ? { ...dettaglioCorrente.record, ...a } : unisciAziendaRivelata(dettaglioCorrente.record, a);
+  dettaglioCorrente.companyJobsLoaded = false;
+  dettaglioCorrente.companyJobs = [];
+  renderDrawer();
+  if (dettaglioCorrente.tab === "jobs") await caricaAziendaJobs();
 }
 function dettaglioAzienda(revealToken) {
   dettaglioSeq += 1;
   aziendaJobsSeq += 1;
-  const a = revealInfo[revealToken] || {};
+  const a = revealInfo[revealToken] || (revealRows[revealToken] || {})["companies:company"] || {};
+  if (!dettaglioCorrente || dettaglioCorrente.revealToken !== revealToken) {
+    dettaglioCorrente = contestoBase("companies", { ...a, reveal_token: revealToken });
+    renderDrawer({ resetScroll: true });
+  }
   if (a.revealed) return apriAziendaDaJob(revealToken);
-  const dip = a.employees > 1 ? Number(a.employees).toLocaleString("en-US") + " employees" : a.employee_range;
-  const pubblici = [a.industry, a.country, dip,
-                    a.n_tecnologie ? a.n_tecnologie + " technologies" : null]
-                   .filter(Boolean).join(" · ");
-  const barra = (w, h = 3) =>
-    `<span class="skel inline-block select-none rounded-full bg-slate-200 blur-[2px]" style="width:${w}%;height:${h * 4}px"></span>`;
-  const kpis = ["active postings", "posted in 30 days", "locations", "company size"]
-    .map(l => `<div class="company-kpi text-center">
-       <div class="flex justify-center">${barra(46, 5)}</div>
-       <p class="company-kpi-label mt-2">${esc(l)}</p>
-     </div>`).join("");
-  const tecRighe = [88, 62, 41].map(w =>
-    `<div class="company-tech-row">
-       <div class="flex items-center justify-between gap-3">${barra(38)}${barra(10)}</div>
-       <div class="company-tech-track"><span class="bg-slate-200" style="width:${w}%"></span></div>
-     </div>`).join("");
-  apriDettaglio(`<div class="company-profile-header">
-    <div class="flex items-start gap-4">
-      ${iconaAziendaNascosta("h-16 w-16 !rounded-2xl")}
-      <div class="min-w-0 flex-1">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company profile</p>
-        <b class="mt-1 inline-block select-none text-[18px] text-slate-400 blur-[4px]">Hidden company</b>
-        ${pubblici
-          ? `<p class="mt-2 text-[13px] leading-5 text-slate-600">${esc(pubblici)}</p>`
-          : `<div class="mt-2">${barra(34)}</div>`}
-      </div>
-      ${pulsanteChiusuraDettaglio()}
-    </div>
-  </div>
-  <div class="company-profile-body">
-    <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-4">${kpis}</div>
-    <div class="mt-4 flex flex-wrap gap-2">${barra(16, 6)}${barra(22, 6)}${barra(13, 6)}</div>
-    <section class="company-section"><p class="company-section-title">Technology stack</p><div class="company-tech-list">${tecRighe}</div></section>
-    <section class="company-section"><p class="company-section-title">Active postings</p><div class="mt-3 space-y-2">${barra(78, 3.5)}${barra(64, 3.5)}</div></section>
-    <div class="company-reveal-card mt-7">
-      <div class="company-reveal-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
-      <div class="company-reveal-copy">
-        <p class="text-[10px] font-extrabold uppercase tracking-[0.12em] text-brand-600">Company reveal</p>
-        <h4 class="mt-1 text-[15px] font-extrabold tracking-tight text-slate-900">Unlock the full company record</h4>
-        <p class="mt-1 text-[12.5px] leading-5 text-slate-600">See the name, domain, technology stack, locations and active postings.</p>
-        <span class="company-reveal-meta">3 credits once · permanent access</span>
-      </div>
-      <button type="button" onclick="rivelaAzienda(${jsArg(revealToken)}, this)" class="app-btn app-btn-primary">Reveal company · 3 credits</button>
-    </div>
-  </div>`);
+  renderDrawer();
 }
 
 function _quando(iso) {
@@ -2741,6 +2867,7 @@ async function stimaExport() {
   vai.disabled = false;
 }
 function vaiAiCrediti() {
+  chiudiDettaglio(false);
   location.hash = "#billing";
   route();
   requestAnimationFrame(() => {
@@ -2799,7 +2926,10 @@ async function scaricaExportFiltrato() {
   await carica();
 }
 
-document.querySelectorAll("[data-route-link]").forEach(link => link.addEventListener("click", () => chiudiDrawer()));
+document.querySelectorAll("[data-route-link]").forEach(link => link.addEventListener("click", () => {
+  chiudiDettaglio(false);
+  chiudiDrawer();
+}));
 addEventListener("hashchange", route);
 window.addEventListener('pageshow', (e) => {
   if (e.persisted) window.location.reload();

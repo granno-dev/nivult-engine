@@ -212,19 +212,29 @@ def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
 
 def completa_titoli_portale(righe: list[dict]) -> list[dict]:
     from nivult.ats.titoli import numerico
-    ids = [str(r["id"]) for r in righe if r.get("id") and numerico(r.get("title"))]
-    urls: dict[str, str] = {}
+    title_ids = [str(r["id"]) for r in righe
+                 if r.get("id") and numerico(r.get("title"))]
+    scoped_ids = [str(r["id"]) for r in righe
+                  if r.get("id") and ("ats" in r or "company_slug" in r)]
+    ids = list(dict.fromkeys([*title_ids, *scoped_ids]))
+    enriched: dict[str, dict] = {}
     if ids:
         try:
             with _conn() as conn:
                 rows = conn.execute(
-                    "SELECT id, url FROM ats_jobs WHERE id = ANY(%(ids)s::uuid[])",
+                    "SELECT j.id, j.url, COALESCE(co.source_type, 'direct') AS source_type "
+                    "FROM ats_jobs j LEFT JOIN ats_companies co "
+                    "ON co.platform_id = j.platform_id AND co.slug = j.slug "
+                    "WHERE j.id = ANY(%(ids)s::uuid[])",
                     {"ids": ids}).fetchall()
-            urls = {str(r["id"]): r["url"] for r in rows}
+            enriched = {str(r["id"]): r for r in rows}
         except Exception as exc:  # noqa: BLE001
-            log.warning("recupero titoli dagli URL non disponibile: %s", exc)
+            log.warning("recupero titoli e fonti dagli URL non disponibile: %s", exc)
     for riga in righe:
-        riga["title"] = pulisci_titolo(riga.get("title"), urls.get(str(riga.get("id"))))
+        data = enriched.get(str(riga.get("id"))) or {}
+        if "source_type" in data:
+            riga["source_type"] = data["source_type"] or "direct"
+        riga["title"] = pulisci_titolo(riga.get("title"), data.get("url"))
     return righe
 
 
@@ -238,9 +248,12 @@ def cerca_portale(filtri: dict, cursore: str | None,
               "city": r.get("city"), "seniority": r.get("seniority"),
               "remote": r.get("remote"), "category": r.get("category"),
               "posted_at": r.get("posted_at"),
+              "employment_type": r.get("employment_type"),
+              "language": r.get("language"),
+              "languages_required": list(r.get("languages_required") or []),
               "technologies": list(r.get("technologies") or []),
               "ats": r.get("ats"), "company": r.get("company"),
-              "company_slug": r.get("company_slug"),
+              "company_slug": r.get("company_slug"), "source_type": r.get("source_type"),
               "company_domain": r.get("company_domain")}
              for r in righe], prossimo, None)
 

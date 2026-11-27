@@ -52,26 +52,24 @@ SECRET_VALUES = {
     DESCRIPTION_MARKER,
 }
 FORBIDDEN_KEYS = {
-    "company",
-    "company_id",
-    "company_slug",
-    "company_domain",
-    "domain",
-    "logo",
-    "logo_url",
-    "website",
-    "url",
-    "apply",
-    "apply_url",
-    "application_url",
-    "source",
-    "source_type",
-    "description",
-    "summary",
-    "summary_source",
-    "external_id",
-    "job_sources",
-    "ref",
+    "company", "company_id", "company_slug", "company_domain", "domain", "logo",
+    "logo_url", "website", "url", "source_url", "apply", "apply_url",
+    "application_url", "source", "source_type", "ats", "description",
+    "description_preview", "summary", "summary_source", "benefits", "about",
+    "external_id", "job_sources", "ref", "city", "location", "remote", "skills",
+    "language", "languages_required", "employees", "employee_range", "company_size",
+    "n_tecnologie", "open_jobs_count", "active_jobs", "jobs_posted_30d", "n_locations",
+}
+JOB_PREVIEW_KEYS = {
+    "id", "title", "category", "seniority", "work_mode", "posted_at", "country",
+    "employment_type", "source_label", "technologies", "company_size_band", "industry",
+    "active_postings_count", "posted_30d_count", "languages", "is_aggregator",
+    "revealed", "az_rivelata", "job_revealed", "reveal_token", "reveal_group",
+}
+COMPANY_PREVIEW_KEYS = {
+    "country", "industry", "company_size_band", "active_postings_count",
+    "posted_30d_count", "technologies", "languages", "is_aggregator", "revealed",
+    "reveal_token", "reveal_group",
 }
 
 
@@ -86,7 +84,14 @@ def _secret_job() -> dict:
         "remote": "remote",
         "category": "engineering",
         "posted_at": "2026-01-01T00:00:00",
-        "technologies": ["Python"],
+        "employment_type": "full_time",
+        "languages_required": ["en", "it"],
+        "technologies": ["Python", "Excel"],
+        "employee_range": "100-249",
+        "industry": "software",
+        "active_jobs": 7,
+        "jobs_posted_30d": 3,
+        "benefits": ["confidential benefit"],
         "company": COMPANY,
         "company_id": COMPANY_ID,
         "company_slug": SLUG,
@@ -113,6 +118,10 @@ def _secret_company() -> dict:
         "n_tecnologie": 4,
         "open_jobs_count": 7,
         "active_jobs": 7,
+        "jobs_posted_30d": 3,
+        "languages": ["en"],
+        "technologies": [{"technology": "Python", "active_jobs": 4}, "Excel"],
+        "locations": [{"city": "Milano", "country": "IT"}],
         "company": COMPANY,
         "company_id": COMPANY_ID,
         "company_slug": SLUG,
@@ -141,13 +150,10 @@ def _walk_json(value):
 
 
 def _assert_zero_leak(payload) -> None:
-    preview_allowed = False
     for key, _ in _walk_json(payload):
         assert str(key).casefold() not in FORBIDDEN_KEYS
-        preview_allowed = preview_allowed or str(key) == "description_preview"
     serialized = json.dumps(payload, ensure_ascii=False).casefold()
-    secrets = SECRET_VALUES - {DESCRIPTION_MARKER} if preview_allowed else SECRET_VALUES
-    for secret in secrets:
+    for secret in SECRET_VALUES:
         assert secret.casefold() not in serialized
 
 
@@ -158,18 +164,31 @@ def _assert_revealed_job(payload: dict) -> None:
     assert payload["company_domain"] == DOMAIN
     assert payload["logo_url"] == LOGO
     assert payload["url"] == APPLY
+    assert payload["source_url"] == APPLY
     assert payload["source_type"] == SOURCE
     assert payload["description"] == DESCRIPTION
+    assert payload["technologies"] == [
+        {"name": "Python", "group": "core"},
+        {"name": "Excel", "group": "productivity"},
+    ]
 
 
 def _assert_revealed_company(payload: dict) -> None:
     assert payload["revealed"] is True
     assert payload["company"] == COMPANY
+    assert payload["name"] == COMPANY
     assert payload["company_slug"] == SLUG
     assert payload["domain"] == DOMAIN
     assert payload["logo"] == LOGO
     assert payload["website"] == DOMAIN
     assert payload["active_jobs"] == 7
+    assert payload["company_size"] == "100-249"
+    assert payload["about"] == DESCRIPTION
+    assert payload["locations_count"] == 1
+    assert payload["technologies"] == [
+        {"name": "Python", "group": "core"},
+        {"name": "Excel", "group": "productivity"},
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -250,14 +269,104 @@ def test_dto_recursive_zero_leak_and_revealed_projection(kind):
     preview = dto(row, False, "opaque-token", "opaque-group")
     _assert_zero_leak(preview)
     assert preview["revealed"] is False
+    assert set(preview) <= (COMPANY_PREVIEW_KEYS if kind == "company" else JOB_PREVIEW_KEYS)
     if kind != "company":
         assert "Hidden company" in preview["title"]
+        assert preview["source_label"] == "Greenhouse"
+        assert preview["work_mode"] == "remote"
+        assert preview["employment_type"] == "full_time"
+        assert preview["languages"] == ["en", "it"]
+        assert preview["active_postings_count"] == 7
+        assert preview["posted_30d_count"] == 3
+        assert preview["company_size_band"] == "100-249"
+        assert preview["technologies"][1]["group"] == "productivity"
+    else:
+        assert preview["active_postings_count"] == 7
+        assert preview["posted_30d_count"] == 3
+        assert preview["company_size_band"] == "100-249"
 
     revealed = dto(row, True, "opaque-token", "opaque-group")
     if kind == "company":
         _assert_revealed_company(revealed)
     else:
         _assert_revealed_job(revealed)
+
+
+@pytest.mark.parametrize(("ats", "label"), [
+    ("jsonld", "Direct Career Site"),
+    ("icims", "iCIMS"),
+    ("lever", "Lever"),
+    ("successfactors", "SuccessFactors"),
+    ("zoho", "Zoho Recruit"),
+    ("zoho_recruit_eu", "Zoho Recruit"),
+])
+def test_structured_source_label_mapping(ats, label):
+    row = {**_secret_job(), "ats": ats}
+    preview = explorer.job_dto(row, False, "token", "group")
+    assert preview["source_label"] == label
+    assert "ats" not in preview
+    _assert_zero_leak(preview)
+
+
+def test_prefix_brand_franchise_and_compact_identity_redaction():
+    assert explorer.clean_company_name("Careers Marinclinic") == "Marinclinic"
+    assert explorer.clean_company_name("Jobs at Marinclinic") == "Marinclinic"
+    assert explorer.clean_company_name("Hiring for Marinclinic") == "Marinclinic"
+    for company in ("Careers Marinclinic", "Jobs at Marinclinic", "Hiring Marinclinic"):
+        assert explorer.safe_title("Marinclinic | Nurse", company) == "Hidden company | Nurse"
+    for variant in ("Chick-fil-A", "chick fil a", "chickfila"):
+        title = explorer.safe_title(f"{variant} | Team Member", "Chick-fil-A Franchise")
+        assert variant.casefold() not in title.casefold()
+        assert "Hidden company" in title
+    revealed = explorer.company_dto(
+        {**_secret_company(), "company": "Careers Marinclinic"},
+        True, "token", "group")
+    assert revealed["company"] == revealed["name"] == "Marinclinic"
+
+
+def test_locked_dto_has_no_prose_or_marin_identity_and_groups_generic_tech():
+    row = {
+        **_secret_job(),
+        "company": "Marin Community Clinics",
+        "title": "MarinCommunityClinics | Registered Nurse",
+        "description": "Marin Community Clinics confidential nursing prose",
+        "summary": "Marin Community Clinics summary",
+        "benefits": ["Marin Community Clinics benefits"],
+        "technologies": ["Python", "Excel", "Word", "Outlook", "PowerPoint",
+                         "Microsoft Office", "Google Workspace"],
+    }
+    preview = explorer.detail_dto(row, False, "token", "group")
+    _assert_zero_leak(preview)
+    serialized = json.dumps(preview)
+    assert "Marin Community Clinics" not in serialized
+    assert "MarinCommunityClinics" not in serialized
+    assert "description_preview" not in preview
+    assert {tech["group"] for tech in preview["technologies"][1:]} == {"productivity"}
+    assert preview["technologies"][0] == {"name": "Python", "group": "core"}
+
+
+@pytest.mark.parametrize("domain", ["jobgether.com", "https://justjoin.it/jobs/123"])
+def test_known_board_intermediary_is_flagged_without_exposing_domain(domain):
+    row = {**_secret_job(), "source_type": "direct", "company_domain": domain}
+    preview = explorer.job_dto(row, False, "token", "group")
+    assert preview["is_aggregator"] is True
+    assert "company_domain" not in preview
+    assert domain not in json.dumps(preview)
+
+
+def test_company_profile_prose_is_never_merged_into_job():
+    row = _secret_job()
+    del row["description"]
+    del row["industry"]
+    del row["active_jobs"]
+    profile = {**_secret_profile(), "description": "Company profile prose",
+               "industry": "healthcare", "active_jobs": 11}
+    revealed = explorer.job_dto(row, True, "token", "group", profile)
+    assert "description" not in revealed
+    assert revealed["industry"] == "healthcare"
+    assert revealed["active_postings_count"] == 11
+    legacy = explorer.job_dto(row, False, "token", "group", profile, job_revealed=True)
+    assert "description" not in legacy
 
 
 def test_http_jobs_companies_and_detail_projection_before_and_after_reveal(
@@ -660,6 +769,19 @@ def test_duckdb_preview_still_finds_redacted_public_title(synthetic_duckdb):
     _assert_zero_leak(explorer.job_dto(secret_row, False, "token", "group", profile))
 
 
+def test_duckdb_company_preview_populates_only_safe_structured_signals(synthetic_duckdb):
+    rows, _, total = dati.cerca_aziende_portale({}, None, 20)
+    assert total == 1
+    preview = explorer.company_dto(rows[0], False, "token", "group")
+    _assert_zero_leak(preview)
+    assert set(preview) <= COMPANY_PREVIEW_KEYS
+    assert preview["active_postings_count"] == 7
+    assert preview["posted_30d_count"] == 3
+    assert preview["company_size_band"] == "100-249"
+    assert preview["languages"] == ["en"]
+    assert preview["technologies"] == [{"name": "Python", "group": "core"}]
+
+
 def test_duckdb_closed_real_shape_resolves_company_and_redacts_unknown(
         synthetic_duckdb):
     rows, cursor, total = dati.cerca_chiuse_portale({}, None, 20)
@@ -852,7 +974,7 @@ def test_postgres_full_http_reveal_has_one_three_credit_ledger_row(
     assert _billing_state(dsn, uid) == before
 
 
-def test_free_description_preview_is_real_but_identity_and_contacts_are_redacted():
+def test_locked_detail_has_no_prose_and_legacy_text_is_complete_but_sanitized():
     row = _secret_job()
     row["description"] = (
         "<p>Zephyr Quantum Labs is hiring. Visit https://zephyrquantum.example/jobs "
@@ -860,71 +982,211 @@ def test_free_description_preview_is_real_but_identity_and_contacts_are_redacted
         "<p>Internal slug zephyr-quantum-7f3e-secret. Telefono: 02 1234 5678. "
         "Logo: //cdn.example.net/logo.svg</p>"
         "<p>You will build reliable data platforms with Python.</p>")
-    dto = explorer.detail_dto(row, False, "token", "group")
-    preview = dto["description_preview"]
-    assert "You will build" in preview or len(preview) <= 520
-    assert "Zephyr Quantum Labs" not in preview
-    assert "zephyrquantum.example" not in preview
-    assert "hiring@zephyrquantum.example" not in preview
-    assert "+39 02 1234 5678" not in preview
-    assert "02 1234 5678" not in preview
-    assert "zephyr-quantum-7f3e-secret" not in preview
-    assert "cdn.example.net" not in preview
-    assert "description" not in dto and "url" not in dto
-    assert dto["job_revealed"] is False
+    preview = explorer.detail_dto(row, False, "token", "group")
+    _assert_zero_leak(preview)
+    assert "description" not in preview and "description_preview" not in preview
+    assert preview["job_revealed"] is False
+
     full = explorer.detail_dto(row, False, "token", "group", job_revealed=True)["description"]
-    for text in (preview, full):
-        assert "zephyr-quantum-7f3e-secret" not in text
-        assert "cdn.example.net" not in text
-        assert "02 1234 5678" not in text
+    assert "You will build reliable data platforms with Python." in full
+    for secret in (COMPANY, BRAND, SLUG, "hiring@zephyrquantum.example",
+                   "+39 02 1234 5678", "02 1234 5678", "cdn.example.net"):
+        assert secret not in full
 
 
-def test_one_credit_job_dto_has_full_sanitized_text_without_company_bypass():
-    row = _secret_job()
-    dto = explorer.detail_dto(row, False, "token", "group", job_revealed=True)
-    assert dto["job_revealed"] is True and dto["revealed"] is False
-    assert "description" in dto
-    assert COMPANY not in dto["description"]
-    assert "company" not in dto and "company_domain" not in dto
-    assert "url" not in dto and "apply_url" not in dto
-    assert "description_preview" not in dto
-
-
-def test_http_job_unlock_charges_one_credit_and_returns_no_company_identity(
+def test_legacy_job_unlock_http_is_permanent_readable_and_never_charges(
         monkeypatch, portal_client):
-    revealed = set()
-    _stub_projection(monkeypatch, revealed)
-    calls = []
-    monkeypatch.setattr(chiavi, "rivela_per_utente",
-                        lambda *args: calls.append(args) or "ok")
-    monkeypatch.setattr(chiavi, "registra_uso", lambda *args, **kwargs: None)
-    monkeypatch.setattr(chiavi, "saldo_per_utente", lambda uid: 499)
-    response = portal_client().post("/portale/rivela", json={"id": "public-posting-1"})
+    _stub_projection(monkeypatch, set())
+    monkeypatch.setattr(
+        chiavi, "e_rivelata",
+        lambda uid, kind, reference: kind == "job" and reference == "public-posting-1")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("legacy reads must not charge or write usage")
+
+    monkeypatch.setattr(chiavi, "rivela_per_utente", forbidden)
+    monkeypatch.setattr(chiavi, "registra_uso", forbidden)
+    monkeypatch.setattr(chiavi, "saldo_per_utente", forbidden)
+    response = portal_client().post(
+        "/portale/offerta-dettaglio", json={"id": "public-posting-1"})
     assert response.status_code == 200
     payload = response.json()
-    assert calls == [(UID_A, "job", "public-posting-1")]
-    assert payload["saldo"] == 499 and payload["job_rivelata"] is True
-    assert payload["azienda_rivelata"] is False
-    assert "description" in payload["offerta"]
+    assert payload["job_rivelata"] is True and payload["azienda_rivelata"] is False
+    description = payload["offerta"]["description"]
+    assert DESCRIPTION_MARKER in description
+    assert COMPANY not in description
+    assert "company" not in payload["offerta"] and "url" not in payload["offerta"]
+    assert "description_preview" not in payload["offerta"]
     serialized = json.dumps(payload)
-    assert COMPANY not in serialized and DOMAIN not in serialized
-    assert SLUG not in serialized and APPLY not in serialized
-    assert payload["offerta"]["revealed"] is False
-    assert "url" not in payload["offerta"]
+    for secret in SECRET_VALUES - {DESCRIPTION, DESCRIPTION_MARKER}:
+        assert secret not in serialized
 
 
-def test_postgres_job_unlock_is_permanent_and_costs_exactly_one(pg_accounts):
+def test_job_unlock_route_returns_410_before_data_quota_or_charging(
+        monkeypatch, portal_client):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("retired job unlock must not reach any backend")
+
+    for module, name in (
+            (chiavi, "consuma_quota_explorer"), (chiavi, "rivela_per_utente"),
+            (chiavi, "registra_uso"), (chiavi, "saldo_per_utente"),
+            (vivo, "rivela_offerta")):
+        monkeypatch.setattr(module, name, forbidden)
+    response = portal_client().post("/portale/rivela", json={"id": "public-posting-1"})
+    assert response.status_code == 410
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_revealed_source_url_is_added_only_for_valid_http_urls():
+    valid = explorer.job_dto(_secret_job(), True, "token", "group")
+    assert valid["source_url"] == APPLY
+    invalid = explorer.job_dto(
+        {**_secret_job(), "url": "javascript:alert(1)"}, True, "token", "group")
+    assert "source_url" not in invalid
+    assert invalid["url"] == "javascript:alert(1)"
+
+
+def test_vivo_title_enrichment_adds_indexed_source_type(monkeypatch):
+    job_id = str(uuid.uuid4())
+
+    class Connection:
+        def execute(self, sql, params):
+            assert "LEFT JOIN ats_companies" in sql
+            assert "COALESCE(co.source_type, 'direct')" in sql
+            assert params == {"ids": [job_id]}
+            return self
+
+        def fetchall(self):
+            return [{"id": job_id, "url": None, "source_type": "aggregator"}]
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def connection():
+        yield Connection()
+
+    monkeypatch.setattr(vivo, "_conn", connection)
+    rows = [{"id": job_id, "title": "Engineer", "ats": "jsonld",
+             "company_slug": "jobgether.com"}]
+    assert vivo.completa_titoli_portale(rows)[0]["source_type"] == "aggregator"
+
+
+def test_scoped_aggregator_reveals_only_selected_employer_and_jobs(
+        synthetic_duckdb, monkeypatch, portal_client):
+    slug = "jobgether.com"
+    base_ref = f"jsonld:{slug}"
+    employers = {"agg-a": "Chick-fil-A Franchise", "agg-b": "Marin Community Clinics"}
+    rows = []
+    with duckdb.connect(str(synthetic_duckdb)) as connection:
+        for index, (job_id, company) in enumerate(employers.items(), start=1):
+            row = {
+                "id": job_id, "title": f"{company} | Team Member", "ats": "jsonld",
+                "country": "US", "city": "Austin", "seniority": "mid", "remote": "onsite",
+                "category": "hospitality", "posted_at": f"2026-01-0{index}T00:00:00",
+                "employment_type": "full_time", "languages_required": ["en"],
+                "technologies": ["Excel"], "company": company, "company_slug": slug,
+                "company_domain": "jobgether.com", "source_type": "aggregator",
+                "description": f"{company} private prose", "url": f"https://jobs.example/{job_id}",
+            }
+            rows.append(row)
+            connection.execute(
+                "INSERT INTO offerte VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [job_id, row["title"], "US", "Austin", "mid", "onsite", "hospitality",
+                 f"2026-01-0{index} 00:00:00", ["Excel"], "jsonld", company, slug,
+                 json.dumps(row)])
+
+        connection.execute(
+            "INSERT INTO aziende VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ["jsonld", slug, "Jobgether", "US", "jobs", 100, ["Excel"],
+             json.dumps({"company": "Jobgether", "domain": "jobgether.com"})],
+        )
+
+    refs = {job_id: f"{base_ref}::employer:{explorer.employer_key(company)}"
+            for job_id, company in employers.items()}
+    assert dati.rivela_azienda(refs["agg-a"])["company"] == "Chick-fil-A Franchise"
+    assert dati.rivela_azienda(refs["agg-b"])["company"] == "Marin Community Clinics"
+    assert dati.rivela_azienda(base_ref + "::employer:unknownemployer") is None
+    profiles = dati.profili_aziende(list(refs.values()))
+    assert profiles[refs["agg-a"]]["company"] == "Chick-fil-A Franchise"
+    assert profiles[refs["agg-b"]]["company"] == "Marin Community Clinics"
+    assert [row["id"] for row in dati.azienda_jobs_portale(refs["agg-a"])] == ["agg-a"]
+    assert [row["id"] for row in dati.azienda_jobs_portale(refs["agg-b"])] == ["agg-b"]
+
+    revealed = {refs["agg-a"]}
+    monkeypatch.setattr(dati, "cerca_portale", lambda *args: (rows, None, 2))
+    monkeypatch.setattr(vivo, "completa_titoli_portale", lambda values: values)
+    monkeypatch.setattr(chiavi, "rivelate_per_utente",
+                        lambda uid, kind, references: set(references) & revealed)
+    monkeypatch.setattr(chiavi, "e_rivelata",
+                        lambda uid, kind, reference: reference in revealed)
+    client = portal_client()
+    response = client.post("/portale/cerca", json={})
+    assert response.status_code == 200
+    by_id = {row["id"]: row for row in response.json()["data"]}
+    assert by_id["agg-a"]["revealed"] is True
+    assert by_id["agg-a"]["company"] == "Chick-fil-A Franchise"
+    assert by_id["agg-b"]["revealed"] is False
+    assert "company" not in by_id["agg-b"]
+    assert "Marin Community Clinics" not in json.dumps(by_id["agg-b"])
+    assert by_id["agg-b"]["is_aggregator"] is True
+    assert "company_domain" not in by_id["agg-b"]
+
+    revealed.clear()
+    revealed.add(base_ref)
+    legacy_broad = client.post("/portale/cerca", json={}).json()["data"]
+    assert all(row["revealed"] is False for row in legacy_broad)
+
+    revealed.clear()
+    revealed.add(refs["agg-a"])
+    monkeypatch.setattr(chiavi, "rivela_per_utente", lambda *args: "ok")
+    monkeypatch.setattr(chiavi, "registra_uso", lambda *args, **kwargs: None)
+    monkeypatch.setattr(chiavi, "saldo_per_utente", lambda uid: 497)
+    token = explorer.reveal_token(UID_A, refs["agg-a"])
+    scoped_reveal = client.post("/portale/rivela-azienda", json={"reveal_token": token})
+    assert scoped_reveal.status_code == 200
+    assert scoped_reveal.json()["azienda"]["company_ref"] == refs["agg-a"]
+    monkeypatch.setattr(vivo, "rivela_offerta", lambda offer_id: rows[0])
+    detail = client.post("/portale/offerta-dettaglio", json={"id": "agg-a"})
+    assert detail.status_code == 200
+    assert detail.json()["company_ref"] == refs["agg-a"]
+    jobs = client.post("/portale/azienda-jobs", json={"reveal_token": token})
+    assert jobs.status_code == 200
+    assert [row["id"] for row in jobs.json()["data"]] == ["agg-a"]
+    assert {"id", "title", "city", "posted_at"} <= set(jobs.json()["data"][0])
+    assert "Marin Community Clinics" not in json.dumps(jobs.json())
+
+    revealed.clear()
+    revealed.add(base_ref)
+
+    def no_charge(*args):
+        raise AssertionError("a board-wide profile must never be charged")
+
+    monkeypatch.setattr(chiavi, "rivela_per_utente", no_charge)
+    assert dati.rivela_azienda(base_ref).get("source_type") is None
+    broad_token = explorer.reveal_token(UID_A, base_ref)
+    broad_reveal = client.post("/portale/rivela-azienda", json={"reveal_token": broad_token})
+    assert broad_reveal.status_code == 409
+    broad_jobs = client.post("/portale/azienda-jobs", json={"reveal_token": broad_token})
+    assert broad_jobs.status_code == 409
+    constants = dati.azienda_jobs_portale.__code__.co_consts
+    assert any("lower(company) = lower($n)" in str(value) and "LIMIT 50" in str(value)
+               for value in constants)
+
+
+def test_postgres_new_job_unlock_is_rejected_and_legacy_rows_stay_readable(pg_accounts):
     dsn = os.environ["TEST_DATABASE_URL"]
     uid = pg_accounts(balance=3)
     reference = f"job-unlock-{uuid.uuid4()}"
-    assert chiavi.rivela_per_utente(uid, "job", reference) == "ok"
-    assert chiavi.saldo_per_utente(uid) == 2
-    assert chiavi.rivela_per_utente(uid, "job", reference) == "gratis"
-    assert chiavi.saldo_per_utente(uid) == 2
+    assert chiavi.rivela_per_utente(uid, "job", reference) == "non_disponibile"
+    assert chiavi.rivela_per_utente(uid, "job", reference) == "non_disponibile"
+    assert chiavi.saldo_per_utente(uid) == 3
     with psycopg.connect(dsn) as connection:
-        used, count, credits = connection.execute(
-            "SELECT k.usati_mese, count(u.id), coalesce(sum(u.crediti), 0) "
-            "FROM api_chiavi k LEFT JOIN portale_uso u "
-            "ON u.user_id = k.user_id AND u.azione = 'posting unlock' "
-            "WHERE k.user_id = %s GROUP BY k.usati_mese", (uid,)).fetchone()
-    assert (used, count, credits) == (1, 1, 1)
+        charged = connection.execute(
+            "SELECT count(*) FROM portale_uso WHERE user_id = %s "
+            "AND azione = 'posting unlock'", (uid,)).fetchone()[0]
+        assert charged == 0
+        connection.execute(
+            "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
+            "VALUES (%s, 'job', %s)", (uid, reference))
+    assert chiavi.e_rivelata(uid, "job", reference) is True
+    assert chiavi.saldo_per_utente(uid) == 3

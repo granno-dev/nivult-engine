@@ -1925,7 +1925,20 @@ def create_app() -> FastAPI:
     def _riferimento(riga: dict) -> str:
         ats = riga.get("ats") or "unknown"
         slug = riga.get("company_slug") or "anonymous-" + str(riga.get("id") or "")
-        return f"{ats}:{slug}"
+        base = f"{ats}:{slug}"
+        if riga.get("source_type") not in ("aggregator", "staffing", "public_board"):
+            return base
+        employer = _explorer.employer_key(riga.get("company"))
+        if not employer:
+            employer = "anonymous" + re.sub(
+                r"[^a-z0-9]", "", str(riga.get("id") or "unknown").lower())
+        return f"{base}::employer:{employer}"
+
+    def _board_non_scoped(riferimento: str, profilo: dict) -> bool:
+        if "::employer:" in riferimento:
+            return False
+        return (_explorer.is_aggregator(profilo)
+                or bool(profilo.get("_multi_employer")))
 
     def _controlla_origine(request: Request) -> None:
         if request.headers.get("sec-fetch-site", "").lower() == "cross-site":
@@ -2021,54 +2034,21 @@ def create_app() -> FastAPI:
         rivelata = await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
         job_rivelata = rivelata or await run_in_threadpool(
             _chiavi.e_rivelata, uid, "job", offerta_id)
-        profili = await run_in_threadpool(_dati.profili_aziende, [rif] if rivelata else [])
+        profili = await run_in_threadpool(_dati.profili_aziende, [rif])
         token = _explorer.reveal_token(uid, rif)
         gruppo = _explorer.reveal_group(rif)
         offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif),
                                        job_rivelata)
         return {"offerta": offerta, "rivelata": job_rivelata,
                 "job_rivelata": job_rivelata, "azienda_rivelata": rivelata,
-                "reveal_token": token, "reveal_group": gruppo}
+                "reveal_token": token, "reveal_group": gruppo,
+                **({"company_ref": rif} if rivelata else {})}
 
     @app.post("/portale/rivela")
     async def rivela_nel_portale(request: Request, uid: str = Depends(utente)):
         _controlla_origine(request)
-        try:
-            corpo = await request.json()
-        except Exception:                            # noqa: BLE001
-            corpo = {}
-        offerta_id = str((corpo or {}).get("id") or "").strip()
-        if not offerta_id:
-            raise HTTPException(400, "missing id")
-        _freno_portale(request, uid)
-        riga = await run_in_threadpool(_vivo.rivela_offerta, offerta_id)
-        if riga is None:
-            raise HTTPException(404, "posting not found")
-        rif = _riferimento(riga)
-        rivelata = await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif)
-        if rivelata:
-            esito = "gratis"
-        else:
-            try:
-                esito = await run_in_threadpool(
-                    _chiavi.rivela_per_utente, uid, "job", offerta_id)
-            except _chiavi.ContatoreNonDisponibile as exc:
-                raise HTTPException(503, "job unlock temporarily unavailable") from exc
-            if esito == "account_sospeso":
-                raise HTTPException(403, "account paused — contact support")
-            if esito == "senza_crediti":
-                raise HTTPException(429, "1 credit required — top up from the dashboard")
-            if esito == "ok":
-                await run_in_threadpool(_chiavi.registra_uso, uid, "portale",
-                                        "posting unlock", offerta_id)
-        token = _explorer.reveal_token(uid, rif)
-        gruppo = _explorer.reveal_group(rif)
-        profili = await run_in_threadpool(_dati.profili_aziende, [rif] if rivelata else [])
-        offerta = _explorer.detail_dto(riga, rivelata, token, gruppo, profili.get(rif), True)
-        saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
-        return {"offerta": offerta, "esito": esito, "saldo": saldo,
-                "rivelata": True, "job_rivelata": True, "azienda_rivelata": rivelata,
-                "reveal_token": token, "reveal_group": gruppo}
+        raise HTTPException(
+            410, "Per-job unlocks are no longer available; reveal the company for 3 credits")
 
     @app.post("/portale/rivela-azienda")
     async def rivela_azienda_nel_portale(request: Request, uid: str = Depends(utente)):
@@ -2088,6 +2068,10 @@ def create_app() -> FastAPI:
         riga = await run_in_threadpool(_dati.rivela_azienda, rif)
         if riga is None:
             raise HTTPException(404, "company not found")
+        if _board_non_scoped(rif, riga):
+            raise HTTPException(409, "Open an individual job to reveal its employer")
+        riga = _explorer.revealed_company_profile(riga)
+        riga["company_ref"] = rif
         try:
             esito = await run_in_threadpool(_chiavi.rivela_per_utente, uid, "azienda", rif)
         except _chiavi.ContatoreNonDisponibile as exc:
@@ -2137,6 +2121,9 @@ def create_app() -> FastAPI:
             raise HTTPException(exc.status_code, str(exc)) from exc
         if not await run_in_threadpool(_chiavi.e_rivelata, uid, "azienda", rif):
             raise HTTPException(402, "reveal the company first")
+        profilo = await run_in_threadpool(_dati.rivela_azienda, rif)
+        if profilo is not None and _board_non_scoped(rif, profilo):
+            raise HTTPException(409, "Open an individual job to reveal its employer")
         righe = await run_in_threadpool(_dati.azienda_jobs_portale, rif)
         righe = await run_in_threadpool(_vivo.completa_titoli_portale, righe)
         return {"data": righe}
