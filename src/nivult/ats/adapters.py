@@ -1573,13 +1573,16 @@ class Taleez(BaseAdapter):
     _UA = "Mozilla/5.0 (compatible; nivult-ats/1.0)"
 
     def jobs(self, slug: str) -> list[AtsJob]:
-        try:
-            d = self.client.get(f"https://{slug}.taleez.com/api/careez",
-                                headers={"User-Agent": self._UA}).json()
-        except (httpx.HTTPError, ValueError):
+        r = self.client.get(f"https://{slug}.taleez.com/api/careez",
+                            headers={"User-Agent": self._UA})
+        if r.status_code in (404, 410):
             return []
+        d = r.json()
+        if (not isinstance(d, dict) or not isinstance(d.get("jobs"), list)
+                or d.get("slug") != slug):
+            raise ValueError("Taleez: risposta careez non valida")
         out = []
-        for j in (d.get("jobs") if isinstance(d, dict) else None) or []:
+        for j in d["jobs"]:
             jid = str(j.get("id") or "").strip()
             if not jid:
                 continue
@@ -2161,8 +2164,8 @@ ADAPTERS["pinpoint"] = Pinpoint
 class Join(BaseAdapter):
     """join.com — micrositio aziendale con __NEXT_DATA__.
 
-    La lista offerte sta in initialState.jobs (5 per pagina, ?page=N).
-    L'URL pubblica dell'offerta è join.com/companies/{slug}/{idParam}.
+    La lista sta in initialState.jobs o, nel nuovo formato, in pageData.jobs
+    (5 per pagina, ?page=N). L'URL pubblica è join.com/companies/{slug}/{idParam}.
     """
     platform_id = "join"
     MAX_PAGINE = 20
@@ -2182,7 +2185,8 @@ class Join(BaseAdapter):
             if not m:
                 break
             try:
-                stato = json.loads(m.group(1))["props"]["pageProps"]["initialState"]
+                props = json.loads(m.group(1))["props"]["pageProps"]
+                stato = props.get("initialState") or props.get("pageData") or {}
                 jobs = stato.get("jobs") or {}
                 items = jobs.get("items") or []
             except (json.JSONDecodeError, KeyError):

@@ -52,7 +52,7 @@ from nivult.ingestion.sources.france_travail import (  # noqa: E402
     FranceTravailClient, EMPLOYMENT_MAP as FR_EMPLOYMENT)
 from nivult.ingestion.sources.indeed import IndeedClient, _query  # noqa: E402
 from nivult.ingestion.sources.linkedin import LinkedInClient  # noqa: E402
-from nivult.ats.adapters import Join, Vincere  # noqa: E402
+from nivult.ats.adapters import Join, Taleez, Vincere  # noqa: E402
 from nivult.ats.runner import _spezza_sql as _spezza_sql_ats  # noqa: E402
 from nivult.ponte_ats import _come_rawjob  # noqa: E402
 
@@ -689,6 +689,54 @@ def test_join_page_data():
         require(offerte[0].url == "https://join.com/companies/acme/abc")
 
 
+def test_taleez_risposte_valide_e_fallite():
+    def leggi(handler):
+        adapter = Taleez()
+        adapter.client.close()
+        adapter.client = httpx.Client(
+            transport=httpx.MockTransport(handler),
+            event_hooks={"response": [adapter._dopo_risposta]},
+        )
+        try:
+            return adapter.jobs("acme")
+        finally:
+            adapter.close()
+
+    payload = {"slug": "acme", "jobs": [{
+        "id": 12, "label": "HR Manager", "slug": "hr-manager",
+        "location": {"city": "Parigi", "country": "FR"},
+    }]}
+    offerte = leggi(lambda req: httpx.Response(200, json=payload))
+    require(len(offerte) == 1 and offerte[0].external_id == "12")
+    require(offerte[0].country == "FR")
+    require(leggi(lambda req: httpx.Response(
+        200, json={"slug": "acme", "jobs": []})) == [])
+    require(leggi(lambda req: httpx.Response(404, text="non trovato")) == [])
+
+    risposte_invalide = [
+        httpx.Response(200, text="<html>pagina di cortesia</html>"),
+        httpx.Response(200, json={"error": "temporaneo"}),
+        httpx.Response(200, json={"slug": "altro", "jobs": []}),
+    ]
+    for risposta in risposte_invalide:
+        try:
+            leggi(lambda req, r=risposta: r)
+        except ValueError:
+            pass
+        else:
+            require(False, f"Taleez ha accettato una risposta invalida: {risposta.text}")
+
+    def rete_giu(req):
+        raise httpx.ConnectError("rete giù", request=req)
+
+    try:
+        leggi(rete_giu)
+    except httpx.ConnectError:
+        pass
+    else:
+        require(False, "Taleez ha trasformato un errore di rete in zero offerte")
+
+
 def test_indice_ricerca_ats():
     schema = (ROOT / "src" / "nivult" / "ats" / "schema.sql").read_text()
     istruzioni = _spezza_sql_ats(schema)
@@ -939,6 +987,7 @@ def _main() -> int:
         ("attempts token/retry France e dettaglio LinkedIn", test_attempts_france_e_linkedin),
         ("Fantastic ISO e Vincere due pagine", test_fantastic_iso_e_vincere),
         ("Join pageData e initialState", test_join_page_data),
+        ("Taleez distingue vuoto vero e lettura fallita", test_taleez_risposte_valide_e_fallite),
         ("mappe nazionali importabili senza rete", test_mappe_nazionali),
         ("indice GIN ATS valido e senza fast update", test_indice_ricerca_ats),
         ("tecnologie normalizzate, trigger e indici", test_tecnologie_ricerca_normalizzata),
