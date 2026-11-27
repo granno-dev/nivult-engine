@@ -2,7 +2,7 @@
 
 # Nivult Global Job Postings API
 
-Query **6.3M+ active job postings** and **73,000+ company records** across **240+ countries and territories**. The maintained Nivult index covers **65 ATS platforms** and public employment sources, with daily refreshes and closed-posting detection.
+Query **6.3M+ active job postings** and **72,000+ company records** across **240+ countries and territories**. The maintained Nivult index covers **66 source platforms**, including ATS and public employment sources, with daily refreshes and closed-posting detection.
 
 Search postings from **Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors**, and other supported sources. No career-site URLs or employer credentials are required, and no scraping happens during your run.
 
@@ -81,24 +81,17 @@ Each job row includes its ATS and source URL. `first_seen` and `last_seen` are n
 
 ## Pricing and limits
 
-Tiered Pay-Per-Event pricing, plus the standard **$0.00005 Actor Start** event:
-
-| Apify subscription tier | Jobs / 1,000 | Company records / 1,000 |
-| --- | ---: | ---: |
-| Free | $6.00 | $18.00 |
-| Bronze (Starter) | $5.40 | $16.20 |
-| Silver (Scale) | $4.80 | $14.40 |
-| Gold (Business) | $4.20 | $12.60 |
+Flat Pay-Per-Event pricing: **$0.003 per job or company result** (**$3.00 per 1,000 results**), plus the standard **$0.00005 Actor Start** event.
 
 Empty results have no result-event charge. A single run returns at most **5,000 rows**. Empty filters run a worldwide query; they are not an empty result.
 
 ## Need higher volume, daily bulk exports, or specific companies?
 
-The direct API at [nivult.com](https://nivult.com) supports volumes beyond 5,000 jobs per run, Daily Delta feeds, Daily bulk JSONL exports, and requests to add missing companies across the 65 supported ATS platforms on Scale and Business plans. Enterprise options include historical backfill, custom company lists including non-standard career sites, and redistribution licensing. Direct plans reach **€0.60 per 1,000 credits** on Business; custom Enterprise volumes start at 5M credits per month.
+The direct API at [nivult.com](https://nivult.com) supports volumes beyond 5,000 jobs per run, Daily Delta feeds, Daily bulk JSONL exports, and requests to add missing companies across the 66 supported source platforms on Scale and Business plans. Enterprise options include historical backfill, custom company lists including non-standard career sites, and redistribution licensing. Direct plans reach **€0.60 per 1,000 credits** on Business; custom Enterprise volumes start at 5M credits per month.
 
 ## Data freshness and sources
 
-The index is refreshed and deduplicated daily. Records come from supported employer ATS platforms, career sites, staffing sources, and public employment portals; coverage is not limited to the seven ATS platforms highlighted above. A run queries the maintained index and does not rescrape or re-enrich records on demand.
+The index is refreshed and deduplicated daily. Records come from supported employer source platforms, career sites, staffing sources, and public employment portals; coverage is not limited to the seven source platforms highlighted above. A run queries the maintained index and does not rescrape or re-enrich records on demand.
 
 ## Explore the Nivult family
 

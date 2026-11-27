@@ -6,7 +6,7 @@ Customer-facing overview and technical documentation for the RapidAPI listing. E
 
 ## 1. LONG DESCRIPTION
 
-Query **6.3M+ active job postings** and **73,000+ company records** across **240+ countries and territories**. The maintained Nivult index covers **65 ATS platforms** and public employment sources, with daily refreshes and closed-posting detection.
+Query **6.3M+ active job postings** and **72,000+ company records** across **240+ countries and territories**. The maintained Nivult index covers **66 source platforms**, including ATS and public employment sources, with daily refreshes and closed-posting detection.
 
 Search records from **Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors**, and other supported sources. The API queries the existing index; it does not scrape employer sites on demand.
 
@@ -21,7 +21,7 @@ Typical uses include labor-market analytics, talent intelligence, sales prospect
 
 ### Enterprise and high-volume use cases
 
-For **Daily Delta feeds, Daily bulk JSONL exports, more than 50K–100K credits per month, missing-company requests across the 65 supported ATS platforms, historical backfill, custom company lists including non-standard career sites, or redistribution rights**, use the direct API at [nivult.com](https://nivult.com). These capabilities are not included in RapidAPI plans. Direct Scale and Business plans include missing-company requests; Enterprise covers custom sourcing, backfill, redistribution licensing, and volumes from 5M credits per month.
+For **Daily Delta feeds, Daily bulk JSONL exports, more than 50K–100K credits per month, missing-company requests across the 66 supported source platforms, historical backfill, custom company lists including non-standard career sites, or redistribution rights**, use the direct API at [nivult.com](https://nivult.com). These capabilities are not included in RapidAPI plans. Direct Scale and Business plans include missing-company requests; Enterprise covers custom sourcing, backfill, redistribution licensing, and volumes from 5M credits per month.
 
 ---
 
@@ -29,7 +29,7 @@ For **Daily Delta feeds, Daily bulk JSONL exports, more than 50K–100K credits 
 
 **Spotlight 1 — Maintained global coverage**
 
-Access 6.3M+ active postings from 73,000+ company records across 240+ countries and territories. Sources include employer ATS platforms, career sites, staffing sources, and public employment portals.
+Access 6.3M+ active postings from 72,000+ company records across 240+ countries and territories. Sources include employer source platforms, career sites, staffing sources, and public employment portals.
 
 **Spotlight 2 — Filters for precise slices**
 
@@ -110,10 +110,13 @@ Returns active postings. Unknown query parameters are ignored; unknown filter va
 - `q` — full-text search over title and description; all terms are required (AND).
 - `q_any` — at least one of up to 15 comma-separated keywords must match the title or description (OR). Can be combined with `q`.
 - `title` — full-text search restricted to the job title; all terms are required (AND).
-- `posted_after` — inclusive ISO 8601 date or timestamp.
+- `posted_after` — inclusive ISO 8601 date or timestamp; takes precedence over `dal` when both are supplied.
+- `dal` — deprecated legacy alias for `posted_after`, used only when `posted_after` is absent.
 - `posted_before` — exclusive ISO 8601 date or timestamp.
 - `limit` — 1–500, default 100.
 - `cursor` — previous response's `next_cursor`.
+
+Successful RapidAPI responses include `X-RapidAPI-Billing: Credits=N`, where `N` is the number of returned jobs; an empty page returns `Credits=0`.
 
 `technology` is a case-insensitive exact match against extracted, normalized technologies, not arbitrary text search. `ats=bundesagentur`, used alone, is an alias for `bundesanstellung`.
 
@@ -145,9 +148,11 @@ Company records are keyed by **`ats + company_slug`**, not by slug alone.
 
 Available fields include employer name, domain, active-job count, industry, legal and registration data, size band, locations, technology stack, and selected source fields. Enrichment is optional and varies by employer.
 
+Successful RapidAPI responses include `X-RapidAPI-Billing: Credits=3N`, where `N` is the number of returned companies; an empty page returns `Credits=0`.
+
 ## GET /v1/companies/{piattaforma}/{slug}
 
-Returns one company record. Supply both the ATS/source and employer slug from a job or company record. A missing company returns 404 and bills 0 custom credits. A successful record bills 3 custom credits.
+Returns one company record. Supply both the ATS/source and employer slug from a job or company record. A missing company returns 404 with `X-RapidAPI-Billing: Credits=0`. A successful record bills 3 custom credits and returns `X-RapidAPI-Billing: Credits=3`.
 
 ## GET /v1/coverage
 

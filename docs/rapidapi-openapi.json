@@ -3,7 +3,7 @@
   "info": {
     "title": "Nivult Job Postings & Company Data — RapidAPI",
     "version": "1.0.0",
-    "description": "RapidAPI access to 6.3M+ active job postings and 73,000+ company records across 240+ countries and 65 ATS platforms, plus public employment sources. The custom Credits quota bills 1 credit per returned job and 3 per returned company; empty results and application errors below 500 bill 0 credits. Coverage and usage bill 0 custom credits. Delta feed, export manifest, and bulk downloads are not included. Company records are keyed by ATS + company_slug.",
+    "description": "RapidAPI access to 6.3M+ active job postings and 72,000+ company records across 240+ countries and 66 source platforms, including ATS and public employment sources. The custom Credits quota bills 1 credit per returned job and 3 per returned company; empty results and application errors below 500 bill 0 credits. Coverage and usage bill 0 custom credits. Delta feed, export manifest, and bulk downloads are not included. Company records are keyed by ATS + company_slug.",
     "contact": { "name": "Nivult", "url": "https://nivult.com", "email": "hello@nivult.com" }
   },
   "servers": [{ "url": "https://nivult-job-postings-company-data.p.rapidapi.com", "description": "RapidAPI proxy" }],
@@ -26,8 +26,9 @@
           { "name": "q", "in": "query", "schema": { "type": "string", "example": "MBSE SysML" }, "description": "Full-text search over job title and description; all terms are required (AND)" },
           { "name": "q_any", "in": "query", "schema": { "type": "string", "example": "MBSE,SysML,CATIA" }, "description": "At least one comma-separated keyword must match the title or description (OR); maximum 15 keywords. Can be combined with q." },
           { "name": "title", "in": "query", "schema": { "type": "string", "example": "systems engineer" }, "description": "Full-text search restricted to the job title; all terms are required (AND)" },
-          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive)" },
+          { "name": "posted_after", "in": "query", "schema": { "type": "string", "example": "2026-10-24T00:00:00Z" }, "description": "Posted at or after this ISO 8601 date/timestamp (inclusive). Takes precedence over dal when both are supplied." },
           { "name": "posted_before", "in": "query", "schema": { "type": "string", "example": "2026-11-24T00:00:00Z" }, "description": "Posted strictly before this ISO 8601 date/timestamp (exclusive)" },
+          { "name": "dal", "in": "query", "schema": { "type": "string", "example": "2026-10-24" }, "description": "Legacy alias for posted_after, used only when posted_after is absent.", "deprecated": true },
           { "name": "source_type", "in": "query", "schema": { "type": "string", "example": "direct,aggregator" }, "description": "direct, aggregator, staffing or public_board; comma-separated OR" },
           { "name": "company", "in": "query", "schema": { "type": "string", "example": "The Dixon Group" }, "description": "Full-text match on employer name" },
           { "name": "company_slug", "in": "query", "schema": { "type": "string" }, "description": "Employer/source slug; comma-separated OR" },
@@ -47,6 +48,7 @@
         "responses": {
           "200": {
             "description": "A page of postings",
+            "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "pattern": "^Credits=[0-9]+$" }, "description": "Credits equals the number of returned jobs; Credits=0 for an empty page.", "example": "Credits=1" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/JobPage" },
               "example": {
@@ -88,6 +90,7 @@
         "responses": {
           "200": {
             "description": "A page of companies",
+            "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "pattern": "^Credits=[0-9]+$" }, "description": "Credits equals 3 times the number of returned companies; Credits=0 for an empty page.", "example": "Credits=3" } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/CompanyPage" },
               "example": {
@@ -122,6 +125,7 @@
         "responses": {
           "200": {
             "description": "The company record",
+            "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "const": "Credits=3" } } },
             "content": { "application/json": {
               "schema": { "$ref": "#/components/schemas/Company" },
               "example": {
@@ -135,7 +139,7 @@
             } }
           },
           "401": { "$ref": "#/components/responses/Unauthorized" },
-          "404": { "description": "Company not found" },
+          "404": { "description": "Company not found; bills 0 custom credits", "headers": { "X-RapidAPI-Billing": { "schema": { "type": "string", "const": "Credits=0" } } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
           "429": { "$ref": "#/components/responses/RateLimited" },
           "503": { "$ref": "#/components/responses/CounterUnavailable" }
         }

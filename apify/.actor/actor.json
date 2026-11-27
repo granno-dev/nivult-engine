@@ -1,8 +1,8 @@
 {
   "actorSpecification": 1,
   "name": "global-job-postings",
-  "title": "Global Job Postings API — Workday, Greenhouse & 65 ATS",
-  "description": "Query 6.3M+ active job postings and 73,000+ company records across 240+ countries. Search Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors and other ATS platforms by country, technology, seniority, workplace, keyword, or date.",
+  "title": "Global Job Postings API — Workday, Greenhouse & 66 Sources",
+  "description": "Query 6.3M+ active job postings and 72,000+ company records across 240+ countries. Search Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, SAP SuccessFactors and other supported sources by country, technology, seniority, workplace, keyword, or date.",
   "version": "0.1",
   "buildTag": "latest",
   "envVars": [

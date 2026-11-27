@@ -112,9 +112,19 @@ def test_custom_job_event_charges_each_item(monkeypatch):
     assert all(isinstance(data, dict) for data, _ in actor.push_calls)
 
 
+def test_custom_job_event_enforces_cap(monkeypatch):
+    actor, client = run_actor(
+        monkeypatch, {"tipo": "jobs", "limite": 10_000},
+        {"job-result": 1}, page_size=500, always_next=True)
+    assert len(actor.rows) == 5_000
+    assert actor.summary["righe"] == 5_000
+    assert len(client.calls) == 10
+
+
 def test_custom_company_event_stops_cleanly_at_user_budget(monkeypatch):
-    actor, _ = run_actor(monkeypatch, {"tipo": "companies", "limite": 3},
-                         {"company-result": 1}, budget_at=2, page_size=3)
+    actor, client = run_actor(monkeypatch, {"tipo": "companies", "limite": 3},
+                              {"company-result": 1}, budget_at=2, page_size=3)
     assert len(actor.rows) == 2
     assert actor.summary["righe"] == 2
     assert [event for _, event in actor.push_calls] == ["company-result"] * 2
+    assert len(client.calls) == 1
