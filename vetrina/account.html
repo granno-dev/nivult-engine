@@ -305,6 +305,128 @@ body.modale-aperto { overflow: hidden; }
 [hidden] { display: none !important; }
 @media (max-width: 639px) { #notifiche { left: 1rem; right: 1rem; } }
 @media (prefers-reduced-motion: reduce) { .skel, .spinner, #export-modale > div:last-child { animation: none; } #account-sidebar { transition: none; } }
+body { font-variant-numeric: tabular-nums; }
+.account-content { width: 100%; max-width: 1180px; margin-inline: auto; }
+[data-view] { width: 100%; min-width: 0; }
+#explorer { background: transparent; }
+.command-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: .55rem; border: 1px solid #E2E8F0; border-radius: 9px; background: #FFFFFF; padding: .35rem .5rem .35rem .7rem; color: #64748B; font-size: 11px; font-weight: 650; white-space: nowrap; transition: border-color .15s,color .15s,background .15s; }
+.command-trigger:hover { border-color: #AFC8FF; background: #F8FAFF; color: #2549B8; }
+.command-trigger kbd { border: 1px solid #E2E8F0; border-radius: 5px; background: #F8FAFC; padding: .08rem .3rem; color: #475569; font-family: inherit; font-size: 10px; }
+.credit-status { display: flex; align-items: center; gap: .4rem; margin-bottom: .55rem; font-size: 10px; font-weight: 700; }
+.credit-status-badge { display: inline-flex; align-items: center; gap: .3rem; border-radius: 999px; padding: .2rem .45rem; }
+.credit-status-badge::before { content: "✓"; font-weight: 900; }
+.credit-status.is-low .credit-status-badge::before, .credit-status.is-depleted .credit-status-badge::before { content: "!"; }
+.credit-status.is-healthy .credit-status-badge { background: #ECFDF5; color: #047857; }
+.credit-status.is-low .credit-status-badge { background: #FFFBEB; color: #92400E; }
+.credit-status.is-depleted .credit-status-badge { background: #FFF1F2; color: #BE123C; }
+.sidebar-credit .credit-status.is-healthy .credit-status-badge { background: rgba(52,211,153,.14); color: #6EE7B7; }
+.sidebar-credit .credit-status.is-low .credit-status-badge { background: rgba(251,191,36,.14); color: #FDE68A; }
+.sidebar-credit .credit-status.is-depleted .credit-status-badge { background: rgba(248,113,113,.16); color: #FCA5A5; }
+.credit-status-detail { margin-left: auto; color: #64748B; }
+.sidebar-credit .credit-status-detail { color: #C7D2FE; }
+.credit-split.is-low > span { background: #F59E0B; }
+.credit-split.is-depleted { background: #E2E8F0; }
+.credit-split.is-depleted > span { width: 0 !important; }
+.sidebar-credit .credit-split.is-depleted { background: rgba(255,255,255,.14); }
+.credit-topup-link { display: inline-flex; margin-top: .65rem; align-items: center; gap: .3rem; color: #2549B8; font-size: 11px; font-weight: 800; }
+.credit-topup-link:hover { color: #1E40AF; text-decoration: underline; text-underline-offset: 3px; }
+.api-reference-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; }
+.api-reference-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+.rate-limit-badge { display: inline-flex; align-items: center; gap: .35rem; border: 1px solid #D9E6FF; border-radius: 999px; background: #FFFFFF; padding: .3rem .55rem; color: #475569; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.rate-limit-badge::before { content: ""; width: 6px; height: 6px; border-radius: 99px; background: #3B6EF6; }
+#chiavi-lista > .overflow-x-auto { display: block; width: 100%; max-width: 100%; overflow-x: auto; contain: layout inline-size paint; }
+.explorer-chip-row { display: flex; min-height: 34px; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .8rem; border-top: 1px solid #F1F5F9; padding-top: .75rem; }
+.explorer-filter-chip, .explorer-preset-chip { display: inline-flex; min-height: 28px; max-width: 100%; align-items: center; gap: .35rem; border-radius: 999px; padding: .25rem .55rem; font-size: 10px; font-weight: 700; }
+.explorer-filter-chip { border: 1px solid #C7D2FE; background: #EEF2FF; color: #3730A3; }
+.explorer-filter-chip button { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 99px; color: #4F46E5; }
+.explorer-filter-chip button:hover { background: #C7D2FE; }
+.explorer-preset-chip { border: 1px solid #E2E8F0; background: #FFFFFF; color: #475569; transition: border-color .15s,color .15s,background .15s; }
+.explorer-preset-chip:hover { border-color: #AFC8FF; background: #F8FAFF; color: #2549B8; }
+.explorer-chip-label { margin-right: .15rem; color: #94A3B8; font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.drawer-preview-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem 1rem; margin-top: .85rem; }
+.drawer-preview-grid dt { color: #64748B; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.drawer-preview-grid dd { margin-top: .2rem; color: #334155; font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.locked-preview-list { display: grid; gap: .5rem; margin-top: .8rem; }
+.locked-preview-list li { display: flex; align-items: flex-start; gap: .45rem; color: #475569; font-size: 12px; line-height: 1.5; }
+.locked-preview-list li::before { content: "✓"; color: #047857; font-weight: 900; }
+.drawer-primary:disabled { color: #475569; opacity: 1; }
+.export-dialog { display: flex; width: min(800px,100%); max-height: calc(100dvh - 2rem); flex-direction: column; overflow: hidden; border: 1px solid #E2E8F0; border-radius: 18px; background: #FFFFFF; box-shadow: 0 24px 70px rgba(15,23,42,.22); }
+.export-modal-header { position: relative; flex-shrink: 0; border-bottom: 1px solid #E2E8F0; padding: 1.25rem 3.75rem 1rem 1.5rem; }
+.export-modal-header .modal-close { position: absolute; top: 1rem; right: 1rem; }
+.export-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem 1.5rem 1.5rem; scrollbar-color: #CBD5E1 transparent; scrollbar-width: thin; }
+.export-grid { display: grid; gap: 1.25rem; }
+.export-filter-column, .export-summary-column { min-width: 0; }
+.export-filter-column { display: grid; align-content: start; gap: .9rem; }
+.export-summary-column { align-self: start; }
+.export-receipt { overflow: hidden; border: 1px solid #263449; border-radius: 14px; background: #0F172A; color: #E2E8F0; }
+.export-receipt-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid rgba(226,232,240,.12); padding: .75rem 1rem; }
+.export-receipt-row:first-child { border-top: 0; }
+.export-receipt .receipt-label { color: #94A3B8; font-size: 11px; font-weight: 600; }
+.export-receipt .receipt-value { color: #E2E8F0; font-size: 14px; font-weight: 750; text-align: right; }
+#ex-costo { color: #60A5FA; }
+#ex-saldo.text-mint-400 { color: #34D399; }
+#ex-saldo.text-amber-400.receipt-negative { color: #F87171; }
+#export-modale .export-download { min-height: 44px; border: 1px solid #2F5DE0; border-radius: 10px; background: #2F5DE0; color: #FFFFFF; box-shadow: 0 5px 14px rgba(47,93,224,.18); }
+#export-modale .export-download:hover { border-color: #2549B8; background: #2549B8; }
+#export-modale .export-download:disabled { border-color: #CBD5E1; background: #CBD5E1; color: #475569; opacity: 1; }
+.ex-transfer-note { border: 1px solid #D9E6FF; border-radius: 10px; background: #F8FAFF; padding: .65rem .75rem; color: #475569; font-size: 11px; line-height: 1.55; }
+@media (min-width: 860px) { .export-grid { grid-template-columns: minmax(0,1fr) minmax(300px,.92fr); gap: 1.5rem; } }
+@media (max-width: 639px) {
+  .export-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .export-modal-header { padding: 1rem 3.5rem 1rem 1rem; }
+  .export-modal-body { padding: 1rem; }
+  .export-receipt-row { padding: .7rem .85rem; }
+  .api-reference-toolbar { align-items: flex-start; flex-direction: column; }
+  .api-reference-toolbar-actions { justify-content: flex-start; }
+  .drawer-preview-grid { grid-template-columns: 1fr 1fr; }
+  .command-trigger > span { display: none; }
+}
+.recent-activity-head, .activity-compact { display: grid; grid-template-columns: 80px 96px minmax(0,1fr) auto 64px; gap: .75rem; align-items: center; }
+.recent-activity-head { border-bottom: 1px solid #F1F5F9; background: #F8FAFC; padding: .6rem 1.25rem; color: #64748B; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.activity-compact { padding: .75rem 1.25rem; font-size: 12px; transition: background .15s; }
+.activity-compact:hover { background: #F8FAFC; }
+.activity-company-link { display: inline-flex; min-width: 0; align-items: center; gap: .45rem; color: #334155; font-weight: 650; text-align: left; }
+.activity-company-link > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-company-link > span:last-child { flex-shrink: 0; color: #2549B8; font-size: 10px; font-weight: 800; }
+.activity-company-link:hover > span:first-child { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 700px) {
+  .recent-activity-head { display: none; }
+  .activity-compact { grid-template-columns: auto minmax(0,1fr) auto; gap: .45rem .65rem; padding: .8rem 1rem; }
+  .activity-compact > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .activity-compact > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  .activity-compact > :nth-child(3) { grid-column: 1 / -1; grid-row: 2; }
+  .activity-compact > :nth-child(4) { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+  .activity-compact > :nth-child(5) { grid-column: 3; grid-row: 1; }
+}
+.session-card { display: flex; align-items: flex-start; gap: .75rem; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: .85rem; }
+.session-card-main { min-width: 0; flex: 1; }
+.session-card-title { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.session-card-detail { margin-top: .3rem; color: #64748B; font-size: 11px; line-height: 1.55; }
+.session-provider { color: #334155; font-size: 10px; font-weight: 800; text-transform: capitalize; }
+#notifiche { pointer-events: none; }
+.notifica { display: flex; align-items: flex-start; gap: .75rem; pointer-events: auto; }
+.notifica-message { min-width: 0; flex: 1; }
+.notifica-close { display: grid; width: 24px; height: 24px; flex-shrink: 0; place-items: center; margin: -.25rem -.35rem -.25rem 0; border-radius: 6px; color: #FFFFFF; font-size: 18px; line-height: 1; }
+.notifica-close:hover { background: rgba(255,255,255,.16); }
+#notifiche:empty { display: none; }
+.command-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.38); backdrop-filter: blur(3px); }
+.command-panel { position: relative; display: flex; width: min(620px,calc(100vw - 2rem)); max-height: min(620px,calc(100dvh - 2rem)); flex-direction: column; overflow: hidden; border: 1px solid #E2E8F0; border-radius: 16px; background: #FFFFFF; box-shadow: 0 24px 70px rgba(15,23,42,.24); }
+.command-search { display: flex; align-items: center; gap: .65rem; border-bottom: 1px solid #E2E8F0; padding: .8rem 1rem; }
+.command-search svg { width: 18px; height: 18px; flex-shrink: 0; color: #64748B; }
+.command-input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #0F172A; font-size: 14px; }
+.command-results { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: .45rem; }
+.command-group { padding: .45rem .55rem .25rem; color: #94A3B8; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.command-option { display: flex; width: 100%; align-items: center; gap: .75rem; border-radius: 9px; padding: .65rem .7rem; color: #334155; text-align: left; }
+.command-option:hover, .command-option.is-selected { background: #EEF4FF; color: #2549B8; }
+.command-option-icon { display: grid; width: 28px; height: 28px; flex-shrink: 0; place-items: center; border: 1px solid #E2E8F0; border-radius: 8px; background: #FFFFFF; color: #64748B; font-size: 11px; font-weight: 800; }
+.command-option.is-selected .command-option-icon { border-color: #C7D2FE; color: #2549B8; }
+.command-option-copy { min-width: 0; flex: 1; }
+.command-option-copy b { display: block; font-size: 12px; }
+.command-option-copy small { display: block; margin-top: .12rem; color: #64748B; font-size: 10px; }
+.command-footer { display: flex; gap: .8rem; border-top: 1px solid #E2E8F0; background: #F8FAFC; padding: .55rem .85rem; color: #64748B; font-size: 10px; }
+.command-footer kbd { color: #334155; font-family: inherit; font-weight: 800; }
+.confirm-panel { position: relative; width: min(430px,calc(100vw - 2rem)); border: 1px solid #E2E8F0; border-radius: 16px; background: #FFFFFF; padding: 1.35rem; box-shadow: 0 24px 70px rgba(15,23,42,.24); }
+@media (prefers-reduced-motion: reduce) { .command-backdrop { backdrop-filter: none; } }
 </style>
 </head>
 <body class="text-slate-900 font-sans antialiased min-h-screen">
@@ -410,8 +532,9 @@ body.modale-aperto { overflow: hidden; }
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
           <span>Live index: <b id="top-offerte" class="font-semibold text-slate-700">—</b> postings · <b id="top-aziende" class="font-semibold text-slate-700">—</b> companies</span>
         </div>
+        <button id="command-trigger" type="button" onclick="apriCommandPalette()" aria-haspopup="dialog" aria-controls="command-palette" aria-keyshortcuts="Meta+K Control+K" class="command-trigger ml-auto sm:ml-0"><span>Search / Jump</span><kbd>⌘K</kbd></button>
       </header>
-      <div class="mx-auto max-w-[1500px] p-4 sm:p-6 lg:p-8">
+      <div class="account-content p-4 sm:p-6 lg:p-8">
         <div id="payment-banner" class="hidden mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800" role="status">
           <b>Payment confirmed.</b> Your credits and plan entitlements will refresh automatically.
         </div>
@@ -441,14 +564,15 @@ body.modale-aperto { overflow: hidden; }
               <a href="#keys" class="mt-4 inline-block text-xs font-bold text-brand-600">Manage keys →</a>
             </article>
             <article class="app-card premium-action p-5">
-              <div class="flex items-start justify-between gap-3"><div class="flex items-center gap-3"><span class="icon-chip chip-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 4l-4 16"/></svg></span><div><h2 class="text-sm font-bold">Quick test</h2><p class="mt-1 text-xs text-slate-500">A ready-to-run request with your latest key only when freshly revealed.</p></div></div><a href="#explorer" class="text-xs font-bold text-brand-600">Open Explorer →</a></div>
+              <div class="flex items-start justify-between gap-3"><div class="flex items-center gap-3"><span class="icon-chip chip-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 6-6 6 6 6M16 6l6 6-6 6M14 4l-4 16"/></svg></span><div><h2 class="text-sm font-bold">Quick test</h2><p class="mt-1 text-xs text-slate-500">A safe five-record request with your latest key only when freshly revealed.</p></div></div><div class="flex shrink-0 flex-col items-end gap-1 text-[11px] font-bold"><a href="#explorer" onclick="apriApiReference();return false;" class="text-brand-600">API Reference →</a><a href="#explorer" class="text-slate-500 hover:text-brand-600">Open Explorer →</a></div></div>
               <div class="mt-4 flex items-center gap-2"><div class="flex rounded-lg bg-slate-100 p-1"><button id="quick-curl" type="button" onclick="quickTest('curl')" class="rounded-md bg-white px-3 py-1 text-[11px] font-bold shadow-sm">cURL</button><button id="quick-python" type="button" onclick="quickTest('python')" class="rounded-md px-3 py-1 text-[11px] font-bold text-slate-500">Python</button></div><button type="button" onclick="copiaQuick(this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
-              <div class="code-block mt-3 p-4"><div class="editor-header"><i class="editor-dot"></i><i class="editor-dot"></i><i class="editor-dot"></i><span class="ml-2 text-[10px] text-slate-400">Quick request</span></div><pre id="quick-code"></pre></div>
+              <div class="code-block mt-3 p-4"><div class="editor-header"><i class="editor-dot"></i><i class="editor-dot"></i><i class="editor-dot"></i><span class="ml-2 text-[10px] text-slate-400">Quick request · limit=5</span></div><pre id="quick-code"></pre></div>
             </article>
           </div>
 
           <article class="app-card mt-5 overflow-hidden">
             <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div class="flex items-center gap-3"><span class="icon-chip chip-mint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><div><h2 class="text-sm font-bold">Recent activity</h2><p class="mt-1 text-xs text-slate-500">Your latest itemized API, portal and export events.</p></div></div><a href="#usage" class="text-xs font-bold text-brand-600">View all usage &amp; logs →</a></div>
+            <div class="recent-activity-head" aria-hidden="true"><span>Date</span><span>Channel</span><span>Details</span><span></span><span class="text-right">Credits</span></div>
             <div id="recent-activity" class="divide-y divide-slate-100"></div>
           </article>
         </section>
@@ -465,7 +589,7 @@ body.modale-aperto { overflow: hidden; }
           </div>
 
           <article id="api-keys" class="app-card soft-indigo p-5">
-            <div class="flex items-center gap-3"><span class="icon-chip chip-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m11 12 10-9m-4 1 3 3-3.5 3.5"/></svg></span><div><h2 class="text-sm font-bold">Create an API key</h2><p class="mt-1 text-xs text-slate-500">Use a different label for each environment or pipeline.</p></div></div>
+            <div class="flex flex-wrap items-center gap-3"><span class="icon-chip chip-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="m11 12 10-9m-4 1 3 3-3.5 3.5"/></svg></span><div><h2 class="text-sm font-bold">Create an API key</h2><p class="mt-1 text-xs text-slate-500">Use a different label for each environment or pipeline.</p></div><span id="api-rate-limit" class="rate-limit-badge ml-auto" title="Active plan rate limit · per API key">2 req/s · burst 5</span></div>
             <form class="mt-4 flex flex-col sm:flex-row gap-2" onsubmit="event.preventDefault();creaChiave()">
               <label for="new-key-label" class="sr-only">New key label</label>
               <input id="new-key-label" maxlength="80" placeholder="Production pipeline or CI" class="app-input flex-1">
@@ -584,7 +708,7 @@ body.modale-aperto { overflow: hidden; }
             <article class="app-card p-4 sm:p-5">
               <div class="flex flex-wrap items-center gap-3">
                 <div class="rounded-xl bg-slate-100 p-1 flex" role="tablist" aria-label="Explore data type"><button id="tab-jobs" role="tab" aria-selected="true" onclick="cambiaTab('jobs')" class="rounded-lg bg-white px-4 py-1.5 text-xs font-bold shadow-sm">Jobs</button><button id="tab-az" role="tab" aria-selected="false" onclick="cambiaTab('az')" class="rounded-lg px-4 py-1.5 text-xs font-bold text-slate-500">Companies</button></div>
-                <span id="cerca-totale" class="text-xs font-semibold text-slate-400 tabular-nums"></span><span id="cerca-match" class="text-xs text-slate-400"></span><span id="cerca-freschezza" class="ml-auto text-[11px] text-slate-400"></span>
+                <span id="cerca-totale" class="text-xs font-semibold text-slate-400 tabular-nums"></span><span id="cerca-match" class="text-xs text-slate-400"></span><div class="ml-auto flex flex-wrap items-center gap-2"><span id="cerca-freschezza" class="text-[11px] text-slate-400"></span><button id="explorer-export-slice" type="button" onclick="exportExplorerSlice()" class="app-btn app-btn-secondary !min-h-8 !px-2.5 !py-1 !text-[11px]"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>Export slice</button></div>
               </div>
               <button id="filtri-toggle" type="button" onclick="toggleFiltri()" aria-expanded="false" aria-controls="filtri-gruppo" class="app-btn app-btn-secondary mt-4 w-full sm:hidden">Show filters</button>
               <div id="filtri-pannello" class="hidden sm:block">
@@ -607,6 +731,7 @@ body.modale-aperto { overflow: hidden; }
                 </details>
                 <div class="mt-2 flex flex-wrap items-center gap-2"><p id="f-q-help" class="text-[11px] text-slate-400">Open Explorer searches job titles only; recently closed postings search titles.</p><button id="pulisci" type="button" onclick="pulisciFiltri()" class="hidden app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Clear filters</button></div><p id="f-tec-help" class="mt-1 text-[11px] text-slate-400">Open postings use normalized technologies; recently closed postings use skills from their last snapshot.</p>
               </div>
+              <div id="explorer-filter-chips" class="explorer-chip-row" aria-live="polite"></div>
             </article>
 
             <details id="api-request-panel" class="app-card mt-4 px-5 py-4">
@@ -626,6 +751,10 @@ body.modale-aperto { overflow: hidden; }
 
           <div id="explorer-reference-panel" class="hidden mt-4">
 
+    <div class="api-reference-toolbar app-card mb-4">
+      <div><p class="text-[13px] font-bold text-slate-900">API Reference</p><p class="mt-0.5 text-[11px] text-slate-500">Live contract, examples and machine-readable schema.</p></div>
+      <div class="api-reference-toolbar-actions"><button type="button" onclick="copiaOpenApiUrl(this)" class="app-btn app-btn-secondary !min-h-8 !py-1 !text-[11px]">Copy OpenAPI URL</button><a href="/openapi.json" target="_blank" rel="noopener" class="app-btn app-btn-secondary !min-h-8 !py-1 !text-[11px]">OpenAPI 3.1 JSON ↗</a></div>
+    </div>
     <div class="doc-layout">
       <nav class="doc-toc" aria-label="API documentation">
         <a href="#doc-intro" data-doc-target>Quickstart</a>
@@ -1354,106 +1483,89 @@ body.modale-aperto { overflow: hidden; }
   </div>
 
   <div id="export-modale" role="dialog" aria-modal="true" aria-label="Build a download" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
-    <div class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()"></div>
-    <div class="relative w-full h-full sm:h-auto max-w-lg max-h-full overflow-auto rounded-none sm:rounded-2xl bg-white shadow-2xl">
-      <div class="hidden from-brand-500 via-violet-500 to-mint-500"></div>
-      <button onclick="chiudiExport()" class="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-700 text-xl leading-none" aria-label="Close">×</button>
-      <div class="p-8">
+    <button type="button" class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()" aria-label="Close export dialog" tabindex="-1"></button>
+    <div class="relative export-dialog">
+      <div class="export-modal-header">
+        <button type="button" onclick="chiudiExport()" class="modal-close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         <div class="flex items-start gap-3">
-          <div class="icon-chip chip-indigo shrink-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
-          <div>
-            <p class="text-[10px] font-bold uppercase tracking-wider text-brand-600">Filtered JSONL export</p>
-            <h3 class="mt-1 text-xl font-bold tracking-tight">Build a download</h3>
-            <p class="mt-1 text-[13px] leading-5 text-slate-500">A filtered slice of active postings or company records, as JSONL: every row is the complete exported record.</p>
-          </div>
+          <div class="icon-chip chip-indigo shrink-0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
+          <div><p class="text-[10px] font-bold uppercase tracking-wider text-brand-600">Filtered JSONL export</p><h3 class="mt-1 text-xl font-bold tracking-tight">Build a download</h3><p class="mt-1 text-[12px] leading-5 text-slate-500">Complete records, exact pricing and no charge on empty results.</p></div>
         </div>
-        <div class="mt-4 flex items-center gap-2 text-[10px] font-semibold text-slate-400"><span class="rounded-md bg-brand-50 px-2 py-1 text-brand-600">1 Filter</span><span>→</span><span class="rounded-md bg-slate-100 px-2 py-1">2 Exact cost</span><span>→</span><span class="rounded-md bg-slate-100 px-2 py-1">3 Download</span></div>
-        <div class="mt-6 grid gap-4">
-          <div class="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
-            <button id="ex-tipo-postings" onclick="exScegliTipo('postings')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Postings</button>
-            <button id="ex-tipo-companies" onclick="exScegliTipo('companies')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700">Companies</button>
-          </div>
-          <div>
-            <label for="ex-paese" class="block text-[13px] font-bold text-slate-700 mb-1.5">Country</label>
-            <select id="ex-paese" class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 transition">
-              <option value="">Everywhere</option>
-            </select>
-          </div>
-          <div class="grid grid-cols-2 gap-4">
+        <div class="mt-3 flex items-center gap-2 text-[10px] font-semibold text-slate-400"><span class="rounded-md bg-brand-50 px-2 py-1 text-brand-600">1 Filter</span><span>→</span><span class="rounded-md bg-slate-100 px-2 py-1">2 Exact cost</span><span>→</span><span class="rounded-md bg-slate-100 px-2 py-1">3 Download</span></div>
+      </div>
+      <div class="export-modal-body">
+        <p id="ex-transfer-note" class="ex-transfer-note hidden mb-4" role="status"></p>
+        <div class="export-grid">
+          <div class="export-filter-column">
+            <div class="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Export data type">
+              <button id="ex-tipo-postings" type="button" role="tab" aria-selected="true" onclick="exScegliTipo('postings')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Postings</button>
+              <button id="ex-tipo-companies" type="button" role="tab" aria-selected="false" onclick="exScegliTipo('companies')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700">Companies</button>
+            </div>
+            <div><label for="ex-paese" class="app-label">Country</label><select id="ex-paese" class="app-input"><option value="">Everywhere</option></select></div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div><label for="ex-tec" class="app-label">Technology</label><input id="ex-tec" type="text" placeholder="e.g. SAP" class="app-input"></div>
+              <div id="ex-dal-box"><label for="ex-dal" class="app-label">Posted since</label><input id="ex-dal" type="date" class="app-input"></div>
+            </div>
+            <p id="ex-cosa" class="text-[11px] leading-5 text-slate-500">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
             <div>
-              <label for="ex-tec" class="block text-[13px] font-bold text-slate-700 mb-1.5">Technology</label>
-              <input id="ex-tec" type="text" placeholder="e.g. SAP"
-                class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
-            </div>
-            <div id="ex-dal-box">
-              <label for="ex-dal" class="block text-[13px] font-bold text-slate-700 mb-1.5">Posted since</label>
-              <input id="ex-dal" type="date"
-                class="w-full rounded-xl border border-slate-200 px-4 py-3 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
-            </div>
-          </div>
-          <p id="ex-cosa" class="text-[12px] text-slate-400 -mt-1">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
-          <div>
-            <div class="flex items-center justify-between gap-3 mb-1.5"><label for="ex-max-rows" class="block text-[13px] font-bold text-slate-700">Max rows</label><span class="text-[11px] font-semibold text-brand-600">Only included rows are charged</span></div>
-            <div class="grid grid-cols-[1fr_112px] gap-2">
-              <div class="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1" aria-label="Max rows presets">
-                <button id="ex-max-100" type="button" onclick="exImpostaMax('100')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">100</button>
-                <button id="ex-max-500" type="button" onclick="exImpostaMax('500')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">500</button>
-                <button id="ex-max-1000" type="button" onclick="exImpostaMax('1000')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">1,000</button>
-                <button id="ex-max-all" type="button" onclick="exImpostaMax('')" class="rounded-lg px-2 py-2 text-xs font-bold bg-white text-slate-900 shadow-sm">Max 100k</button>
+              <div class="mb-1.5 flex items-center justify-between gap-3"><label for="ex-max-rows" class="app-label !mb-0">Max rows</label><span class="text-[10px] font-semibold text-brand-600">Only included rows are charged</span></div>
+              <div class="grid gap-2 sm:grid-cols-[1fr_100px]">
+                <div class="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1" aria-label="Max rows presets">
+                  <button id="ex-max-100" type="button" onclick="exImpostaMax('100')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">100</button>
+                  <button id="ex-max-500" type="button" onclick="exImpostaMax('500')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">500</button>
+                  <button id="ex-max-1000" type="button" onclick="exImpostaMax('1000')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">1,000</button>
+                  <button id="ex-max-all" type="button" onclick="exImpostaMax('')" class="rounded-lg px-2 py-2 text-xs font-bold bg-white text-slate-900 shadow-sm">Max 100k</button>
+                </div>
+                <input id="ex-max-rows" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="Custom" class="app-input tabular-nums">
               </div>
-              <input id="ex-max-rows" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="Max" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+              <p id="ex-max-help" class="mt-1.5 text-[11px] leading-4 text-slate-500">100 included jobs = 100 credits. Max 100k is a safety cap, not the full dataset.</p>
             </div>
-            <p id="ex-max-help" class="mt-1.5 text-[11px] leading-4 text-slate-500">100 included jobs = 100 credits. Max 100k is a safety cap, not the full dataset.</p>
+          </div>
+
+          <div class="export-summary-column">
+            <div class="export-receipt" aria-label="Live export receipt">
+              <div class="export-receipt-row"><span class="receipt-label">Matching dataset · not included</span><span id="ex-righe" class="receipt-value tabular-nums">—</span></div>
+              <div class="export-receipt-row"><span class="receipt-label">Included in this download</span><span class="text-right"><span id="ex-export-righe" class="receipt-value tabular-nums">—</span><span id="ex-export-note" class="receipt-label hidden ml-1 text-[10px]">most recent</span></span></div>
+              <div class="export-receipt-row"><span id="ex-prezzo-label" class="receipt-label">Exact cost · 1 credit / job</span><span id="ex-costo" class="receipt-value tabular-nums">—</span></div>
+              <div class="export-receipt-row"><span class="receipt-label">Current balance</span><span id="ex-saldo-attuale" class="receipt-value tabular-nums">—</span></div>
+              <div class="export-receipt-row"><span class="receipt-label">Balance after export</span><span id="ex-saldo" class="receipt-value text-mint-400 tabular-nums">—</span></div>
+            </div>
+            <p class="mt-2 text-center text-[10px] leading-5 text-slate-500">Same rate as API · 1 credit/job · 3 credits/company</p>
+            <p id="ex-cap-nota" class="hidden mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-[11px] font-semibold leading-5 text-blue-800"></p>
+            <div id="ex-avviso" role="alert" class="hidden mt-3 overflow-hidden rounded-xl border border-amber-200 bg-amber-50">
+              <div class="p-3">
+                <div class="flex items-start gap-2.5"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg></span><div class="min-w-0"><p id="ex-avviso-titolo" class="text-[12px] font-extrabold text-amber-950"></p><p id="ex-avviso-testo" class="mt-1 text-[11px] font-medium leading-5 text-amber-900"></p></div></div>
+                <div id="ex-avviso-metriche" class="hidden mt-3 grid grid-cols-3 gap-1.5">
+                  <div class="rounded-lg border border-amber-200 bg-white/80 px-2 py-1.5"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Balance</span><b id="ex-metric-saldo" class="mt-0.5 block text-xs tabular-nums text-slate-900"></b></div>
+                  <div class="rounded-lg border border-amber-200 bg-white/80 px-2 py-1.5"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Selected</span><b id="ex-metric-costo" class="mt-0.5 block text-xs tabular-nums text-slate-900"></b></div>
+                  <div class="rounded-lg border border-amber-200 bg-white/80 px-2 py-1.5"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Missing</span><b id="ex-metric-mancano" class="mt-0.5 block text-xs tabular-nums text-amber-800"></b></div>
+                </div>
+                <div id="ex-avviso-azioni" class="hidden mt-3 grid gap-2 sm:grid-cols-2">
+                  <button id="ex-fit" type="button" onclick="exFitBalance()" class="hidden rounded-lg bg-amber-700 px-3 py-2 text-[11px] font-bold text-white hover:bg-amber-800">Fit my balance</button>
+                  <a id="ex-ricarica" href="#billing" onclick="vaiAllaRicarica(); return false" class="hidden rounded-lg border border-amber-300 bg-white px-3 py-2 text-center text-[11px] font-bold text-amber-900 hover:bg-amber-100">Top up credits</a>
+                </div>
+              </div>
+            </div>
+            <button id="ex-vai" type="button" onclick="scaricaExportFiltrato()" class="export-download mt-4 flex w-full items-center justify-center gap-2 px-3 py-2.5 text-[13px] font-bold transition disabled:cursor-not-allowed"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span id="ex-vai-label">Download</span></button>
+            <p id="ex-nota" class="mt-2 text-center text-[11px] leading-5 text-slate-500"></p>
           </div>
         </div>
-
-        <div class="mt-6 overflow-hidden rounded-2xl bg-slate-950 shadow-lg shadow-slate-900/20">
-          <div class="flex items-center justify-between gap-3 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Matching dataset · not included</span>
-            <span id="ex-righe" class="text-[15px] font-bold tabular-nums text-white">—</span>
-          </div>
-          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-300">Included in this download</span>
-            <span class="text-right"><span id="ex-export-righe" class="text-[15px] font-bold tabular-nums text-white">—</span><span id="ex-export-note" class="hidden ml-1 text-[11px] font-medium text-slate-400">most recent</span></span>
-          </div>
-          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span id="ex-prezzo-label" class="text-xs font-medium text-slate-400">Exact cost · 1 credit / job</span>
-            <span id="ex-costo" class="text-[15px] font-bold tabular-nums text-brand-400">—</span>
-          </div>
-          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Current balance</span>
-            <span id="ex-saldo-attuale" class="text-[15px] font-bold tabular-nums text-white">—</span>
-          </div>
-          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Balance after export</span>
-            <span id="ex-saldo" class="text-[15px] font-bold tabular-nums text-mint-400">—</span>
-          </div>
-        </div>
-        <p class="mt-3 text-center text-[11px] leading-5 text-slate-400">Same rate as API · 1 credit/job · 3 credits/company</p>
-        <p id="ex-cap-nota" class="hidden mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[12px] font-semibold leading-5 text-blue-800"></p>
-
-        <div id="ex-avviso" role="alert" class="hidden mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm">
-          <div class="p-4">
-            <div class="flex items-start gap-3">
-              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 9v4m0 4h.01M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg></span>
-              <div class="min-w-0"><p id="ex-avviso-titolo" class="text-[13px] font-extrabold text-amber-950"></p><p id="ex-avviso-testo" class="mt-1 text-[12px] font-medium leading-5 text-amber-900"></p></div>
-            </div>
-            <div id="ex-avviso-metriche" class="hidden mt-4 grid grid-cols-3 gap-2">
-              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Balance</span><b id="ex-metric-saldo" class="mt-0.5 block text-sm tabular-nums text-slate-900"></b></div>
-              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Selected</span><b id="ex-metric-costo" class="mt-0.5 block text-sm tabular-nums text-slate-900"></b></div>
-              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Missing</span><b id="ex-metric-mancano" class="mt-0.5 block text-sm tabular-nums text-amber-800"></b></div>
-            </div>
-            <div id="ex-avviso-azioni" class="hidden mt-4 grid sm:grid-cols-2 gap-2">
-              <button id="ex-fit" type="button" onclick="exFitBalance()" class="hidden rounded-xl bg-amber-700 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-amber-800 transition">Fit my balance</button>
-              <a id="ex-ricarica" href="#billing" onclick="vaiAllaRicarica(); return false" class="hidden rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-center text-xs font-bold text-amber-900 hover:bg-amber-100 transition">Top up credits</a>
-            </div>
-          </div>
-        </div>
-
-        <button id="ex-vai" onclick="scaricaExportFiltrato()" class="mt-5 w-full rounded-xl bg-brand-500 from-brand-500 via-violet-500 to-mint-500 py-3.5 font-bold text-white shadow-lg shadow-violet-500/30 hover:shadow-xl hover:shadow-violet-500/40 hover:-translate-y-px transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0 flex items-center justify-center gap-2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span id="ex-vai-label">Download</span></button>
-        <p id="ex-nota" class="mt-3 text-[12px] text-slate-400 text-center"></p>
       </div>
     </div>
+  </div>
+
+  <div id="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" class="hidden fixed inset-0 z-[80] flex items-start justify-center p-4 pt-[10vh]">
+    <button type="button" class="command-backdrop" onclick="chiudiCommandPalette()" aria-label="Close command palette" tabindex="-1"></button>
+    <div class="command-panel">
+      <div class="command-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="command-input" class="command-input" type="search" autocomplete="off" placeholder="Search pages and actions…" aria-label="Search commands" aria-controls="command-results" aria-activedescendant="" oninput="filtraComandi(this.value)" onkeydown="tastoCommandPalette(event)"><button type="button" onclick="chiudiCommandPalette()" class="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500" aria-label="Close command palette">ESC</button></div>
+      <div id="command-results" class="command-results" role="listbox" aria-label="Available commands"></div>
+      <div class="command-footer"><span><kbd>↑↓</kbd> Navigate</span><span><kbd>↵</kbd> Open</span><span><kbd>esc</kbd> Close</span></div>
+    </div>
+  </div>
+
+  <div id="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description" class="hidden fixed inset-0 z-[90] flex items-center justify-center p-4">
+    <button type="button" class="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" onclick="rispondiConferma(false)" aria-label="Cancel confirmation" tabindex="-1"></button>
+    <div class="confirm-panel"><span class="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg></span><h2 id="confirm-title" class="mt-4 text-lg font-extrabold tracking-tight">Confirm action</h2><p id="confirm-description" class="mt-2 text-[13px] leading-6 text-slate-500"></p><div class="mt-5 flex justify-end gap-2"><button type="button" onclick="rispondiConferma(false)" class="app-btn app-btn-secondary">Cancel</button><button id="confirm-action" type="button" onclick="rispondiConferma(true)" class="app-btn border border-rose-600 bg-rose-600 text-white hover:bg-rose-700">Confirm</button></div></div>
   </div>
 </main>
 
@@ -1474,12 +1586,23 @@ const setTok = t => t ? sessionStorage.setItem("nv_sessione", t)
 
 function notifica(testo, tipo = "ok") {
   const box = document.getElementById("notifiche");
+  while (box.children.length >= 4) box.firstElementChild.remove();
   const el = document.createElement("div");
   el.className = `notifica ${tipo === "errore" ? "errore" : "ok"}`;
+  el.dataset.toast = tipo;
   el.setAttribute("role", tipo === "errore" ? "alert" : "status");
-  el.textContent = testo;
+  const message = document.createElement("span");
+  message.className = "notifica-message";
+  message.textContent = testo;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "notifica-close";
+  close.setAttribute("aria-label", "Dismiss notification");
+  close.textContent = "×";
+  close.addEventListener("click", () => el.remove());
+  el.append(message, close);
   box.appendChild(el);
-  setTimeout(() => el.remove(), 6000);
+  setTimeout(() => { if (el.isConnected) el.remove(); }, 6000);
 }
 
 async function api(percorso, opz = {}) {
@@ -1659,9 +1782,18 @@ function hasActiveSubscription() {
   return Boolean(abbonamento.creem_subscription_id)
     && ["active", "scheduled_cancel"].includes(abbonamento.subscription_status);
 }
+function creditRemainingPct(remaining, allowance) {
+  if (allowance <= 0) return remaining > 0 ? 100 : 0;
+  return Math.max(0, Math.min(100, remaining / allowance * 100));
+}
+function creditProgressState(remaining, allowance) {
+  if (remaining === 0) return "depleted";
+  return creditRemainingPct(remaining, allowance) <= 20 ? "low" : "healthy";
+}
 function disegnaAccesso() {
   const volume = Number(saldoAccount.crediti_mensili || 0);
   const attivo = hasActiveSubscription();
+  document.getElementById("api-rate-limit").textContent = volume <= 1000 ? "2 req/s · burst 5" : "15 req/s · burst 30";
   const nomi = { starter: "Starter", growth: "Growth", scale: "Scale", business: "Business" };
   const piano = nomi[abbonamento.subscription_plan] || "Subscription";
   const legacyTrial = !attivo && volume > 500;
@@ -1718,12 +1850,14 @@ function disegna() {
   const usedPct = max > 0 ? Math.min(100, Math.round(100 * usati / max)) : 0;
   document.getElementById("hero-crediti").textContent = disponibili.toLocaleString("en-US");
   document.getElementById("sidebar-credit-available").textContent = disponibili.toLocaleString("en-US");
+  const creditState = creditProgressState(disponibili, max + creditiExtra);
   const totalBalance = Math.max(1, liberi + creditiExtra);
   const planWidth = Math.min(100, liberi / totalBalance * 100);
-  const usageLabel = max > 0
+  const usageLabel = creditState === "depleted" ? "0 credits left · Top up to continue" : (max > 0
     ? `${usedPct}% of ${hasActiveSubscription() ? "monthly allowance used" : "trial credits used"}`
-    : (hasActiveSubscription() ? "No monthly plan allowance" : "No trial allowance");
-  const breakdown = dark => `<div class="credit-split" role="img" aria-label="${liberi.toLocaleString("en-US")} plan or trial credits and ${creditiExtra.toLocaleString("en-US")} purchased credits"><span class="credit-plan" style="width:${planWidth}%"></span><span class="credit-purchased" style="width:${100 - planWidth}%"></span></div><div class="credit-legend mt-2 ${dark ? "text-white/70" : "text-slate-500"}"><span><i class="credit-dot credit-plan"></i><b>${liberi.toLocaleString("en-US")}</b> plan/trial</span><span><i class="credit-dot credit-purchased"></i><b>${creditiExtra.toLocaleString("en-US")}</b> purchased</span></div><p class="credit-usage ${usedPct >= 80 ? (dark ? "text-amber-300" : "text-amber-600") : ""}">${usageLabel}</p>`;
+    : (hasActiveSubscription() ? "No monthly plan allowance" : "No trial allowance"));
+  const stateLabel = creditState === "depleted" ? "Depleted" : (creditState === "low" ? "Low balance" : "Available");
+  const breakdown = dark => `<div class="credit-status is-${creditState}"><span class="credit-status-badge">${stateLabel}</span><span class="credit-status-detail">${disponibili.toLocaleString("en-US")} left</span></div><div class="credit-split is-${creditState}" data-credit-state="${creditState}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${creditState === "depleted" ? 0 : Math.round(creditRemainingPct(disponibili, max + creditiExtra))}" aria-label="${stateLabel}: ${disponibili.toLocaleString("en-US")} credits left"><span class="credit-plan" style="width:${planWidth}%"></span><span class="credit-purchased" style="width:${100 - planWidth}%"></span></div><div class="credit-legend mt-2 ${dark ? "text-white/70" : "text-slate-500"}"><span><i class="credit-dot credit-plan"></i><b>${liberi.toLocaleString("en-US")}</b> plan/trial</span><span><i class="credit-dot credit-purchased"></i><b>${creditiExtra.toLocaleString("en-US")}</b> purchased</span></div><p class="credit-usage ${creditState !== "healthy" ? (dark ? "text-amber-300" : "text-amber-700") : ""}">${usageLabel}</p>${!dark && (creditState === "depleted" || creditRemainingPct(disponibili, max + creditiExtra) < 15) ? '<button type="button" data-credit-topup onclick="vaiAiCrediti()" class="credit-topup-link">Top up credits →</button>' : ""}`;
   document.getElementById("overview-credit-breakdown").innerHTML = breakdown(false);
   document.getElementById("sidebar-credit-breakdown").innerHTML = breakdown(true);
   aggiornaOnboarding();
@@ -1760,7 +1894,7 @@ async function creaChiave() {
   }
 }
 async function revoca(id) {
-  if (!confirm("Revoke this key? Calls with it stop working immediately.")) return;
+  if (!await chiediConferma("Revoke this API key?", "Calls with this key stop working immediately. This action cannot be undone.", "Revoke key")) return;
   try {
     const r = await api("/me/chiavi/" + encodeURIComponent(id), { method: "DELETE" });
     if (!r.ok) { notifica("The key could not be revoked. Retry.", "errore"); return; }
@@ -1770,27 +1904,39 @@ async function revoca(id) {
     if (e.message !== "401") notifica("The key could not be revoked. Retry.", "errore");
   }
 }
-async function copiaTesto(testo) {
+async function copiaTesto(testo, successMessage = "Copied to clipboard") {
   try {
     await navigator.clipboard.writeText(testo);
+    notifica(successMessage);
     return true;
   } catch (e) {
     notifica("Copy was blocked by the browser. Select the text and copy it manually.", "errore");
     return false;
   }
 }
+function copiaOpenApiUrl(btn) {
+  const url = new URL("/openapi.json", location.origin).href;
+  copiaTesto(url, "OpenAPI 3.1 URL copied").then(ok => {
+    if (ok && btn) { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy OpenAPI URL", 1600); }
+  });
+}
+function apriApiReference() {
+  if (location.hash !== "#explorer") location.hash = "#explorer";
+  else route();
+  cambiaExplorer("reference");
+}
 function copiaChiave(btn) {
-  copiaTesto(document.getElementById("chiave-nuova-val").textContent).then(ok => {
+  copiaTesto(document.getElementById("chiave-nuova-val").textContent, "API key copied").then(ok => {
     if (ok) { btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = "Copy", 1600); }
   });
 }
 function curlPrimaChiamata() {
   const k = chiaveFresca || ESEMPIO_CHIAVE;
-  return `curl -H "X-Api-Key: ${k}" "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`;
+  return `curl -H "X-Api-Key: ${k}" "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=5"`;
 }
 function pythonPrimaChiamata() {
   const k = chiaveFresca || ESEMPIO_CHIAVE;
-  return `import requests\n\nresponse = requests.get(\n    "https://api.nivult.com/v1/jobs",\n    headers={"X-Api-Key": "${k}"},\n    params={"technology": "SAP", "country": "DE", "limit": 100},\n    timeout=30,\n)\nresponse.raise_for_status()\nprint(response.json())`;
+  return `import requests\n\nresponse = requests.get(\n    "https://api.nivult.com/v1/jobs",\n    headers={"X-Api-Key": "${k}"},\n    params={"technology": "SAP", "country": "DE", "limit": 5},\n    timeout=30,\n)\nresponse.raise_for_status()\nprint(response.json())`;
 }
 let quickLanguage = "curl";
 function quickTest(language) {
@@ -1880,7 +2026,8 @@ function pulisciStatoAccount() {
   for (const mappa of [revealInfo, revealRows, gruppiRivelati]) {
     for (const key of Object.keys(mappa)) delete mappa[key];
   }
-  for (const id of ["dettaglio", "export-modale"]) {
+  if (confermaPending) { confermaPending.resolve(false); confermaPending = null; }
+  for (const id of ["dettaglio", "export-modale", "command-palette", "confirm-dialog"]) {
     const el = document.getElementById(id);
     if (el) mostraVistaAccount(id, false);
   }
@@ -1918,12 +2065,30 @@ function apriDialogo(id) {
   el.classList.remove("hidden");
   document.body.classList.add("modale-aperto");
   requestAnimationFrame(() => {
-    const target = el.querySelector("button:not([disabled]), a[href], input, select, textarea, [tabindex='0']");
+    const target = el.querySelector("button:not([disabled]):not([tabindex='-1']), a[href], input, select, textarea, [tabindex='0']");
     if (target) target.focus();
   });
 }
+let confermaPending = null;
+function chiediConferma(title, description, actionLabel) {
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-description").textContent = description;
+  document.getElementById("confirm-action").textContent = actionLabel;
+  apriDialogo("confirm-dialog");
+  return new Promise(resolve => { confermaPending = { resolve }; });
+}
+function rispondiConferma(answer) {
+  const pending = confermaPending;
+  confermaPending = null;
+  chiudiDialogo("confirm-dialog");
+  pending?.resolve(answer === true);
+}
 function chiudiDialogo(id) {
   const el = typeof id === "string" ? document.getElementById(id) : id;
+  if (el.id === "confirm-dialog" && confermaPending) {
+    confermaPending.resolve(false);
+    confermaPending = null;
+  }
   el.classList.add("hidden");
   document.body.classList.remove("modale-aperto");
   dialogoAttivo = null;
@@ -1936,7 +2101,7 @@ document.addEventListener("keydown", e => {
     e.preventDefault(); chiudiDialogo(dialogoAttivo); return;
   }
   if (e.key !== "Tab") return;
-  const focusabili = [...dialogoAttivo.querySelectorAll("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']")]
+  const focusabili = [...dialogoAttivo.querySelectorAll("button:not([disabled]):not([tabindex='-1']), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex='0']")]
     .filter(el => el.getClientRects().length > 0);
   if (!focusabili.length) { e.preventDefault(); return; }
   const primo = focusabili[0], ultimo = focusabili[focusabili.length - 1];
@@ -1960,9 +2125,10 @@ async function caricaSicurezza() {
     document.getElementById("link-microsoft").classList.toggle("hidden",
       (d.provider || []).some(p => p.provider === "microsoft"));
     const sessioni = d.sessioni || [];
-    document.getElementById("sessioni-list").innerHTML = sessioni.length ? sessioni.map(s =>
-      `<div class="rounded-xl bg-white border border-slate-200 px-3 py-2.5 flex items-center gap-2.5 flex-wrap"><span class="provider-avatar">${s.corrente ? "C" : "S"}</span><b class="text-[12px]">${s.corrente ? "This session" : esc(s.origine)}</b><span class="text-[11px] text-slate-400">last used ${esc(_quando(s.ultimo_uso))}</span>${s.corrente ? '<span class="activity-badge ml-auto bg-emerald-50 text-emerald-700">CURRENT</span>' : `<button onclick="revocaSessione(${jsArg(s.id)})" class="ml-auto text-[11px] font-bold text-rose-600">Revoke</button>`}</div>`).join("")
-      : '<p class="text-[12px] text-slate-400">No active sessions.</p>';
+    document.getElementById("sessioni-list").innerHTML = sessioni.length ? sessioni.map(s => {
+      const origin = String(s.origine || "session").replaceAll("_", " ");
+      return `<div class="session-card"><span class="provider-avatar">${s.corrente ? "C" : "S"}</span><div class="session-card-main"><div class="session-card-title"><b class="text-[12px]">${s.corrente ? "This session" : "Active session"}</b><span class="session-provider">${esc(origin)}</span>${s.corrente ? '<span class="activity-badge bg-emerald-50 text-emerald-700">CURRENT</span>' : ""}</div><p class="session-card-detail">Last used ${esc(_quando(s.ultimo_uso))}${s.scade_il ? ` · Expires ${esc(new Date(s.scade_il).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }))}` : ""}</p></div>${s.corrente ? "" : `<button type="button" onclick="revocaSessione(${jsArg(s.id)})" class="app-btn app-btn-secondary !min-h-8 !py-1 !text-[11px] !text-rose-600">Revoke</button>`}</div>`;
+    }).join("") : '<p class="text-[12px] text-slate-400">No active sessions.</p>';
     document.getElementById("revoca-altre").disabled = sessioni.filter(s => !s.corrente).length === 0;
   } catch (e) {
     if (e.message !== "401") notifica("Security details could not be loaded. Retry.", "errore");
@@ -1976,7 +2142,7 @@ async function revocaSessione(id) {
   } catch (e) { if (e.message !== "401") notifica("The session could not be revoked. Retry.", "errore"); }
 }
 async function revocaAltreSessioni() {
-  if (!confirm("Sign out every session except this one?")) return;
+  if (!await chiediConferma("Sign out other sessions?", "Every active session except this one will be revoked. You can sign in again at any time.", "Sign out others")) return;
   const btn = document.getElementById("revoca-altre");
   btn.disabled = true;
   try {
@@ -2427,6 +2593,7 @@ function cambiaTab(t) {
   document.getElementById("f-tec-help").style.display = t === "jobs" ? "" : "none";
   document.getElementById("advanced-filters").classList.toggle("hidden", t !== "jobs");
   cursore = null;
+  aggiornaPulisci();
   cerca(false);
 }
 function mostraCaricamento() {
@@ -2514,15 +2681,88 @@ async function cerca(append = false) {
   btnAltro.classList.toggle("hidden", !cursore);
 }
 function cercaAncora() { cerca(true); }
-function pulisciFiltri() {
+const EXPLORER_FILTER_FIELDS = {
+  q: "f-q", industry: "f-q", technology: "f-tec", country: "f-paese", remote: "f-remoto",
+  stato: "f-stato", category: "f-category", ats: "f-ats", seniority: "f-seniority",
+  language: "f-language", dal: "f-dal",
+};
+const EXPLORER_FILTER_LABELS = {
+  q: "Search", industry: "Industry", technology: "Technology", country: "Country",
+  remote: "Workplace", stato: "Status", category: "Job family", ats: "ATS source",
+  seniority: "Seniority", language: "Language", dal: "Posted since",
+};
+function resetExplorerInputs() {
   ["f-q", "f-tec", "f-paese", "f-category", "f-ats", "f-seniority", "f-language", "f-dal"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("f-remoto").value = "";
   document.getElementById("f-stato").value = "aperte";
-  paeseIso = ""; cursore = null;
+  paeseIso = "";
+}
+function pulisciFiltri() {
+  resetExplorerInputs();
+  cursore = null;
   aggiornaPulisci(); cerca(false);
+}
+function rimuoviFiltroExplorer(key) {
+  const field = EXPLORER_FILTER_FIELDS[key];
+  if (!field) return;
+  document.getElementById(field).value = key === "stato" ? "aperte" : "";
+  if (key === "country") paeseIso = "";
+  cursore = null;
+  aggiornaPulisci(); cerca(false);
+}
+function applicaExplorerPreset(name) {
+  const presets = {
+    "sap-de": { technology: "SAP", country: "DE" },
+    "kubernetes-remote": { technology: "Kubernetes", remote: "remote" },
+    "python-fr": { technology: "Python", country: "FR" },
+  };
+  const preset = presets[name];
+  if (!preset) return;
+  resetExplorerInputs();
+  for (const [key, value] of Object.entries(preset)) {
+    document.getElementById(EXPLORER_FILTER_FIELDS[key]).value = value;
+    if (key === "country") {
+      paeseIso = value;
+      const country = PAESI.find(([, code]) => code === value);
+      document.getElementById("f-paese").value = `${country?.[0] || value} (${value})`;
+    }
+  }
+  aggiornaPulisci();
+  if (tab === "jobs") cerca(false);
+  else cambiaTab("jobs");
+}
+function renderExplorerFilterChips() {
+  const current = filtri(), entries = Object.entries(current);
+  const target = document.getElementById("explorer-filter-chips");
+  if (!entries.length) {
+    target.innerHTML = `<span class="explorer-chip-label">Try a preset</span><button type="button" class="explorer-preset-chip" data-explorer-preset="sap-de" onclick="applicaExplorerPreset('sap-de')">SAP · DE</button><button type="button" class="explorer-preset-chip" data-explorer-preset="kubernetes-remote" onclick="applicaExplorerPreset('kubernetes-remote')">Kubernetes · Remote</button><button type="button" class="explorer-preset-chip" data-explorer-preset="python-fr" onclick="applicaExplorerPreset('python-fr')">Python · FR</button>`;
+    return;
+  }
+  target.innerHTML = `<span class="explorer-chip-label">Active filters</span>${entries.map(([key, value]) => `<span class="explorer-filter-chip" data-filter-key="${esc(key)}"><span>${esc(EXPLORER_FILTER_LABELS[key] || key)}: ${esc(value === "chiuse" ? "Recently closed" : value)}</span><button type="button" onclick="rimuoviFiltroExplorer(${jsArg(key)})" aria-label="Remove ${esc(EXPLORER_FILTER_LABELS[key] || key)} filter">×</button></span>`).join("")}<button type="button" class="px-1.5 text-[10px] font-bold text-brand-600 hover:text-brand-700" onclick="pulisciFiltri()">Clear all</button>`;
+}
+function exportExplorerSlice() {
+  const current = filtri();
+  const pre = { tipo: tab === "jobs" ? "postings" : "companies" };
+  const transferred = [], omitted = [];
+  for (const key of ["country", "technology", "dal"]) {
+    if (!current[key]) continue;
+    if (key === "dal" && pre.tipo !== "postings") { omitted.push(EXPLORER_FILTER_LABELS[key]); continue; }
+    pre[key] = current[key];
+    transferred.push(EXPLORER_FILTER_LABELS[key]);
+  }
+  for (const key of Object.keys(current)) {
+    if (!["country", "technology", "dal"].includes(key)) omitted.push(EXPLORER_FILTER_LABELS[key] || key);
+  }
+  const notes = [];
+  notes.push(transferred.length ? `Transferred from Explorer: ${transferred.join(", ")}.` : "No compatible Explorer filters to transfer.");
+  if (omitted.length) notes.push(`Not applied in Export: ${[...new Set(omitted)].join(", ")}.`);
+  pre.transferNote = notes.join(" ");
+  apriExport(pre);
+  notifica(omitted.length ? "Export opened with compatible Explorer filters" : "Explorer filters transferred to Export");
 }
 function aggiornaPulisci() {
   document.getElementById("pulisci").classList.toggle("hidden", Object.keys(filtri()).length === 0);
+  renderExplorerFilterChips();
   aggiornaRichiestaApi();
 }
 ["f-q", "f-tec", "f-paese"].forEach(id =>
@@ -2718,11 +2958,11 @@ function drawerLoading() {
 }
 function revealValueCard(record) {
   const count = companyActiveJobs(record) ?? 0;
-  return `<div class="drawer-subtle mt-4"><p class="text-[13px] font-bold text-slate-900">3 credits once · Permanent access to company profile, tech stack, and all ${count} postings</p><p class="mt-1 text-[12px] leading-5 text-slate-500">One company unlock. No additional charge to revisit its full postings or company data.</p></div>`;
+  return `<section class="drawer-subtle mt-4" aria-label="Locked preview"><div class="flex items-center justify-between gap-3"><p class="text-[13px] font-bold text-slate-900">Locked preview</p><span class="drawer-status">3 credits once</span></div><p class="mt-2 text-[12px] font-semibold leading-5 text-slate-700">3 credits once · Permanent access to company profile, tech stack, and all ${count} postings</p><ul class="locked-preview-list"><li>Company profile, identity, locations and hiring signals</li><li>Verified technology stack, grouped by relevance</li><li>Every active posting, with permanent revisit access</li></ul><p class="mt-3 border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">One company unlock. No additional charge to revisit its full postings or company data.</p></section>`;
 }
 function revealButtonMarkup(context) {
   const low = saldoDisponibile() < 3;
-  return `<div><button type="button" data-focus-key="reveal" data-job-id="${esc(context.jobId)}" data-explorer-kind="${esc(context.kind)}" onclick="rivelaAzienda(${jsArg(context.revealToken)}, this)" class="drawer-primary" ${low ? "disabled" : ""}>Reveal company · 3 credits</button>${low ? '<div class="drawer-warning mt-2 rounded-lg px-3 py-2 text-[11px]"><b>Need 3 credits to reveal</b> · <a href="#billing" class="font-bold underline" onclick="chiudiDettaglio();vaiAiCrediti();return false;">Top up credits</a></div>' : ""}</div>`;
+  return `<div class="reveal-action"><button type="button" data-focus-key="reveal" data-job-id="${esc(context.jobId)}" data-explorer-kind="${esc(context.kind)}" onclick="rivelaAzienda(${jsArg(context.revealToken)}, this)" class="drawer-primary" ${low ? "disabled" : ""}>Reveal company · 3 credits</button>${low ? '<div class="drawer-warning mt-2 rounded-lg px-3 py-2 text-[11px]" role="status"><b>Need 3 credits to reveal</b> · <a href="#billing" class="font-bold underline" onclick="chiudiDettaglio();vaiAiCrediti();return false;">Top up credits</a></div>' : ""}</div>`;
 }
 function aziendaAssente() {
   dettaglioSeq += 1;
@@ -2797,9 +3037,19 @@ function techPreview(record) {
   if (!technologies.length) return "";
   return `<section class="drawer-card mt-4"><p class="drawer-section-title">Technology signals</p>${core.length ? `<p class="mt-3 text-[11px] font-bold text-slate-600">Core &amp; Vertical Tech</p><div class="mt-2 flex flex-wrap gap-1.5">${core.map(tech => techChip(tech)).join("")}</div>` : ""}${productivity.length ? `<p class="mt-3 text-[11px] font-bold text-slate-500">Office &amp; Productivity</p><div class="mt-2 flex flex-wrap gap-1.5">${productivity.map(tech => techChip(tech)).join("")}</div>` : ""}</section>`;
 }
+function jobMetadataPreview(record) {
+  const languages = languageList(record).map(value => value.toUpperCase()).join(", ");
+  const fields = [
+    [record.category, "Category"], [record.seniority, "Seniority"],
+    [record.work_mode || record.remote, "Workplace"], [record.employment_type, "Contract"],
+    [languages, "Language"], [record.posted_at ? String(record.posted_at).slice(0, 10) : "", "Published"],
+    [sourceLabel(record), "Source"],
+  ];
+  return `<section class="drawer-card mb-4" aria-label="Free job metadata"><p class="drawer-section-title">Included in the free preview</p><p class="mt-1 text-[11px] leading-5 text-slate-500">Structured posting metadata available before unlocking the company.</p><dl class="drawer-preview-grid">${fields.map(([value, label]) => `<div><dt>${esc(label)}</dt><dd>${esc(value || "Not provided")}</dd></div>`).join("")}</dl></section>`;
+}
 function jobPreview(context) {
   const record = context.record || {};
-  return `${context.kind === "companies" ? '<div class="drawer-card mb-4"><p class="text-[13px] font-bold text-slate-800">Select a posting after unlock</p><p class="mt-1 text-[12px] leading-5 text-slate-500">This Job opens each company posting inline without closing the drawer.</p></div>' : ""}<section class="drawer-card" aria-label="Structured job preview"><div class="flex items-center justify-between gap-3"><p class="drawer-section-title">Anonymous company signals</p>${record.is_aggregator === true ? '<span class="explorer-aggregator-pill">Aggregator</span>' : ""}</div><div class="mt-3">${companySignals(record)}</div></section>${techPreview(record)}${revealValueCard(record)}`;
+  return `${context.kind === "companies" ? '<div class="drawer-card mb-4"><p class="text-[13px] font-bold text-slate-800">Select a posting after unlock</p><p class="mt-1 text-[12px] leading-5 text-slate-500">This Job opens each company posting inline without closing the drawer.</p></div>' : ""}${context.kind === "jobs" ? jobMetadataPreview(record) : ""}<section class="drawer-card" aria-label="Structured job preview"><div class="flex items-center justify-between gap-3"><p class="drawer-section-title">Anonymous company signals</p>${record.is_aggregator === true ? '<span class="explorer-aggregator-pill">Aggregator</span>' : ""}</div><div class="mt-3">${companySignals(record)}</div></section>${techPreview(record)}${revealValueCard(record)}`;
 }
 function copiaDominio(btn) {
   const domain = String(dettaglioCorrente?.record.company_domain || dettaglioCorrente?.company?.domain || "");
@@ -3258,11 +3508,24 @@ function labelAzione(action) {
   const labels = { "company unlock": "Company profile unlocked", "posting unlock": "Job posting unlocked", "daily export": "Daily export downloaded" };
   return labels[action] || (action && action.startsWith("filtered export") ? "Filtered export downloaded" : action || "API call");
 }
+function activityCompanyRef(event) {
+  const ref = String(event.dettaglio || "");
+  return event.azione === "company unlock" && unlockedCompanies().some(r => String(r.ref || "") === ref) ? ref : "";
+}
+function apriAziendaDaAttivita(ref, btn) {
+  const index = unlockedCompanies().findIndex(r => String(r.ref || "") === String(ref));
+  if (index < 0) { notifica("This unlocked company is no longer in the current activity snapshot.", "errore"); return; }
+  apriAziendaSbloccata(index, btn);
+}
 function eventoCompatto(e) {
   const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
   const detail = e.titolo || e.dettaglio || labelAzione(e.azione);
+  const companyRef = activityCompanyRef(e);
+  const detailMarkup = companyRef
+    ? `<button type="button" class="activity-company-link" data-company-ref="${esc(companyRef)}" onclick="apriAziendaDaAttivita(${jsArg(companyRef)}, this)" title="Open unlocked company profile"><span>${esc(detail)}</span><span>View →</span></button>`
+    : `<span class="min-w-0 truncate font-medium text-slate-700" title="${esc(detail)}">${esc(detail)}</span>`;
   const retry = e.download_id ? `<button type="button" data-export-download onclick="scaricaExportRecente(${jsArg(e.download_id)})" class="shrink-0 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[10px] font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-40">Download again · 0 credits</button>` : "";
-  return `<div class="flex items-center gap-3 px-5 py-3 text-xs transition-colors hover:bg-slate-50"><span class="w-20 shrink-0 text-[11px] text-slate-400">${esc(new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}</span><span class="w-24 shrink-0"><span class="activity-badge ${cls}">${nome}</span></span><span class="min-w-0 flex-1 truncate font-medium text-slate-700" title="${esc(detail)}">${esc(detail)}</span>${retry}<span class="ml-auto shrink-0 rounded-md bg-slate-50 px-1.5 py-0.5 font-bold tabular-nums text-slate-500">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></div>`;
+  return `<div class="activity-compact"><span class="w-20 shrink-0 text-[11px] text-slate-400">${esc(new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}</span><span class="w-24 shrink-0"><span class="activity-badge ${cls}">${nome}</span></span>${detailMarkup}${retry || "<span></span>"}<span class="ml-auto shrink-0 rounded-md bg-slate-50 px-1.5 py-0.5 text-right font-bold tabular-nums text-slate-500">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></div>`;
 }
 async function caricaUso() {
   const seq = ++usoSeq;
@@ -3666,6 +3929,8 @@ function exScegliTipo(t) {
   const off = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700";
   document.getElementById("ex-tipo-postings").className = t === "postings" ? on : off;
   document.getElementById("ex-tipo-companies").className = t === "companies" ? on : off;
+  document.getElementById("ex-tipo-postings").setAttribute("aria-selected", String(t === "postings"));
+  document.getElementById("ex-tipo-companies").setAttribute("aria-selected", String(t === "companies"));
   document.getElementById("ex-dal-box").style.display = t === "companies" ? "none" : "";
   document.getElementById("ex-cosa").textContent = t === "companies"
     ? "Each row is one company: name, tech stack, locations, size, active postings and 30-day hiring pace."
@@ -3686,6 +3951,9 @@ function apriExport(pre) {
   document.getElementById("ex-dal").value = "";
   document.getElementById("ex-max-rows").value = pre && pre.max_rows ? String(pre.max_rows) : "";
   document.getElementById("ex-nota").textContent = "";
+  const transferNote = document.getElementById("ex-transfer-note");
+  transferNote.textContent = pre?.transferNote || "";
+  transferNote.classList.toggle("hidden", !pre?.transferNote);
   exDati = null;
   exAggiornaPreset();
   if (pre) {
@@ -3799,8 +4067,8 @@ async function stimaExport() {
   }
   const saldoEl = document.getElementById("ex-saldo");
   saldoEl.textContent = exFmt(d.balance_after_export) + " credits";
-  saldoEl.className = "text-[15px] font-black tabular-nums " +
-    (d.balance_after_export >= 0 ? "text-mint-400" : "text-amber-400");
+  saldoEl.className = "receipt-value tabular-nums " +
+    (d.balance_after_export >= 0 ? "text-mint-400" : "text-amber-400 receipt-negative");
   exAggiornaPulsante();
   if (d.export_rows === 0) {
     exMostraAvviso("No rows match these filters. Change the country or technology — 0 credits will be used.", true);
@@ -3887,11 +4155,91 @@ async function scaricaExportFiltrato() {
   await carica();
 }
 
+let commandQuery = "", commandSelected = 0;
+const COMMANDS = [
+  ...ROUTES.map(routeName => ({
+    id: `go-${routeName}`, group: "Navigate", label: ROUTE_TITLES[routeName],
+    detail: `Open ${ROUTE_TITLES[routeName]}`, icon: ROUTE_TITLES[routeName][0],
+    keywords: `page section ${routeName}`,
+    run: () => { location.hash = `#${routeName}`; route(); },
+  })),
+  { id: "go-reference", group: "Navigate", label: "API Reference", detail: "Endpoints, examples and OpenAPI schema", icon: "</>", keywords: "docs documentation openapi", run: apriApiReference },
+  { id: "build-export", group: "Quick actions", label: "Build filtered export", detail: "Filter records and see the exact credit cost", icon: "↓", keywords: "download jsonl export", run: () => apriExport() },
+  { id: "create-key", group: "Quick actions", label: "Create new API key", detail: "Generate a key for an app or pipeline", icon: "+", keywords: "credential token secret", run: nuovaChiaveVista },
+  { id: "top-up", group: "Quick actions", label: "Top up credits", detail: "Open one-time credit purchase", icon: "€", keywords: "billing buy credits", run: vaiAiCrediti },
+  { id: "copy-base", group: "Quick actions", label: "Copy API Base URL", detail: API, icon: "⧉", keywords: "clipboard endpoint url", run: () => copiaTesto(API, "API Base URL copied") },
+  { id: "copy-openapi", group: "Quick actions", label: "Copy OpenAPI 3.1 URL", detail: "Copy the machine-readable schema URL", icon: "⧉", keywords: "clipboard json schema docs", run: () => copiaOpenApiUrl() },
+];
+function commandMatches() {
+  const query = commandQuery.trim().toLocaleLowerCase();
+  return COMMANDS.filter(command => !query || `${command.label} ${command.detail} ${command.keywords}`.toLocaleLowerCase().includes(query));
+}
+function renderComandi() {
+  const matches = commandMatches();
+  commandSelected = Math.max(0, Math.min(commandSelected, matches.length - 1));
+  const input = document.getElementById("command-input");
+  input.setAttribute("aria-activedescendant", matches.length ? `command-option-${matches[commandSelected].id}` : "");
+  let group = "";
+  document.getElementById("command-results").innerHTML = matches.length ? matches.map((command, index) => {
+    const heading = command.group !== group ? `<p class="command-group">${esc(command.group)}</p>` : "";
+    group = command.group;
+    return `${heading}<button id="command-option-${esc(command.id)}" type="button" role="option" aria-selected="${index === commandSelected}" data-command-id="${esc(command.id)}" class="command-option ${index === commandSelected ? "is-selected" : ""}" onclick="eseguiComando(${jsArg(command.id)})"><span class="command-option-icon" aria-hidden="true">${esc(command.icon)}</span><span class="command-option-copy"><b>${esc(command.label)}</b><small>${esc(command.detail)}</small></span><span aria-hidden="true">↵</span></button>`;
+  }).join("") : '<p class="px-4 py-8 text-center text-xs text-slate-500" role="status">No matching pages or actions.</p>';
+}
+function eseguiComando(id) {
+  const command = COMMANDS.find(item => item.id === id);
+  if (!command) return;
+  chiudiCommandPalette();
+  command.run();
+}
+function apriCommandPalette() {
+  if (dialogoAttivo?.id === "command-palette") return;
+  if (dialogoAttivo) chiudiDialogo(dialogoAttivo);
+  commandQuery = "";
+  commandSelected = 0;
+  document.getElementById("command-input").value = "";
+  renderComandi();
+  apriDialogo("command-palette");
+  requestAnimationFrame(() => document.getElementById("command-input").focus());
+}
+function chiudiCommandPalette() {
+  if (dialogoAttivo?.id === "command-palette") chiudiDialogo("command-palette");
+}
+function filtraComandi(value) {
+  commandQuery = String(value || "");
+  commandSelected = 0;
+  renderComandi();
+}
+function tastoCommandPalette(event) {
+  const matches = commandMatches();
+  if (event.key === "Escape") {
+    event.preventDefault(); event.stopPropagation(); chiudiCommandPalette(); return;
+  }
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault(); event.stopPropagation();
+    if (matches.length) commandSelected = (commandSelected + (event.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+    renderComandi();
+    const selected = matches[commandSelected];
+    if (selected) document.getElementById(`command-option-${selected.id}`)?.scrollIntoView({ block: "nearest" });
+  } else if (event.key === "Enter") {
+    event.preventDefault(); event.stopPropagation();
+    if (matches[commandSelected]) eseguiComando(matches[commandSelected].id);
+  }
+}
+document.addEventListener("keydown", event => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "k") {
+    event.preventDefault();
+    if (dialogoAttivo?.id === "command-palette") chiudiCommandPalette();
+    else apriCommandPalette();
+  }
+});
+
 document.querySelectorAll("[data-route-link]").forEach(link => link.addEventListener("click", () => {
   chiudiDettaglio(false);
   chiudiDrawer();
 }));
 addEventListener("hashchange", route);
+aggiornaPulisci();
 window.addEventListener('pageshow', (e) => {
   if (e.persisted) window.location.reload();
 });
