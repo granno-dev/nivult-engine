@@ -889,27 +889,27 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
           </div>
           <p id="ex-cosa" class="text-[12px] text-slate-400 -mt-1">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
           <div>
-            <div class="flex items-center justify-between gap-3 mb-1.5"><label for="ex-max-rows" class="block text-[13px] font-bold text-slate-700">Max rows</label><span class="text-[11px] text-slate-400">Up to 100,000 per download</span></div>
+            <div class="flex items-center justify-between gap-3 mb-1.5"><label for="ex-max-rows" class="block text-[13px] font-bold text-slate-700">Max rows</label><span class="text-[11px] font-semibold text-brand-600">Only included rows are charged</span></div>
             <div class="grid grid-cols-[1fr_112px] gap-2">
               <div class="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1" aria-label="Max rows presets">
                 <button id="ex-max-100" type="button" onclick="exImpostaMax('100')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">100</button>
                 <button id="ex-max-500" type="button" onclick="exImpostaMax('500')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">500</button>
                 <button id="ex-max-1000" type="button" onclick="exImpostaMax('1000')" class="rounded-lg px-2 py-2 text-xs font-bold text-slate-500 hover:text-slate-800">1,000</button>
-                <button id="ex-max-all" type="button" onclick="exImpostaMax('')" class="rounded-lg px-2 py-2 text-xs font-bold bg-white text-slate-900 shadow-sm">All</button>
+                <button id="ex-max-all" type="button" onclick="exImpostaMax('')" class="rounded-lg px-2 py-2 text-xs font-bold bg-white text-slate-900 shadow-sm">Max 100k</button>
               </div>
-              <input id="ex-max-rows" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="All" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
+              <input id="ex-max-rows" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="Max" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-[14px] outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition">
             </div>
-            <p class="mt-1.5 text-[11px] leading-4 text-slate-400">All selects the freshest records, up to the per-download ceiling.</p>
+            <p id="ex-max-help" class="mt-1.5 text-[11px] leading-4 text-slate-500">100 included jobs = 100 credits. Max 100k is a safety cap, not the full dataset.</p>
           </div>
         </div>
 
         <div class="mt-6 overflow-hidden rounded-2xl bg-slate-950 shadow-lg shadow-slate-900/20">
           <div class="flex items-center justify-between gap-3 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Matching slice</span>
+            <span class="text-xs font-medium text-slate-400">Matching dataset · not included</span>
             <span id="ex-righe" class="text-[15px] font-bold tabular-nums text-white">—</span>
           </div>
           <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
-            <span class="text-xs font-medium text-slate-400">Exporting</span>
+            <span class="text-xs font-medium text-slate-300">Included in this download</span>
             <span class="text-right"><span id="ex-export-righe" class="text-[15px] font-bold tabular-nums text-white">—</span><span id="ex-export-note" class="hidden ml-1 text-[11px] font-medium text-slate-400">most recent</span></span>
           </div>
           <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
@@ -917,18 +917,32 @@ GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;post
             <span id="ex-costo" class="text-[15px] font-bold tabular-nums text-brand-400">—</span>
           </div>
           <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
+            <span class="text-xs font-medium text-slate-400">Current balance</span>
+            <span id="ex-saldo-attuale" class="text-[15px] font-bold tabular-nums text-white">—</span>
+          </div>
+          <div class="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3.5">
             <span class="text-xs font-medium text-slate-400">Balance after export</span>
             <span id="ex-saldo" class="text-[15px] font-bold tabular-nums text-mint-400">—</span>
           </div>
         </div>
         <p class="mt-3 text-center text-[11px] leading-5 text-slate-400">Same rate as API · 1 credit/job · 3 credits/company</p>
-        <p id="ex-cap-nota" class="hidden mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold leading-5 text-amber-800"></p>
+        <p id="ex-cap-nota" class="hidden mt-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[12px] font-semibold leading-5 text-blue-800"></p>
 
-        <div id="ex-avviso" role="alert" class="hidden mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed">
-          <p id="ex-avviso-testo"></p>
-          <div id="ex-avviso-azioni" class="hidden mt-3 flex flex-wrap items-center gap-3">
-            <button id="ex-fit" type="button" onclick="exFitBalance()" class="hidden rounded-lg border border-amber-300 bg-white/70 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-white">Fit my balance</button>
-            <a id="ex-ricarica" href="#billing" onclick="vaiAllaRicarica(); return false" class="hidden font-bold text-violet-700 underline underline-offset-2">Top up credits</a>
+        <div id="ex-avviso" role="alert" class="hidden mt-4 overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm">
+          <div class="p-4">
+            <div class="flex items-start gap-3">
+              <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 9v4m0 4h.01M10.3 3.7 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"/></svg></span>
+              <div class="min-w-0"><p id="ex-avviso-titolo" class="text-[13px] font-extrabold text-amber-950"></p><p id="ex-avviso-testo" class="mt-1 text-[12px] font-medium leading-5 text-amber-900"></p></div>
+            </div>
+            <div id="ex-avviso-metriche" class="hidden mt-4 grid grid-cols-3 gap-2">
+              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Balance</span><b id="ex-metric-saldo" class="mt-0.5 block text-sm tabular-nums text-slate-900"></b></div>
+              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Selected</span><b id="ex-metric-costo" class="mt-0.5 block text-sm tabular-nums text-slate-900"></b></div>
+              <div class="rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2"><span class="block text-[9px] font-bold uppercase tracking-wide text-amber-700">Missing</span><b id="ex-metric-mancano" class="mt-0.5 block text-sm tabular-nums text-amber-800"></b></div>
+            </div>
+            <div id="ex-avviso-azioni" class="hidden mt-4 grid sm:grid-cols-2 gap-2">
+              <button id="ex-fit" type="button" onclick="exFitBalance()" class="hidden rounded-xl bg-amber-700 px-3 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-amber-800 transition">Fit my balance</button>
+              <a id="ex-ricarica" href="#billing" onclick="vaiAllaRicarica(); return false" class="hidden rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-center text-xs font-bold text-amber-900 hover:bg-amber-100 transition">Top up credits</a>
+            </div>
           </div>
         </div>
 
@@ -2818,6 +2832,9 @@ function exScegliTipo(t) {
     : "Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.";
   document.getElementById("ex-prezzo-label").textContent = t === "companies"
     ? "Exact cost · 3 credits / company" : "Exact cost · 1 credit / job";
+  document.getElementById("ex-max-help").textContent = t === "companies"
+    ? "1 included company = 3 credits. Max 100k is a safety cap, not the full dataset."
+    : "100 included jobs = 100 credits. Max 100k is a safety cap, not the full dataset.";
   stimaExport();
 }
 function apriExport(pre) {
@@ -2853,15 +2870,42 @@ function filtriExport() {
   return f;
 }
 function exResetRiepilogo(value) {
-  for (const id of ["ex-righe", "ex-export-righe", "ex-costo", "ex-saldo"])
+  for (const id of ["ex-righe", "ex-export-righe", "ex-costo", "ex-saldo-attuale", "ex-saldo"])
     document.getElementById(id).textContent = value;
 }
 function exMostraAvviso(testo, neutral = false) {
   const avviso = document.getElementById("ex-avviso");
-  avviso.className = "mt-4 rounded-xl px-4 py-3 text-[13px] font-semibold leading-relaxed " +
-    (neutral ? "bg-slate-50 border border-slate-200 text-slate-600"
-             : "bg-amber-50 border border-amber-200 text-amber-800");
-  document.getElementById("ex-avviso-testo").textContent = testo;
+  avviso.className = "mt-4 overflow-hidden rounded-2xl border shadow-sm " +
+    (neutral ? "border-slate-200 bg-slate-50" : "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50");
+  const titolo = document.getElementById("ex-avviso-titolo");
+  titolo.textContent = neutral ? "No rows to export" : "Export unavailable";
+  titolo.className = "text-[13px] font-extrabold " + (neutral ? "text-slate-800" : "text-amber-950");
+  const body = document.getElementById("ex-avviso-testo");
+  body.textContent = testo;
+  body.className = "mt-1 text-[12px] font-medium leading-5 " + (neutral ? "text-slate-600" : "text-amber-900");
+  document.getElementById("ex-avviso-metriche").classList.add("hidden");
+}
+function exMostraSaldoInsufficiente(d) {
+  const mancano = d.exact_cost - d.saldo;
+  exMostraAvviso("", false);
+  document.getElementById("ex-avviso-titolo").textContent = exFmt(mancano) + " credits missing";
+  document.getElementById("ex-avviso-testo").textContent = d.affordable_rows > 0
+    ? "Your balance covers " + exFmt(d.affordable_rows) + " rows. This selection includes " +
+      exFmt(d.export_rows) + " rows. Fit it to your balance or top up for the full selection."
+    : "Your current balance is 0 credits. This selection of " + exFmt(d.export_rows) +
+      " rows costs " + exFmt(d.exact_cost) + " credits, so no rows can be downloaded right now.";
+  document.getElementById("ex-metric-saldo").textContent = exFmt(d.saldo) + " cr";
+  document.getElementById("ex-metric-costo").textContent = exFmt(d.exact_cost) + " cr";
+  document.getElementById("ex-metric-mancano").textContent = exFmt(mancano) + " cr";
+  document.getElementById("ex-avviso-metriche").classList.remove("hidden");
+  const azioni = document.getElementById("ex-avviso-azioni");
+  azioni.className = "mt-4 grid gap-2 " + (d.affordable_rows > 0 ? "sm:grid-cols-2" : "sm:grid-cols-1");
+  if (d.export_rows > d.affordable_rows && d.affordable_rows > 0) {
+    const fit = document.getElementById("ex-fit");
+    fit.textContent = "Fit my balance · " + exFmt(d.affordable_rows) + " rows";
+    fit.classList.remove("hidden");
+  }
+  document.getElementById("ex-ricarica").classList.remove("hidden");
 }
 function exAggiornaPulsante() {
   if (!exDati) return;
@@ -2875,7 +2919,7 @@ async function stimaExport() {
   exResetRiepilogo("…");
   vai.disabled = true;
   document.getElementById("ex-vai-label").textContent = "Checking exact cost…";
-  for (const id of ["ex-avviso", "ex-avviso-azioni", "ex-fit", "ex-ricarica", "ex-export-note", "ex-cap-nota"])
+  for (const id of ["ex-avviso", "ex-avviso-azioni", "ex-avviso-metriche", "ex-fit", "ex-ricarica", "ex-export-note", "ex-cap-nota"])
     document.getElementById(id).classList.add("hidden");
   let r;
   try { r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) }); }
@@ -2904,12 +2948,13 @@ async function stimaExport() {
   document.getElementById("ex-righe").textContent = exFmt(d.matching_rows) + " rows";
   document.getElementById("ex-export-righe").textContent = exFmt(d.export_rows) + " rows";
   document.getElementById("ex-costo").textContent = exFmt(d.exact_cost) + " credits";
+  document.getElementById("ex-saldo-attuale").textContent = exFmt(d.saldo) + " credits";
   if (d.export_rows < d.matching_rows) document.getElementById("ex-export-note").classList.remove("hidden");
   if (!document.getElementById("ex-max-rows").value && d.matching_rows > d.max_allowed_rows) {
     const capNota = document.getElementById("ex-cap-nota");
-    capNota.textContent = "All is limited to " + exFmt(d.max_allowed_rows) + " rows per export. Only the " +
-      exFmt(d.export_rows) + " most recent records will be downloaded, not all " +
-      exFmt(d.matching_rows) + " matching rows.";
+    capNota.textContent = "Safety cap: only " + exFmt(d.export_rows) + " of " + exFmt(d.matching_rows) +
+      " matching rows are included. " + exFmt(d.matching_rows - d.export_rows) +
+      " rows are excluded and are not charged.";
     capNota.classList.remove("hidden");
   }
   const saldoEl = document.getElementById("ex-saldo");
@@ -2922,17 +2967,7 @@ async function stimaExport() {
     return;
   }
   if (d.saldo < d.exact_cost) {
-    const mancano = d.exact_cost - d.saldo;
-    exMostraAvviso("You're short " + exFmt(mancano) + " credits for this download. " +
-      (d.affordable_rows > 0 ? "Fit it to your balance or top up to continue."
-                             : "Top up with at least " + d.unit_cost + " credits to download one record."));
-    document.getElementById("ex-avviso-azioni").classList.remove("hidden");
-    if (d.matching_rows > d.affordable_rows && d.affordable_rows > 0) {
-      const fit = document.getElementById("ex-fit");
-      fit.textContent = "Fit my balance (" + exFmt(d.affordable_rows) + " rows)";
-      fit.classList.remove("hidden");
-    }
-    document.getElementById("ex-ricarica").classList.remove("hidden");
+    exMostraSaldoInsufficiente(d);
     return;
   }
   vai.disabled = false;

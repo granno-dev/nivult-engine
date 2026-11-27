@@ -415,16 +415,18 @@ def test_export_modal_copy_controls_and_server_quote_contract():
     export_script = html[start:end]
     for marker in [
         'id="ex-max-rows"', 'id="ex-max-100"', 'id="ex-max-500"',
-        'id="ex-max-1000"', 'id="ex-max-all"', "Matching slice", "Exporting",
-        "Exact cost", "Balance after export", "most recent", "Fit my balance",
-        "Top up credits", "Same rate as API · 1 credit/job · 3 credits/company",
-        "bg-amber-50 border border-amber-200 text-amber-800", 'id="ex-cap-nota"',
-        "All is limited to ", " most recent records will be downloaded, not all ",
+        'id="ex-max-1000"', 'id="ex-max-all"', "Matching dataset · not included",
+        "Included in this download", "Exact cost", "Current balance", "Balance after export",
+        "most recent", "Fit my balance", "Top up credits", "Max 100k",
+        "Same rate as API · 1 credit/job · 3 credits/company", 'id="ex-cap-nota"',
+        'id="ex-avviso-metriche"', 'id="ex-metric-saldo"', 'id="ex-metric-costo"',
+        'id="ex-metric-mancano"', "Safety cap: only ", "rows are excluded and are not charged.",
     ]:
         assert marker in html
     for old_copy in [
         "1 credit / 10 job records", "1 credit / 10 jobs", "1 credit = 1 company record",
-        "Portal filtered export pricing",
+        "Portal filtered export pricing", "Top up with at least ", "You're short ",
+        "All is limited to ",
     ]:
         assert old_copy not in html
     assert "f.max_rows = Number(maxRows)" in export_script
@@ -432,6 +434,9 @@ def test_export_modal_copy_controls_and_server_quote_contract():
     assert "d.export_rows" in export_script
     assert "d.exact_cost" in export_script
     assert "d.balance_after_export" in export_script
+    assert 'getElementById("ex-saldo-attuale").textContent = exFmt(d.saldo)' in export_script
+    assert "exMostraSaldoInsufficiente(d)" in export_script
+    assert 'getElementById("ex-metric-mancano").textContent = exFmt(mancano)' in export_script
     assert "exImpostaMax(String(rows))" in export_script
     assert "d.matching_rows > d.max_allowed_rows" in export_script
     assert 'if (r.status === 402) {\n    await stimaExport();' in export_script
