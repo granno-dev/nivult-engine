@@ -50,16 +50,22 @@ body { background: #F5F4EF; }
 .topup-summary .credit-amount strong { color: #6EE7B7; }
 .activity-event { border-bottom: 1px solid #F1F5F9; }
 .activity-event:last-child { border-bottom: 0; }
-.activity-event summary { display: grid; grid-template-columns: minmax(150px,.8fr) auto minmax(140px,.8fr) minmax(220px,1.4fr) auto; gap: .75rem; align-items: center; padding: .85rem 1.25rem; cursor: pointer; list-style: none; }
+.activity-event summary { display: grid; grid-template-columns: 190px 92px 190px minmax(0,1fr) 72px; gap: .75rem; align-items: center; padding: .85rem 1.25rem; cursor: pointer; list-style: none; }
 .activity-event summary::-webkit-details-marker { display: none; }
 .activity-event summary:hover, .activity-event[open] summary { background: #F8FAFC; }
 .activity-event[open] summary { border-bottom: 1px solid #E2E8F0; }
+.activity-event summary > :nth-child(2) { justify-self: start; }
+.activity-event summary > :nth-child(4) { min-width: 0; }
 .activity-detail { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .75rem 1.5rem; padding: 1rem 1.25rem 1.25rem; background: #F8FAFC; font-size: 12px; }
 .activity-detail dt { color: #94A3B8; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .activity-detail dd { margin: .2rem 0 0; color: #475569; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
-  .activity-event summary { grid-template-columns: 1fr auto; row-gap: .5rem; }
-  .activity-event summary > :nth-child(3), .activity-event summary > :nth-child(4) { grid-column: 1 / -1; }
+  .activity-event summary { grid-template-columns: minmax(0,1fr) auto; row-gap: .5rem; }
+  .activity-event summary > :nth-child(1) { grid-column: 1; grid-row: 1; }
+  .activity-event summary > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  .activity-event summary > :nth-child(3) { grid-column: 1; grid-row: 2; }
+  .activity-event summary > :nth-child(4) { grid-column: 1 / -1; grid-row: 3; overflow-wrap: anywhere; white-space: normal; }
+  .activity-event summary > :nth-child(5) { grid-column: 2; grid-row: 2; }
   .activity-detail { grid-template-columns: 1fr; }
 }
 .index-main { display: flex; align-items: flex-start; gap: .75rem; }
@@ -132,22 +138,49 @@ body { background: #F5F4EF; }
 .channel-item strong { display: block; font-size: .9rem; color: #0F172A; }
 .channel-item small { display: block; margin-top: .1rem; font-size: .65rem; color: #64748B; }
 .channel-item > div:last-child { text-align: right; }
+.unlocked-picker { position: relative; }
+.unlocked-search-wrap { position: relative; }
+.unlocked-search-wrap > svg { position: absolute; top: 50%; left: .8rem; width: 16px; height: 16px; color: #94A3B8; pointer-events: none; transform: translateY(-50%); }
+.unlocked-search { padding-right: 2.5rem; padding-left: 2.35rem; }
+.unlocked-search-clear { position: absolute; top: 50%; right: .45rem; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; color: #64748B; transform: translateY(-50%); }
+.unlocked-search-clear:hover { background: #F1F5F9; color: #0F172A; }
+.unlocked-options { position: absolute; z-index: 20; top: calc(100% + .4rem); right: 0; left: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: .35rem; box-shadow: 0 14px 32px rgba(15,23,42,.14); }
+.unlocked-option { display: flex; align-items: center; gap: .65rem; border-radius: 8px; padding: .6rem .65rem; color: #334155; cursor: pointer; font-size: 12px; font-weight: 600; }
+.unlocked-option:hover, .unlocked-option.is-active { background: #EEF4FF; color: #2549B8; }
+.unlocked-option[aria-selected="true"] { background: #ECFDF5; color: #047857; }
+.unlocked-option input { width: 15px; height: 15px; flex-shrink: 0; accent-color: #2F5DE0; pointer-events: none; }
+.unlocked-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .65rem; }
+.unlocked-chip { display: inline-flex; max-width: 100%; align-items: center; gap: .35rem; border: 1px solid #C7D2FE; border-radius: 999px; background: #EEF2FF; padding: .25rem .35rem .25rem .6rem; color: #3730A3; font-size: 11px; font-weight: 700; }
+.unlocked-chip button { display: grid; width: 20px; height: 20px; flex-shrink: 0; place-items: center; border-radius: 999px; color: #4F46E5; }
+.unlocked-chip button:hover { background: #C7D2FE; }
+.unlocked-company-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; max-height: 280px; margin-top: .85rem; overflow-y: auto; overscroll-behavior: contain; padding-right: .25rem; scrollbar-color: #CBD5E1 transparent; scrollbar-width: thin; }
+.unlocked-company-card { display: flex; min-width: 0; min-height: 62px; align-items: center; gap: .65rem; border: 1px solid #E2E8F0; border-radius: 11px; background: #FFFFFF; padding: .7rem; text-align: left; transition: border-color .15s,box-shadow .15s,background .15s; }
+.unlocked-company-card:hover { border-color: #AFC8FF; background: #F8FAFF; box-shadow: 0 4px 12px rgba(47,93,224,.08); }
+.unlocked-company-card:disabled { opacity: .6; cursor: wait; }
+.unlocked-company-action { flex-shrink: 0; color: #2F5DE0; font-size: 10px; font-weight: 750; }
+@media (max-width: 639px) {
+  .unlocked-company-grid { grid-template-columns: 1fr; max-height: 320px; }
+  .unlocked-company-action { display: none; }
+}
 .explorer-tabs { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: 4px; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
 .explorer-tab { display: inline-flex; min-height: 40px; align-items: center; gap: .45rem; border-radius: 9px; padding: .55rem .9rem; font-size: 12px; font-weight: 750; color: #64748B; transition: background .15s, color .15s, box-shadow .15s; }
 .explorer-tab svg { width: 15px; height: 15px; }
 .explorer-tab.is-active { background: #2F5DE0; color: #FFFFFF; box-shadow: 0 4px 10px rgba(47,93,224,.20); }
 .explorer-tab:not(.is-active):hover { background: #F1F5F9; color: #0F172A; }
 .doc-layout { display: grid; grid-template-columns: 210px minmax(0,1fr); gap: 1.5rem; align-items: start; }
+.doc-layout > * { min-width: 0; }
 .doc-toc { position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto; padding: .25rem; }
 .doc-toc a { display: block; border-radius: 8px; padding: .5rem .65rem; font-size: 12px; font-weight: 600; color: #64748B; }
 .doc-toc a:hover { background: #EEF4FF; color: #2549B8; }
-.doc-section { scroll-margin-top: 90px; margin-bottom: 1.5rem; }
+.doc-section { min-width: 0; scroll-margin-top: 90px; margin-bottom: 1.5rem; }
 .doc-section h2 { margin: 0 0 .75rem; padding-bottom: .65rem; border-bottom: 1px solid #E2E8F0; font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em; }
 .doc-section h3 { margin: 1.25rem 0 .5rem; font-size: .95rem; font-weight: 750; }
 .doc-section h4 { margin: 1rem 0 .4rem; font-size: .8rem; font-weight: 750; }
 .doc-section p { margin: .5rem 0; font-size: .875rem; line-height: 1.65; color: #475569; }
 .doc-section ul { margin: .5rem 0; padding-left: 1.25rem; font-size: .875rem; line-height: 1.65; color: #475569; }
-.doc-table-wrap { margin: .75rem 0; overflow-x: auto; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; }
+.doc-section p, .doc-section li, .doc-section code, .doc-note { overflow-wrap: anywhere; }
+.doc-section .code-block { max-width: 100%; }
+.doc-table-wrap { max-width: 100%; margin: .75rem 0; overflow-x: auto; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; }
 .doc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .doc-table th, .doc-table td { padding: .65rem .75rem; border-bottom: 1px solid #F1F5F9; text-align: left; vertical-align: top; line-height: 1.5; }
 .doc-table th { background: #F8FAFC; color: #64748B; font-size: 10px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
@@ -156,6 +189,9 @@ body { background: #F5F4EF; }
 .doc-endpoint { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .75rem 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 .doc-method { display: inline-flex; border-radius: 6px; background: #D1FAE5; padding: .25rem .45rem; color: #047857; font-family: Inter,sans-serif; font-size: 10px; font-weight: 800; }
 .doc-note { margin: .75rem 0; border-left: 3px solid #3B6EF6; border-radius: 0 10px 10px 0; background: #EEF4FF; padding: .75rem 1rem; font-size: 12px; line-height: 1.6; color: #475569; }
+.doc-warning { border-left-color: #D97706; background: #FFFBEB; color: #78350F; }
+.doc-details { margin: .75rem 0; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; padding: .65rem .85rem; }
+.doc-details summary { cursor: pointer; font-size: 12px; font-weight: 750; color: #334155; }
 .doc-code-tabs { display: inline-flex; border-radius: 8px; background: #F1F5F9; padding: 3px; }
 .doc-code-tabs button { border-radius: 6px; padding: .3rem .55rem; font-size: 10px; font-weight: 700; color: #64748B; }
 .doc-code-tabs button.is-active { background: #FFFFFF; color: #0F172A; box-shadow: 0 1px 3px rgba(15,23,42,.10); }
@@ -592,215 +628,684 @@ body.modale-aperto { overflow: hidden; }
 
     <div class="doc-layout">
       <nav class="doc-toc" aria-label="API documentation">
-        <a href="#doc-intro" data-doc-target>Introduction</a>
-        <a href="#doc-authentication" data-doc-target>Authentication &amp; metering</a>
-        <a href="#doc-jobs" data-doc-target>Jobs &amp; v2 filters</a>
+        <a href="#doc-intro" data-doc-target>Quickstart</a>
+        <a href="#doc-authentication" data-doc-target>Authentication, plans &amp; credits</a>
+        <a href="#doc-jobs" data-doc-target>Jobs</a>
         <a href="#doc-companies" data-doc-target>Companies</a>
         <a href="#doc-company-detail" data-doc-target>Company detail</a>
         <a href="#doc-changes" data-doc-target>Changes / Delta feed</a>
         <a href="#doc-coverage" data-doc-target>Coverage</a>
         <a href="#doc-exports" data-doc-target>Daily exports</a>
         <a href="#doc-usage" data-doc-target>Usage</a>
+        <a href="#doc-rate-limits" data-doc-target>Rate limits &amp; headers</a>
         <a href="#doc-errors" data-doc-target>Errors &amp; pagination</a>
       </nav>
       <div id="api-quickstart" class="min-w-0">
         <section id="doc-intro" class="doc-section app-card p-5">
-          <h2>Nivult API</h2>
-          <p>Query live job postings and company intelligence from employer career systems and public employment portals. The API is versioned, JSON-first and uses keyset pagination.</p>
+          <h2>Nivult API quickstart</h2>
+          <p>Search live job postings and company records with JSON over HTTPS. Create an active key in <a href="#keys" class="font-semibold text-brand-600">API Keys</a>, store it in the <code>NIVULT_API_KEY</code> environment variable, and send it as <code>X-Api-Key</code>. Never put a key in a URL or client-side code.</p>
           <div class="doc-endpoint"><span class="doc-method">BASE URL</span><code>https://api.nivult.com</code></div>
-          <h3>Quickstart</h3>
-          <p>Create an active key in <a href="#keys" class="font-semibold text-brand-600">API Keys</a>, then send it in the <code>X-Api-Key</code> header. Never put the key in the URL.</p>
+          <h3>Step 1 — Check your account for 0 credits</h3>
+          <p>Call <code>GET /v1/usage</code>. It costs 0 credits and works even when your balance is zero.</p>
+          <h3>Step 2 — Fetch up to five jobs</h3>
+          <p>Call <code>GET /v1/jobs?limit=5</code>. That first request costs at most 5 credits because jobs cost 1 credit per returned record. The Python example caps itself at one page; increase <code>max_pages</code> only when you are ready to pay for more results.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="quick"><button type="button" class="is-active" onclick="docCode('quick','curl')">cURL</button><button type="button" onclick="docCode('quick','python')">Python</button></div><button type="button" onclick="copyDoc('doc-quick-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-quick-code"></pre></div>
-          <h3>Response envelope</h3>
-          <p>Paginated endpoints return <code>data</code>, <code>next_cursor</code> and <code>count_page</code>. Keep requesting until <code>next_cursor</code> is <code>null</code>.</p>
-          <div class="code-block mt-3 p-4"><pre>{
-  "data": [{ "id": "...", "title": "Data Engineer" }],
-  "next_cursor": "opaque-keyset-cursor",
-  "count_page": 1
+          <h3>Read a page</h3>
+          <p>Jobs, companies and changes return <code>data</code> (an array), <code>count_page</code> (the number of records in this page) and <code>next_cursor</code> (a string or <code>null</code>). There is no <code>total_count</code>: keyset pagination avoids an expensive full-result count on every request.</p>
+          <div class="code-block mt-3 p-4"><pre data-json-example="empty-page">{
+  "data": [],
+  "next_cursor": null,
+  "count_page": 0
 }</pre></div>
+          <p>For a low-risk first query, keep <code>limit=5</code>. Use <a href="#doc-coverage" data-doc-target class="font-semibold text-brand-600">Coverage</a> to understand field availability before building a large pipeline.</p>
         </section>
 
         <section id="doc-authentication" class="doc-section app-card p-5">
-          <h2>Authentication &amp; metering</h2>
-          <p>Direct API clients authenticate with <code>X-Api-Key</code>. Revoked keys stop working immediately. Usage is shared across all account keys, including revoked keys.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Resource</th><th>Cost</th><th>Entitlement</th></tr></thead><tbody>
-            <tr><td><code>/v1/jobs</code></td><td>1 credit per returned job</td><td>Every plan</td></tr>
-            <tr><td><code>/v1/companies</code> and company detail</td><td>3 credits per returned company</td><td>Every plan</td></tr>
-            <tr><td><code>/v1/changes</code></td><td>1 credit per returned event</td><td>Active Growth, 100K credits/month</td></tr>
-            <tr><td><code>/v1/coverage</code></td><td>0 credits (rate-limited)</td><td>Every plan</td></tr>
-            <tr><td><code>/v1/exports/latest</code> and file downloads</td><td>0 credits (included)</td><td>Active Scale, 500K credits/month</td></tr>
-            <tr><td><code>/v1/usage</code></td><td>0 credits (rate-limited)</td><td>Every plan (works at zero balance)</td></tr>
+          <h2>Authentication, plans &amp; credits</h2>
+          <p>Direct clients authenticate every request with <code>X-Api-Key</code>. Revoked keys stop working immediately. Monthly usage is account-wide across current and revoked keys; <code>key_credits_used</code> is the per-key view.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Resource</th><th>Cost</th><th>Access</th></tr></thead><tbody>
+            <tr><td><code>GET /v1/jobs</code></td><td>1 credit per returned job</td><td>Every plan</td></tr>
+            <tr><td><code>GET /v1/companies</code> and company detail</td><td>3 credits per returned company</td><td>Every plan</td></tr>
+            <tr><td><code>GET /v1/changes</code></td><td>1 credit per returned event</td><td>Delta entitlement: active subscription with at least 100,000 monthly credits</td></tr>
+            <tr><td><code>GET /v1/coverage</code>, <code>GET /v1/usage</code></td><td>0 credits</td><td>Every plan, including zero balance</td></tr>
+            <tr><td><code>GET /v1/exports/latest</code> and downloads</td><td>0 credits</td><td>Bulk entitlement: active subscription with at least 500,000 monthly credits</td></tr>
           </tbody></table></div>
-          <div class="doc-note"><b>Pay per result, not per call.</b> Empty results and errors cost 0 credits. Usage, coverage and Daily bulk are unmetered service endpoints and return <code>X-Credits-Charged: 0</code>; authentication, rate limits and plan entitlements still apply. Plan or trial allowance is spent before purchased credits. Top-ups never expire and do not unlock Delta or Daily bulk.</div>
-          <p>For direct accounts, the effective page limit is also capped by the available balance and the per-record cost.</p>
+          <h3>Plan quotas and product entitlements</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Plan</th><th>Credits / month</th><th>Delta (100K)</th><th>Daily bulk (500K)</th></tr></thead><tbody>
+            <tr><td>Trial</td><td>500 total trial credits; legacy accounts can differ</td><td>No</td><td>No</td></tr>
+            <tr><td>Starter</td><td>15,000</td><td>No</td><td>No</td></tr>
+            <tr><td>Growth</td><td>100,000</td><td>Included</td><td>No</td></tr>
+            <tr><td>Scale</td><td>500,000</td><td>Included</td><td>Included</td></tr>
+            <tr><td>Business</td><td>1,500,000</td><td>Included</td><td>Included</td></tr>
+          </tbody></table></div>
+          <div class="doc-note"><b>Pay per result, not per call.</b> Empty results and errors cost 0 credits. The recurring plan or one-time trial allowance is spent before purchased credits. Top-ups never expire, but they do not unlock Delta or Daily bulk. Usage, coverage, the export manifest and bulk downloads are unmetered service endpoints; authentication, rate limits and entitlements still apply.</div>
+          <p>For direct paid endpoints, the balance is an effective page-size limit: at most <code>floor(balance / credits_per_record)</code> records can be returned. A balance of 12 allows 12 jobs or 4 companies. Below the cost of one result, the paid endpoint returns a credit 429. Direct accounts at or below 1,000 monthly credits also have a page cap of 25; higher-volume accounts can request up to 500.</p>
         </section>
 
         <section id="doc-jobs" class="doc-section app-card p-5">
           <h2>Jobs</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/jobs</code></div>
-          <p>Returns live job postings. Each returned record costs 1 credit. Keyword filters accept comma-separated values and are ORed.</p>
-          <h3>Core parameters</h3>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>country</code></td><td>ISO 3166-1 alpha-2 country code, e.g. <code>DE,FR</code>.</td></tr>
-            <tr><td><code>category</code></td><td>Job family.</td></tr>
-            <tr><td><code>ats</code></td><td>Source platform slug. <code>bundesagentur</code> is accepted alone as a public alias for <code>bundesanstellung</code>.</td></tr>
-            <tr><td><code>exclude_ats</code></td><td>Exclude source slugs. If a value appears in both <code>ats</code> and <code>exclude_ats</code>, it is excluded.</td></tr>
-            <tr><td><code>seniority</code></td><td>Seniority, e.g. <code>mid,senior</code>.</td></tr>
-            <tr><td><code>remote</code></td><td><code>remote</code>, <code>hybrid</code> or <code>onsite</code>.</td></tr>
-            <tr><td><code>language</code></td><td>Posting language, e.g. <code>en,it</code>.</td></tr>
-            <tr><td><code>q</code></td><td>Full text over title and description; all terms are required (AND).</td></tr>
-            <tr><td><code>q_any</code></td><td>At least one of up to 15 comma-separated keywords (OR). Can be combined with <code>q</code>.</td></tr>
-            <tr><td><code>title</code></td><td>Full text restricted to the job title; all terms required.</td></tr>
-            <tr><td><code>technology</code></td><td>Case-insensitive exact match on normalized technologies.</td></tr>
-            <tr><td><code>posted_after</code></td><td>Posted at or after an ISO 8601 date/timestamp, inclusive.</td></tr>
-            <tr><td><code>posted_before</code></td><td>Posted strictly before an ISO 8601 date/timestamp, exclusive.</td></tr>
-            <tr><td><code>limit</code></td><td>Page size: default 100, minimum 1, maximum 500. Balance can reduce the effective limit.</td></tr>
-            <tr><td><code>cursor</code></td><td>Opaque keyset cursor returned by <code>next_cursor</code>.</td></tr>
+          <p>Returns active postings for 1 credit per returned job. Different parameters are combined with AND. Within a parameter, comma-separated values are ORed only where the table says so. Unknown enum-like values usually produce an empty result rather than a 400; <code>source_type</code> and <code>has_salary</code> are validated exceptions.</p>
+          <h3>Search &amp; Text</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>q</code></td><td>String; full text over title and description. All terms are ANDed.</td><td><code>q=data platform engineer</code></td></tr>
+            <tr><td><code>q_any</code></td><td>String; up to 15 comma-separated alternatives, ORed. Terms inside each alternative are ANDed. Can be combined with <code>q</code>.</td><td><code>q_any=MBSE,SysML,CATIA</code></td></tr>
+            <tr><td><code>title</code></td><td>String; full text restricted to title. All terms are ANDed.</td><td><code>title=systems engineer</code></td></tr>
           </tbody></table></div>
-          <h3>v2 parameters</h3>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>source_type</code></td><td><code>direct</code>, <code>aggregator</code>, <code>staffing</code> or <code>public_board</code>.</td></tr>
-            <tr><td><code>company</code></td><td>Full-text match on employer name.</td></tr>
-            <tr><td><code>company_slug</code></td><td>Employer/source slug.</td></tr>
-            <tr><td><code>company_domain</code></td><td>Employer domain; scheme, www and path are normalized.</td></tr>
-            <tr><td><code>city</code></td><td>City.</td></tr>
-            <tr><td><code>state</code></td><td>State or region.</td></tr>
-            <tr><td><code>employment_type</code></td><td>Employment type.</td></tr>
-            <tr><td><code>department</code></td><td>Department.</td></tr>
-            <tr><td><code>skills</code></td><td>Extracted skills, e.g. <code>MBSE,SysML</code>.</td></tr>
-            <tr><td><code>salary_currency</code></td><td>Salary currency, e.g. <code>EUR</code>.</td></tr>
-            <tr><td><code>has_salary</code></td><td><code>true</code> or <code>false</code>; whether observed salary_min or salary_max exists.</td></tr>
-            <tr><td><code>salary_min</code></td><td>Lower bound on observed <code>salary_min</code>, number ≥ 0.</td></tr>
-            <tr><td><code>salary_max</code></td><td>Upper bound on observed <code>salary_max</code>, number ≥ 0.</td></tr>
+          <h3>Role, Skills &amp; Tech</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>category</code></td><td>String; comma OR over the 33 job families below.</td><td><code>category=Data%20%26%20Analytics,Software</code></td></tr>
+            <tr><td><code>seniority</code></td><td>String; comma OR: <code>intern</code>, <code>junior</code>, <code>mid</code>, <code>senior</code>, <code>lead</code>, <code>head</code>.</td><td><code>seniority=mid,senior</code></td></tr>
+            <tr><td><code>employment_type</code></td><td>String; comma OR: <code>full_time</code>, <code>part_time</code>, <code>contract</code>, <code>temporary</code>, <code>internship</code>, <code>apprenticeship</code>.</td><td><code>employment_type=full_time,contract</code></td></tr>
+            <tr><td><code>department</code></td><td>String; comma OR over exact source department values. There is no department discovery endpoint.</td><td><code>department=Engineering</code></td></tr>
+            <tr><td><code>skills</code></td><td>String; comma OR, exact match against extracted skills. Broader and noisier than normalized technologies.</td><td><code>skills=MBSE,SysML</code></td></tr>
+            <tr><td><code>technology</code></td><td>String; comma OR, case-insensitive exact match against normalized technologies.</td><td><code>technology=SAP,Kubernetes</code></td></tr>
           </tbody></table></div>
-          <h3>Example: v2 filters in production</h3>
-          <p>This query asks for direct hybrid mid-level Data &amp; Analytics jobs in Paris with SAP, a salary range and a November posting window.</p>
+          <p><b><code>technology</code> versus <code>skills</code>:</b> use <code>technology</code> for curated, normalized tools such as <code>SAP</code> or <code>Python</code>; use <code>skills</code> for the wider extracted skill vocabulary such as <code>MBSE</code>. They are different fields, not aliases.</p>
+          <details class="doc-details"><summary>All 33 category values</summary><p><code>Administrative</code> · <code>Agriculture</code> · <code>Art &amp; Design</code> · <code>Construction</code> · <code>Consulting</code> · <code>Creative &amp; Media</code> · <code>Customer Service &amp; Support</code> · <code>Data &amp; Analytics</code> · <code>Education</code> · <code>Energy</code> · <code>Engineering</code> · <code>Environmental &amp; Sustainability</code> · <code>Finance &amp; Accounting</code> · <code>Food &amp; Beverage</code> · <code>Government &amp; Public Sector</code> · <code>Healthcare</code> · <code>Hospitality</code> · <code>Human Resources</code> · <code>Legal</code> · <code>Logistics</code> · <code>Management &amp; Leadership</code> · <code>Manufacturing</code> · <code>Marketing</code> · <code>Retail</code> · <code>Sales</code> · <code>Science &amp; Research</code> · <code>Security &amp; Safety</code> · <code>Social Services</code> · <code>Software</code> · <code>Sports &amp; Recreation</code> · <code>Technology</code> · <code>Trades</code> · <code>Transportation</code></p></details>
+          <h3>Location</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>country</code></td><td>String; comma OR over ISO 3166-1 alpha-2 codes.</td><td><code>country=DE,FR</code></td></tr>
+            <tr><td><code>city</code></td><td>String; comma OR over city values.</td><td><code>city=Berlin,Paris</code></td></tr>
+            <tr><td><code>state</code></td><td>String; comma OR over state or region values.</td><td><code>state=Berlin,Bavaria</code></td></tr>
+            <tr><td><code>remote</code></td><td>String; comma OR: <code>remote</code>, <code>hybrid</code>, <code>onsite</code>.</td><td><code>remote=remote,hybrid</code></td></tr>
+          </tbody></table></div>
+          <h3>Company</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>company</code></td><td>String; employer-name full text. All terms are ANDed.</td><td><code>company=The Dixon Group</code></td></tr>
+            <tr><td><code>company_slug</code></td><td>String; comma OR over exact employer slugs within the source.</td><td><code>company_slug=danone</code></td></tr>
+            <tr><td><code>company_domain</code></td><td>String; comma OR. Scheme, <code>www</code> and path are normalized away.</td><td><code>company_domain=dixonvalve.com</code></td></tr>
+          </tbody></table></div>
+          <h3>Compensation</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>salary_currency</code></td><td>String; comma OR over source currency codes.</td><td><code>salary_currency=EUR,USD</code></td></tr>
+            <tr><td><code>has_salary</code></td><td>Boolean string, <code>true</code> or <code>false</code>; tests whether either observed extremum exists. Not implied by salary bounds.</td><td><code>has_salary=true</code></td></tr>
+            <tr><td><code>salary_min</code></td><td>Non-negative number; filters the record's observed <code>salary_min &gt;= N</code>. Records with null <code>salary_min</code> do not match.</td><td><code>salary_min=50000</code></td></tr>
+            <tr><td><code>salary_max</code></td><td>Non-negative number; filters the record's observed <code>salary_max &lt;= N</code>. Records with null <code>salary_max</code> do not match.</td><td><code>salary_max=80000</code></td></tr>
+          </tbody></table></div>
+          <div class="doc-note"><b>Observed amounts stay in source units.</b> <code>salary_min</code> and <code>salary_max</code> are not annualized and are not normalized for gross or net pay. <code>salary_period</code> retains the source period, so compare period and currency before comparing amounts. Bounds do not implicitly add <code>has_salary=true</code>. Invalid salary numbers, negative values, or <code>salary_min &gt; salary_max</code> return 400. Separate <code>salary_estimate_*</code> fields are annual gross Nivult benchmarks, not observed employer amounts.</div>
+          <h3>Source &amp; Dates</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>ats</code></td><td>String; comma OR over source slugs returned in records. There is no facets or ATS-discovery endpoint.</td><td><code>ats=workday,greenhouse</code></td></tr>
+            <tr><td><code>exclude_ats</code></td><td>String; comma OR of source slugs to exclude. Exclusion wins if a slug is also in <code>ats</code>.</td><td><code>exclude_ats=jsonld,indeed</code></td></tr>
+            <tr><td><code>source_type</code></td><td>String; comma OR: <code>direct</code>, <code>aggregator</code>, <code>staffing</code>, <code>public_board</code>.</td><td><code>source_type=direct,staffing</code></td></tr>
+            <tr><td><code>language</code></td><td>String; comma OR over posting language codes.</td><td><code>language=en,it</code></td></tr>
+            <tr><td><code>posted_after</code></td><td>ISO 8601 date or timestamp; inclusive (<code>posted_at &gt;= value</code>).</td><td><code>posted_after=2026-11-01T00:00:00Z</code></td></tr>
+            <tr><td><code>posted_before</code></td><td>ISO 8601 date or timestamp; exclusive (<code>posted_at &lt; value</code>).</td><td><code>posted_before=2026-12-01T00:00:00Z</code></td></tr>
+            <tr><td><code>dal</code></td><td>Legacy string alias used only when <code>posted_after</code> is absent; same inclusive semantics.</td><td><code>dal=2026-11-01</code></td></tr>
+          </tbody></table></div>
+          <div class="doc-note"><b>One narrow ATS alias only:</b> exact, standalone, case-sensitive <code>ats=bundesagentur</code> maps to <code>bundesanstellung</code>. The alias is not applied to <code>exclude_ats</code>, to other casing, or inside comma-separated token lists. For portable queries, use the returned slug <code>bundesanstellung</code>.</div>
+          <h3>Pagination</h3>
+          <p>There is no <code>total_count</code>. Follow the opaque keyset cursor until it is null; start with <code>limit=5</code> to cap initial spend and use Coverage for field availability.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500. Tier and balance can lower the effective limit; <code>limit=5</code> is a safe first request.</td><td><code>limit=5</code></td></tr>
+            <tr><td><code>cursor</code></td><td>Opaque string copied exactly from <code>next_cursor</code>. Keep the other filters unchanged.</td><td><code>cursor=WyIyMDI2LTExLTI3VDA5OjAwOjAwIiwiMDFKQUJDMTIzIl0=</code></td></tr>
+          </tbody></table></div>
+          <h3>Example request</h3>
+          <p>This query asks for direct hybrid mid-level Data &amp; Analytics jobs in Paris with SAP and observed salary bounds during November 2026. The URL keeps <code>Data%20%26%20Analytics</code> correctly encoded.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="jobs"><button type="button" class="is-active" onclick="docCode('jobs','curl')">cURL</button><button type="button" onclick="docCode('jobs','python')">Python</button></div><button type="button" onclick="copyDoc('doc-jobs-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-jobs-code"></pre></div>
-          <h3>More query patterns</h3>
-          <div class="code-block mt-3 p-4"><pre>GET /v1/jobs?q_any=MBSE,SysML,CATIA&amp;exclude_ats=jsonld&amp;has_salary=true&amp;salary_min=50000&amp;salary_max=80000&amp;salary_currency=EUR
-
-GET /v1/jobs?company_domain=dixonvalve.com&amp;source_type=direct&amp;department=Engineering
-
-GET /v1/jobs?city=Berlin&amp;state=Berlin&amp;employment_type=full_time&amp;posted_after=2026-11-01T00:00:00Z&amp;posted_before=2026-12-01T00:00:00Z</pre></div>
+          <h3>Full representative job page</h3>
+          <p>This record has observed salary, so estimate fields are omitted. Optional top-level fields whose values are null, empty strings or empty arrays are omitted in real job and company records; clients must use <code>.get()</code> or equivalent rather than assume every key exists.</p>
+          <div class="code-block mt-3 p-4"><pre data-json-example="jobs-page">{
+  "data": [
+    {
+      "id": "01KBC0M7W4F8N2Q6E3A5D9G1JT",
+      "title": "Lead Data Engineer",
+      "ats": "greenhouse",
+      "company_slug": "danone",
+      "company": "Danone",
+      "url": "https://boards.greenhouse.io/danone/jobs/1234567",
+      "source_type": "direct",
+      "company_domain": "danone.com",
+      "country": "DE",
+      "city": "Berlin",
+      "location": "Berlin, Germany",
+      "language": "en",
+      "seniority": "lead",
+      "remote": "hybrid",
+      "skills": ["data modeling", "ETL", "MBSE"],
+      "has_salary": true,
+      "salary_min": 75000.0,
+      "salary_max": 95000.0,
+      "salary_currency": "EUR",
+      "posted_at": "2026-11-25T09:15:00+00:00",
+      "first_seen": "2026-11-25T10:00:00+00:00",
+      "last_seen": "2026-11-27T05:00:00+00:00",
+      "description": "Lead the design and operation of reliable data pipelines for our analytics platform.",
+      "category": "Data &amp; Analytics",
+      "employment_type": "full_time",
+      "languages_required": ["en", "de"],
+      "external_id": "1234567",
+      "department": "Data Platform",
+      "hours_type": "full_time",
+      "duration_type": "permanent",
+      "salary_period": "year",
+      "salary_source": "job_posting",
+      "salary_text": "EUR 75,000 to EUR 95,000 per year",
+      "posted_at_estimated": true,
+      "technologies": ["Python", "Snowflake", "dbt"],
+      "summary": "Technical leadership for a cloud data platform and its pipelines.",
+      "summary_source": "nivult",
+      "management_level": "manager",
+      "is_decision_maker": true,
+      "shift_schedule": "flexible",
+      "work_hours": "40 hours/week",
+      "is_urgently_hiring": true,
+      "benefits": ["health insurance", "remote allowance"],
+      "valid_through": "2026-12-25T23:59:59+00:00",
+      "state": "Berlin",
+      "postal_code": "10117",
+      "geo": {"latitude": 52.52, "longitude": 13.405, "source": "company_site"},
+      "applicants_count": 14,
+      "is_easy_apply": true,
+      "job_sources": [
+        {"id": "01KBC0N4XQ2V8R6M3P5T7A9ZWK", "ats": "linkedin", "company_slug": "danone", "url": "https://www.linkedin.com/jobs/view/1234567", "posted_at": "2026-11-25T08:00:00+00:00", "status": "active"}
+      ],
+      "updated_at": "2026-11-26T18:30:00+00:00"
+    }
+  ],
+  "next_cursor": "WyIyMDI2LTExLTI1VDA5OjE1OjAwIiwiMDFLQkMwTTdXNEY4TjJRNkUzQTVEOUcxSlQiXQ==",
+  "count_page": 1
+}</pre></div>
+          <h3>Job fields: types and presence</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>Type</th><th>Presence and meaning</th></tr></thead><tbody>
+            <tr><td><code>id</code>, <code>title</code>, <code>ats</code>, <code>company_slug</code>, <code>url</code>, <code>source_type</code></td><td>string</td><td>Stable identity, source and application link; <code>source_type</code> uses the four values above.</td></tr>
+            <tr><td><code>company</code>, <code>company_domain</code>, <code>location</code>, <code>language</code>, <code>seniority</code>, <code>remote</code>, <code>category</code>, <code>employment_type</code>, <code>department</code>, <code>description</code>, <code>summary</code>, <code>management_level</code>, <code>shift_schedule</code>, <code>work_hours</code>, <code>external_id</code>, <code>hours_type</code>, <code>duration_type</code>, <code>state</code>, <code>postal_code</code></td><td>string</td><td>Optional; omitted when null or empty. Enum-like fields use the vocabularies above when known.</td></tr>
+            <tr><td><code>country</code>, <code>city</code></td><td>string</td><td>Optional posting geography; omitted when unavailable.</td></tr>
+            <tr><td><code>skills</code>, <code>technologies</code>, <code>languages_required</code>, <code>benefits</code></td><td>array of strings</td><td>Optional; omitted when empty.</td></tr>
+            <tr><td><code>posted_at</code>, <code>first_seen</code>, <code>last_seen</code>, <code>updated_at</code>, <code>valid_through</code></td><td>ISO 8601 timestamp string</td><td>Optional; posting, observation, content-change and expiry times respectively.</td></tr>
+            <tr><td><code>posted_at_estimated</code>, <code>is_decision_maker</code>, <code>is_urgently_hiring</code>, <code>is_easy_apply</code></td><td>boolean</td><td>Optional true flags; omitted when not established.</td></tr>
+            <tr><td><code>summary_source</code>, <code>salary_source</code></td><td>string</td><td>Optional provenance for generated summary and observed salary.</td></tr>
+            <tr><td><code>geo</code></td><td>object</td><td>Optional <code>latitude</code> and <code>longitude</code> numbers plus <code>source</code> string.</td></tr>
+            <tr><td><code>job_sources</code></td><td>array of objects</td><td>Optional duplicate-source observations with <code>id</code>, <code>ats</code>, <code>company_slug</code>, <code>url</code>, <code>posted_at</code>, <code>status</code>.</td></tr>
+            <tr><td><code>applicants_count</code></td><td>integer</td><td>Optional source-reported count.</td></tr>
+          </tbody></table></div>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Compensation field</th><th>Type</th><th>Presence and meaning</th></tr></thead><tbody>
+            <tr><td><code>has_salary</code></td><td>boolean</td><td>True when at least one observed extremum exists.</td></tr>
+            <tr><td><code>salary_min</code>, <code>salary_max</code></td><td>number</td><td>Optional observed source amounts; omitted independently when null.</td></tr>
+            <tr><td><code>salary_currency</code>, <code>salary_period</code>, <code>salary_text</code></td><td>string</td><td>Optional source currency, unchanged source period and original text.</td></tr>
+            <tr><td><code>salary_is_estimate</code></td><td>boolean</td><td>Optional true flag for benchmark-only records.</td></tr>
+            <tr><td><code>salary_estimate_min</code>, <code>salary_estimate_median</code>, <code>salary_estimate_max</code></td><td>number</td><td>Optional annual gross benchmark quartiles; never substitute them into observed-salary filters.</td></tr>
+            <tr><td><code>salary_estimate_currency</code>, <code>salary_estimate_basis</code></td><td>string</td><td>Optional estimate currency and benchmark provenance, including sample size and cohort.</td></tr>
+          </tbody></table></div>
         </section>
 
         <section id="doc-companies" class="doc-section app-card p-5">
           <h2>Companies</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/companies</code></div>
-          <p>Returns company records keyed by <code>ATS + company_slug</code>. Each returned record costs 3 credits.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>country</code></td><td>Country of the company record, not every posting location.</td></tr>
-            <tr><td><code>industry</code></td><td>Exact industry value.</td></tr>
-            <tr><td><code>q</code></td><td>Case-insensitive company-name search.</td></tr>
-            <tr><td><code>technology</code></td><td>Company-level technology aggregate.</td></tr>
-            <tr><td><code>employees_min</code></td><td>Minimum headcount.</td></tr>
-            <tr><td><code>employees_max</code></td><td>Maximum headcount.</td></tr>
-            <tr><td><code>limit</code>, <code>cursor</code></td><td>Same pagination contract as Jobs.</td></tr>
+          <p>Returns company records keyed by <code>ats + company_slug</code> for 3 credits per company. Company filters are single-value filters: they do not comma-OR. Different filters are ANDed.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and matching</th><th>Real example</th></tr></thead><tbody>
+            <tr><td><code>country</code></td><td>String; exact country of the company record, not every posting location.</td><td><code>country=IT</code></td></tr>
+            <tr><td><code>industry</code></td><td>String; exact industry value. There is no industry discovery endpoint.</td><td><code>industry=Distribution of gaseous fuels</code></td></tr>
+            <tr><td><code>q</code></td><td>String; case-insensitive substring search on company name.</td><td><code>q=italgas</code></td></tr>
+            <tr><td><code>technology</code></td><td>String; case-insensitive exact match on the company-level normalized technology aggregate.</td><td><code>technology=Kubernetes</code></td></tr>
+            <tr><td><code>employees_min</code></td><td>Integer; <code>employees &gt;= N</code>. Missing employee counts do not match.</td><td><code>employees_min=500</code></td></tr>
+            <tr><td><code>employees_max</code></td><td>Integer; <code>employees &lt;= N</code>. Missing employee counts do not match.</td><td><code>employees_max=5000</code></td></tr>
+            <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500; tier and <code>floor(balance / 3)</code> can lower it.</td><td><code>limit=25</code></td></tr>
+            <tr><td><code>cursor</code></td><td>Opaque keyset string from <code>next_cursor</code>; keep filters unchanged.</td><td><code>cursor=WyJJdGFsZ2FzIiwiYmFtYm9vaHIiLCJpdGFsZ2FzIl0=</code></td></tr>
           </tbody></table></div>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="companies"><button type="button" class="is-active" onclick="docCode('companies','curl')">cURL</button><button type="button" onclick="docCode('companies','python')">Python</button></div><button type="button" onclick="copyDoc('doc-companies-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-companies-code"></pre></div>
+          <h3>Representative company page</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="companies-page">{
+  "data": [
+    {
+      "ats": "bamboohr",
+      "company_slug": "italgas",
+      "company": "Italgas",
+      "country": "IT",
+      "domain": "italgas.it",
+      "logo": "https://logo.clearbit.com/italgas.it",
+      "active_jobs": 92,
+      "employees": 4200,
+      "employees_scope": "group",
+      "employees_source": "registro",
+      "industry": "Distribution of gaseous fuels",
+      "employees_legal_entity": 3800,
+      "employees_legal_entity_band": "1001-5000",
+      "employees_legal_entity_source": "registro",
+      "industry_source": "wikidata",
+      "jobs_posted_30d": 18,
+      "languages": ["it", "en"],
+      "top_skills": [{"skill": "project management", "jobs": 12}],
+      "website": "https://www.italgas.it",
+      "company_name_source": "company_site",
+      "size_range": "1001-5000",
+      "size_range_source": "registro",
+      "n_locations": 2,
+      "technologies": [
+        {"technology": "Kubernetes", "active_jobs": 4, "jobs": 9, "first_verified_at": "2026-08-12T10:00:00+00:00", "last_verified_at": "2026-11-27T05:00:00+00:00"}
+      ]
+    }
+  ],
+  "next_cursor": null,
+  "count_page": 1
+}</pre></div>
+          <p>Optional empty or null top-level fields are omitted. Provenance is explicit where available: <code>employees_source</code>, <code>industry_source</code>, <code>company_name_source</code>, <code>size_range_source</code> and the more specific legal-entity source describe how values were obtained; provenance is not present on every field.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>Type</th><th>Presence and meaning</th></tr></thead><tbody>
+            <tr><td><code>ats</code>, <code>company_slug</code>, <code>company</code></td><td>string</td><td>Company identity; use ATS + slug for detail requests.</td></tr>
+            <tr><td><code>country</code>, <code>domain</code>, <code>logo</code>, <code>website</code>, <code>industry</code>, <code>legal_name</code>, <code>legal_form</code>, <code>legal_form_code</code>, <code>registration_id</code>, <code>founded</code>, <code>size_range</code>, <code>employees_scope</code>, <code>lei</code>, <code>description</code></td><td>string</td><td>Optional profile and registry fields; omitted when empty or null.</td></tr>
+            <tr><td><code>active_jobs</code>, <code>jobs_posted_30d</code>, <code>n_locations</code></td><td>integer</td><td>Observed posting and location counts.</td></tr>
+            <tr><td><code>employees</code>, <code>employees_legal_entity</code></td><td>integer</td><td>Optional best available and legal-entity headcounts.</td></tr>
+            <tr><td><code>employees_legal_entity_band</code></td><td>string</td><td>Optional registry headcount band.</td></tr>
+            <tr><td><code>industry_mix_share</code></td><td>number</td><td>Optional strength of a job-mix-derived industry signal.</td></tr>
+            <tr><td><code>*_source</code>, <code>founded_source</code></td><td>string</td><td>Optional field-level provenance; inspect the source alongside the value.</td></tr>
+            <tr><td><code>languages</code>, <code>external_urls</code></td><td>array of strings</td><td>Optional posting languages and external profile links.</td></tr>
+            <tr><td><code>top_skills</code></td><td>array of objects</td><td>Optional <code>skill</code> string and <code>jobs</code> integer.</td></tr>
+            <tr><td><code>technologies</code></td><td>array of objects</td><td>Optional technology, active/total job counts and first/last verification timestamps.</td></tr>
+            <tr><td><code>keywords</code></td><td>object</td><td>Optional <code>famiglie</code> and <code>tecnologie</code> arrays of strings.</td></tr>
+            <tr><td><code>locations</code></td><td>array of objects</td><td>Optional <code>city</code>, <code>country</code>, <code>state</code>, integer <code>offerte</code> and boolean <code>is_primary</code>.</td></tr>
+            <tr><td><code>headquarters</code></td><td>object</td><td>Optional address fields, numeric coordinates and <code>source</code> provenance.</td></tr>
+          </tbody></table></div>
         </section>
 
         <section id="doc-company-detail" class="doc-section app-card p-5">
           <h2>Company detail</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/companies/{piattaforma}/{slug}</code></div>
-          <p>Returns one company for 3 credits. A missing company or any other error costs 0 credits.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Path parameter</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>piattaforma</code></td><td>ATS/source identifier, e.g. <code>greenhouse</code>.</td></tr>
-            <tr><td><code>slug</code></td><td>Employer slug within that ATS.</td></tr>
+          <p>Returns one full company object for 3 credits. A missing company or any other error costs 0 credits.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Path parameter</th><th>Type</th><th>Example</th></tr></thead><tbody>
+            <tr><td><code>{piattaforma}</code></td><td>String ATS/source identifier from the record's <code>ats</code>.</td><td><code>bamboohr</code></td></tr>
+            <tr><td><code>{slug}</code></td><td>String employer slug within that ATS.</td><td><code>italgas</code></td></tr>
           </tbody></table></div>
+          <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="companyDetail"><button type="button" class="is-active" onclick="docCode('companyDetail','curl')">cURL</button><button type="button" onclick="docCode('companyDetail','python')">Python</button></div><button type="button" onclick="copyDoc('doc-companyDetail-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-companyDetail-code"></pre></div>
-          <p>Selected enriched fields include declared provenance metadata. It is not present on every field.</p>
+          <h3>Full representative company detail</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="company-detail">{
+  "ats": "bamboohr",
+  "company_slug": "italgas",
+  "company": "Italgas",
+  "country": "IT",
+  "domain": "italgas.it",
+  "logo": "https://logo.clearbit.com/italgas.it",
+  "active_jobs": 92,
+  "employees": 4200,
+  "employees_scope": "group",
+  "employees_source": "registro",
+  "industry": "Distribution of gaseous fuels",
+  "employees_legal_entity": 3800,
+  "employees_legal_entity_band": "1001-5000",
+  "employees_legal_entity_source": "registro",
+  "industry_source": "wikidata",
+  "industry_mix_share": 0.82,
+  "founded_source": "registro",
+  "legal_name": "ITALGAS S.P.A.",
+  "legal_form": "Società per azioni",
+  "legal_form_code": "SPA",
+  "registration_id": "815600F25FF44EF1FA76",
+  "founded": "2016-05-31",
+  "jobs_posted_30d": 18,
+  "languages": ["it", "en"],
+  "top_skills": [{"skill": "project management", "jobs": 12}],
+  "website": "https://www.italgas.it",
+  "lei": "815600F25FF44EF1FA76",
+  "company_name_source": "company_site",
+  "size_range": "1001-5000",
+  "size_range_source": "registro",
+  "locations": [
+    {"city": "Turin", "country": "IT", "state": "Piedmont", "offerte": 54, "is_primary": true},
+    {"city": "Milan", "country": "IT", "state": "Lombardy", "offerte": 38, "is_primary": false}
+  ],
+  "n_locations": 2,
+  "headquarters": {
+    "country": "IT",
+    "state": "Piedmont",
+    "city": "Turin",
+    "street": "Via XX Settembre 1",
+    "zipcode": "10121",
+    "full_address": "Via XX Settembre 1, 10121 Turin TO, Italy",
+    "latitude": 45.0703,
+    "longitude": 7.6869,
+    "source": "company_site"
+  },
+  "description": "Italgas operates gas distribution infrastructure and related digital services in Italy.",
+  "description_source": "company_site",
+  "external_urls": ["https://www.linkedin.com/company/italgas"],
+  "keywords": {
+    "famiglie": ["Energy", "Engineering"],
+    "tecnologie": ["Kubernetes", "Python"]
+  },
+  "technologies": [
+    {"technology": "Kubernetes", "active_jobs": 4, "jobs": 9, "first_verified_at": "2026-08-12T10:00:00+00:00", "last_verified_at": "2026-11-27T05:00:00+00:00"}
+  ]
+}</pre></div>
+          <p>The detail object is not wrapped in <code>data</code>. It uses the same field types and omission rule as company-list records. Nested provenance such as <code>headquarters.source</code> and <code>description_source</code> distinguishes company-site evidence from registry, Wikidata or inferred values.</p>
         </section>
 
         <section id="doc-changes" class="doc-section app-card p-5">
           <h2>Changes / Delta feed</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/changes?since={ISO timestamp}</code></div>
-          <p>Returns <code>new</code>, <code>updated</code> and <code>closed</code> events so your local index stays synchronized. Requires an active Growth subscription or higher with at least 100,000 credits/month.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>since</code></td><td><b>Required.</b> ISO 8601 timestamp within the retained seven-day history.</td></tr>
-            <tr><td><code>limit</code></td><td>Page size, capped by balance.</td></tr>
-            <tr><td><code>cursor</code></td><td>Paginates the current response; it is not the next <code>since</code> value.</td></tr>
+          <p>Synchronizes a local job index for 1 credit per returned event. It requires the Delta entitlement: an active Growth-or-higher subscription with at least 100,000 credits/month. Top-ups do not unlock it.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Parameter</th><th>Type and semantics</th><th>Example</th></tr></thead><tbody>
+            <tr><td><code>since</code></td><td>Required ISO 8601 timestamp. Return events at or after this time within retained history.</td><td><code>since=2026-11-27T08:00:00Z</code></td></tr>
+            <tr><td><code>limit</code></td><td>Integer, default 100, range 1–500; tier and balance can lower it.</td><td><code>limit=100</code></td></tr>
+            <tr><td><code>cursor</code></td><td>Opaque keyset cursor for this response stream. It is not the next <code>since</code>.</td><td><code>cursor=WyIyMDI2LTExLTI3VDA5OjAwOjAwIiwiMDFLQkMwTSJd</code></td></tr>
           </tbody></table></div>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Event</th><th>Record semantics</th><th>Client action</th></tr></thead><tbody>
+            <tr><td><code>new</code></td><td>Sparse discovery event with identity, source and selected posting fields; it is not a full job snapshot.</td><td>Insert or fetch the full job if your pipeline needs enriched fields.</td></tr>
+            <tr><td><code>updated</code></td><td>Full current active-job snapshot plus <code>event</code> and <code>updated_at</code>; not a field-level patch.</td><td>Replace the stored record by ID after removing <code>event</code> if desired.</td></tr>
+            <tr><td><code>closed</code></td><td>Sparse closure event with identity and closure metadata, including <code>closed_at</code>.</td><td>Mark the ID closed or remove it from the active index.</td></tr>
+          </tbody></table></div>
+          <p>Default retention is 7 days, but the effective earliest timestamp is metadata-driven from the current export (<code>flusso_dal</code>, with generation metadata as fallback). Always use the error's <code>retention_since</code>, not a hard-coded calendar assumption.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="changes"><button type="button" class="is-active" onclick="docCode('changes','curl')">cURL</button><button type="button" onclick="docCode('changes','python')">Python</button></div><button type="button" onclick="copyDoc('doc-changes-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-changes-code"></pre></div>
-          <div class="doc-note">Use an ISO timestamp from your previous successful sync for the next <code>since</code>. If retention has expired, the API returns <code>delta_retention_exceeded</code> with <code>action=resync</code> and <code>resync_required=true</code>.</div>
+          <h3>New, updated and closed in one page</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="changes-page">{
+  "data": [
+    {
+      "event": "new",
+      "id": "01KBC0M7W4F8N2Q6E3A5D9G1JT",
+      "title": "Lead Data Engineer",
+      "ats": "greenhouse",
+      "company_slug": "danone",
+      "company": "Danone",
+      "url": "https://boards.greenhouse.io/danone/jobs/1234567",
+      "country": "DE",
+      "city": "Berlin",
+      "language": "en",
+      "seniority": "lead",
+      "remote": "hybrid",
+      "skills": ["data modeling", "ETL"],
+      "salary_min": 75000.0,
+      "salary_max": 95000.0,
+      "salary_currency": "EUR",
+      "posted_at": "2026-11-25T09:15:00+00:00",
+      "first_seen": "2026-11-25T10:00:00+00:00",
+      "description": "Lead the design and operation of reliable data pipelines.",
+      "source_type": "direct"
+    },
+    {
+      "event": "updated",
+      "id": "01KBC0M7W4F8N2Q6E3A5D9G1JT",
+      "title": "Lead Data Engineer",
+      "ats": "greenhouse",
+      "company_slug": "danone",
+      "company": "Danone",
+      "url": "https://boards.greenhouse.io/danone/jobs/1234567",
+      "source_type": "direct",
+      "company_domain": "danone.com",
+      "country": "DE",
+      "city": "Berlin",
+      "location": "Berlin, Germany",
+      "language": "en",
+      "seniority": "lead",
+      "remote": "hybrid",
+      "skills": ["data modeling", "ETL"],
+      "has_salary": true,
+      "salary_min": 75000.0,
+      "salary_max": 95000.0,
+      "salary_currency": "EUR",
+      "posted_at": "2026-11-25T09:15:00+00:00",
+      "first_seen": "2026-11-25T10:00:00+00:00",
+      "last_seen": "2026-11-27T05:00:00+00:00",
+      "description": "Lead the design and operation of reliable data pipelines for our analytics platform.",
+      "category": "Data &amp; Analytics",
+      "employment_type": "full_time",
+      "languages_required": ["en", "de"],
+      "external_id": "1234567",
+      "department": "Data Platform",
+      "salary_period": "year",
+      "salary_source": "job_posting",
+      "technologies": ["Python", "Snowflake", "dbt"],
+      "summary": "Technical leadership for a cloud data platform and its pipelines.",
+      "summary_source": "nivult",
+      "updated_at": "2026-11-27T08:45:00+00:00"
+    },
+    {
+      "event": "closed",
+      "id": "01KBC0N4XQ2V8R6M3P5T7A9ZWK",
+      "title": "Senior Analytics Engineer",
+      "ats": "workday",
+      "company_slug": "danone",
+      "url": "https://danone.wd3.myworkdayjobs.com/job/1234567",
+      "country": "FR",
+      "posted_at": "2026-10-15T09:00:00+00:00",
+      "closed_at": "2026-11-27T08:50:00+00:00"
+    }
+  ],
+  "next_cursor": null,
+  "count_page": 3
+}</pre></div>
+          <h3>Expired retention response — HTTP 400</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="delta-retention-exceeded">{
+  "detail": {
+    "code": "delta_retention_exceeded",
+    "error": "delta_retention_exceeded",
+    "message": "since predates the retained delta history; perform a full resync",
+    "since": "2026-11-01T00:00:00+00:00",
+    "retention_since": "2026-11-20T00:00:00+00:00",
+    "action": "resync",
+    "resync_required": true
+  }
+}</pre></div>
+          <div class="doc-note"><b>Cursor versus since:</b> paginate one sync by passing <code>next_cursor</code> unchanged with the same <code>since</code>. After the sync completes successfully, store your own sync timestamp for the next run's <code>since</code>. Never turn an opaque cursor into a timestamp. On <code>delta_retention_exceeded</code>, perform a full resync before restarting Delta.</div>
         </section>
 
         <section id="doc-coverage" class="doc-section app-card p-5">
           <h2>Coverage</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/coverage</code></div>
-          <p>Returns coverage percentages from 0 to 100 for the documented set of posting and company fields measured on the latest export. It is not a schema of every response field. Costs 0 credits on every plan, including at zero balance; key authentication and rate limits still apply.</p>
-          <div class="code-block mt-3 p-4"><pre>{
-  "category": 97.0,
-  "description": 95.6,
-  "country": 89.4,
-  "remote": 52.4,
+          <p>Returns fill-rate percentages from 0 to 100 for the documented posting fields and nested company fields, measured on the latest export. Costs 0 credits and works at zero balance. This is a field-coverage report, not a schema or a facet-discovery endpoint.</p>
+          <p>All top-level keys and all nested <code>aziende</code> keys are shown below. Company coverage is nested under <code>aziende</code>; there are no <code>company:*</code> keys.</p>
+          <div class="code-block mt-3 p-4"><pre data-json-example="coverage">{
   "salary_observed": 23.2,
-  "company:headquarters": 93.9
+  "salary_estimate": 31.4,
+  "description": 95.6,
+  "language": 88.1,
+  "category": 97.0,
+  "country": 89.4,
+  "skills": 72.5,
+  "employment_type": 64.3,
+  "seniority": 56.7,
+  "remote": 52.4,
+  "technologies": 68.9,
+  "summary": 41.8,
+  "benefits": 37.2,
+  "shift_schedule": 4.6,
+  "work_hours": 8.7,
+  "management_level": 19.3,
+  "valid_through": 28.4,
+  "state": 61.2,
+  "geo": 34.8,
+  "job_sources": 17.9,
+  "department": 44.1,
+  "salary_text": 21.7,
+  "aziende": {
+    "country": 96.2,
+    "domain": 70.0,
+    "website": 68.4,
+    "industry": 62.0,
+    "size_range": 58.3,
+    "employees": 55.7,
+    "legal_name": 42.8,
+    "legal_form": 39.6,
+    "registration_id": 37.1,
+    "founded": 31.5,
+    "headquarters": 64.9,
+    "description": 48.6,
+    "technologies": 73.4,
+    "top_skills": 81.0,
+    "locations": 57.2,
+    "external_urls": 29.8,
+    "lei": 18.4,
+    "languages": 91.3
+  }
 }</pre></div>
         </section>
 
         <section id="doc-exports" class="doc-section app-card p-5">
           <h2>Daily exports</h2>
-          <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest</code><span class="text-slate-400">and</span><code>/v1/exports/latest/{nome}</code></div>
-          <p>The manifest returns metadata for the latest export and file downloads return JSONL gzip. Both cost 0 credits and require an active Scale subscription or higher with at least 500,000 credits/month, including at zero API balance. Top-ups alone do not unlock this entitlement.</p>
-          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Resource</th><th>Description</th></tr></thead><tbody>
-            <tr><td><code>/v1/exports/latest</code></td><td>Latest manifest, with row counts and file paths.</td></tr>
-            <tr><td><code>offerte</code></td><td>Daily postings JSONL gzip.</td></tr>
-            <tr><td><code>aziende</code></td><td>Daily companies JSONL gzip.</td></tr>
+          <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest</code></div>
+          <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/exports/latest/{nome}</code></div>
+          <p>The manifest and gzip JSONL downloads cost 0 credits, including at zero API balance, but require the Bulk entitlement: an active Scale-or-higher subscription with at least 500,000 credits/month. Top-ups alone do not unlock it.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th><code>{nome}</code> value</th><th>Download</th><th>Response</th></tr></thead><tbody>
+            <tr><td><code>offerte</code></td><td>Daily job postings</td><td><code>application/gzip</code>, one job JSON object per line after decompression</td></tr>
+            <tr><td><code>aziende</code></td><td>Daily companies</td><td><code>application/gzip</code>, one company JSON object per line after decompression</td></tr>
           </tbody></table></div>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="exports"><button type="button" class="is-active" onclick="docCode('exports','curl')">cURL</button><button type="button" onclick="docCode('exports','python')">Python</button></div><button type="button" onclick="copyDoc('doc-exports-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-exports-code"></pre></div>
+          <h3>Manifest: raw metadata and HTTP aliases</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="export-manifest">{
+  "stato": "ok",
+  "data_export": "2026-11-27",
+  "offerte": 6372345,
+  "aziende": 73008,
+  "flusso": 150000,
+  "flusso_giorni": 7,
+  "flusso_dal": "2026-11-20T00:00:00+00:00",
+  "file_offerte": "/opt/nivult/exports/offerte-2026-11-27.jsonl.gz",
+  "file_aziende": "/opt/nivult/exports/aziende-2026-11-27.jsonl.gz",
+  "generato_at": "2026-11-27T05:30:00+00:00",
+  "data": "2026-11-27",
+  "righe": {
+    "offerte": 6372345,
+    "aziende": 73008,
+    "flusso": 150000
+  },
+  "file": {
+    "offerte": "/opt/nivult/exports/offerte-2026-11-27.jsonl.gz",
+    "aziende": "/opt/nivult/exports/aziende-2026-11-27.jsonl.gz"
+  }
+}</pre></div>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody>
+            <tr><td><code>stato</code>, <code>data_export</code>, <code>generato_at</code></td><td>string</td><td>Raw status, export date and generation timestamp.</td></tr>
+            <tr><td><code>offerte</code>, <code>aziende</code>, <code>flusso</code>, <code>flusso_giorni</code></td><td>integer</td><td>Raw row counts and configured Delta retention.</td></tr>
+            <tr><td><code>flusso_dal</code></td><td>ISO 8601 timestamp string</td><td>Earliest retained Delta event.</td></tr>
+            <tr><td><code>file_offerte</code>, <code>file_aziende</code></td><td>string</td><td>Raw server filesystem paths.</td></tr>
+            <tr><td><code>data</code></td><td>string</td><td>HTTP alias for <code>data_export</code>.</td></tr>
+            <tr><td><code>righe</code></td><td>object</td><td>HTTP alias with <code>offerte</code>, <code>aziende</code> and <code>flusso</code> integer counts.</td></tr>
+            <tr><td><code>file</code></td><td>object</td><td>HTTP alias with <code>offerte</code> and <code>aziende</code> server paths.</td></tr>
+          </tbody></table></div>
+          <div class="doc-note"><b>Server paths are not URLs.</b> Do not fetch <code>file_offerte</code> or <code>file.offerte</code> directly. Download through the fixed API paths <code>/v1/exports/latest/offerte</code> and <code>/v1/exports/latest/aziende</code>. Download responses include <code>Content-Disposition</code> with the filename.</div>
         </section>
 
         <section id="doc-usage" class="doc-section app-card p-5">
           <h2>Usage</h2>
           <div class="doc-endpoint"><span class="doc-method">GET</span><code>/v1/usage</code></div>
-          <p>Reports current usage and balance without changing it. Costs 0 credits on every plan and remains available at zero balance; key authentication and rate limits still apply.</p>
+          <p>Reports current direct-account usage without changing it. Costs 0 credits and remains available at zero balance; key authentication and rate limits still apply.</p>
           <div class="flex flex-wrap items-center gap-2"><div class="doc-code-tabs" data-doc-tabs="usage"><button type="button" class="is-active" onclick="docCode('usage','curl')">cURL</button><button type="button" onclick="docCode('usage','python')">Python</button></div><button type="button" onclick="copyDoc('doc-usage-code',this)" class="app-btn app-btn-secondary ml-auto !min-h-8 !py-1">Copy</button></div>
           <div class="code-block mt-3 p-4"><pre id="doc-usage-code"></pre></div>
-          <h3>Representative response</h3>
-          <div class="code-block mt-3 p-4"><pre>{
-  "monthly_credits": 500,
-  "used": 119,
-  "remaining": 401,
+          <h3>Scale account example</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="usage-scale">{
+  "monthly_credits": 500000,
+  "used": 125000,
+  "remaining": 400000,
   "usage_month": "2026-11-01",
-  "monthly_remaining": 381,
-  "purchased_credits": 20,
-  "balance": 401,
-  "key_credits_used": 113,
-  "account_monthly_credits": 500,
+  "monthly_remaining": 375000,
+  "purchased_credits": 25000,
+  "balance": 400000,
+  "key_credits_used": 4000,
+  "account_monthly_credits": 500000,
   "subscription_status": "active",
   "subscription_plan": "scale",
-  "subscription_interval": "year"
+  "subscription_interval": "month",
+  "current_period_end": "2026-12-01T00:00:00+00:00"
+}</pre></div>
+          <p>In this example, <code>remaining == balance == monthly_remaining + purchased_credits</code>, so <code>400000 = 375000 + 25000</code>. <code>monthly_credits == account_monthly_credits</code>. <code>used</code> is account-wide monthly usage, while <code>key_credits_used</code> is local to the authenticated key.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Field</th><th>Type / nullable</th><th>Meaning</th></tr></thead><tbody>
+            <tr><td><code>monthly_credits</code></td><td>integer</td><td>Monthly plan or trial allowance for this account.</td></tr>
+            <tr><td><code>used</code></td><td>integer</td><td>Account-wide credits used in <code>usage_month</code>.</td></tr>
+            <tr><td><code>remaining</code>, <code>balance</code></td><td>integer</td><td>Total spendable balance; both equal monthly remainder plus purchased credits.</td></tr>
+            <tr><td><code>usage_month</code></td><td>date string</td><td>First day of the usage accounting month.</td></tr>
+            <tr><td><code>monthly_remaining</code></td><td>integer</td><td>Unspent plan or trial allowance before purchased credits.</td></tr>
+            <tr><td><code>purchased_credits</code></td><td>integer</td><td>Unspent top-up balance.</td></tr>
+            <tr><td><code>key_credits_used</code></td><td>integer</td><td>Usage by this API key only.</td></tr>
+            <tr><td><code>account_monthly_credits</code></td><td>integer</td><td>Account allowance; currently the same value as <code>monthly_credits</code>.</td></tr>
+            <tr><td><code>subscription_status</code>, <code>subscription_plan</code>, <code>subscription_interval</code></td><td>string or null</td><td>Subscription state, plan slug and billing interval; nullable for accounts without a subscription.</td></tr>
+            <tr><td><code>current_period_end</code></td><td>ISO 8601 timestamp string or null</td><td>End of the current subscription period; null when unavailable.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="doc-rate-limits" class="doc-section app-card p-5">
+          <h2>Rate limits &amp; response headers</h2>
+          <p>Rate limiting is separate from credit balance. Limits are enforced in process, per API instance, using a per-key identity for direct traffic and the RapidAPI user identity for marketplace traffic.</p>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Channel and monthly volume</th><th>Sustained rate</th><th>Burst</th><th>Scope</th></tr></thead><tbody>
+            <tr><td>Direct, volume <code>&lt;= 1000</code></td><td>2 requests/second</td><td>5 requests</td><td>Per API key</td></tr>
+            <tr><td>Direct, volume <code>&gt; 1000</code></td><td>15 requests/second</td><td>30 requests</td><td>Per API key</td></tr>
+            <tr><td>RapidAPI</td><td>15 requests/second</td><td>30 requests</td><td>Per RapidAPI user, with IP fallback</td></tr>
+          </tbody></table></div>
+          <p>There are no <code>X-RateLimit-*</code> headers. Leave client-side capacity for bursts and implement exponential backoff for temporary failures.</p>
+          <h3>Headers you can rely on</h3>
+          <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Header</th><th>When it appears</th><th>Meaning</th></tr></thead><tbody>
+            <tr><td><code>X-Credits-Charged: 0</code></td><td>Direct usage, coverage, export manifest and bulk downloads only</td><td>Explicit unmetered service response.</td></tr>
+            <tr><td><code>X-Credits-Charged</code> absent</td><td>Direct paid <code>/v1/jobs</code>, <code>/v1/companies</code>, company detail and <code>/v1/changes</code></td><td>Paid direct routes do not emit a per-response charge header; inspect <code>count_page</code> and <code>/v1/usage</code>.</td></tr>
+            <tr><td><code>Retry-After</code></td><td>Only rate-limit 429 responses</td><td>Seconds to wait before retrying. Credit 429 responses do not include it.</td></tr>
+            <tr><td><code>X-RapidAPI-Billing: Credits=N</code></td><td>RapidAPI responses below status 500</td><td>Credits assigned to that marketplace call, including 0.</td></tr>
+            <tr><td><code>Content-Disposition</code></td><td>File downloads</td><td>Attachment filename supplied by the server.</td></tr>
+            <tr><td><code>X-Content-Type-Options: nosniff</code></td><td>Global responses</td><td>Prevents MIME-type sniffing.</td></tr>
+            <tr><td><code>Strict-Transport-Security</code></td><td>Global responses over HTTPS</td><td>Enforces HTTPS with <code>max-age=63072000; includeSubDomains</code>.</td></tr>
+            <tr><td><code>Access-Control-Expose-Headers</code></td><td>CORS responses</td><td>Exposes <code>Content-Disposition</code>, <code>X-Credits-Charged</code>, <code>X-Export-Rows</code> and <code>X-Download-Id</code>.</td></tr>
+          </tbody></table></div>
+          <div class="doc-note doc-warning"><b>429 is not always “slow down.” Inspect the JSON body before retrying.</b> A rate-limit body is a string detail and includes <code>Retry-After</code>: retry with backoff. Credit errors have an object detail and no <code>Retry-After</code>: <b>stop immediately and never retry automatically</b>; add credits or change plan first. Paid endpoints use 429 for credit failures, not 402. No <code>/v1</code> endpoint returns 402.</div>
+          <h3>Rate limit — HTTP 429</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="rate-limit-error">{
+  "detail": "rate limit exceeded: 15 requests/second (burst 30)"
+}</pre></div>
+          <h3>Credits exhausted — HTTP 429</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="credits-exhausted-error">{
+  "detail": {
+    "error": "monthly and purchased credits exhausted",
+    "monthly_credits": 500000,
+    "purchased_credits": 0,
+    "usage_month": "2026-11-01"
+  }
+}</pre></div>
+          <h3>Insufficient credits for one result — HTTP 429</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="insufficient-credit-error">{
+  "detail": {
+    "error": "insufficient credits for one result",
+    "remaining": 2,
+    "credits_per_record": 3
+  }
 }</pre></div>
         </section>
 
         <section id="doc-errors" class="doc-section app-card p-5">
           <h2>Errors &amp; pagination</h2>
+          <p>Errors and empty results cost 0 credits. Read the HTTP status and JSON body, fix the cause, then retry only when the table says retrying can help.</p>
           <div class="doc-table-wrap"><table class="doc-table"><thead><tr><th>Status</th><th>Meaning</th><th>What to do</th></tr></thead><tbody>
-            <tr><td>400</td><td>Invalid date, cursor or Delta retention.</td><td>Correct parameters; on retention error, run a full resync.</td></tr>
-            <tr><td>401</td><td>Missing, invalid or revoked key.</td><td>Use an active key; create a replacement if needed.</td></tr>
-            <tr><td>403</td><td>Required entitlement is missing.</td><td>Upgrade to Growth for Delta or Scale for bulk.</td></tr>
-            <tr><td>404</td><td>Company or export not found.</td><td>Check ATS + slug or retry when the daily export is ready.</td></tr>
-            <tr><td>422</td><td>Parameter validation failed.</td><td>Fix types, ranges and allowed values, e.g. limit or salary.</td></tr>
-            <tr><td>429</td><td>Rate limit exceeded, or insufficient credits on paid data endpoints. Usage, coverage and Daily bulk never return 429 for zero balance.</td><td>Back off and honor Retry-After. For paid data, add credits or reduce the page size; no error charge.</td></tr>
-            <tr><td>503</td><td>Database, counter or query timeout.</td><td>Retry with backoff; no error charge.</td></tr>
+            <tr><td>400</td><td>Invalid date, cursor, <code>source_type</code>, <code>has_salary</code>, salary number/range, too many <code>q_any</code> terms, or expired Delta retention.</td><td>Correct the parameter. Salary validation is 400. On <code>delta_retention_exceeded</code>, run a full resync.</td></tr>
+            <tr><td>401</td><td>Missing, invalid or revoked API key.</td><td>Send an active key in <code>X-Api-Key</code>; create a replacement if needed.</td></tr>
+            <tr><td>403</td><td>Required Delta or Bulk subscription entitlement is missing.</td><td>Upgrade to an eligible active plan; top-ups alone do not help.</td></tr>
+            <tr><td>404</td><td>Company or export not found, or unknown export name.</td><td>Check <code>piattaforma + slug</code>, use <code>offerte</code> or <code>aziende</code>, or retry when the daily export is ready.</td></tr>
+            <tr><td>422</td><td>FastAPI typed parameter validation failed, such as <code>limit=0</code> or a non-integer <code>employees_min</code>.</td><td>Fix types and constraints from the <code>detail</code> array. Do not confuse this with salary validation, which is 400.</td></tr>
+            <tr><td>429</td><td>Rate limit or insufficient direct credits. There is no 402 on <code>/v1</code>.</td><td>For rate limits, honor <code>Retry-After</code> and back off. For credits, stop immediately and never retry automatically; add credits or change plan first.</td></tr>
+            <tr><td>503</td><td>Database, credit counter or query timeout.</td><td>Retry with exponential backoff and jitter; narrow an expensive query if it times out repeatedly.</td></tr>
           </tbody></table></div>
-          <h3>Credit error shape</h3>
-          <div class="code-block mt-3 p-4"><pre>{
-  "detail": {
-    "error": "monthly and purchased credits exhausted",
-    "monthly_credits": 500,
-    "purchased_credits": 0,
-    "usage_month": "2026-11-01"
-  }
+          <h3>400 — Invalid salary</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="bad-salary-error">{
+  "detail": "salary_min must be a number"
+}</pre></div>
+          <h3>401 — Authentication</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="unauthorized-error">{
+  "detail": "invalid or revoked API key"
+}</pre></div>
+          <h3>403 — Missing entitlement</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="forbidden-error">{
+  "detail": "the delta feed requires an active subscription with at least 100,000 credits/month"
+}</pre></div>
+          <h3>404 — Missing company</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="not-found-error">{
+  "detail": "company not found"
+}</pre></div>
+          <h3>422 — Typed validation</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="validation-error">{
+  "detail": [
+    {
+      "type": "greater_than_equal",
+      "loc": ["query", "limit"],
+      "msg": "Input should be greater than or equal to 1",
+      "input": "0",
+      "ctx": {"ge": 1}
+    }
+  ]
+}</pre></div>
+          <h3>503 — Temporary backend failure</h3>
+          <div class="code-block mt-3 p-4"><pre data-json-example="service-unavailable-error">{
+  "detail": "database query timed out; narrow the filters or retry"
 }</pre></div>
           <h3>Paginate safely</h3>
-          <ul><li>Use <code>next_cursor</code> exactly as returned; it is an opaque keyset cursor, not an offset.</li><li>Stop only when <code>next_cursor</code> is <code>null</code>.</li><li>For Delta, keep the previous successful sync timestamp separately for the next <code>since</code>.</li></ul>
+          <ul><li>Use <code>next_cursor</code> exactly as returned; it is an opaque keyset cursor, not an offset. Keep filters and <code>limit</code> unchanged while following it.</li><li>Stop when <code>next_cursor</code> is <code>null</code>. Treat a repeated non-null cursor as a client or server error rather than looping forever.</li><li>There is no <code>total_count</code>. Use <code>count_page</code> for page size, <code>/v1/coverage</code> for field fill rates, and start with <code>limit=5</code> to control spend.</li><li>For Delta, keep the previous successful sync timestamp separately for the next <code>since</code>; a cursor is never a timestamp.</li></ul>
         </section>
       </div>
     </div>
@@ -1361,6 +1866,12 @@ function pulisciStatoAccount() {
   aziendaJobsSeq += 1;
   usoDati = null;
   usoSeq += 1;
+  unlockedCompanyQuery = "";
+  unlockedCompanyOpen = false;
+  unlockedCompanyActive = 0;
+  unlockedCompanyOpenSeq += 1;
+  unlockedCompanySelected.clear();
+  unlockedCompanyLoading.clear();
   paeseIso = "";
   clearTimeout(exStimaTimer);
   exStimaTimer = null;
@@ -2555,6 +3066,188 @@ const VIA_STILE = {
 
 
 let usoDati = null, usoSeq = 0;
+let unlockedCompanyQuery = "", unlockedCompanyOpen = false, unlockedCompanyActive = 0;
+let unlockedCompanyOpenSeq = 0;
+const unlockedCompanySelected = new Set(), unlockedCompanyLoading = new Set();
+function unlockedCompanies() {
+  return Array.isArray(usoDati?.rivelazioni) ? usoDati.rivelazioni : [];
+}
+function unlockedCompanyName(r) {
+  return String(r.nome || "Unnamed company");
+}
+function filteredUnlockedCompanies() {
+  const query = unlockedCompanyQuery.trim().toLocaleLowerCase();
+  return unlockedCompanies().map((r, index) => ({ r, index })).filter(({ r }) =>
+    !query || unlockedCompanyName(r).toLocaleLowerCase().includes(query));
+}
+function apriFiltroAziendeSbloccate() {
+  unlockedCompanyOpen = true;
+  const list = document.getElementById("unlocked-company-options");
+  const input = document.getElementById("unlocked-company-search");
+  if (list) list.hidden = false;
+  if (input) input.setAttribute("aria-expanded", "true");
+}
+function chiudiFiltroAziendeSbloccate() {
+  unlockedCompanyOpen = false;
+  const list = document.getElementById("unlocked-company-options");
+  const input = document.getElementById("unlocked-company-search");
+  if (list) list.hidden = true;
+  if (input) {
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+  }
+}
+function disegnaAziendeSbloccate(restoreSearchFocus = false) {
+  const target = document.getElementById("unlocked-companies");
+  if (!target) return;
+  const unlocked = unlockedCompanies();
+  if (!unlocked.length) {
+    unlockedCompanySelected.clear();
+    unlockedCompanyQuery = "";
+    unlockedCompanyOpen = false;
+    target.innerHTML = `<p class="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">No companies unlocked yet. Reveals appear here after their first use.</p>`;
+    return;
+  }
+  const validRefs = new Set(unlocked.map(r => String(r.ref || "")));
+  for (const ref of unlockedCompanySelected) {
+    if (!validRefs.has(ref)) unlockedCompanySelected.delete(ref);
+  }
+  const matches = filteredUnlockedCompanies();
+  unlockedCompanyActive = Math.max(0, Math.min(unlockedCompanyActive, matches.length - 1));
+  const active = matches[unlockedCompanyActive];
+  const activeDescendant = unlockedCompanyOpen && active ? `unlocked-option-${active.index}` : "";
+  const options = matches.length ? matches.map(({ r, index }, position) => {
+    const name = unlockedCompanyName(r), selected = unlockedCompanySelected.has(String(r.ref || ""));
+    return `<label id="unlocked-option-${index}" role="option" aria-selected="${selected}" class="unlocked-option ${position === unlockedCompanyActive ? "is-active" : ""}"><input type="checkbox" tabindex="-1" ${selected ? "checked" : ""} onchange="selezionaAziendaSbloccata(${index}, this.checked)"><span class="min-w-0 flex-1 truncate">${esc(name)}</span></label>`;
+  }).join("") : `<p class="px-3 py-5 text-center text-xs text-slate-400">No companies match this search.</p>`;
+  const selectedRows = unlocked.map((r, index) => ({ r, index })).filter(({ r }) => unlockedCompanySelected.has(String(r.ref || "")));
+  const visibleRows = unlockedCompanySelected.size ? selectedRows : matches;
+  const chips = selectedRows.length ? `<div class="unlocked-chips" aria-label="Selected companies">${selectedRows.map(({ r, index }) => {
+    const name = unlockedCompanyName(r);
+    return `<span class="unlocked-chip"><span class="truncate">${esc(name)}</span><button type="button" aria-label="Remove ${esc(name)} from selection" onclick="selezionaAziendaSbloccata(${index}, false)">×</button></span>`;
+  }).join("")}<button type="button" class="px-1.5 text-[11px] font-bold text-brand-600 hover:text-brand-700" onclick="pulisceSelezioneAziende()">Clear selection</button></div>` : "";
+  const cards = visibleRows.length ? visibleRows.map(({ r, index }) => {
+    const name = unlockedCompanyName(r), ref = String(r.ref || ""), loading = unlockedCompanyLoading.has(ref);
+    const initial = Array.from(name)[0] || "?";
+    const action = loading ? "Opening…" : (ref ? "View profile →" : "Unavailable");
+    return `<button type="button" class="unlocked-company-card" aria-label="Open ${esc(name)} company profile" aria-busy="${loading}" ${loading || !ref ? "disabled" : ""} onclick="apriAziendaSbloccata(${index}, this)"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-[11px] font-bold text-slate-500">${esc(initial.toUpperCase())}</span><span class="min-w-0 flex-1"><span class="block truncate text-xs font-semibold text-slate-700">${esc(name)}</span><span class="mt-0.5 block text-[10px] text-slate-400">Unlocked ${esc(new Date(r.at).toLocaleDateString("en-GB"))}</span></span><span class="unlocked-company-action" data-company-action>${action}</span></button>`;
+  }).join("") : `<p class="col-span-full rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">No unlocked companies match this filter.</p>`;
+  target.innerHTML = `<div class="unlocked-picker" data-unlocked-picker><label for="unlocked-company-search" class="app-label">Filter unlocked companies</label><div class="unlocked-search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="unlocked-company-search" class="app-input unlocked-search" type="text" role="combobox" autocomplete="off" placeholder="Search ${unlocked.length} unlocked companies..." value="${esc(unlockedCompanyQuery)}" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="${unlockedCompanyOpen}" aria-controls="unlocked-company-options" aria-describedby="unlocked-company-status" ${activeDescendant ? `aria-activedescendant="${activeDescendant}"` : ""} onfocus="apriFiltroAziendeSbloccate()" oninput="filtraAziendeSbloccate(this.value)" onkeydown="tastoFiltroAziendeSbloccate(event)">${unlockedCompanyQuery ? `<button type="button" class="unlocked-search-clear" aria-label="Clear company search" onclick="pulisceRicercaAziende()">×</button>` : ""}</div><div id="unlocked-company-options" class="unlocked-options" role="listbox" aria-label="Unlocked companies" aria-multiselectable="true" ${unlockedCompanyOpen ? "" : "hidden"}>${options}</div>${chips}<p id="unlocked-company-status" role="status" class="mt-3 text-[11px] text-slate-400">${visibleRows.length} of ${unlocked.length} companies shown${unlockedCompanySelected.size ? ` · ${unlockedCompanySelected.size} selected` : ""}</p><div class="unlocked-company-grid">${cards}</div></div>`;
+  if (restoreSearchFocus) requestAnimationFrame(() => {
+    const input = document.getElementById("unlocked-company-search");
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+    const option = activeDescendant && document.getElementById(activeDescendant);
+    option?.scrollIntoView({ block: "nearest" });
+  });
+}
+function filtraAziendeSbloccate(value) {
+  unlockedCompanyQuery = String(value || "");
+  unlockedCompanyOpen = true;
+  unlockedCompanyActive = 0;
+  disegnaAziendeSbloccate(true);
+}
+function pulisceRicercaAziende() {
+  unlockedCompanyQuery = "";
+  unlockedCompanyOpen = true;
+  unlockedCompanyActive = 0;
+  disegnaAziendeSbloccate(true);
+}
+function selezionaAziendaSbloccata(index, selected) {
+  const r = unlockedCompanies()[index];
+  if (!r) return;
+  const ref = String(r.ref || "");
+  if (!ref) return;
+  if (selected) unlockedCompanySelected.add(ref);
+  else unlockedCompanySelected.delete(ref);
+  disegnaAziendeSbloccate(true);
+}
+function pulisceSelezioneAziende() {
+  unlockedCompanySelected.clear();
+  disegnaAziendeSbloccate(true);
+}
+function tastoFiltroAziendeSbloccate(event) {
+  const matches = filteredUnlockedCompanies();
+  if (event.key === "Escape" && unlockedCompanyOpen) {
+    event.preventDefault();
+    event.stopPropagation();
+    chiudiFiltroAziendeSbloccate();
+    return;
+  }
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!matches.length) return;
+    if (!unlockedCompanyOpen) {
+      unlockedCompanyOpen = true;
+      unlockedCompanyActive = 0;
+    } else {
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      unlockedCompanyActive = (unlockedCompanyActive + direction + matches.length) % matches.length;
+    }
+    disegnaAziendeSbloccate(true);
+  } else if (event.key === "Enter" && unlockedCompanyOpen && matches.length) {
+    event.preventDefault();
+    event.stopPropagation();
+    const current = matches[unlockedCompanyActive];
+    selezionaAziendaSbloccata(current.index, !unlockedCompanySelected.has(String(current.r.ref || "")));
+  } else if (event.key === "Tab") chiudiFiltroAziendeSbloccate();
+}
+document.addEventListener("click", event => {
+  if (!event.target.closest?.("[data-unlocked-picker]")) chiudiFiltroAziendeSbloccate();
+});
+async function apriAziendaSbloccata(index, btn) {
+  const r = unlockedCompanies()[index], ref = String(r?.ref || "");
+  if (!r || !ref || unlockedCompanyLoading.has(ref)) return;
+  const seq = ++unlockedCompanyOpenSeq;
+  unlockedCompanyLoading.add(ref);
+  btn.disabled = true;
+  btn.setAttribute("aria-busy", "true");
+  const action = btn.querySelector("[data-company-action]");
+  if (action) action.textContent = "Opening…";
+  if (location.hash !== "#explorer") {
+    location.hash = "#explorer";
+    route();
+  }
+  cambiaExplorer("query");
+  try {
+    const response = await api("/portale/token-azienda", {
+      method: "POST", body: JSON.stringify({ company_ref: r.ref }),
+    });
+    if (seq !== unlockedCompanyOpenSeq) return;
+    if (!response.ok) {
+      notifica("The company could not be opened. Retry.", "errore");
+      return;
+    }
+    const data = await response.json();
+    const token = String(data.reveal_token || "");
+    if (seq !== unlockedCompanyOpenSeq) return;
+    if (!token) {
+      notifica("The company could not be opened. Retry.", "errore");
+      return;
+    }
+    const separator = ref.indexOf(":");
+    const name = unlockedCompanyName(r);
+    revealInfo[token] = { ...(revealInfo[token] || {}), ...r, name, company: name,
+      company_ref: ref, ats: r.ats || (separator > 0 ? ref.slice(0, separator) : ""),
+      company_slug: r.company_slug || (separator > 0 ? ref.slice(separator + 1) : ""),
+      revealed: true, reveal_token: token, reveal_group: String(data.reveal_group || r.reveal_group || "") };
+    chiudiFiltroAziendeSbloccate();
+    await apriAziendaDaJob(token);
+  } catch (e) {
+    if (seq === unlockedCompanyOpenSeq && e.message !== "401" && e.name === "SyntaxError") {
+      notifica("The company could not be opened. Retry.", "errore");
+    }
+  } finally {
+    unlockedCompanyLoading.delete(ref);
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.setAttribute("aria-busy", "false");
+      if (action) action.textContent = "View profile →";
+    }
+  }
+}
 function apriUso() {
   location.hash = "#usage";
   caricaUso();
@@ -2619,9 +3312,7 @@ function disegnaUso() {
     return `<div class="spend-column" title="${label}"><span class="spend-bar ${g.credits ? "" : "is-empty"}" style="height:${height}%"></span><span class="spend-tooltip">${label}</span></div>`;
   }).join("");
   document.getElementById("daily-spend").innerHTML = `<div class="usage-summary"><div class="usage-stat"><span>30-day total</span><strong>${total.toLocaleString("en-US")}</strong><small>itemized credits</small></div><div class="usage-stat"><span>Average per active day</span><strong>${average.toLocaleString("en-US", { maximumFractionDigits: 1 })}</strong><small>${plurUso(activeDays, "active day")}</small></div><div class="usage-stat"><span>Peak day</span><strong>${total ? dayLabel(peak.day) : "—"}</strong><small>${total ? plurUso(peak.credits, "credit") : "No itemized spend"}</small></div></div><div class="spend-chart" role="img" aria-label="Daily itemized credits for the last 30 days. Total ${plurUso(total, "credit")}. ${total ? `Peak ${dayLabel(peak.day)} with ${plurUso(peak.credits, "credit")}.` : "No itemized spend."}"><div class="spend-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div class="spend-bars" aria-hidden="true">${bars}</div></div><div class="spend-dates"><span>${dayLabel(days[0].day)}</span><span>${dayLabel(days[15].day)}</span><span>${dayLabel(days[29].day)}</span></div>`;
-  const unlocked = d.rivelazioni || [];
-  document.getElementById("unlocked-companies").innerHTML = unlocked.length ? `<div class="grid sm:grid-cols-2 gap-2">${unlocked.map(r => `<div class="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2"><span class="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-[11px] font-bold text-slate-500">${esc((r.nome || "?")[0].toUpperCase())}</span><span class="min-w-0 flex-1 truncate text-xs font-semibold">${esc(r.nome || "")}</span><span class="text-[10px] text-slate-400">${esc(new Date(r.at).toLocaleDateString("en-GB"))}</span></div>`).join("")}</div>`
-    : `<p class="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">No companies unlocked yet. Reveals appear here after their first use.</p>`;
+  disegnaAziendeSbloccate();
   document.getElementById("activity-log-full").innerHTML = eventi.length ? eventi.map((e, index) => {
     const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
     const action = e.via === "api" ? e.azione : labelAzione(e.azione), detail = e.titolo || e.dettaglio || "—";
@@ -2640,25 +3331,100 @@ function disegnaUso() {
 
 const DOC_EXAMPLES = {
   quick: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
-  "https://api.nivult.com/v1/jobs?technology=SAP&country=DE&limit=100"`,
-    python: `import requests
+    curl: `# Step 1: 0 credits, even at zero balance
+curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/usage"
 
-response = requests.get(
-    "https://api.nivult.com/v1/jobs",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
-    params={"technology": "SAP", "country": "DE", "limit": 100},
-    timeout=30,
-)
-response.raise_for_status()
-page = response.json()
-for job in page["data"]:
-    print(job["title"], job["ats"])`
+# Step 2: at most 5 returned jobs = at most 5 credits
+curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/jobs?limit=5"`,
+    python: `import os
+import time
+import requests
+
+BASE_URL = "https://api.nivult.com"
+session = requests.Session()
+session.headers["X-Api-Key"] = os.environ["NIVULT_API_KEY"]
+
+
+def get_json(path, *, params=None, rate_limit_retries=3):
+    for attempt in range(rate_limit_retries + 1):
+        try:
+            response = session.get(
+                BASE_URL + path, params=params, timeout=30
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as exc:
+            response = exc.response
+            try:
+                detail = response.json()
+            except ValueError:
+                detail = response.text
+            is_rate_limit = response.status_code == 429 and (
+                "Retry-After" in response.headers
+                or (isinstance(detail, str)
+                    and detail.startswith("rate limit exceeded"))
+            )
+            if is_rate_limit:
+                if attempt >= rate_limit_retries:
+                    raise RuntimeError(
+                        "Rate limit persisted after backoff retries"
+                    ) from exc
+                delay = max(
+                    float(response.headers.get("Retry-After", "1")),
+                    2 ** attempt,
+                )
+                time.sleep(delay)
+                continue
+            if response.status_code == 429:
+                raise RuntimeError(
+                    f"Credit error from {path}: {detail}. "
+                    "Stop immediately; never retry automatically."
+                ) from exc
+            raise RuntimeError(
+                f"HTTP {response.status_code} from {path}: {detail}"
+            ) from exc
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Request to {path} failed: {exc}") from exc
+    raise RuntimeError("unreachable")
+
+
+def iter_jobs(max_pages=None):
+    params = {"limit": 5}
+    seen_cursors = set()
+    pages = 0
+    while True:
+        page = get_json("/v1/jobs", params=params)
+        yield from page["data"]
+        pages += 1
+        cursor = page["next_cursor"]
+        if cursor is None:
+            return
+        if max_pages is not None and pages >= max_pages:
+            return
+        if cursor in seen_cursors:
+            raise RuntimeError("API repeated a non-null cursor")
+        seen_cursors.add(cursor)
+        params["cursor"] = cursor
+
+
+usage = get_json("/v1/usage")  # Step 1: 0 credits
+print("Balance:", usage["balance"])
+
+# Step 2: one page of at most 5 jobs = at most 5 credits.
+# Set max_pages=None to follow every cursor; each extra job costs 1 credit.
+for job in iter_jobs(max_pages=1):
+    print(job["id"], job["title"], job.get("company"))`
   },
   jobs: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
-  "https://api.nivult.com/v1/jobs?category=Data%20%26%20Analytics&city=Paris&remote=hybrid&seniority=mid&technology=SAP&source_type=direct&has_salary=true&salary_min=45000&salary_max=65000&salary_currency=EUR&posted_after=2026-11-01T00:00:00Z&posted_before=2026-12-01T00:00:00Z&limit=100"`,
-    python: `import requests
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/jobs?category=Data%20%26%20Analytics&city=Paris&remote=hybrid&seniority=mid&technology=SAP&source_type=direct&has_salary=true&salary_min=45000&salary_max=65000&salary_currency=EUR&posted_after=2026-11-01T00:00:00Z&posted_before=2026-12-01T00:00:00Z&limit=5"`,
+    python: `import os
+import requests
 
 params = {
     "category": "Data & Analytics",
@@ -2673,88 +3439,134 @@ params = {
     "salary_currency": "EUR",
     "posted_after": "2026-11-01T00:00:00Z",
     "posted_before": "2026-12-01T00:00:00Z",
-    "limit": 100,
+    "limit": 5,
 }
 response = requests.get(
     "https://api.nivult.com/v1/jobs",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
+    headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
     params=params,
     timeout=30,
 )
 response.raise_for_status()
-print(response.json())`
+page = response.json()
+print("Records in this page:", page["count_page"])
+print("Next cursor:", page["next_cursor"])`
   },
   companies: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
-  "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500&country=FR&limit=100"`,
-    python: `import requests
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/companies?technology=Kubernetes&employees_min=500&country=IT&limit=25"`,
+    python: `import os
+import requests
 
 response = requests.get(
     "https://api.nivult.com/v1/companies",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
-    params={"technology": "Kubernetes", "employees_min": 500, "country": "FR", "limit": 100},
+    headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
+    params={
+        "technology": "Kubernetes",
+        "employees_min": 500,
+        "country": "IT",
+        "limit": 25,
+    },
     timeout=30,
 )
 response.raise_for_status()
 print(response.json())`
   },
   companyDetail: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
-  "https://api.nivult.com/v1/companies/greenhouse/danone"`,
-    python: `import requests
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/companies/bamboohr/italgas"`,
+    python: `import os
+import requests
 
 response = requests.get(
-    "https://api.nivult.com/v1/companies/greenhouse/danone",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
+    "https://api.nivult.com/v1/companies/bamboohr/italgas",
+    headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
     timeout=30,
 )
 response.raise_for_status()
-print(response.json())`
+company = response.json()
+print(company["company"], company.get("industry"))`
   },
   changes: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
   "https://api.nivult.com/v1/changes?since=${new Date(Date.now() - 3600000).toISOString()}&limit=100"`,
-    python: `import requests
+    python: `import os
+import requests
 
 response = requests.get(
     "https://api.nivult.com/v1/changes",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
-    params={"since": "${new Date(Date.now() - 3600000).toISOString()}", "limit": 100},
+    headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
+    params={
+        "since": "${new Date(Date.now() - 3600000).toISOString()}",
+        "limit": 100,
+    },
     timeout=30,
 )
 response.raise_for_status()
 page = response.json()
 for event in page["data"]:
-    print(event["event"], event["id"])`
+    print(event["event"], event["id"])
+print("Next cursor:", page["next_cursor"])`
   },
   exports: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
   "https://api.nivult.com/v1/exports/latest"
 
-curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
-  "https://api.nivult.com/v1/exports/latest/offerte" --output nivult-jobs.jsonl.gz`,
-    python: `import requests
+curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/exports/latest/offerte" \
+  --output nivult-offerte.jsonl.gz
 
-response = requests.get(
-    "https://api.nivult.com/v1/exports/latest",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
-    timeout=30,
-)
-response.raise_for_status()
-print(response.json())`
+curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
+  "https://api.nivult.com/v1/exports/latest/aziende" \
+  --output nivult-aziende.jsonl.gz`,
+    python: `import os
+from pathlib import Path
+import requests
+
+session = requests.Session()
+session.headers["X-Api-Key"] = os.environ["NIVULT_API_KEY"]
+base = "https://api.nivult.com"
+
+manifest = session.get(base + "/v1/exports/latest", timeout=30)
+manifest.raise_for_status()
+print(manifest.json())
+
+for name in ("offerte", "aziende"):
+    with session.get(
+        base + f"/v1/exports/latest/{name}", stream=True, timeout=120
+    ) as response:
+        response.raise_for_status()
+        output = Path(f"nivult-{name}.jsonl.gz")
+        with output.open("wb") as handle:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    handle.write(chunk)
+        print(output, response.headers.get("Content-Disposition"))`
   },
   usage: {
-    curl: `curl -H "X-Api-Key: ${ESEMPIO_CHIAVE}" \
+    curl: `curl --fail-with-body --silent --show-error \
+  -H "X-Api-Key: $NIVULT_API_KEY" \
   "https://api.nivult.com/v1/usage"`,
-    python: `import requests
+    python: `import os
+import requests
 
 response = requests.get(
     "https://api.nivult.com/v1/usage",
-    headers={"X-Api-Key": "${ESEMPIO_CHIAVE}"},
+    headers={"X-Api-Key": os.environ["NIVULT_API_KEY"]},
     timeout=30,
 )
 response.raise_for_status()
-print(response.json())`
+usage = response.json()
+assert usage["balance"] == (
+    usage["monthly_remaining"] + usage["purchased_credits"]
+)
+print("Balance:", usage["balance"])`
   }
 };
 function docCode(id, language) {

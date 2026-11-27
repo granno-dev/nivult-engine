@@ -492,12 +492,67 @@ def test_account_startup_keeps_topup_pricing_helper():
 def test_saved_report_activity_alignment_and_legacy_trial_copy():
     html = (ROOT / "vetrina" / "account.html").read_text()
     compact = html[html.index("function eventoCompatto("):html.index("async function caricaUso(")]
+    full = html[html.index('document.getElementById("activity-log-full")'):
+                html.index('document.getElementById("usage-non-itemized")')]
     assert "scaricaExportRecente" in compact
     assert 'class="w-24 shrink-0"' in compact
     assert "Download again · 0 credits" in compact
+    assert "const retry = e.download_id ?" in compact
+    assert "scaricaExportRecente" in full
+    assert "Download again · 0 credits" in full
+    assert "const retry = e.download_id ?" in full
     assert "async function scaricaExportRecente(downloadId)" in html
     assert 'api("/portale/export-file/" + encodeURIComponent(downloadId))' in html
     assert 'const legacyTrial = !attivo && volume > 500' in html
     assert '"Legacy one-time trial"' in html
     assert "new accounts receive 500 credits" in html
     assert "new trials: 500 credits" in html
+
+
+def test_full_activity_log_has_deterministic_columns_and_mobile_stacking():
+    html = (ROOT / "vetrina" / "account.html").read_text()
+    css = html[html.index(".activity-event {"):html.index(".index-main {")]
+    assert "grid-template-columns: 190px 92px 190px minmax(0,1fr) 72px" in css
+    assert "minmax(150px,.8fr)" not in css
+    assert "minmax(140px,.8fr)" not in css
+    assert "@media (max-width: 700px)" in css
+    assert "grid-template-columns: minmax(0,1fr) auto" in css
+    for child, placement in [
+            (1, "grid-column: 1; grid-row: 1"),
+            (2, "grid-column: 2; grid-row: 1"),
+            (3, "grid-column: 1; grid-row: 2"),
+            (4, "grid-column: 1 / -1; grid-row: 3"),
+            (5, "grid-column: 2; grid-row: 2")]:
+        assert f".activity-event summary > :nth-child({child})" in css
+        assert placement in css
+
+
+def test_unlocked_companies_combobox_selection_and_drawer_contract():
+    html = (ROOT / "vetrina" / "account.html").read_text()
+    source = html[html.index("let unlockedCompanyQuery"):html.index("function apriUso(")]
+    css = html[html.index(".unlocked-picker {"):html.index(".explorer-tabs {")]
+    for marker in [
+            'role="combobox"', 'aria-autocomplete="list"', 'aria-haspopup="listbox"',
+            'aria-multiselectable="true"', 'role="option"', 'type="checkbox"',
+            "unlockedCompanySelected", "Clear selection", "Clear company search",
+            'event.key === "Escape"', '["ArrowDown", "ArrowUp"]',
+            'event.key === "Enter"', "aria-activedescendant",
+            "unlockedCompanyLoading", 'btn.setAttribute("aria-busy", "true")']:
+        assert marker in source
+    assert 'api("/portale/token-azienda"' in source
+    assert 'method: "POST", body: JSON.stringify({ company_ref: r.ref })' in source
+    assert "await apriAziendaDaJob(token)" in source
+    assert 'location.hash = "#explorer"' in source
+    assert 'cambiaExplorer("query")' in source
+    assert source.index('location.hash = "#explorer"') < source.index("await apriAziendaDaJob(token)")
+    assert "revealInfo[token]" in source
+    assert "if (!response.ok)" in source
+    assert "esc(name)" in source
+    assert 'onclick="apriAziendaSbloccata(${index}, this)"' in source
+    assert "grid-template-columns: repeat(2,minmax(0,1fr))" in css
+    assert "max-height: 280px" in css
+    assert "overflow-y: auto" in css
+    assert "@media (max-width: 639px)" in css
+    assert "unlockedCompanySelected.clear();" in html
+    assert "unlockedCompanyLoading.clear();" in html
+    assert "disegnaAziendeSbloccate();" in html
