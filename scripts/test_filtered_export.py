@@ -848,3 +848,106 @@ def test_unlocked_companies_payload_contains_logo_and_drawer_identity_fields(
     assert row["logo_url"] == "https://acme.example/logo.svg"
     assert row["ats"] == "greenhouse"
     assert row["company_slug"] == "acme"
+
+
+def test_opensearch_export_query_maps_every_normalized_filter_and_tech_all():
+    normalized = dati.normalizza_filtri_export({
+        "countries": "it,de", "technologies": ["Python", "SAP"], "tech_match": "all",
+        "categories": "Engineering,Data & Analytics", "seniority": "senior,mid",
+        "remote": "remote,hybrid", "employment_type": "full_time,contract",
+        "language": "en,it", "source_type": "direct,public", "ats": "greenhouse,workday",
+        "exclude_ats": "icims", "q": "HR Specialist", "title": "HR",
+        "posted_after": "2026-11-01", "posted_before": "2026-11-28",
+        "has_salary": True, "salary_min": 40000, "salary_max": 90000,
+    }, "postings")
+    query = dati._query_export_opensearch(normalized)
+    filters = query["bool"]["filter"]
+    tech_filters = [item for item in filters if "technologies" in item.get("term", {})
+                    or "technologies" in item.get("terms", {})]
+    assert tech_filters == [{"term": {"technologies": "python"}},
+                            {"term": {"technologies": "sap"}}]
+    assert {"terms": {"country": ["it", "de"]}} in filters
+    assert {"terms": {"category": ["engineering", "data & analytics"]}} in filters
+    assert {"terms": {"seniority": ["senior", "mid"]}} in filters
+    assert {"terms": {"remote": ["remote", "hybrid"]}} in filters
+    assert {"terms": {"employment_type": ["full_time", "contract"]}} in filters
+    assert {"terms": {"language": ["en", "it"]}} in filters
+    assert {"terms": {"source_type": ["direct", "public_board"]}} in filters
+    assert {"terms": {"ats": ["greenhouse", "workday"]}} in filters
+    assert {"term": {"has_salary": True}} in filters
+    assert {"range": {"salary_min": {"gte": 40000.0}}} in filters
+    assert {"range": {"salary_max": {"lte": 90000.0}}} in filters
+    assert query["bool"]["must_not"] == [{"term": {"ats": "icims"}}]
+    assert any("multi_match" in item for item in query["bool"]["must"])
+    ranges = json.dumps(filters)
+    assert "2026-11-01T00:00:00" in ranges
+    assert "2026-11-28T00:00:00" in ranges
+    with pytest.raises(ValueError, match="unsupported OpenSearch export filter"):
+        dati._query_export_opensearch({"unsupported": "raw scan forbidden"})
+
+
+def test_keyword_quote_does_not_block_concurrent_catalog(
+        pg_account, portal_client, monkeypatch):
+    uid = pg_account(100)
+    seen = []
+    monkeypatch.setattr(opensearch, "attivo", lambda: True)
+
+    def slow_opensearch_count(filters):
+        seen.append(filters)
+        time.sleep(0.3)
+        return 42
+
+    def forbidden_duckdb_count(_filters):
+        raise AssertionError("OpenSearch must be used instead of the DuckDB raw scan")
+
+    monkeypatch.setattr(dati, "conteggio_export_opensearch", slow_opensearch_count)
+    monkeypatch.setattr(dati, "stima_export", forbidden_duckdb_count)
+    monkeypatch.setattr(dati, "catalogo_export", lambda campo, q, limite: [
+        {"value": "IT", "count": 123}])
+    quote_client, catalog_client = portal_client(uid), portal_client(uid)
+    payload = {"tipo": "postings", "q": "HR Speci", "max_rows": 10,
+               "technologies": ["Python", "SAP"], "tech_match": "all"}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        quote_future = pool.submit(quote_client.post, "/portale/export/stima", json=payload)
+        time.sleep(0.05)
+        started = time.monotonic()
+        catalog_future = pool.submit(
+            catalog_client.get, "/portale/catalogo/country?q=it&limit=5")
+        catalog_response = catalog_future.result(timeout=2)
+        catalog_elapsed = time.monotonic() - started
+        quote_response = quote_future.result(timeout=2)
+    assert catalog_response.status_code == 200
+    assert catalog_response.json() == [{"value": "IT", "count": 123}]
+    assert catalog_elapsed < 1
+    assert quote_response.status_code == 200
+    assert quote_response.json()["matching_rows"] == 42
+    assert seen[0]["q"] == "HR Speci"
+    assert seen[0]["technologies"] == ["Python", "SAP"]
+    assert seen[0]["tech_match"] == "all"
+
+
+def test_keyword_quote_returns_503_without_raw_fallback_when_opensearch_unavailable(
+        pg_account, portal_client, monkeypatch):
+    uid = pg_account(100)
+    monkeypatch.setattr(opensearch, "attivo", lambda: False)
+
+    def forbidden_duckdb_count(_filters):
+        raise AssertionError("a keyword must never trigger a raw DuckDB scan")
+
+    monkeypatch.setattr(dati, "stima_export", forbidden_duckdb_count)
+    response = portal_client(uid).post(
+        "/portale/export/stima", json={"tipo": "postings", "q": "HR Speci"})
+    assert response.status_code == 503
+    assert "no DuckDB raw scan performed" in response.json()["detail"]
+
+
+def test_export_quote_abort_controller_and_debounce_contract():
+    html = (ROOT / "vetrina" / "account.html").read_text()
+    quote = html[html.index("async function stimaExport()"):html.index("function exFitBalance()")]
+    assert "exStimaAbort?.abort()" in quote
+    assert "new AbortController()" in quote
+    assert "signal: controller.signal" in quote
+    assert "timedOut = true; controller.abort()" in quote
+    assert "setTimeout(stimaExport" in html
+    assert 'e.name !== "AbortError"' in html
+    assert "setInterval" not in quote

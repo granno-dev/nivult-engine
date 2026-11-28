@@ -1663,7 +1663,7 @@ async function api(percorso, opz = {}) {
     }
     return r;
   } catch (e) {
-    if (e.message !== "401") notifica("The API could not be reached. Check your connection and retry.", "errore");
+    if (e.name !== "AbortError" && e.message !== "401") notifica("The API could not be reached. Check your connection and retry.", "errore");
     throw e;
   }
 }
@@ -3948,7 +3948,7 @@ document.addEventListener("click", e => {
   }
 });
 
-let exStimaTimer = null, exDati = null, exStimaSeq = 0;
+let exStimaTimer = null, exDati = null, exStimaSeq = 0, exStimaAbort = null;
 let exTipoCorrente = "postings", exInitializing = false, exportCombosReady = false;
 const exportCombos = {}, exTechMatch = { postings: "any", companies: "any" };
 let exportComboAperta = null;
@@ -4374,6 +4374,7 @@ function apriExport(pre) {
   exScegliTipo(exTipoCorrente);
 }
 function chiudiExport() {
+  exStimaAbort?.abort();
   Object.values(exportCombos).forEach(combo => combo.close());
   chiudiDialogo("export-modale");
 }
@@ -4457,6 +4458,11 @@ function exAggiornaPulsante() {
 }
 async function stimaExport() {
   const seq = ++exStimaSeq;
+  exStimaAbort?.abort();
+  const controller = new AbortController();
+  exStimaAbort = controller;
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 30000);
   const vai = document.getElementById("ex-vai");
   exDati = null;
   exResetRiepilogo("…");
@@ -4465,9 +4471,10 @@ async function stimaExport() {
   for (const id of ["ex-avviso", "ex-avviso-azioni", "ex-avviso-metriche", "ex-fit", "ex-ricarica", "ex-export-note", "ex-cap-nota"])
     document.getElementById(id).classList.add("hidden");
   let r;
-  try { r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()) }); }
+  try {
+  try { r = await api("/portale/export/stima", { method: "POST", body: JSON.stringify(filtriExport()), signal: controller.signal }); }
   catch (e) {
-    if (seq !== exStimaSeq) return;
+    if (seq !== exStimaSeq || (controller.signal.aborted && !timedOut)) return;
     exResetRiepilogo("—");
     document.getElementById("ex-vai-label").textContent = "Download";
     exMostraAvviso("The estimate could not be loaded. Check your connection and retry.");
@@ -4480,7 +4487,7 @@ async function stimaExport() {
     let message = "The estimate could not be loaded. Retry in a moment.";
     try {
       const error = await r.json();
-      if (r.status === 400 && typeof error.detail === "string") message = error.detail;
+      if ((r.status === 400 || r.status === 503) && typeof error.detail === "string") message = error.detail;
     } catch (e) { /* response without a JSON error body */ }
     exMostraAvviso(message);
     return;
@@ -4514,6 +4521,10 @@ async function stimaExport() {
     return;
   }
   vai.disabled = false;
+} finally {
+  clearTimeout(timeout);
+  if (exStimaAbort === controller) exStimaAbort = null;
+}
 }
 function exFitBalance() {
   if (!exDati || exDati.affordable_rows < 1) return;

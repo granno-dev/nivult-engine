@@ -510,6 +510,49 @@ def normalizza_filtri_export(corpo: dict, tipo: str) -> dict:
     return out
 
 
+def _query_export_opensearch(filtri: dict) -> dict:
+    from . import opensearch
+
+    multipli = {
+        "countries": "country", "categories": "category",
+        "seniorities": "seniority", "remote_values": "remote",
+        "employment_types": "employment_type", "languages": "language",
+        "source_types": "source_type",
+    }
+    scalari = {"q", "title", "dal", "posted_before", "has_salary",
+               "salary_min", "salary_max", "ats", "exclude_ats"}
+    unknown = sorted(set(filtri) - set(multipli) - scalari - {"technologies", "tech_match"})
+    if unknown:
+        raise ValueError(f"unsupported OpenSearch export filter: {unknown[0]}")
+    mapped = {}
+    for campo, destinazione in multipli.items():
+        if filtri.get(campo):
+            mapped[destinazione] = ",".join(filtri[campo])
+    for campo in scalari:
+        if campo in filtri:
+            value = filtri[campo]
+            mapped[campo] = ",".join(value) if isinstance(value, list) else value
+    technologies = filtri.get("technologies") or []
+    match_all = filtri.get("tech_match") == "all" and technologies
+    if technologies and not match_all:
+        mapped["technology"] = ",".join(technologies)
+    query = opensearch._query(mapped)
+    if match_all:
+        for value in technologies:
+            query["bool"]["filter"].append(opensearch._keyword("technologies", value))
+    return query
+
+
+def conteggio_export_opensearch(filtri: dict) -> int:
+    from . import opensearch
+
+    query = _query_export_opensearch(filtri)
+    with opensearch._http_client() as client:
+        esito = opensearch._chiamata(
+            client, f"/{opensearch.INDEX}/_count", {"query": query})
+    return int(esito["count"])
+
+
 def _where_in(dove: list[str], par: dict, expression: str, nome: str,
               values: list[str], upper: bool = False, negate: bool = False) -> None:
     if not values:

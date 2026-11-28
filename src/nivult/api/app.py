@@ -1859,6 +1859,7 @@ def create_app() -> FastAPI:
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
     from nivult.api_clienti import explorer as _explorer
+    from nivult.api_clienti import opensearch as _opensearch
     from nivult.api_clienti import vivo as _vivo
 
     def _abuso_explorer(request: Request, uid: str, motivo: str) -> None:
@@ -2234,6 +2235,22 @@ def create_app() -> FastAPI:
         except (TypeError, ValueError) as exc:
             raise HTTPException(400, str(exc)) from exc
 
+    async def _conteggio_export_postings(filtri: dict) -> int:
+        if _opensearch.attivo():
+            try:
+                return await run_in_threadpool(_dati.conteggio_export_opensearch, filtri)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            except psycopg.Error as exc:
+                log.warning("conteggio OpenSearch non disponibile: %s", type(exc).__name__)
+                raise HTTPException(
+                    503, "OpenSearch count temporarily unavailable; no DuckDB text scan performed"
+                ) from exc
+        if filtri.get("q") or filtri.get("title"):
+            raise HTTPException(
+                503, "text search is temporarily unavailable; no DuckDB raw scan performed")
+        return await run_in_threadpool(_dati.stima_export, filtri)
+
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
         try:
@@ -2245,8 +2262,8 @@ def create_app() -> FastAPI:
         tipo = "companies" if corpo.get("tipo") == "companies" else "postings"
         max_rows = _max_rows_export(corpo)
         filtri = _filtri_export(corpo, tipo)
-        stima = _dati.stima_export_aziende if tipo == "companies" else _dati.stima_export
-        righe = await run_in_threadpool(stima, filtri)
+        righe = (await run_in_threadpool(_dati.stima_export_aziende, filtri)
+                 if tipo == "companies" else await _conteggio_export_postings(filtri))
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
         return _preventivo_export(tipo, righe, saldo, max_rows)
 
@@ -2263,8 +2280,8 @@ def create_app() -> FastAPI:
         filtri = _filtri_export(corpo, tipo)
         # DuckDB e Postgres qui sotto sono chiamate SINCROME e pesanti:
         # sul thread dell'event loop un export lento inchioda TUTTA l'API.
-        stima = _dati.stima_export_aziende if tipo == "companies" else _dati.stima_export
-        righe = await run_in_threadpool(stima, filtri)
+        righe = (await run_in_threadpool(_dati.stima_export_aziende, filtri)
+                 if tipo == "companies" else await _conteggio_export_postings(filtri))
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
         preventivo = _preventivo_export(tipo, righe, saldo, max_rows)
         if preventivo["export_rows"] == 0:
