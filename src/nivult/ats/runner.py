@@ -25,6 +25,7 @@ from psycopg.rows import dict_row
 
 from nivult.ats.adapters import ADAPTERS, RATE_PER_SECOND, LetturaFallita
 from nivult.ats.enrichment import cerca_wikidata
+from nivult.ats.qualita_dati import crollo_sospetto
 
 log = logging.getLogger("nivult.ats.runner")
 
@@ -36,6 +37,39 @@ log = logging.getLogger("nivult.ats.runner")
 # il ban sui pochi condivisi. Il gate serializza al ritmo di RATE_PER_SECOND.
 _rate_lock = threading.Lock()
 _rate_next: dict[str, float] = {}
+PAUSA_429_SECONDI = float(os.environ.get("PAUSA_429_SECONDI", "1800"))
+PAUSA_429_DIR = os.environ.get("PAUSA_429_DIR", "/tmp")
+
+
+def _pausa_429_file(platform_id: str) -> str:
+    pulito = re.sub(r"[^a-z0-9_-]", "", platform_id.lower())
+    return os.path.join(PAUSA_429_DIR, f"nivult-429-{pulito}")
+
+
+def _pausa_429_attiva(platform_id: str) -> bool:
+    f = _pausa_429_file(platform_id)
+    try:
+        scade = os.path.getmtime(f) + PAUSA_429_SECONDI
+    except OSError:
+        return False
+    if scade <= time.time():
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def _piattaforme_in_pausa() -> set[str]:
+    try:
+        nomi = os.listdir(PAUSA_429_DIR)
+    except OSError:
+        return set()
+    return {
+        nome[11:] for nome in nomi
+        if nome.startswith("nivult-429-") and _pausa_429_attiva(nome[11:])
+    }
 
 
 def _rate_gate(platform_id: str) -> None:
@@ -59,6 +93,11 @@ def _rate_penalizza(platform_id: str, secondi: float = 20.0) -> None:
     with _rate_lock:
         ora = time.monotonic()
         _rate_next[platform_id] = max(_rate_next.get(platform_id, 0.0), ora) + secondi
+    try:
+        with open(_pausa_429_file(platform_id), "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass
 
 
 def _paese_all_ingresso(j) -> str | None:
@@ -167,6 +206,12 @@ def setup(dsn: str) -> None:
     istruzioni = _spezza_sql(schema.read_text())
     with psycopg.connect(dsn, autocommit=True) as conn:
         with conn.cursor() as cur:
+            lock_timeout = os.environ.get("ATS_LOCK_TIMEOUT")
+            if lock_timeout:
+                if not re.fullmatch(r"\d+(?:ms|s|min|h)", lock_timeout):
+                    raise ValueError("ATS_LOCK_TIMEOUT non valido")
+                cur.execute("SELECT set_config('lock_timeout', %s, false)",
+                            (lock_timeout,))
             colonne: dict[str, set] = {}
             for tab, col in cur.execute(
                     "SELECT table_name, column_name FROM information_schema.columns "
@@ -174,13 +219,17 @@ def setup(dsn: str) -> None:
                 colonne.setdefault(tab, set()).add(col)
             indici = {r[0] for r in cur.execute(
                 "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'").fetchall()}
+            fastupdate_off = cur.execute(
+                "SELECT COALESCE((SELECT reloptions::text FROM pg_class "
+                "WHERE oid = to_regclass('public.ats_jobs_search_idx')), '')").fetchone()[0]
             triggers = {r[0] for r in cur.execute(
                 "SELECT tgname FROM pg_trigger WHERE NOT tgisinternal").fetchall()}
             # i lock restanti (i CREATE TABLE di controllo, i SET DEFAULT…)
             # si prendono con lock_timeout corto e riprova: chi legge a
             # lungo non viene strangolato, e lo schema entra nella prima
             # finestra libera invece di morire in fondo alla fila
-            cur.execute("SET lock_timeout = '4s'")
+            cur.execute("SELECT set_config('lock_timeout', %s, false)",
+                        (lock_timeout or "4s",))
             salta_create_trigger: str | None = None
             for sql in istruzioni:
                 testa = _senza_commenti_testa(sql)
@@ -193,6 +242,12 @@ def setup(dsn: str) -> None:
                     continue
                 m = re.match(r"CREATE\s+(?:UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)", testa, re.I)
                 if m and m.group(1) in indici:
+                    continue
+                m = re.match(
+                    r"ALTER\s+INDEX\s+IF\s+EXISTS\s+ats_jobs_search_idx\s+"
+                    r"SET\s+\(\s*fastupdate\s*=\s*false\s*\)", testa, re.I)
+                if m and re.search(r"fastupdate\s*=\s*(?:off|false|0)\b",
+                                   fastupdate_off, re.I):
                     continue
                 m = re.match(r"DROP\s+TRIGGER\s+IF\s+EXISTS\s+(\w+)", testa, re.I)
                 if m and m.group(1) in triggers:
@@ -319,10 +374,45 @@ def _lettura_vuota(conn, az: dict, pagina: str | None, campioni_ora: dict) -> tu
     return attive, confermate
 
 
+def _quarantena_crollo(conn, az: dict, trovate: int) -> bool:
+    pid, slug = az["platform_id"], az["slug"]
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) FROM ats_jobs "
+            "WHERE platform_id = %s AND slug = %s AND expired_at IS NULL",
+            (pid, slug),
+        )
+        attive = cur.fetchone()[0]
+    if not crollo_sospetto(attive, trovate):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO letture_sospette "
+            "(platform_id, slug, attive_prima, trovate, confermate, http_status, campione) "
+            "VALUES (%s, %s, %s, %s, 0, 200, NULL)",
+            (pid, slug, attive, trovate),
+        )
+        cur.execute(
+            "UPDATE ats_companies SET last_fetch_at = now(), lettura_parziale = true "
+            "WHERE platform_id = %s AND slug = %s",
+            (pid, slug),
+        )
+    conn.commit()
+    log.warning(
+        "  %s/%s: lettura in quarantena, %d -> %d offerte; last_ok_at invariato",
+        pid,
+        slug,
+        attive,
+        trovate,
+    )
+    return True
+
+
 def scrape(dsn: str, piattaforma: str | None = None,
            thread: int = 10, limite: int | None = None,
            solo_attivi: bool = False,
-           salta: set[str] | None = None) -> dict[str, int]:
+           salta: set[str] | None = None,
+           tenant: list[tuple[str, str]] | None = None) -> dict[str, int]:
     """Scarica le offerte di tutte le aziende attive (o di una piattaforma).
 
     Il fetch delle aziende va in parallelo: quasi tutto il tempo di uno
@@ -345,8 +435,9 @@ def scrape(dsn: str, piattaforma: str | None = None,
              "fallite": 0}
     with psycopg.connect(dsn) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, "
-                   "       ac.wd_server, ac.wd_instance, ac.pub_key, ac.sorgente_url "
+            sql = ("SELECT ac.slug, ac.platform_id, ac.company_name, ac.site_domain, "
+                   "       ac.company_name_source, ac.wd_server, ac.wd_instance, "
+                   "       ac.pub_key, ac.sorgente_url "
                    "FROM ats_companies ac "
                    "JOIN ats_platforms ap ON ap.id = ac.platform_id "
                    "WHERE ac.is_active AND ap.is_active")
@@ -358,9 +449,19 @@ def scrape(dsn: str, piattaforma: str | None = None,
                 lista = [p.strip() for p in piattaforma.split(",") if p.strip()]
                 sql += " AND ac.platform_id = ANY(%s)"
                 params.append(lista)
+            if tenant:
+                sql += " AND (" + " OR ".join(
+                    "(ac.platform_id = %s AND ac.slug = %s)"
+                    for _ in tenant) + ")"
+                for coppia in tenant:
+                    params.extend(coppia)
             if salta:
                 sql += " AND NOT (ac.platform_id = ANY(%s))"
                 params.append(sorted(salta))
+            in_pausa = _piattaforme_in_pausa()
+            if in_pausa:
+                sql += " AND NOT (ac.platform_id = ANY(%s))"
+                params.append(sorted(in_pausa))
             if solo_attivi:
                 # corsia veloce: solo i tenant che HANNO offerte, rivisitati
                 # di continuo dal piu' stantio — cosi' le posizioni appena
@@ -409,8 +510,43 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         jobs = adapter.jobs(az["slug"], az["pub_key"])
                     elif az["platform_id"] == "jsonld":
                         jobs = adapter.jobs(az["slug"], az.get("sorgente_url"))
+                    elif az["platform_id"] == "ukg":
+                        try:
+                            from .ukg_nomi import nome_sporco
+                        except ImportError:
+                            nome_sporco = None
+                        jobs = adapter.jobs(az["slug"])
+                        sporco = (nome_sporco(az.get("company_name"))
+                                  if nome_sporco else not (az.get("company_name") or "").strip())
+                        if sporco or not az.get("site_domain"):
+                            az["_ukg_meta"] = adapter.metadata(az["slug"])
                     else:
                         jobs = adapter.jobs(az["slug"])
+                    if az["platform_id"] != "ukg" and not (az.get("company_name") or "").strip():
+                        try:
+                            from .company_names import board_url, nome_da_html, nome_unico
+                        except ImportError:
+                            pass
+                        else:
+                            nome = nome_unico([j.raw for j in jobs])
+                            fonte = "raw" if nome else None
+                            if not nome and not az.get("company_name_source"):
+                                url = board_url(az["platform_id"], az["slug"])
+                                if az["platform_id"] == "workday" and az.get("wd_server"):
+                                    url = (f"https://{az['slug']}.{az['wd_server']}.myworkdayjobs.com/"
+                                           f"{az.get('wd_instance') or ''}")
+                                if url:
+                                    try:
+                                        r = adapter.client.get(url)
+                                        if r.status_code == 200:
+                                            nome = nome_da_html(r.text)
+                                            fonte = "board" if nome else "unresolved"
+                                    except Exception as exc:  # noqa: BLE001
+                                        log.debug("metadata azienda non letti %s/%s: %s",
+                                                  az["platform_id"], az["slug"], exc)
+                            if nome or fonte == "unresolved":
+                                az["_company_meta"] = {"company_name": nome,
+                                                       "company_name_source": fonte}
                     return az, jobs, (adapter.ultima_pagina if not jobs else None), adapter.lettura_parziale
             except LetturaFallita as exc:
                 if exc.status == 429:
@@ -447,6 +583,25 @@ def scrape(dsn: str, piattaforma: str | None = None,
                     continue
                 stats["aziende"] += 1
 
+                if az.get("_ukg_meta"):
+                    meta = az["_ukg_meta"]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE ats_companies SET company_name=%s, "
+                            "site_domain=COALESCE(site_domain,%s) "
+                            "WHERE platform_id=%s AND slug=%s",
+                            (meta["company_name"], meta["site_domain"],
+                             az["platform_id"], az["slug"]))
+                    conn.commit()
+                if az.get("_company_meta"):
+                    meta = az["_company_meta"]
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE ats_companies SET company_name=%s, "
+                            "company_name_source=%s WHERE platform_id=%s AND slug=%s",
+                            (meta["company_name"], meta["company_name_source"],
+                             az["platform_id"], az["slug"]))
+                    conn.commit()
                 if not jobs:
                     # Zero con HTTP 200. Se il tenant aveva offerte, non ci
                     # si crede sulla parola: il ripiego cerca nella pagina
@@ -466,6 +621,11 @@ def scrape(dsn: str, piattaforma: str | None = None,
                         conn.commit()
                         continue
 
+                if _quarantena_crollo(conn, az, len(jobs)):
+                    stats["quarantene"] = stats.get("quarantene", 0) + 1
+                    continue
+                lettura_iniziata = datetime.now(timezone.utc)
+                scritture_fallite = 0
                 for j in jobs:
                     j.country = _paese_all_ingresso(j)
                     try:
@@ -503,19 +663,38 @@ def scrape(dsn: str, piattaforma: str | None = None,
                                     stats["aggiornate"] += 1
                             stats["offerte"] += 1
                     except psycopg.Error as exc:
+                        scritture_fallite += 1
                         stats["saltate"] = stats.get("saltate", 0) + 1
                         log.warning("offerta saltata (%s/%s/%s): %s",
                                     j.platform_id, j.slug, j.external_id,
                                     str(exc).splitlines()[0][:160])
 
                 with conn.cursor() as cur:
-                    # last_ok_at: la lettura e' RIUSCITA (offerte parseate, o
-                    # bacheca vuota confermata dal ripiego). E' l'unica data
-                    # da cui la scadenza per presenza puo' dedurre qualcosa.
-                    cur.execute(
-                        "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
-                        "job_count = %s, lettura_parziale = %s WHERE platform_id = %s AND slug = %s",
-                        (len(jobs), bool(parziale), az["platform_id"], az["slug"]))
+                    if parziale or scritture_fallite:
+                        cur.execute(
+                            "UPDATE ats_companies SET last_fetch_at = now(), "
+                            "lettura_parziale = true "
+                            "WHERE platform_id = %s AND slug = %s",
+                            (az["platform_id"], az["slug"]),
+                        )
+                    else:
+                        cur.execute(
+                            "UPDATE ats_jobs j SET "
+                            "absent_since = COALESCE(j.absent_since, now()), "
+                            "absence_count = j.absence_count + 1 "
+                            "WHERE j.platform_id = %s AND j.slug = %s "
+                            "AND j.expired_at IS NULL AND j.fetched_at < %s",
+                            (az["platform_id"], az["slug"], lettura_iniziata),
+                        )
+                        stats["assenze_registrate"] = (
+                            stats.get("assenze_registrate", 0) + cur.rowcount
+                        )
+                        cur.execute(
+                            "UPDATE ats_companies SET last_fetch_at = now(), last_ok_at = now(), "
+                            "job_count = %s, lettura_parziale = false "
+                            "WHERE platform_id = %s AND slug = %s",
+                            (len(jobs), az["platform_id"], az["slug"]),
+                        )
                 conn.commit()
                 if len(jobs):
                     log.info("  %s/%s: %d offerte",
@@ -599,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.runner", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--piattaforma", help="solo queste piattaforme (elenco con virgole: greenhouse,ashby,…)")
+    ap.add_argument("--tenant", action="append", default=[], metavar="PIATTAFORMA:SLUG",
+                    help="leggi solo questo tenant; ripetibile per un onboarding mirato")
     ap.add_argument("--salta", default=None,
                     help="MAI queste piattaforme (elenco con virgole): la "
                          "corsia di casa le lascia a Hetzner e viceversa")
@@ -619,6 +800,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--schema", action="store_true",
                     help="applica schema.sql (idempotente) e registra le piattaforme; poi esce se non c'e' altro")
     args = ap.parse_args(argv)
+    tenant = []
+    for valore in args.tenant:
+        pid, sep, slug = valore.partition(":")
+        if not sep or not pid.strip() or not slug.strip():
+            ap.error(f"--tenant non valido: {valore!r}; atteso PIATTAFORMA:SLUG")
+        tenant.append((pid.strip(), slug.strip()))
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s",
                         stream=sys.stderr)
@@ -651,12 +838,12 @@ def main(argv: list[str] | None = None) -> int:
             while True:
                 s = scrape(dsn, args.piattaforma, thread=args.thread,
                            limite=args.limite, solo_attivi=args.solo_attivi,
-                           salta=salta)
+                           salta=salta, tenant=tenant)
                 print("scrape:", s, flush=True)
                 _t.sleep(5)
         s = scrape(dsn, args.piattaforma, thread=args.thread,
                    limite=args.limite, solo_attivi=args.solo_attivi,
-                   salta=salta)
+                   salta=salta, tenant=tenant)
         if s.get("sospette"):
             print(f"\n⚠ {s['sospette']} letture SOSPETTE (adapter a zero su tenant con offerte ancora in pagina)")
         print(f"\nscrape: {s['aziende']} aziende, {s['offerte']} offerte "

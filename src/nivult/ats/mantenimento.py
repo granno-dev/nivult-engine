@@ -40,13 +40,9 @@ ATS_DSN = os.environ.get(
     "ATS_DATABASE_URL",
     "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
 
-# Quanti giorni senza essere rivista prima di considerarla scaduta.
-# Gli scraper girano ogni notte: 21 giorni = tre settimane di
-# assenze consecutive.
-# Con lo sweep a 12h (ATS) e i servizi pubblici a 24h, un'offerta ancora
-# in bacheca ha sempre fetched_at fresco: 3 giorni bastano con margine
-# 3-6x. Era 21: un'offerta rimossa restava «attiva» tre settimane.
-GIORNI_SCADENZA = 3
+# Un'offerta assente resta in grace per sette giorni e servono due
+# snapshot completi consecutivi prima che possa diventare un evento closed.
+GIORNI_SCADENZA = 7
 
 
 # ── 1. EXPIRA ─────────────────────────────────────────────────────
@@ -74,11 +70,13 @@ def _prova_vita_jsonld(dsn: str, giorni: int, limite: int = 2000) -> tuple[int, 
             SELECT j.id, j.url FROM ats_jobs j
              WHERE j.platform_id = 'jsonld' AND j.expired_at IS NULL
                AND j.fetched_at < now() - make_interval(days => %s)
+               AND j.absent_since < now() - make_interval(days => %s)
+               AND j.absence_count >= 2
                AND EXISTS (SELECT 1 FROM ats_companies c
                             WHERE c.platform_id = j.platform_id AND c.slug = j.slug
                               AND c.last_ok_at > j.fetched_at
                               AND c.lettura_parziale = false)
-             ORDER BY j.fetched_at ASC LIMIT %s""", (giorni, limite)).fetchall()
+             ORDER BY j.fetched_at ASC LIMIT %s""", (giorni, giorni, limite)).fetchall()
         if not cand:
             return 0, 0
 
@@ -109,121 +107,139 @@ def _prova_vita_jsonld(dsn: str, giorni: int, limite: int = 2000) -> tuple[int, 
                          (vivi[i:i + 5000],))
         n = 0
         for i in range(0, len(morti), 5000):
-            n += conn.execute("UPDATE ats_jobs SET expired_at = now() WHERE id = ANY(%s::uuid[])",
+            n += conn.execute("UPDATE ats_jobs SET expired_at = now(), closure_reason = 'jsonld_prova_vita' WHERE id = ANY(%s::uuid[])",
                               (morti[i:i + 5000],)).rowcount
         return n, len(vivi)
 
 
-def expira(dsn: str, giorni: int = GIORNI_SCADENZA) -> int:
-    """Marca scadute le offerte non più viste dallo scraper.
-
-    Due regole:
-    1. fetched_at vecchio — lo scraper non la rivede: ritirata.
-    2. posted_at ANTICO — l'ATS continua a elencarla ma è uno zombie
-       (listing del 2013 ancora sulla pagina).
-
-    ⚠ La regola 2 NON ESISTE PIU' (2026-09-06). A 90 giorni ha marcato
-    scadute 163.710 offerte viste sul sito negli ultimi 3 giorni (5 su 6
-    controllate a mano erano online); portata a 2 anni ne ha scartate
-    altre 94.000 nel pomeriggio, sempre viste di recente. Molti ATS
-    tengono annunci aperti per mesi o anni, e certe piattaforme scrivono
-    date di pubblicazione inaffidabili (2013 su annunci vivi). La
-    presenza sulla pagina e' l'UNICA verita' sulla scadenza; la
-    freschezza per il digest la applica il ponte (30 giorni), non
-    questa funzione. Il parametro `giorni` e' la sola regola.
-
-    ⚠ L'INTERRUTTORE (2026-09-06, sera). La regola di presenza si fida
-    dello scraper: se un adapter smette di leggere una bacheca — JazzHR
-    ha cambiato template su 1.442 tenant e l'adapter rispondeva «zero
-    offerte» a pagine da 60 annunci — il runner scrive job_count = 0 e
-    tre giorni dopo questa funzione scade 33.344 offerte VIVE in un
-    colpo. Quindi: una scadenza di massa non si esegue, si RIFIUTA e si
-    segnala. Per piattaforma, sopra il 30% delle sue attive (e almeno
-    500), la piattaforma resta fuori dal giro; il rifiuto finisce in
-    RIFIUTO_FILE, che la sentinella legge e trasforma in incidente. Le
-    altre piattaforme scadono regolarmente: un adapter rotto non deve
-    congelare le scadenze oneste degli altri.
-    """
-    # ⚠ SOLO le piattaforme lette da un adapter, cioe' bacheca per
-    # bacheca e per intero. Le fonti a FETTA — France Travail,
-    # Arbetsförmedlingen, Bundesanstellung, EURES, il feed «agenzie» — si
-    # leggono di notte con `--limite 2000`: le piu' recenti, mai l'elenco
-    # completo. Li' «non vista da 3 giorni» non significa niente, e la
-    # presenza le stava macinando: France Travail 60.184 scadute in 7
-    # giorni contro 5.437 attive (misurato il 07/09/2026), poi rivissute
-    # alla fetta successiva come «nuove». Stessa regola del motore
-    # (`fetch_complete`): da una lettura parziale la scadenza non si
-    # deduce. La loro scadenza va presa dai segnali della fonte
-    # (`removed` di Arbetsförmedlingen, assenza dopo una lettura completa
-    # per ROME…) — finche' non c'e', non scadono per presenza.
+def expira(
+    dsn: str,
+    giorni: int = GIORNI_SCADENZA,
+    *,
+    giorni_zombie: int = 365,
+    dry_run: bool = False,
+) -> int:
+    """Chiude assenze confermate e offerte attive ininterrottamente da oltre un anno."""
     from .adapters import ADAPTERS
-    # 28/09/2026 — jsonld fuori dalla regola SEMPLICE: per i portali la
-    # sitemap e' una finestra rotante, non l'inventario (mindpal.co: 446
-    # offerte vive con JobPosting in pagina, fuori dalla sitemap da
-    # giorni, scadute in ondata — 2.522 in 6 ore, mediana 8 giorni).
-    # jsonld scade solo con la prova di vita, qui sotto.
+    from .qualita_dati import RIFIUTO_TENANT_MINIMO, RIFIUTO_TENANT_QUOTA
+
     con_adapter = [p for p in sorted(ADAPTERS) if p != "jsonld"]
+    cte = """
+        WITH cand AS MATERIALIZED (
+            SELECT j.id, j.platform_id, j.slug, j.active_since, j.fetched_at,
+                   CASE WHEN j.active_since < now() - make_interval(days => %s)
+                        THEN 'zombie_365d' ELSE 'last_seen_7d' END AS motivo
+              FROM ats_jobs j
+             WHERE j.expired_at IS NULL
+               AND j.active_since IS NOT NULL
+               AND (j.active_since < now() - make_interval(days => %s)
+                    OR (j.platform_id = ANY(%s)
+                        AND j.fetched_at < now() - make_interval(days => %s)
+                        AND j.absent_since < now() - make_interval(days => %s)
+                        AND j.absence_count >= 2
+                        AND EXISTS (SELECT 1 FROM ats_companies c
+                                     WHERE c.platform_id = j.platform_id
+                                       AND c.slug = j.slug
+                                       AND c.last_ok_at > j.fetched_at
+                                       AND c.lettura_parziale = false)))),
+        att_tenant AS (
+            SELECT platform_id, slug, count(*) AS tot FROM ats_jobs
+             WHERE expired_at IS NULL GROUP BY 1, 2),
+        rifiuto_tenant AS (
+            SELECT c.platform_id, c.slug, count(*) AS n, a.tot
+              FROM cand c JOIN att_tenant a USING (platform_id, slug)
+             WHERE c.motivo = 'last_seen_7d'
+             GROUP BY c.platform_id, c.slug, a.tot
+            HAVING count(*) >= %s AND count(*) > a.tot * %s),
+        att_platform AS (
+            SELECT platform_id, count(*) AS tot FROM ats_jobs
+             WHERE expired_at IS NULL GROUP BY 1),
+        rifiuto_platform AS (
+            SELECT c.platform_id, count(*) AS n, a.tot
+              FROM cand c JOIN att_platform a USING (platform_id)
+             WHERE c.motivo = 'last_seen_7d'
+             GROUP BY c.platform_id, a.tot
+            HAVING count(*) >= %s AND count(*) > a.tot * %s),
+        idonei AS (
+            SELECT c.* FROM cand c
+             WHERE c.motivo = 'zombie_365d'
+                OR (NOT EXISTS (SELECT 1 FROM rifiuto_tenant r
+                                 WHERE r.platform_id = c.platform_id
+                                   AND r.slug = c.slug)
+                    AND NOT EXISTS (SELECT 1 FROM rifiuto_platform r
+                                     WHERE r.platform_id = c.platform_id))),
+        scelte AS (
+            SELECT id, platform_id, slug, active_since, fetched_at, motivo
+              FROM idonei WHERE motivo = 'last_seen_7d'
+            UNION ALL
+            SELECT id, platform_id, slug, active_since, fetched_at, motivo FROM (
+                SELECT i.*, row_number() OVER (
+                           PARTITION BY i.platform_id, i.slug
+                           ORDER BY i.active_since, i.id) AS rn
+                  FROM idonei i
+                 WHERE i.motivo = 'zombie_365d'
+                   AND NOT EXISTS (SELECT 1 FROM ats_jobs z
+                                    WHERE z.closure_reason = 'zombie_365d'
+                                      AND z.expired_at > now() - interval '1 day')
+                 ORDER BY i.active_since, i.id) z
+             WHERE rn <= %s LIMIT %s)
+    """
+    params = (
+        giorni_zombie, giorni_zombie, con_adapter, giorni, giorni,
+        RIFIUTO_TENANT_MINIMO, RIFIUTO_TENANT_QUOTA,
+        RIFIUTO_MINIMO, RIFIUTO_QUOTA,
+        ZOMBIE_LIMITE_TENANT_GIORNALIERO, ZOMBIE_LIMITE_GIORNALIERO,
+    )
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            # La condizione che manca da sempre: il tenant e' stato RILETTO
-            # CON SUCCESSO dopo l'ultima volta che abbiamo visto l'offerta
-            # (ats_companies.last_ok_at). Senza, «non vista da 3 giorni»
-            # include le letture fallite, quelle mute e i tenant mai
-            # rivisitati — cioe' tutte le stragi del 06/09.
-            cur.execute("""
-                WITH cand AS (
-                    SELECT j.platform_id, count(*) AS n FROM ats_jobs j
-                     WHERE j.expired_at IS NULL
-                       AND j.fetched_at < now() - make_interval(days => %s)
-                       AND j.platform_id = ANY(%s)
-                       AND EXISTS (SELECT 1 FROM ats_companies c
-                                    WHERE c.platform_id = j.platform_id AND c.slug = j.slug
-                                      AND c.last_ok_at > j.fetched_at
-                                      AND c.lettura_parziale = false)   -- 14/09: mai da un elenco incompleto
-                     GROUP BY 1),
-                att AS (
-                    SELECT platform_id, count(*) AS tot FROM ats_jobs
-                     WHERE expired_at IS NULL GROUP BY 1)
-                SELECT cand.platform_id, cand.n, att.tot
-                  FROM cand JOIN att USING (platform_id)
-                 WHERE cand.n >= %s AND cand.n > att.tot * %s
-            """, (giorni, con_adapter, RIFIUTO_MINIMO, RIFIUTO_QUOTA))
-            rifiutate = cur.fetchall()
-            escluse = [r[0] for r in rifiutate]
-            cur.execute("""
-                UPDATE ats_jobs j
-                   SET expired_at = now()
-                 WHERE j.expired_at IS NULL
-                   AND j.fetched_at < now() - make_interval(days => %s)
-                   AND j.platform_id = ANY(%s)
-                   AND NOT (j.platform_id = ANY(%s))
-                   AND EXISTS (SELECT 1 FROM ats_companies c
-                                WHERE c.platform_id = j.platform_id AND c.slug = j.slug
-                                  AND c.last_ok_at > j.fetched_at
-                                  AND c.lettura_parziale = false)   -- 14/09: mai da un elenco incompleto
-                RETURNING j.id
-            """, (giorni, con_adapter, escluse))
-            n = cur.rowcount
-        conn.commit()
-    # jsonld scade solo dopo la prova di vita sulla pagina: la sitemap dei
-    # portali e' una finestra, e dalla finestra la morte non si deduce.
-    n_j, vivi_j = _prova_vita_jsonld(dsn, giorni)
-    n += n_j
+            cur.execute(
+                cte + """
+                SELECT COALESCE((SELECT json_agg(r) FROM (
+                           SELECT platform_id || '/' || slug AS piattaforma,
+                                  n AS scadrebbero, tot AS attive FROM rifiuto_tenant
+                           UNION ALL
+                           SELECT platform_id AS piattaforma,
+                                  n AS scadrebbero, tot AS attive FROM rifiuto_platform
+                         ) r), '[]'::json), (SELECT count(*) FROM scelte)
+                """,
+                params,
+            )
+            report, candidati = cur.fetchone()
+            rifiutate = [(r["piattaforma"], r["scadrebbero"], r["attive"]) for r in report]
+            n = candidati
+            if not dry_run:
+                cur.execute(
+                    cte + """
+                    UPDATE ats_jobs j SET expired_at = now(), closure_reason = s.motivo
+                      FROM scelte s
+                     WHERE j.id = s.id AND j.expired_at IS NULL
+                       AND j.fetched_at = s.fetched_at
+                       AND j.active_since = s.active_since
+                    RETURNING j.id
+                    """,
+                    params,
+                )
+                n = cur.rowcount
+        if not dry_run:
+            conn.commit()
+    n_j = vivi_j = 0
+    if not dry_run:
+        n_j, vivi_j = _prova_vita_jsonld(dsn, giorni)
+        n += n_j
+        _segna_rifiuto(rifiutate)
     if n_j or vivi_j:
-        log.info("expira jsonld con prova di vita: %d scadute, %d riviste vive",
-                 n_j, vivi_j)
-    _segna_rifiuto(rifiutate)
-    log.info("expira: %d offerte scadute (non viste o pubblicate da troppo)", n)
+        log.info("expira jsonld con prova di vita: %d scadute, %d riviste vive", n_j, vivi_j)
+    log.info("expira%s: %d offerte candidate/chiuse", " dry-run" if dry_run else "", n)
     for pid, k, tot in rifiutate:
-        log.warning("expira: RIFIUTATA scadenza di massa su %s: %d di %d attive (%.0f%%) — adapter muto?",
+        log.warning("expira: RIFIUTATA scadenza di massa su %s: %d di %d attive (%.0f%%)",
                     pid, k, tot, 100.0 * k / max(tot, 1))
     return n
 
 
-# Sopra questa quota delle attive di una piattaforma (e questo minimo)
-# la scadenza non e' una scadenza: e' un adapter che non legge piu'.
 RIFIUTO_QUOTA = 0.30
 RIFIUTO_MINIMO = 500
+ZOMBIE_LIMITE_TENANT_GIORNALIERO = 100
+ZOMBIE_LIMITE_GIORNALIERO = 1000
 RIFIUTO_FILE = "/opt/nivult/expira-rifiutata.json"
 
 
@@ -572,6 +588,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="nivult.ats.mantenimento",
                                  description=__doc__)
     ap.add_argument("--expira", action="store_true")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="per --expira: mostra il piano senza scritture o probe HTTP")
     ap.add_argument("--normalizza", action="store_true")
     ap.add_argument("--dedup", action="store_true")
     ap.add_argument("--arricchisci", action="store_true",
@@ -581,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     if args.expira:
-        expira(ATS_DSN)
+        expira(ATS_DSN, dry_run=args.dry_run)
     if args.normalizza:
         normalizza(ATS_DSN, args.limite)
     if args.dedup:

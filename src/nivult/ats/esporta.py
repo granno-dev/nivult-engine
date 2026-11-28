@@ -27,6 +27,7 @@ import os
 import re
 import tempfile
 import uuid
+from contextlib import nullcontext
 
 import psycopg
 
@@ -39,6 +40,7 @@ from nivult.ats.export_quality import (
     scrivi_indice,
     stratifica,
 )
+from nivult.ats.qualita_dati import campi_esportati, valuta_updated
 from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
 
@@ -67,10 +69,11 @@ _ATTIVE_SELECT = f"""
            d.postal_code, d.latitude, d.longitude, d.geo_da,
            d.applicants_count, d.is_easy_apply,
            fo.job_sources, j.content_updated_at,
-           {SOURCE_TYPE_SQL} AS source_type, co.site_domain
+           {SOURCE_TYPE_SQL} AS source_type, co.site_domain, h.content_hash
       FROM ats_jobs j
       LEFT JOIN ats_companies co
              ON co.platform_id = j.platform_id AND co.slug = j.slug
+      LEFT JOIN ats_delta_hash h ON h.job_id = j.id
       LEFT JOIN job_classifications x ON x.job_id = j.id
       LEFT JOIN tecnologie_v1 t ON t.job_id = j.id
       LEFT JOIN sintesi_finali sf ON sf.job_id = j.id
@@ -150,8 +153,7 @@ def _skills_pulite(valori) -> list[str]:
 
 
 def _riga(**kv) -> str:
-    return json.dumps({k: v for k, v in kv.items() if v not in (None, [], "")},
-                      ensure_ascii=False, default=str) + "\n"
+    return json.dumps(campi_esportati(kv), ensure_ascii=False, default=str) + "\n"
 
 
 def _benchmark(conn) -> dict:
@@ -548,7 +550,87 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
     return n
 
 
-def flusso(dsn: str) -> dict:
+class _NullOutput:
+    def write(self, value: str) -> int:
+        return len(value)
+
+
+def _salva_hash(conn, batch: list[tuple]) -> None:
+    if not batch:
+        return
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO ats_delta_hash (job_id, content_hash, last_emitted_at)
+            VALUES (%s, %s, CASE WHEN %s THEN now() END)
+            ON CONFLICT (job_id) DO UPDATE SET
+                content_hash = EXCLUDED.content_hash,
+                updated_at = now(),
+                last_emitted_at = CASE WHEN %s THEN now()
+                                       ELSE ats_delta_hash.last_emitted_at END
+            """,
+            batch,
+        )
+    batch.clear()
+
+
+def _chiusure_massive_delta(conn, da: str, adesso: dt.datetime) -> list[tuple]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH chiusi AS (
+                SELECT platform_id, slug, count(*) AS n FROM ats_jobs
+                 WHERE expired_at > %s::timestamptz
+                   AND expired_at <= %s::timestamptz
+                   AND COALESCE(closure_reason, '') NOT IN
+                       ('zombie_365d', 'zombie_365d_backlog', 'last_seen_7d_backlog')
+                 GROUP BY 1, 2),
+            tot_tenant AS (
+                SELECT platform_id, slug, count(*) AS tot FROM ats_jobs
+                 WHERE expired_at IS NULL OR expired_at > %s::timestamptz
+                 GROUP BY 1, 2),
+            rifiuto_tenant AS (
+                SELECT c.platform_id, c.slug, c.n, t.tot
+                  FROM chiusi c JOIN tot_tenant t USING (platform_id, slug)
+                 WHERE c.n >= %s AND c.n > t.tot * %s),
+            chiusi_platform AS (
+                SELECT platform_id, sum(n) AS n FROM chiusi GROUP BY 1),
+            tot_platform AS (
+                SELECT platform_id, count(*) AS tot FROM ats_jobs
+                 WHERE expired_at IS NULL OR expired_at > %s::timestamptz
+                 GROUP BY 1)
+            SELECT platform_id || '/' || slug, n, tot FROM rifiuto_tenant
+            UNION ALL
+            SELECT c.platform_id, c.n, t.tot
+              FROM chiusi_platform c JOIN tot_platform t USING (platform_id)
+             WHERE c.n >= %s AND c.n > t.tot * %s
+            """,
+            (da, adesso, da, 100, 0.30, da, 500, 0.30),
+        )
+        return cur.fetchall()
+
+
+def _leggi_cursore(conn, fallback: str) -> str:
+    with conn.cursor() as cur:
+        cur.execute("SELECT valore FROM ats_delta_state WHERE chiave = 'flusso'")
+        row = cur.fetchone()
+    return row[0] if row else fallback
+
+
+def _salva_cursore(conn, adesso: dt.datetime) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ats_delta_state (chiave, valore, updated_at)
+            VALUES ('flusso', %s, now())
+            ON CONFLICT (chiave) DO UPDATE SET
+                valore = EXCLUDED.valore, updated_at = now()
+            """,
+            (adesso.isoformat(),),
+        )
+
+
+def flusso(dsn: str, *, dry_run: bool = False) -> dict:
     """Il delta feed: offerte nuove, aggiornate e chiuse dall'ultimo giro.
 
     Gli aggiornamenti portano la stessa fotografia completa dell'export
@@ -557,7 +639,8 @@ def flusso(dsn: str) -> dict:
     evento arrivato mentre il file era in scrittura.
     """
     cartella = f"{CARTELLA}/flusso"
-    os.makedirs(cartella, exist_ok=True)
+    if not dry_run:
+        os.makedirs(cartella, exist_ok=True)
     cursore_file = f"{cartella}/cursore.json"
     try:
         with open(cursore_file) as f:
@@ -568,38 +651,44 @@ def flusso(dsn: str) -> dict:
     adesso = dt.datetime.now(dt.UTC)
     marca = adesso.strftime("%Y%m%d-%H%M%S")
     percorso = f"{cartella}/novita-{marca}.jsonl.gz"
-    stats = {"nuove": 0, "aggiornate": 0, "chiuse": 0}
-    with psycopg.connect(dsn) as conn, \
-            gzip.open(percorso + ".tmp", "wt", encoding="utf-8") as f:
+    stats = {
+        "nuove": 0,
+        "aggiornate": 0,
+        "chiuse": 0,
+        "hash_baseline": 0,
+        "hash_immutati": 0,
+    }
+    hash_batch: list[tuple] = []
+    conn = psycopg.connect(dsn)
+    output = None
+    try:
+        output = (
+            nullcontext(_NullOutput())
+            if dry_run
+            else gzip.open(percorso + ".tmp", "wt", encoding="utf-8")  # noqa: SIM115
+        )
+        f = output.__enter__()
+        da = _leggi_cursore(conn, da)
         bench = _benchmark(conn)
+        bloccate = _chiusure_massive_delta(conn, da, adesso)
+        if bloccate:
+            dettaglio = ", ".join(f"{p}: {n}/{tot}" for p, n, tot in bloccate)
+            raise RuntimeError(f"Delta fermo: chiusure massive {dettaglio}")
         with conn.cursor(name="fl_nuove") as cur:
             cur.itersize = 2000
-            cur.execute(f"""
-                SELECT j.id, j.title, j.platform_id, j.slug,
-                       {COMPANY_SQL},
-                       j.url, j.country, j.city, j.lang, j.seniority,
-                       j.remote, j.skills, j.salary_min, j.salary_max,
-                       j.salary_currency, j.posted_at, j.created_at,
-                       {_DESCR}, {SOURCE_TYPE_SQL}
-                  FROM ats_jobs j
-                  LEFT JOIN ats_companies co
-                         ON co.platform_id = j.platform_id
-                        AND co.slug = j.slug
+            cur.execute(f"""{_ATTIVE_SELECT}
                  WHERE j.created_at > %s::timestamptz
                    AND j.created_at <= %s::timestamptz
                    AND j.expired_at IS NULL""", (da, adesso))
             for r in cur:
-                f.write(_riga(
-                    event="new", id=str(r[0]), title=pulito(r[1]), ats=r[2],
-                    company_slug=r[3], company=pulito(r[4]), url=r[5],
-                    country=r[6], city=r[7], language=r[8],
-                    seniority=r[9], remote=r[10],
-                    skills=_skills_pulite(r[11]),
-                    salary_min=float(r[12]) if r[12] is not None else None,
-                    salary_max=float(r[13]) if r[13] is not None else None,
-                    salary_currency=r[14], posted_at=r[15],
-                    first_seen=r[16], description=pulito(r[17]), source_type=r[18]))
+                record = _riga_attiva(r, bench)
+                f.write(_riga(event="new", **record))
                 stats["nuove"] += 1
+                if not dry_run:
+                    digest = valuta_updated(None, record).digest
+                    hash_batch.append((str(record["id"]), digest, True, True))
+                if len(hash_batch) >= 1000:
+                    _salva_hash(conn, hash_batch)
         with conn.cursor(name="fl_aggiornate") as cur:
             cur.itersize = 2000
             cur.execute(f"""{_ATTIVE_SELECT}
@@ -618,8 +707,26 @@ def flusso(dsn: str) -> dict:
                                                       j.fetched_at), j.id))""",
                         (da, adesso, da))
             for r in cur:
-                f.write(_riga(event="updated", **_riga_attiva(r, bench)))
-                stats["aggiornate"] += 1
+                record = _riga_attiva(r, bench)
+                precedente = r[52] if len(r) > 52 else None
+                decisione = valuta_updated(precedente, record)
+                if decisione.motivo == "immutato":
+                    stats["hash_immutati"] += 1
+                    continue
+                if not dry_run:
+                    hash_batch.append((
+                        str(record["id"]), decisione.digest,
+                        decisione.emetti, decisione.emetti,
+                    ))
+                if decisione.motivo == "baseline":
+                    stats["hash_baseline"] += 1
+                else:
+                    f.write(_riga(event="updated", **record))
+                    stats["aggiornate"] += 1
+                if len(hash_batch) >= 1000:
+                    _salva_hash(conn, hash_batch)
+            if not dry_run:
+                _salva_hash(conn, hash_batch)
         with conn.cursor(name="fl_chiuse") as cur:
             cur.itersize = 2000
             cur.execute("""
@@ -634,11 +741,23 @@ def flusso(dsn: str) -> dict:
                     company_slug=r[3], url=r[4], country=r[5],
                     posted_at=r[6], closed_at=r[7]))
                 stats["chiuse"] += 1
-    os.replace(percorso + ".tmp", percorso)
-    with open(cursore_file + ".tmp", "w") as f:
-        json.dump({"t": adesso.isoformat()}, f)
-    os.replace(cursore_file + ".tmp", cursore_file)
-    log.info("flusso %s: %s", marca, stats)
+        output.__exit__(None, None, None)
+        if not dry_run:
+            os.replace(percorso + ".tmp", percorso)
+            _salva_cursore(conn, adesso)
+            conn.commit()
+    except Exception as exc:
+        if output is not None:
+            output.__exit__(type(exc), exc, exc.__traceback__)
+        if not dry_run:
+            try:
+                os.remove(percorso + ".tmp")
+            except OSError:
+                pass
+        raise
+    finally:
+        conn.close()
+    log.info("flusso %s%s: %s", marca, " dry-run" if dry_run else "", stats)
     return stats
 
 
@@ -650,6 +769,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--aziende", action="store_true")
     ap.add_argument("--scadute", action="store_true")
     ap.add_argument("--flusso", action="store_true")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="per --flusso: conta gli eventi senza file, cursore o hash")
     ap.add_argument("--giorni", type=int, default=None,
                     help="per --scadute: solo le chiuse negli ultimi N giorni")
     ap.add_argument("--campione", type=int, default=None,
@@ -669,7 +790,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.scadute:
         print("scadute:", scadute(dsn, args.giorni))
     if args.flusso:
-        print("flusso:", flusso(dsn))
+        print("flusso:", flusso(dsn, dry_run=args.dry_run))
     return 0
 
 

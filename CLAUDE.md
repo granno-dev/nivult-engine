@@ -195,21 +195,40 @@ Un adapter (`src/nivult/ats/adapters.py`) che non riconosce più il
 template di una piattaforma torna **zero offerte con HTTP 200**, e nulla
 fa rumore. Il 06/09/2026 così sono scadute 33.344 offerte JazzHR vive —
 terza strage dello stesso giorno con la stessa radice: fidarsi di un
-segnale senza contro-verifica. Da allora quattro strati, tutti misurabili
+segnale senza contro-verifica. Da allora cinque strati, tutti misurabili
 e descritti in `docs/manuale-guasti.md`:
 
 1. **letture veritiere** — 403/429/5xx alzano `LetturaFallita`; uno zero
    su un tenant che aveva offerte passa dal **ripiego**
    (`nivult.ats.ripiego`), che ritrova in pagina le offerte d'archivio e
-   le rinfresca, e finisce in `letture_sospette` con un campione;
-2. **scadenza solo dopo una rilettura riuscita** del tenant
-   (`ats_companies.last_ok_at`), solo sulle piattaforme con adapter — le
-   fonti a fetta (France Travail, Arbetsförmedlingen, EURES, «agenzie»)
-   non scadono per presenza — con interruttore al 30%;
+   le rinfresca, e finisce in `letture_sospette` con un campione. Un calo
+   di almeno 100 offerte e oltre il 30% di un tenant va in quarantena:
+   non aggiorna `last_ok_at` e non può autorizzare scadenze;
+2. **scadenza dopo due snapshot completi e sette giorni di grace**, solo
+   sulle piattaforme con adapter — le fonti a fetta (France Travail,
+   Arbetsförmedlingen, EURES, «agenzie») non scadono per presenza. Il
+   breaker vale per tenant (100/30%) e piattaforma (500/30%), anche prima
+   della pubblicazione del Delta. Gli zombie si chiudono dopo oltre 365
+   giorni di `active_since`, non per la sola `posted_at`, con limiti di
+   100/tenant e 1.000/giorno; `posted_at` prima del 2020 o oltre due
+   giorni nel futuro viene sostituita da una stima deterministica.
+   Il rollout separa DDL breve (`0101`), indici concorrenti (`0102`) e
+   backfill keyset (`nivult.ats.backfill_wave2`, dry-run di default).
+   `nivult.ats.backlog_wave2` è il drenaggio opt-in, con report e tetti
+   espliciti, senza cambiare questi breaker; JSON-LD non scade per sola
+   assenza senza la prova di vita;
 3. **canarini** (`nivult.ats.canarini`, ogni ora): 3 tenant di
    riferimento per piattaforma; tutti a zero = «adapter rotto», entro
    l'ora;
-4. **officina** (`deploy/officina.sh`): Claude sul server ripara la sola
+4. **Delta per contenuto sostanziale** — `ats_delta_hash` conserva
+   SHA-256 della fotografia pubblica normalizzata. Timestamp di
+   ingestione, `last_seen`, campi vuoti equivalenti e riordini degli array
+   non producono `updated`; un `new` inizializza subito il proprio hash e
+   la prima baseline storica è silenziosa. Il file è reso durevole prima
+   del commit; cursore (`ats_delta_state`) e hash sono nella stessa
+   transazione, così un errore di commit può ripetere ma non perdere
+   eventi;
+5. **officina** (`deploy/officina.sh`): Claude sul server ripara la sola
    classe della piattaforma nel suo clone, il banco
    `scripts/prova_adapter.py` deve passare, la verifica impone il
    perimetro a macchina, poi deploy con canarini e rollback. **Deploy

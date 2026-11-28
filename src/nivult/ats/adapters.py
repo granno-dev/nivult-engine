@@ -14,11 +14,13 @@ from __future__ import annotations
 import json
 import logging
 import re
-from urllib.parse import unquote, urljoin
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from urllib.parse import unquote, urljoin
 
 import httpx
+
+from .qualita_dati import sana_data
 
 log = logging.getLogger("nivult.ats")
 
@@ -87,31 +89,7 @@ class AtsJob:
 
 def _dt(v) -> datetime | None:
     """I timestamp arrivano in formati diversi: ISO, epoch (sec o msec)."""
-    if not v:
-        return None
-    if isinstance(v, (int, float)):
-        # Epoch: se è in millisecondi (Lever), dividere per 1000
-        ts = float(v)
-        if ts > 1e12:
-            ts /= 1000
-        try:
-            d = datetime.fromtimestamp(ts, tz=timezone.utc)
-        except (ValueError, OverflowError):
-            return None
-    else:
-        try:
-            d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
-            d = d if d.tzinfo else d.replace(tzinfo=timezone.utc)
-        except ValueError:
-            return None
-    # la guardia del futuro (28/09/2026), qui e non solo in jobposting:
-    # le «Lehre» jsonld e alcuni SuccessFactors scrivono in datePosted la
-    # data di INIZIO del contratto (fino al 2030). La guardia in
-    # jobposting._data copriva un solo ingresso; qui vale per ogni
-    # adattatore, perche' tutti passano da AtsJob.__post_init__.
-    if d > datetime.now(timezone.utc) + timedelta(days=2):
-        return None
-    return d
+    return sana_data(v)
 
 
 def _iso(country: str | None) -> str | None:
@@ -1825,6 +1803,7 @@ class Vincere(BaseAdapter):
         out: list[AtsJob] = []
         visti: set[str] = set()
         for pagina in range(1, 31):  # tetto 300 offerte
+            nuovi = 0
             url = f"https://{slug}.vincere.io/careers/?page={pagina}"
             try:
                 r = self.client.get(url, headers={"User-Agent": self._UA})
@@ -3061,12 +3040,13 @@ class OracleRecruiting(BaseAdapter):
         base = f"https://{slug}"
         try:
             r = self.client.get(f"{base}/")
-        except httpx.HTTPError:
-            return []
+        except httpx.HTTPError as exc:
+            raise LetturaFallita(0, base) from exc
         m = re.search(
             r'https://([a-z0-9.-]+\.oraclecloud\.com)/hcmUI/'
             r'CandidateExperience/[a-zA-Z-]+/sites/([A-Za-z0-9_]+)', r.text)
         if not m:
+            self.lettura_parziale = True
             return []
         host, sito = m.group(1), m.group(2)
 

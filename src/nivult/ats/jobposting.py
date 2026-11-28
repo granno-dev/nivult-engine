@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 import httpx
 
@@ -87,24 +87,12 @@ def _estrai_ld(html: str):
 
 
 def _data(jp) -> datetime | None:
+    from .qualita_dati import sana_data
+
     for chiave in ("datePosted", "datePublished"):
-        v = jp.get(chiave)
-        if not v:
-            continue
-        try:
-            dt = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
-            dt = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-        # la guardia del futuro (27/09/2026): le «Lehre» svizzere e
-        # tedesche scrivono in datePosted la data di INIZIO del contratto
-        # (agosto dell'anno prossimo), non quella di pubblicazione.
-        # Misurato: 79 annunci jsonld datati fino al 2030, tutti
-        # apprendistati. Una data futura non e' una data di
-        # pubblicazione: meglio NULL che un 2030 venduto come «oggi».
-        if dt > datetime.now(timezone.utc) + timedelta(days=2):
-            return None
-        return dt
+        parsed = sana_data(jp.get(chiave))
+        if parsed is not None:
+            return parsed
     return None
 
 
