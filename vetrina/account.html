@@ -141,7 +141,7 @@ body { background: #F5F4EF; }
 .unlocked-picker { position: relative; }
 .unlocked-search-wrap { position: relative; }
 .unlocked-search-wrap > svg { position: absolute; top: 50%; left: .8rem; width: 16px; height: 16px; color: #94A3B8; pointer-events: none; transform: translateY(-50%); }
-.unlocked-search { padding-right: 2.5rem; padding-left: 2.35rem; }
+.app-input.unlocked-search { padding-right: 2.5rem; padding-left: 2.5rem; }
 .unlocked-search-clear { position: absolute; top: 50%; right: .45rem; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; color: #64748B; transform: translateY(-50%); }
 .unlocked-search-clear:hover { background: #F1F5F9; color: #0F172A; }
 .unlocked-options { position: absolute; z-index: 20; top: calc(100% + .4rem); right: 0; left: 0; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: .35rem; box-shadow: 0 14px 32px rgba(15,23,42,.14); }
@@ -235,8 +235,8 @@ body { background: #F5F4EF; }
 .cov-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
 .company-logo { position: relative; display: inline-grid; place-items: center; overflow: hidden; isolation: isolate; flex-shrink: 0; border: 1px solid #E2E8F0; background: #FFFFFF; color: #3730A3; box-shadow: 0 3px 10px rgba(15,23,42,.05); }
 .company-logo-monogram { display: grid; width: 100%; height: 100%; place-items: center; background: #EEF2FF; font-size: 1rem; font-weight: 800; line-height: 1; }
-.company-logo-image { position: absolute; inset: 0; display: none; box-sizing: border-box; width: 100%; height: 100%; padding: inherit; background: #FFFFFF; object-fit: contain; }
-.company-logo-image.is-loaded { display: block; }
+.company-logo-image { position: absolute; inset: 0; display: block; box-sizing: border-box; width: 100%; height: 100%; padding: inherit; background: #FFFFFF; object-fit: contain; opacity: 0; }
+.company-logo-image.is-loaded { opacity: 1; }
 .modal-close { display: inline-grid; width: 36px; height: 36px; flex-shrink: 0; place-items: center; border: 1px solid #E2E8F0; border-radius: 10px; background: #FFFFFF; color: #64748B; transition: border-color .15s,color .15s,background .15s; }
 .modal-close:hover { border-color: #2563EB; background: #F8FAFC; color: #2563EB; }
 .modal-close svg { width: 17px; height: 17px; }
@@ -370,7 +370,36 @@ body { font-variant-numeric: tabular-nums; }
 #export-modale .export-download:hover { border-color: #2549B8; background: #2549B8; }
 #export-modale .export-download:disabled { border-color: #CBD5E1; background: #CBD5E1; color: #475569; opacity: 1; }
 .ex-transfer-note { border: 1px solid #D9E6FF; border-radius: 10px; background: #F8FAFF; padding: .65rem .75rem; color: #475569; font-size: 11px; line-height: 1.55; }
-@media (min-width: 860px) { .export-grid { grid-template-columns: minmax(0,1fr) minmax(300px,.92fr); gap: 1.5rem; } }
+.export-filter-stack { display: grid; align-content: start; gap: .9rem; min-width: 0; }
+.export-quick-chip { min-height: 30px; border: 1px solid #E2E8F0; border-radius: 999px; background: #FFFFFF; padding: .3rem .65rem; color: #64748B; font-size: 10px; font-weight: 750; }
+.export-quick-chip:hover, .export-quick-chip[aria-pressed="true"] { border-color: #AFC8FF; background: #EEF4FF; color: #2549B8; }
+.export-advanced { border: 1px solid #E2E8F0; border-radius: 12px; background: #F8FAFC; padding: .75rem; }
+.export-advanced > summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; color: #334155; font-size: 12px; font-weight: 750; list-style: none; }
+.export-advanced > summary::-webkit-details-marker { display: none; }
+.export-advanced-badge { display: inline-grid; min-width: 20px; height: 20px; place-items: center; border-radius: 999px; background: #2F5DE0; padding: 0 .35rem; color: #FFFFFF; font-size: 10px; }
+.multi-combo { min-width: 0; }
+.multi-combo-control { display: flex; min-height: 46px; min-width: 0; flex-wrap: wrap; align-items: center; gap: .3rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #FFFFFF; padding: .35rem .45rem; cursor: text; }
+.multi-combo-control:focus-within { border-color: #3B6EF6; box-shadow: 0 0 0 3px rgba(59,110,246,.10); }
+.multi-combo-input { min-width: 90px; min-height: 30px; flex: 1 1 100px; border: 0; background: transparent; padding: .2rem; color: #334155; font-size: .8125rem; outline: none; }
+.multi-combo-chip { display: inline-flex; max-width: 100%; min-height: 27px; align-items: center; gap: .25rem; border: 1px solid #C7D2FE; border-radius: 999px; background: #EEF2FF; padding: .2rem .25rem .2rem .55rem; color: #3730A3; font-size: 10px; font-weight: 750; }
+.multi-combo-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-combo-chip > button { display: grid; width: 20px; height: 20px; flex-shrink: 0; place-items: center; border-radius: 99px; color: #4F46E5; font-size: 15px; }
+.multi-combo-chip > button:hover { background: #C7D2FE; }
+.multi-combo-dropdown { position: fixed; z-index: 120; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #E2E8F0; border-radius: 12px; background: #FFFFFF; padding: .35rem; box-shadow: 0 18px 45px rgba(15,23,42,.20); }
+.multi-combo-option { display: flex; width: 100%; min-width: 0; align-items: center; gap: .55rem; border-radius: 8px; padding: .55rem .6rem; color: #334155; text-align: left; cursor: pointer; }
+.multi-combo-option:hover, .multi-combo-option.is-active { background: #EEF4FF; color: #2549B8; }
+.multi-combo-option[aria-selected="true"] { background: #ECFDF5; color: #047857; }
+.multi-combo-check { display: inline-grid; width: 16px; height: 16px; flex-shrink: 0; place-items: center; border: 1px solid #CBD5E1; border-radius: 4px; color: transparent; font-size: 11px; }
+.multi-combo-option[aria-selected="true"] .multi-combo-check { border-color: #10B981; background: #10B981; color: #FFFFFF; }
+.multi-combo-option-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+.multi-combo-option-count { flex-shrink: 0; color: #94A3B8; font-size: 10px; font-variant-numeric: tabular-nums; }
+.multi-combo-empty { padding: 1rem .65rem; color: #64748B; text-align: center; font-size: 11px; line-height: 1.5; }
+@media (min-width: 860px) {
+  .export-grid { grid-template-columns: minmax(0,1fr) minmax(300px,.92fr); gap: 1.5rem; min-height: 0; flex: 1; }
+  .export-modal-body { display: flex; overflow: hidden; }
+  .export-filter-column, .export-summary-column { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .export-filter-column { padding-right: .25rem; }
+}
 @media (max-width: 639px) {
   .export-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
   .export-modal-header { padding: 1rem 3.5rem 1rem 1rem; }
@@ -742,11 +771,6 @@ body { font-variant-numeric: tabular-nums; }
 
             <div class="mt-5 flex items-end justify-between gap-3 border-b border-slate-200 pb-3"><div><h2 class="text-sm font-bold">Query results</h2><p class="mt-1 text-xs text-slate-500">Live records returned by your current filters, not sample API responses.</p></div><span class="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">LIVE INDEX</span></div>
             <article class="app-card mt-3 p-3 sm:p-4"><div id="cerca-righe" aria-live="polite" class="grid gap-2 content-start"></div><div id="cerca-cap" role="status" class="hidden mt-3 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-xs leading-5 text-slate-600"><b class="text-slate-900">Preview limit reached.</b> Explorer shows up to 5 pages of 20 results. For deeper access, use <code>/v1/jobs</code> or <code>/v1/companies</code>, or <a href="#exports" class="font-bold text-brand-600">Filtered Export</a>.</div><div class="mt-3 flex justify-center"><button id="cerca-altro" type="button" onclick="cercaAncora()" class="hidden app-btn app-btn-secondary">Load more</button></div></article>
-          </div>
-
-          <div id="dettaglio" hidden role="dialog" aria-modal="false" aria-label="Job and company Explorer" class="hidden explorer-drawer-shell fixed inset-0 z-[60]">
-            <button type="button" class="explorer-drawer-backdrop" onclick="chiudiDettaglio()" aria-label="Close Explorer drawer" tabindex="-1"></button>
-            <aside id="dettaglio-box" class="explorer-drawer" aria-label="Posting and company details"></aside>
           </div>
 
           <div id="explorer-reference-panel" class="hidden mt-4">
@@ -1482,6 +1506,11 @@ body { font-variant-numeric: tabular-nums; }
     </div>
   </div>
 
+  <div id="dettaglio" hidden role="dialog" aria-modal="true" aria-label="Job and company Explorer" class="hidden explorer-drawer-shell fixed inset-0 z-[60]">
+    <button type="button" class="explorer-drawer-backdrop" onclick="chiudiDettaglio()" aria-label="Close Explorer drawer" tabindex="-1"></button>
+    <aside id="dettaglio-box" class="explorer-drawer" aria-label="Posting and company details"></aside>
+  </div>
+
   <div id="export-modale" role="dialog" aria-modal="true" aria-label="Build a download" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
     <button type="button" class="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onclick="chiudiExport()" aria-label="Close export dialog" tabindex="-1"></button>
     <div class="relative export-dialog">
@@ -1501,10 +1530,24 @@ body { font-variant-numeric: tabular-nums; }
               <button id="ex-tipo-postings" type="button" role="tab" aria-selected="true" onclick="exScegliTipo('postings')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900">Postings</button>
               <button id="ex-tipo-companies" type="button" role="tab" aria-selected="false" onclick="exScegliTipo('companies')" class="rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700">Companies</button>
             </div>
-            <div><label for="ex-paese" class="app-label">Country</label><select id="ex-paese" class="app-input"><option value="">Everywhere</option></select></div>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div><label for="ex-tec" class="app-label">Technology</label><input id="ex-tec" type="text" placeholder="e.g. SAP" class="app-input"></div>
-              <div id="ex-dal-box"><label for="ex-dal" class="app-label">Posted since</label><input id="ex-dal" type="date" class="app-input"></div>
+            <div id="ex-postings-filters" class="export-filter-column">
+              <div><label for="ex-q" class="app-label">Role or keyword</label><input id="ex-q" type="search" placeholder="e.g. Data engineer or Kubernetes" class="app-input"></div>
+              <div id="ex-countries"></div>
+              <div id="ex-technologies"></div>
+              <div id="ex-tech-match-wrap" class="hidden -mt-1 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><span class="text-[11px] font-semibold text-slate-500">Selected technologies</span><div class="flex rounded-lg bg-slate-200/70 p-0.5" aria-label="Technology match mode"><button id="ex-tech-any" type="button" onclick="exSetTechMatch('any')" class="rounded-md px-2.5 py-1 text-[10px] font-bold">Match any (OR)</button><button id="ex-tech-all" type="button" onclick="exSetTechMatch('all')" class="rounded-md px-2.5 py-1 text-[10px] font-bold">Match all (AND)</button></div></div>
+              <div id="ex-dal-box"><label for="ex-dal" class="app-label">Posted since</label><div class="mb-2 flex flex-wrap gap-1.5" aria-label="Posted since presets"><button type="button" data-date-preset="7" onclick="exDataPreset(7)" class="export-quick-chip">7d</button><button type="button" data-date-preset="14" onclick="exDataPreset(14)" class="export-quick-chip">14d</button><button type="button" data-date-preset="30" onclick="exDataPreset(30)" class="export-quick-chip">30d</button><button type="button" data-date-preset="" onclick="exDataPreset('')" class="export-quick-chip">Any</button></div><input id="ex-dal" type="date" class="app-input" aria-label="Custom posted since date"></div>
+              <details id="ex-more-filters" class="export-advanced"><summary><span>More filters</span><span id="ex-advanced-badge" class="hidden export-advanced-badge">0</span></summary><div class="mt-3 flex justify-end"><button type="button" onclick="exResetAdvanced()" class="text-[11px] font-bold text-brand-600 hover:text-brand-700">Reset filters</button></div><div class="mt-2 grid gap-4">
+                <div id="ex-categories"></div><div id="ex-seniority"></div><div id="ex-remote"></div><div id="ex-employment"></div><div id="ex-languages"></div>
+                <fieldset class="rounded-xl border border-slate-200 p-3"><legend class="px-1 text-xs font-bold text-slate-600">Salary</legend><label class="flex items-center gap-2 text-xs font-semibold text-slate-600"><input id="ex-has-salary" type="checkbox" class="h-4 w-4 accent-brand-600">Only with salary</label><div class="mt-3 grid grid-cols-2 gap-2"><div><label for="ex-salary-min" class="app-label">Minimum</label><input id="ex-salary-min" type="number" min="0" step="any" inputmode="decimal" placeholder="40000" class="app-input"></div><div><label for="ex-salary-max" class="app-label">Maximum</label><input id="ex-salary-max" type="number" min="0" step="any" inputmode="decimal" placeholder="90000" class="app-input"></div></div></fieldset>
+                <div id="ex-source-types"></div><div id="ex-ats"></div><div id="ex-exclude-ats"></div>
+              </div></details>
+            </div>
+            <div id="ex-companies-filters" class="hidden export-filter-column">
+              <div id="ex-company-countries"></div><div id="ex-company-technologies"></div>
+              <div id="ex-company-tech-match-wrap" class="hidden -mt-1 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2"><span class="text-[11px] font-semibold text-slate-500">Selected technologies</span><div class="flex rounded-lg bg-slate-200/70 p-0.5" aria-label="Technology match mode"><button id="ex-company-tech-any" type="button" onclick="exSetTechMatch('any')" class="rounded-md px-2.5 py-1 text-[10px] font-bold">Match any (OR)</button><button id="ex-company-tech-all" type="button" onclick="exSetTechMatch('all')" class="rounded-md px-2.5 py-1 text-[10px] font-bold">Match all (AND)</button></div></div>
+              <div id="ex-industries"></div>
+              <fieldset class="rounded-xl border border-slate-200 p-3"><legend class="px-1 text-xs font-bold text-slate-600">Company size</legend><div class="mb-3 flex flex-wrap gap-1.5"><button type="button" onclick="exCompanySize(1,50,this)" class="export-quick-chip">1–50</button><button type="button" onclick="exCompanySize(51,200,this)" class="export-quick-chip">51–200</button><button type="button" onclick="exCompanySize(201,1000,this)" class="export-quick-chip">201–1K</button><button type="button" onclick="exCompanySize(1001,'',this)" class="export-quick-chip">1K+</button></div><div class="grid grid-cols-2 gap-2"><div><label for="ex-employees-min" class="app-label">Min employees</label><input id="ex-employees-min" type="number" min="0" step="1" class="app-input"></div><div><label for="ex-employees-max" class="app-label">Max employees</label><input id="ex-employees-max" type="number" min="0" step="1" class="app-input"></div></div></fieldset>
+              <div><label for="ex-min-active-jobs" class="app-label">Min active postings</label><input id="ex-min-active-jobs" type="number" min="0" step="1" placeholder="0" class="app-input"></div>
             </div>
             <p id="ex-cosa" class="text-[11px] leading-5 text-slate-500">Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.</p>
             <div>
@@ -2744,14 +2787,13 @@ function exportExplorerSlice() {
   const current = filtri();
   const pre = { tipo: tab === "jobs" ? "postings" : "companies" };
   const transferred = [], omitted = [];
-  for (const key of ["country", "technology", "dal"]) {
-    if (!current[key]) continue;
-    if (key === "dal" && pre.tipo !== "postings") { omitted.push(EXPLORER_FILTER_LABELS[key]); continue; }
-    pre[key] = current[key];
-    transferred.push(EXPLORER_FILTER_LABELS[key]);
-  }
-  for (const key of Object.keys(current)) {
-    if (!["country", "technology", "dal"].includes(key)) omitted.push(EXPLORER_FILTER_LABELS[key] || key);
+  for (const [key, value] of Object.entries(current)) {
+    if (key === "stato") {
+      omitted.push(EXPLORER_FILTER_LABELS[key]);
+      continue;
+    }
+    pre[key === "dal" ? "posted_after" : key] = value;
+    transferred.push(EXPLORER_FILTER_LABELS[key] || key);
   }
   const notes = [];
   notes.push(transferred.length ? `Transferred from Explorer: ${transferred.join(", ")}.` : "No compatible Explorer filters to transfer.");
@@ -2868,6 +2910,7 @@ async function rivelaAzienda(revealToken, btn) {
 let dettaglioCorrente = null;
 let focusPrimaDelDettaglio = null;
 let focusDettaglioFallback = null;
+let dettaglioScrollPrecedente = 0;
 function dettaglioVisibile() {
   const el = document.getElementById("dettaglio");
   return Boolean(el && !el.hidden && !el.classList.contains("hidden"));
@@ -2889,9 +2932,11 @@ function apriDettaglio(html, options = {}) {
   const previousScroll = document.getElementById("dettaglio-scroll")?.scrollTop || 0;
   const focusState = wasOpen && box.contains(active) ? { id: active.id || "", key: active.dataset?.focusKey || "" } : null;
   if (!wasOpen) {
+    dettaglioScrollPrecedente = window.scrollY;
     focusPrimaDelDettaglio = active;
     const row = active?.closest?.("#cerca-righe [data-explorer-key]");
     focusDettaglioFallback = row ? { key: row.dataset.explorerKey, token: row.dataset.revealToken } : null;
+    document.body.classList.add("modale-aperto");
   }
   box.innerHTML = html;
   if (!wasOpen) mostraVistaAccount("dettaglio", true);
@@ -2918,6 +2963,7 @@ function chiudiDettaglio(restoreFocus = true) {
   drawer.classList.remove("is-open");
   mostraVistaAccount("dettaglio", false);
   dettaglioCorrente = null;
+  if (wasOpen && !dialogoAttivo) document.body.classList.remove("modale-aperto");
   if (restoreFocus && wasOpen) {
     let target = focusPrimaDelDettaglio?.isConnected ? focusPrimaDelDettaglio : null;
     if (!target && focusDettaglioFallback) {
@@ -2925,9 +2971,11 @@ function chiudiDettaglio(restoreFocus = true) {
         row.dataset.explorerKey === focusDettaglioFallback.key && row.dataset.revealToken === focusDettaglioFallback.token);
     }
     target?.focus({ preventScroll: true });
+    window.scrollTo(0, dettaglioScrollPrecedente);
   }
   focusPrimaDelDettaglio = null;
   focusDettaglioFallback = null;
+  dettaglioScrollPrecedente = 0;
 }
 function esc(s) {
   const d = document.createElement("div");
@@ -3377,9 +3425,9 @@ function disegnaAziendeSbloccate(restoreSearchFocus = false) {
   }).join("")}<button type="button" class="px-1.5 text-[11px] font-bold text-brand-600 hover:text-brand-700" onclick="pulisceSelezioneAziende()">Clear selection</button></div>` : "";
   const cards = visibleRows.length ? visibleRows.map(({ r, index }) => {
     const name = unlockedCompanyName(r), ref = String(r.ref || ""), loading = unlockedCompanyLoading.has(ref);
-    const initial = Array.from(name)[0] || "?";
     const action = loading ? "Opening…" : (ref ? "View profile →" : "Unavailable");
-    return `<button type="button" class="unlocked-company-card" aria-label="Open ${esc(name)} company profile" aria-busy="${loading}" ${loading || !ref ? "disabled" : ""} onclick="apriAziendaSbloccata(${index}, this)"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-[11px] font-bold text-slate-500">${esc(initial.toUpperCase())}</span><span class="min-w-0 flex-1"><span class="block truncate text-xs font-semibold text-slate-700">${esc(name)}</span><span class="mt-0.5 block text-[10px] text-slate-400">Unlocked ${esc(new Date(r.at).toLocaleDateString("en-GB"))}</span></span><span class="unlocked-company-action" data-company-action>${action}</span></button>`;
+    const logoRecord = { ...r, revealed: true, name, company: name };
+    return `<button type="button" class="unlocked-company-card" aria-label="Open ${esc(name)} company profile" aria-busy="${loading}" ${loading || !ref ? "disabled" : ""} onclick="apriAziendaSbloccata(${index}, this)">${logoRivelato(logoRecord, "h-8 w-8 rounded-lg p-0.5")}<span class="min-w-0 flex-1"><span class="block truncate text-xs font-semibold text-slate-700">${esc(name)}</span><span class="mt-0.5 block text-[10px] text-slate-400">Unlocked ${esc(new Date(r.at).toLocaleDateString("en-GB"))}</span></span><span class="unlocked-company-action" data-company-action>${action}</span></button>`;
   }).join("") : `<p class="col-span-full rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">No unlocked companies match this filter.</p>`;
   target.innerHTML = `<div class="unlocked-picker" data-unlocked-picker><label for="unlocked-company-search" class="app-label">Filter unlocked companies</label><div class="unlocked-search-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="unlocked-company-search" class="app-input unlocked-search" type="text" role="combobox" autocomplete="off" placeholder="Search ${unlocked.length} unlocked companies..." value="${esc(unlockedCompanyQuery)}" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="${unlockedCompanyOpen}" aria-controls="unlocked-company-options" aria-describedby="unlocked-company-status" ${activeDescendant ? `aria-activedescendant="${activeDescendant}"` : ""} onfocus="apriFiltroAziendeSbloccate()" oninput="filtraAziendeSbloccate(this.value)" onkeydown="tastoFiltroAziendeSbloccate(event)">${unlockedCompanyQuery ? `<button type="button" class="unlocked-search-clear" aria-label="Clear company search" onclick="pulisceRicercaAziende()">×</button>` : ""}</div><div id="unlocked-company-options" class="unlocked-options" role="listbox" aria-label="Unlocked companies" aria-multiselectable="true" ${unlockedCompanyOpen ? "" : "hidden"}>${options}</div>${chips}<p id="unlocked-company-status" role="status" class="mt-3 text-[11px] text-slate-400">${visibleRows.length} of ${unlocked.length} companies shown${unlockedCompanySelected.size ? ` · ${unlockedCompanySelected.size} selected` : ""}</p><div class="unlocked-company-grid">${cards}</div></div>`;
   if (restoreSearchFocus) requestAnimationFrame(() => {
@@ -3455,11 +3503,6 @@ async function apriAziendaSbloccata(index, btn) {
   btn.setAttribute("aria-busy", "true");
   const action = btn.querySelector("[data-company-action]");
   if (action) action.textContent = "Opening…";
-  if (location.hash !== "#explorer") {
-    location.hash = "#explorer";
-    route();
-  }
-  cambiaExplorer("query");
   try {
     const response = await api("/portale/token-azienda", {
       method: "POST", body: JSON.stringify({ company_ref: r.ref }),
@@ -3578,8 +3621,12 @@ function disegnaUso() {
   document.getElementById("activity-log-full").innerHTML = eventi.length ? eventi.map((e, index) => {
     const [nome, cls] = VIA_STILE[e.via] || [e.via, "bg-slate-100 text-slate-500"];
     const action = e.via === "api" ? e.azione : labelAzione(e.azione), detail = e.titolo || e.dettaglio || "—";
+    const companyRef = activityCompanyRef(e);
+    const detailMarkup = companyRef
+      ? `<button type="button" class="activity-company-link" data-company-ref="${esc(companyRef)}" onclick="event.preventDefault();event.stopPropagation();apriAziendaDaAttivita(${jsArg(companyRef)}, this)" title="Open unlocked company profile"><span>${esc(detail)}</span><span>View →</span></button>`
+      : `<span class="truncate text-xs text-slate-500" title="${esc(detail)}">${esc(detail)}</span>`;
     const retry = e.download_id ? `<div><dt>Saved report</dt><dd><button type="button" data-export-download onclick="scaricaExportRecente(${jsArg(e.download_id)})" class="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-40">Download again · 0 credits</button></dd></div>` : "";
-    return `<details class="activity-event" ${index === 0 ? "open" : ""}><summary><span class="text-[11px] text-slate-500">${esc(_quando(e.at))}</span><span class="activity-badge ${cls}">${nome}</span><span class="text-xs font-medium text-slate-700">${esc(action)}</span><span class="truncate text-xs text-slate-500" title="${esc(detail)}">${esc(detail)}</span><span class="justify-self-end rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-600">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></summary><dl class="activity-detail"><div><dt>Timestamp</dt><dd>${esc(_quando(e.at))}</dd></div><div><dt>Channel</dt><dd>${esc(nome)}</dd></div><div><dt>Event</dt><dd>${esc(action)}</dd></div><div><dt>Request details</dt><dd><code>${esc(detail)}</code></dd></div><div><dt>Credits deducted</dt><dd>${plurUso(e.crediti || 0, "credit")}</dd></div>${retry}<div><dt>Entry type</dt><dd>Itemized event from the account activity ledger</dd></div></dl></details>`;
+    return `<details class="activity-event" ${index === 0 ? "open" : ""}><summary><span class="text-[11px] text-slate-500">${esc(_quando(e.at))}</span><span class="activity-badge ${cls}">${nome}</span><span class="text-xs font-medium text-slate-700">${esc(action)}</span>${detailMarkup}<span class="justify-self-end rounded-md bg-rose-50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-600">−${Number(e.crediti || 0).toLocaleString("en-US")}</span></summary><dl class="activity-detail"><div><dt>Timestamp</dt><dd>${esc(_quando(e.at))}</dd></div><div><dt>Channel</dt><dd>${esc(nome)}</dd></div><div><dt>Event</dt><dd>${esc(action)}</dd></div><div><dt>Request details</dt><dd><code>${esc(detail)}</code></dd></div><div><dt>Credits deducted</dt><dd>${plurUso(e.crediti || 0, "credit")}</dd></div>${retry}<div><dt>Entry type</dt><dd>Itemized event from the account activity ledger</dd></div></dl></details>`;
   }).join("") : `<p class="px-5 py-8 text-center text-xs text-slate-400">No activity yet. API calls, unlocks and exports will appear here as they happen.</p>`;
   const nonDet = document.getElementById("usage-non-itemized");
   nonDet.classList.toggle("hidden", !(d.non_dettagliati > 0));
@@ -3902,12 +3949,345 @@ document.addEventListener("click", e => {
 });
 
 let exStimaTimer = null, exDati = null, exStimaSeq = 0;
+let exTipoCorrente = "postings", exInitializing = false, exportCombosReady = false;
+const exportCombos = {}, exTechMatch = { postings: "any", companies: "any" };
+let exportComboAperta = null;
 function trentaGiorniFa() {
   const d = new Date(); d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
 }
-let exTipoCorrente = "postings";
 function exFmt(n) { return Number(n || 0).toLocaleString("en-US"); }
+function exProgrammaStima(delay = 250) {
+  if (exInitializing) return;
+  clearTimeout(exStimaTimer);
+  exStimaTimer = setTimeout(stimaExport, delay);
+}
+function exStaticOptions(values) {
+  return values.map(value => ({ value: Array.isArray(value) ? value[0] : value,
+    label: Array.isArray(value) ? value[1] : value }));
+}
+function createExportCombo(id, config) {
+  const host = document.getElementById(id);
+  const selected = [];
+  let options = [], open = false, active = 0, seq = 0, timer = null, dropdown = null;
+  host.classList.add("multi-combo");
+  host.innerHTML = `<label class="app-label" for="${esc(config.inputId)}">${esc(config.label)}</label><div class="multi-combo-control"><input id="${esc(config.inputId)}" class="multi-combo-input" type="text" role="combobox" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="${esc(config.inputId)}-listbox" placeholder="${esc(config.placeholder || "Search…")}" aria-label="${esc(config.label)}"></div>`;
+  const input = host.querySelector("input"), control = host.querySelector(".multi-combo-control");
+  const display = value => options.find(o => o.value.toLocaleLowerCase() === value.toLocaleLowerCase())?.label
+    || (config.options || []).find(o => o.value.toLocaleLowerCase() === value.toLocaleLowerCase())?.label || value;
+  const close = () => {
+    open = false;
+    seq += 1;
+    clearTimeout(timer);
+    dropdown?.remove();
+    dropdown = null;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    if (exportComboAperta === apiCombo) exportComboAperta = null;
+  };
+  const changed = () => {
+    config.onChange?.(selected.slice());
+    if (!exInitializing) exProgrammaStima();
+  };
+  const renderChips = () => {
+    host.querySelectorAll(".multi-combo-chip").forEach(chip => chip.remove());
+    for (const [index, value] of selected.entries()) {
+      const chip = document.createElement("span");
+      chip.className = "multi-combo-chip";
+      chip.dataset.comboChip = String(index);
+      const text = document.createElement("span");
+      text.textContent = display(value);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.tabIndex = -1;
+      remove.setAttribute("aria-label", `Remove ${display(value)}`);
+      remove.textContent = "×";
+      remove.addEventListener("mousedown", event => event.preventDefault());
+      remove.addEventListener("click", event => {
+        event.stopPropagation();
+        selected.splice(index, 1);
+        renderChips();
+        changed();
+        input.focus();
+      });
+      chip.append(text, remove);
+      control.insertBefore(chip, input);
+    }
+  };
+  const position = () => {
+    if (!dropdown) return;
+    const rect = control.getBoundingClientRect();
+    const width = Math.min(Math.max(rect.width, 260), 380, innerWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, innerWidth - width - 8));
+    const below = innerHeight - rect.bottom - 12, above = rect.top - 12;
+    const height = Math.min(280, Math.max(100, below >= 130 || below >= above ? below : above));
+    dropdown.style.width = width + "px";
+    dropdown.style.left = left + "px";
+    dropdown.style.maxHeight = height + "px";
+    dropdown.style.top = (below >= 130 || below >= above ? rect.bottom + 6 : rect.top - height - 6) + "px";
+  };
+  const render = (message = "") => {
+    if (!dropdown) return;
+    dropdown.innerHTML = "";
+    if (message) {
+      const empty = document.createElement("p");
+      empty.className = "multi-combo-empty";
+      empty.setAttribute("role", "status");
+      empty.textContent = message;
+      dropdown.appendChild(empty);
+      return;
+    }
+    if (!options.length) {
+      const empty = document.createElement("p");
+      empty.className = "multi-combo-empty";
+      empty.setAttribute("role", "status");
+      empty.textContent = config.emptyLabel || `No matching ${config.label.toLocaleLowerCase()} in index`;
+      dropdown.appendChild(empty);
+      return;
+    }
+    active = Math.max(0, Math.min(active, options.length - 1));
+    options.forEach((option, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.tabIndex = -1;
+      button.id = `${config.inputId}-option-${index}`;
+      button.className = "multi-combo-option" + (index === active ? " is-active" : "");
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(selected.includes(option.value)));
+      const check = document.createElement("span");
+      check.className = "multi-combo-check";
+      check.textContent = "✓";
+      const name = document.createElement("span");
+      name.className = "multi-combo-option-name";
+      name.textContent = option.label || option.value;
+      button.append(check, name);
+      if (Number.isFinite(Number(option.count))) {
+        const count = document.createElement("span");
+        count.className = "multi-combo-option-count";
+        count.textContent = Number(option.count).toLocaleString("en-US");
+        button.appendChild(count);
+      }
+      button.addEventListener("mousedown", event => event.preventDefault());
+      button.addEventListener("click", () => toggle(option.value));
+      dropdown.appendChild(button);
+    });
+    input.setAttribute("aria-activedescendant", `${config.inputId}-option-${active}`);
+  };
+  const load = async () => {
+    const query = input.value.trim(), current = ++seq;
+    if (config.options) {
+      options = config.options.filter(option => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+      active = 0;
+      render();
+      return;
+    }
+    render("Searching the index…");
+    try {
+      const response = await api(`/portale/catalogo/${config.kind}?q=${encodeURIComponent(query)}&limit=25`);
+      if (current !== seq || !open) return;
+      if (!response.ok) { options = []; render("Catalog unavailable. Retry."); return; }
+      const data = await response.json();
+      if (current !== seq || !open) return;
+      options = (Array.isArray(data) ? data : []).map(item => ({ value: String(item.value), label: String(item.value), count: item.count }));
+      active = 0;
+      render();
+    } catch (error) {
+      if (current === seq && open) { options = []; render("Catalog unavailable. Retry."); }
+    }
+  };
+  const show = () => {
+    if (open) { position(); return; }
+    exportComboAperta?.close();
+    open = true;
+    exportComboAperta = apiCombo;
+    dropdown = document.createElement("div");
+    dropdown.id = `${config.inputId}-listbox`;
+    dropdown.className = "multi-combo-dropdown";
+    dropdown.setAttribute("role", "listbox");
+    dropdown.setAttribute("aria-label", config.label);
+    dropdown.setAttribute("aria-multiselectable", "true");
+    document.body.appendChild(dropdown);
+    input.setAttribute("aria-expanded", "true");
+    position();
+    load();
+  };
+  const toggle = value => {
+    const index = selected.indexOf(value);
+    if (index >= 0) selected.splice(index, 1);
+    else selected.push(value);
+    input.value = "";
+    renderChips();
+    changed();
+    active = 0;
+    load();
+    input.focus();
+  };
+  input.addEventListener("focus", show);
+  input.addEventListener("input", () => {
+    show();
+    clearTimeout(timer);
+    timer = setTimeout(load, 150);
+  });
+  input.addEventListener("keydown", event => {
+    if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      show();
+      if (options.length) {
+        active = (active + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+        render();
+        dropdown?.children[active]?.scrollIntoView({ block: "nearest" });
+      }
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (!open) show();
+      else if (options[active]) toggle(options[active].value);
+    } else if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    } else if (event.key === "Backspace" && !input.value && selected.length) {
+      selected.pop();
+      renderChips();
+      changed();
+    } else if (event.key === "Tab") close();
+  });
+  control.addEventListener("mousedown", event => {
+    if (event.target === input || event.target.closest("button")) return;
+    event.preventDefault();
+    input.focus();
+  });
+  const apiCombo = {
+    close, position,
+    getValues: () => selected.slice(),
+    setValues: values => {
+      selected.splice(0, selected.length);
+      const raw = Array.isArray(values) ? values : (values ? String(values).split(",") : []);
+      for (const value of raw) {
+        const clean = String(value).trim();
+        if (!clean || selected.some(v => v.toLocaleLowerCase() === clean.toLocaleLowerCase())) continue;
+        if (config.options) {
+          const canonical = config.options.find(o => o.value.toLocaleLowerCase() === clean.toLocaleLowerCase());
+          if (!canonical) continue;
+          selected.push(canonical.value);
+        } else selected.push(clean);
+      }
+      renderChips();
+    },
+    reset: () => { close(); input.value = ""; selected.splice(0, selected.length); renderChips(); },
+  };
+  return apiCombo;
+}
+document.addEventListener("mousedown", event => {
+  if (!exportComboAperta) return;
+  const list = document.querySelector(".multi-combo-dropdown");
+  if (!event.target.closest(".multi-combo") && !list?.contains(event.target)) exportComboAperta.close();
+});
+document.addEventListener("scroll", () => exportComboAperta?.position(), true);
+window.addEventListener("resize", () => exportComboAperta?.position());
+function inizializzaExportCombos() {
+  if (exportCombosReady) return;
+  const remote = [
+    ["countries", "ex-countries", "Countries", "ex-countries-input", "country", "Search countries…"],
+    ["technologies", "ex-technologies", "Technologies", "ex-tec", "technology", "Search technologies…"],
+    ["categories", "ex-categories", "Category", "ex-category-input", "category", "Search categories…"],
+    ["ats", "ex-ats", "ATS", "ex-ats-input", "ats", "Search ATS…"],
+    ["excludeAts", "ex-exclude-ats", "Exclude ATS", "ex-exclude-ats-input", "ats", "Search ATS to exclude…"],
+    ["companyCountries", "ex-company-countries", "HQ Countries", "ex-company-countries-input", "country", "Search HQ countries…"],
+    ["companyTechnologies", "ex-company-technologies", "Technology stack", "ex-company-tec", "technology", "Search technologies…"],
+    ["industries", "ex-industries", "Industries", "ex-industries-input", "industry", "Search industries…"],
+  ];
+  for (const [key, id, label, inputId, kind, placeholder] of remote) {
+    exportCombos[key] = createExportCombo(id, { label, inputId, kind, placeholder,
+      emptyLabel: key.toLocaleLowerCase().includes("technolog") ? "No matching technology in index" : undefined,
+      onChange: () => { exAggiornaTechMatch(); exAggiornaAdvancedBadge(); } });
+  }
+  const staticCombos = {
+    seniority: ["ex-seniority", "Seniority", "ex-seniority-input", ["intern", "junior", "mid", "senior", "lead", "head"]],
+    remote: ["ex-remote", "Workplace / Remote", "ex-remote-input", ["remote", "hybrid", "onsite"]],
+    employment: ["ex-employment", "Employment type", "ex-employment-input", ["full_time", "part_time", "contract", "temporary", "internship", "apprenticeship"]],
+    languages: ["ex-languages", "Language", "ex-language-input", ["en", "it", "de", "fr", "es", "nl", "sv", "pl", "pt"]],
+    sourceTypes: ["ex-source-types", "Source type", "ex-source-input", ["direct", "aggregator", "staffing", "public_board"]],
+  };
+  for (const [key, [id, label, inputId, values]] of Object.entries(staticCombos)) {
+    exportCombos[key] = createExportCombo(id, { label, inputId,
+      options: exStaticOptions(values), placeholder: "Search values…",
+      onChange: exAggiornaAdvancedBadge });
+  }
+  exportCombosReady = true;
+}
+function exAggiornaTechMatch() {
+  if (!exportCombosReady) return;
+  const company = exTipoCorrente === "companies";
+  const values = exportCombos[company ? "companyTechnologies" : "technologies"].getValues();
+  document.getElementById(company ? "ex-company-tech-match-wrap" : "ex-tech-match-wrap").classList.toggle("hidden", values.length < 2);
+  const prefix = company ? "ex-company-tech" : "ex-tech", mode = exTechMatch[exTipoCorrente];
+  for (const candidate of ["any", "all"]) {
+    const button = document.getElementById(`${prefix}-${candidate}`);
+    button.setAttribute("aria-pressed", String(candidate === mode));
+    button.className = "rounded-md px-2.5 py-1 text-[10px] font-bold " + (candidate === mode ? "bg-white text-slate-900 shadow-sm" : "text-slate-500");
+  }
+}
+function exSetTechMatch(mode) {
+  exTechMatch[exTipoCorrente] = mode === "all" ? "all" : "any";
+  exAggiornaTechMatch();
+  exProgrammaStima();
+}
+function exAggiornaDateChips() {
+  const value = document.getElementById("ex-dal").value;
+  document.querySelectorAll("[data-date-preset]").forEach(button => {
+    const days = button.dataset.datePreset;
+    let expected = "";
+    if (days) {
+      const date = new Date(); date.setDate(date.getDate() - Number(days));
+      expected = date.toISOString().slice(0, 10);
+    }
+    button.setAttribute("aria-pressed", String(value === expected));
+  });
+}
+function exDataPreset(days) {
+  if (!days) document.getElementById("ex-dal").value = "";
+  else {
+    const date = new Date(); date.setDate(date.getDate() - Number(days));
+    document.getElementById("ex-dal").value = date.toISOString().slice(0, 10);
+  }
+  exAggiornaDateChips();
+  exProgrammaStima();
+}
+function exAggiornaAdvancedBadge() {
+  if (!exportCombosReady) return;
+  let count = ["categories", "seniority", "remote", "employment", "languages", "sourceTypes", "ats", "excludeAts"]
+    .filter(key => exportCombos[key].getValues().length).length;
+  if (document.getElementById("ex-has-salary").checked) count += 1;
+  if (document.getElementById("ex-salary-min").value || document.getElementById("ex-salary-max").value) count += 1;
+  const badge = document.getElementById("ex-advanced-badge");
+  badge.textContent = String(count);
+  badge.classList.toggle("hidden", count === 0);
+}
+function exResetAdvanced() {
+  for (const key of ["categories", "seniority", "remote", "employment", "languages", "sourceTypes", "ats", "excludeAts"])
+    exportCombos[key].reset();
+  document.getElementById("ex-has-salary").checked = false;
+  document.getElementById("ex-salary-min").value = "";
+  document.getElementById("ex-salary-max").value = "";
+  exAggiornaAdvancedBadge();
+  exProgrammaStima();
+}
+function exAggiornaCompanySize() {
+  const min = document.getElementById("ex-employees-min").value, max = document.getElementById("ex-employees-max").value;
+  document.querySelectorAll("#ex-companies-filters .export-quick-chip").forEach(button => button.setAttribute("aria-pressed", "false"));
+  document.querySelectorAll("#ex-companies-filters .export-quick-chip").forEach(button => {
+    const text = button.textContent;
+    const match = (text === "1–50" && min === "1" && max === "50") || (text === "51–200" && min === "51" && max === "200")
+      || (text === "201–1K" && min === "201" && max === "1000") || (text === "1K+" && min === "1001" && !max);
+    button.setAttribute("aria-pressed", String(match));
+  });
+}
+function exCompanySize(min, max) {
+  document.getElementById("ex-employees-min").value = String(min);
+  document.getElementById("ex-employees-max").value = String(max);
+  exAggiornaCompanySize();
+  exProgrammaStima();
+}
 function exAggiornaPreset() {
   const value = document.getElementById("ex-max-rows").value;
   for (const preset of ["100", "500", "1000", ""]) {
@@ -3925,13 +4305,15 @@ function exImpostaMax(value) {
 }
 function exScegliTipo(t) {
   exTipoCorrente = t;
+  Object.values(exportCombos).forEach(combo => combo.close());
   const on = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition bg-white shadow-sm text-slate-900";
   const off = "rounded-lg px-4 py-2.5 text-[13px] font-bold transition text-slate-500 hover:text-slate-700";
   document.getElementById("ex-tipo-postings").className = t === "postings" ? on : off;
   document.getElementById("ex-tipo-companies").className = t === "companies" ? on : off;
   document.getElementById("ex-tipo-postings").setAttribute("aria-selected", String(t === "postings"));
   document.getElementById("ex-tipo-companies").setAttribute("aria-selected", String(t === "companies"));
-  document.getElementById("ex-dal-box").style.display = t === "companies" ? "none" : "";
+  document.getElementById("ex-postings-filters").classList.toggle("hidden", t !== "postings");
+  document.getElementById("ex-companies-filters").classList.toggle("hidden", t !== "companies");
   document.getElementById("ex-cosa").textContent = t === "companies"
     ? "Each row is one company: name, tech stack, locations, size, active postings and 30-day hiring pace."
     : "Each row is one full posting: title, company, location, tech stack, salary when posted, dates, source link.";
@@ -3940,40 +4322,93 @@ function exScegliTipo(t) {
   document.getElementById("ex-max-help").textContent = t === "companies"
     ? "1 included company = 3 credits. Max 100k is a safety cap, not the full dataset."
     : "100 included jobs = 100 credits. Max 100k is a safety cap, not the full dataset.";
+  exAggiornaTechMatch();
   stimaExport();
 }
 function apriExport(pre) {
-  const sel = document.getElementById("ex-paese");
-  if (sel.options.length <= 1)
-    PAESI.forEach(([n, c]) => sel.add(new Option(n + " (" + c + ")", c)));
-  sel.value = "";
-  document.getElementById("ex-tec").value = "";
-  document.getElementById("ex-dal").value = "";
-  document.getElementById("ex-max-rows").value = pre && pre.max_rows ? String(pre.max_rows) : "";
+  inizializzaExportCombos();
+  exInitializing = true;
+  Object.values(exportCombos).forEach(combo => combo.reset());
+  for (const id of ["ex-q", "ex-dal", "ex-salary-min", "ex-salary-max", "ex-employees-min", "ex-employees-max", "ex-min-active-jobs"])
+    document.getElementById(id).value = "";
+  document.getElementById("ex-has-salary").checked = false;
+  document.getElementById("ex-more-filters").open = false;
+  exTechMatch.postings = exTechMatch.companies = "any";
+  exTipoCorrente = pre?.tipo === "companies" ? "companies" : "postings";
+  const company = exTipoCorrente === "companies";
+  const set = (key, values) => exportCombos[key]?.setValues(values);
+  set(company ? "companyCountries" : "countries", pre?.countries || pre?.country);
+  set(company ? "companyTechnologies" : "technologies", pre?.technologies || pre?.technology);
+  if (pre?.tech_match) exTechMatch[exTipoCorrente] = pre.tech_match === "all" ? "all" : "any";
+  if (company) {
+    set("industries", pre?.industries || pre?.industry);
+    for (const key of ["employees_min", "employees_max", "min_active_jobs"])
+      if (pre?.[key] !== undefined && pre[key] !== null) document.getElementById("ex-" + key.replaceAll("_", "-")).value = String(pre[key]);
+  } else {
+    document.getElementById("ex-q").value = pre?.q || pre?.title || "";
+    document.getElementById("ex-dal").value = pre?.posted_after || pre?.dal || "";
+    set("categories", pre?.categories || pre?.category);
+    set("seniority", pre?.seniorities || pre?.seniority);
+    set("remote", pre?.remote_values || pre?.remote);
+    set("employment", pre?.employment_types || pre?.employment_type);
+    set("languages", pre?.languages || pre?.language);
+    set("sourceTypes", pre?.source_types || pre?.source_type);
+    set("ats", pre?.ats);
+    set("excludeAts", pre?.exclude_ats);
+    document.getElementById("ex-has-salary").checked = pre?.has_salary === true || pre?.has_salary === "true";
+    for (const key of ["salary_min", "salary_max"])
+      if (pre?.[key] !== undefined && pre[key] !== null) document.getElementById("ex-" + key.replaceAll("_", "-")).value = String(pre[key]);
+  }
+  document.getElementById("ex-max-rows").value = pre?.max_rows ? String(pre.max_rows) : "";
   document.getElementById("ex-nota").textContent = "";
   const transferNote = document.getElementById("ex-transfer-note");
   transferNote.textContent = pre?.transferNote || "";
   transferNote.classList.toggle("hidden", !pre?.transferNote);
   exDati = null;
   exAggiornaPreset();
-  if (pre) {
-    if (pre.country) sel.value = pre.country;
-    if (pre.technology) document.getElementById("ex-tec").value = pre.technology;
-    if (pre.dal) document.getElementById("ex-dal").value = pre.dal;
-  }
+  exAggiornaDateChips();
+  exAggiornaAdvancedBadge();
+  exAggiornaCompanySize();
+  exInitializing = false;
   apriDialogo("export-modale");
-  exScegliTipo(pre && pre.tipo === "companies" ? "companies" : "postings");
+  exScegliTipo(exTipoCorrente);
 }
-function chiudiExport() { chiudiDialogo("export-modale"); }
+function chiudiExport() {
+  Object.values(exportCombos).forEach(combo => combo.close());
+  chiudiDialogo("export-modale");
+}
 function filtriExport() {
-  const f = { tipo: exTipoCorrente };
-  const p = document.getElementById("ex-paese").value;
-  const t = document.getElementById("ex-tec").value.trim();
-  const d = document.getElementById("ex-dal").value;
+  const f = { tipo: exTipoCorrente }, company = exTipoCorrente === "companies";
+  const add = (key, combo) => { const values = exportCombos[combo].getValues(); if (values.length) f[key] = values; };
+  add("countries", company ? "companyCountries" : "countries");
+  add("technologies", company ? "companyTechnologies" : "technologies");
+  const techKey = company ? "companyTechnologies" : "technologies";
+  if (exportCombos[techKey].getValues().length >= 2) f.tech_match = exTechMatch[exTipoCorrente];
+  if (company) {
+    add("industries", "industries");
+    for (const key of ["employees_min", "employees_max", "min_active_jobs"]) {
+      const value = document.getElementById("ex-" + key.replaceAll("_", "-")).value.trim();
+      if (value) f[key] = Number(value);
+    }
+  } else {
+    const q = document.getElementById("ex-q").value.trim(), d = document.getElementById("ex-dal").value;
+    if (q) f.q = q;
+    if (d) f.posted_after = d;
+    add("categories", "categories");
+    add("seniorities", "seniority");
+    add("remote_values", "remote");
+    add("employment_types", "employment");
+    add("languages", "languages");
+    add("source_types", "sourceTypes");
+    add("ats", "ats");
+    add("exclude_ats", "excludeAts");
+    if (document.getElementById("ex-has-salary").checked) f.has_salary = true;
+    for (const key of ["salary_min", "salary_max"]) {
+      const value = document.getElementById("ex-" + key.replaceAll("_", "-")).value.trim();
+      if (value) f[key] = Number(value);
+    }
+  }
   const maxRows = document.getElementById("ex-max-rows").value.trim();
-  if (p) f.country = p;
-  if (t) f.technology = t;
-  if (d && exTipoCorrente === "postings") f.dal = d;
   if (maxRows) f.max_rows = Number(maxRows);
   return f;
 }
@@ -4071,7 +4506,7 @@ async function stimaExport() {
     (d.balance_after_export >= 0 ? "text-mint-400" : "text-amber-400 receipt-negative");
   exAggiornaPulsante();
   if (d.export_rows === 0) {
-    exMostraAvviso("No rows match these filters. Change the country or technology — 0 credits will be used.", true);
+    exMostraAvviso("No rows match these filters. Change or reset a filter — 0 credits will be used.", true);
     return;
   }
   if (d.saldo < d.exact_cost) {
@@ -4108,11 +4543,18 @@ function vaiAllaRicarica() {
   chiudiExport();
   vaiAiCrediti();
 }
-["ex-paese", "ex-tec", "ex-dal", "ex-max-rows"].forEach(id =>
+["ex-q", "ex-dal", "ex-salary-min", "ex-salary-max", "ex-employees-min", "ex-employees-max", "ex-min-active-jobs", "ex-max-rows"].forEach(id =>
   document.getElementById(id).addEventListener("input", () => {
     if (id === "ex-max-rows") exAggiornaPreset();
-    clearTimeout(exStimaTimer); exStimaTimer = setTimeout(stimaExport, 350);
+    if (id === "ex-dal") exAggiornaDateChips();
+    if (["ex-salary-min", "ex-salary-max"].includes(id)) exAggiornaAdvancedBadge();
+    if (["ex-employees-min", "ex-employees-max"].includes(id)) exAggiornaCompanySize();
+    exProgrammaStima(350);
   }));
+document.getElementById("ex-has-salary").addEventListener("change", () => {
+  exAggiornaAdvancedBadge();
+  exProgrammaStima();
+});
 async function scaricaExportFiltrato() {
   const btn = document.getElementById("ex-vai");
   const nota = document.getElementById("ex-nota");

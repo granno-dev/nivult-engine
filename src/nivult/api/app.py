@@ -1859,7 +1859,6 @@ def create_app() -> FastAPI:
     from nivult.api_clienti import billing as _billing
     from nivult.api_clienti import dati as _dati
     from nivult.api_clienti import explorer as _explorer
-    from nivult.api_clienti import opensearch as _opensearch
     from nivult.api_clienti import vivo as _vivo
 
     def _abuso_explorer(request: Request, uid: str, motivo: str) -> None:
@@ -2131,6 +2130,19 @@ def create_app() -> FastAPI:
         righe = await run_in_threadpool(_vivo.completa_titoli_portale, righe)
         return {"data": righe}
 
+    @app.get("/portale/catalogo/{campo}")
+    async def catalogo_export_portale(
+            campo: str, q: str = Query(default="", max_length=80),
+            limite: int = Query(default=25, alias="limit", ge=1, le=30),
+            uid: str = Depends(utente)):
+        if campo not in _dati._CATALOGO_CAMPI:
+            raise HTTPException(404, "unknown catalog field")
+        try:
+            valori = await run_in_threadpool(_dati.catalogo_export, campo, q, limite)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return JSONResponse(valori, headers={"Cache-Control": "private, max-age=30"})
+
     @app.get("/portale/export/{nome}")
     def export_dal_portale(nome: str, request: Request, uid: str = Depends(utente)):
         """Daily Bulk incluso in Scale attivo: nessun addebito, ma sessione,
@@ -2216,6 +2228,12 @@ def create_app() -> FastAPI:
             "max_allowed_rows": preventivo["max_allowed_rows"],
         })
 
+    def _filtri_export(corpo: dict, tipo: str) -> dict:
+        try:
+            return _dati.normalizza_filtri_export(corpo, tipo)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+
     @app.post("/portale/export/stima")
     async def stima_export_portale(request: Request, uid: str = Depends(utente)):
         try:
@@ -2226,13 +2244,9 @@ def create_app() -> FastAPI:
             corpo = {}
         tipo = "companies" if corpo.get("tipo") == "companies" else "postings"
         max_rows = _max_rows_export(corpo)
-        filtri = {k: v for k, v in corpo.items()
-                  if k in ("country", "technology", "dal") and v}
-        if tipo == "companies":
-            righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
-        else:
-            stima = _opensearch.conteggio if _opensearch.attivo() else _dati.stima_export
-            righe = await run_in_threadpool(stima, filtri)
+        filtri = _filtri_export(corpo, tipo)
+        stima = _dati.stima_export_aziende if tipo == "companies" else _dati.stima_export
+        righe = await run_in_threadpool(stima, filtri)
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
         return _preventivo_export(tipo, righe, saldo, max_rows)
 
@@ -2246,14 +2260,11 @@ def create_app() -> FastAPI:
             corpo = {}
         tipo = "companies" if corpo.get("tipo") == "companies" else "postings"
         max_rows = _max_rows_export(corpo)
-        filtri = {k: v for k, v in corpo.items()
-                  if k in ("country", "technology", "dal") and v}
+        filtri = _filtri_export(corpo, tipo)
         # DuckDB e Postgres qui sotto sono chiamate SINCROME e pesanti:
         # sul thread dell'event loop un export lento inchioda TUTTA l'API.
-        if tipo == "companies":
-            righe = await run_in_threadpool(_dati.stima_export_aziende, filtri)
-        else:
-            righe = await run_in_threadpool(_dati.stima_export, filtri)
+        stima = _dati.stima_export_aziende if tipo == "companies" else _dati.stima_export
+        righe = await run_in_threadpool(stima, filtri)
         saldo = await run_in_threadpool(_chiavi.saldo_per_utente, uid)
         preventivo = _preventivo_export(tipo, righe, saldo, max_rows)
         if preventivo["export_rows"] == 0:
@@ -2443,10 +2454,18 @@ def create_app() -> FastAPI:
         nomi = {}
         loghi = {}
         for r in rivelazioni:
+            ats, separator, slug = r["ref"].partition(":")
+            r["ats"] = ats if separator else None
+            r["company_slug"] = slug if separator else None
+            r["company_domain"] = None
+            r["logo_url"] = None
             try:
                 a = _dati.rivela_azienda(r["ref"])
                 if a:
                     r["nome"] = a.get("company") or a.get("legal_name")
+                    r["company_domain"] = (a.get("domain") or a.get("company_domain")
+                                           or a.get("website"))
+                    r["logo_url"] = a.get("logo") or a.get("logo_url")
                     r["logo"] = _logo_rif(r["ref"]) or _favicon(a.get("domain"))
             except Exception:                            # noqa: BLE001
                 pass
@@ -2456,6 +2475,7 @@ def create_app() -> FastAPI:
                 r["nome"] = _bel_nome(r["ref"])
             if not r.get("logo"):
                 r["logo"] = _logo_rif(r["ref"])
+            r["logo_url"] = r["logo_url"] or r.get("logo")
             nomi[r["ref"]] = r["nome"]
             if r.get("logo"):
                 loghi[r["ref"]] = r["logo"]

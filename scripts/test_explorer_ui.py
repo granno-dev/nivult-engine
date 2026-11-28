@@ -12,11 +12,12 @@ def section(start: str, end: str) -> str:
 
 class ExplorerUiTest(unittest.TestCase):
     def test_nonblocking_right_drawer_shell_and_responsive_tokens(self):
-        shell = section('<div id="dettaglio"', '<div id="explorer-reference-panel"')
-        self.assertIn('aria-modal="false"', shell)
+        shell = section('<div id="dettaglio"', '<div id="export-modale"')
+        self.assertIn('aria-modal="true"', shell)
         self.assertIn("explorer-drawer-backdrop", shell)
         self.assertIn('id="dettaglio-box" class="explorer-drawer"', shell)
         self.assertLess(HTML.index('id="vista-dash"'), HTML.index('id="dettaglio"'))
+        self.assertLess(HTML.index('id="explorer-reference-panel"'), HTML.index('id="dettaglio"'))
         css = section(".explorer-lock-pill,", "@keyframes spin")
         self.assertIn("width: min(680px,58vw)", css)
         self.assertIn("height: 100vh", css)

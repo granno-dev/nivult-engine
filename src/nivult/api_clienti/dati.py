@@ -29,6 +29,7 @@ import datetime as dt
 import gzip
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -378,21 +379,204 @@ def rivela_offerta(offerta_id: str) -> dict | None:
     return _senza_pii(json.loads(r[0])) if r else None
 
 
+_EXPORT_MULTIPLI = {
+    "countries": "country", "technologies": "technology",
+    "categories": "category", "industries": "industry",
+}
+_EXPORT_SOURCE_TYPES = frozenset({"direct", "aggregator", "staffing", "public_board"})
+
+
+def _valori_export(filtri: dict, plurale: str, singolare: str) -> list[str]:
+    raw = filtri.get(plurale)
+    if raw is None or raw == "" or raw == []:
+        raw = filtri.get(singolare)
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, (str, bool)):
+        raw = [raw]
+    if not isinstance(raw, (list, tuple)):
+        raise TypeError(f"{plurale} must be an array or a comma-separated string")
+    if len(raw) > 50:
+        raise ValueError(f"{plurale} accepts at most 50 values")
+    values = []
+    seen = set()
+    for item in raw:
+        if singolare == "remote" and isinstance(item, bool):
+            item = "remote" if item else "onsite"
+        if not isinstance(item, str):
+            raise TypeError(f"{plurale} values must be strings")
+        for value in item.split(","):
+            value = value.strip()
+            if not value:
+                continue
+            if len(value) > 120:
+                raise ValueError(f"{plurale} values must be at most 120 characters")
+            if singolare == "country":
+                value = value.upper()
+                if not re.fullmatch(r"[A-Z]{2}", value):
+                    raise ValueError("countries must contain ISO 3166-1 alpha-2 codes")
+            marker = value.casefold()
+            if marker not in seen:
+                seen.add(marker)
+                values.append(value)
+    return values
+
+
+def _numero_export(valore, nome: str, intero: bool = False):
+    if isinstance(valore, bool):
+        raise TypeError(f"{nome} must be a non-negative number")
+    try:
+        numero = float(valore)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{nome} must be a non-negative number") from exc
+    if not math.isfinite(numero) or numero < 0 or (intero and not numero.is_integer()):
+        raise ValueError(f"{nome} must be a non-negative number")
+    return int(numero) if intero else numero
+
+
+def normalizza_filtri_export(corpo: dict, tipo: str) -> dict:
+    """Valida e canonicalizza una sola volta i filtri di quote e download."""
+    if not isinstance(corpo, dict):
+        raise TypeError("export filters must be a JSON object")
+    multipli = [("countries", "country"), ("technologies", "technology")]
+    if tipo == "companies":
+        multipli.append(("industries", "industry"))
+        extra = {"employees_min", "employees_max", "min_active_jobs"}
+    else:
+        multipli.extend((plurale, singolare) for plurale, singolare in (
+            ("categories", "category"), ("seniorities", "seniority"),
+            ("remote_values", "remote"), ("employment_types", "employment_type"),
+            ("languages", "language"), ("source_types", "source_type"),
+        ))
+        extra = {"q", "title", "posted_after", "posted_before", "dal", "has_salary",
+                 "salary_min", "salary_max", "ats", "exclude_ats"}
+    allowed = {"tipo", "max_rows", "limit", "tech_match", *extra}
+    for plurale, singolare in multipli:
+        allowed.update((plurale, singolare))
+    unknown = sorted(set(corpo) - allowed)
+    if unknown:
+        raise ValueError(f"unsupported export filter: {unknown[0]}")
+
+    out: dict = {}
+    for plurale, singolare in multipli:
+        values = _valori_export(corpo, plurale, singolare)
+        if singolare == "source_type":
+            values = ["public_board" if value.lower() == "public" else value.lower()
+                      for value in values]
+            if any(value not in _EXPORT_SOURCE_TYPES for value in values):
+                raise ValueError("source_type must use direct, aggregator, staffing or public_board")
+        if values:
+            out[plurale] = values
+    match = str(corpo.get("tech_match") or "any").lower()
+    if match not in ("any", "all"):
+        raise ValueError("tech_match must be any or all")
+    out["tech_match"] = match
+
+    for campo in ("q", "title"):
+        if corpo.get(campo) is not None:
+            if not isinstance(corpo[campo], str) or len(corpo[campo].strip()) > 200:
+                raise ValueError(f"{campo} must be a string of at most 200 characters")
+            if corpo[campo].strip():
+                out[campo] = corpo[campo].strip()
+    for campo in ("salary_min", "salary_max"):
+        if corpo.get(campo) is not None:
+            out[campo] = _numero_export(corpo[campo], campo)
+    if out.get("salary_min") is not None and out.get("salary_max") is not None \
+            and out["salary_min"] > out["salary_max"]:
+        raise ValueError("salary_min cannot exceed salary_max")
+    for campo in ("employees_min", "employees_max", "min_active_jobs"):
+        if corpo.get(campo) is not None:
+            out[campo] = _numero_export(corpo[campo], campo, intero=True)
+    if out.get("employees_min") is not None and out.get("employees_max") is not None \
+            and out["employees_min"] > out["employees_max"]:
+        raise ValueError("employees_min cannot exceed employees_max")
+    if corpo.get("has_salary") is not None:
+        value = corpo["has_salary"]
+        if isinstance(value, str) and value.lower() in ("true", "false"):
+            value = value.lower() == "true"
+        if not isinstance(value, bool):
+            raise ValueError("has_salary must be true or false")
+        out["has_salary"] = value
+    for campo in ("ats", "exclude_ats"):
+        if corpo.get(campo):
+            values = _valori_export(corpo, campo + "_values", campo)
+            if values:
+                out[campo] = [value.lower() for value in values]
+    dopo = corpo.get("posted_after") or corpo.get("dal")
+    if dopo:
+        out["dal"] = _norm_ts(dopo)
+    if corpo.get("posted_before"):
+        out["posted_before"] = _norm_ts(corpo["posted_before"])
+    return out
+
+
+def _where_in(dove: list[str], par: dict, expression: str, nome: str,
+              values: list[str], upper: bool = False, negate: bool = False) -> None:
+    if not values:
+        return
+    keys = []
+    for index, value in enumerate(values):
+        key = f"{nome}_{index}"
+        par[key] = value.upper() if upper else value.lower()
+        keys.append("$" + key)
+    column = f"upper({expression})" if upper else f"lower(coalesce({expression}, ''))"
+    dove.append(f"{column} {'NOT IN' if negate else 'IN'} ({', '.join(keys)})")
+
+
+def _where_tech(dove: list[str], par: dict, filtri: dict) -> None:
+    values = _valori_export(filtri, "technologies", "technology")
+    conditions = []
+    for index, value in enumerate(values):
+        key = f"technology_{index}"
+        par[key] = value
+        conditions.append(_TEC.format(nome=key))
+    if conditions:
+        joiner = " AND " if filtri.get("tech_match") == "all" else " OR "
+        dove.append("(" + joiner.join(conditions) + ")")
+
+
 def _dove_export(filtri: dict) -> tuple[str, dict]:
     """I filtri del download, condivisi fra stima e scrittura."""
-    # posted_at nel futuro (data d'inizio contratto): mai venduta come
-    # data di pubblicazione, la stessa guardia delle ricerche (28/09).
     dove = ["(posted_at IS NULL OR posted_at <= current_timestamp)"]
     par: dict = {}
-    if filtri.get("country"):
-        dove.append("country = $country")
-        par["country"] = str(filtri["country"])[:2].upper()
-    if filtri.get("technology"):
-        dove.append(_TEC.format(nome="technology"))
-        par["technology"] = str(filtri["technology"])
-    if filtri.get("dal"):
-        dove.append("posted_at >= CAST($dal AS TIMESTAMP)")
-        par["dal"] = _norm_ts(filtri["dal"])
+    _where_in(dove, par, "country", "country",
+              _valori_export(filtri, "countries", "country"), upper=True)
+    _where_tech(dove, par, filtri)
+    for plurale, singolare, column in (
+            ("categories", "category", "category"),
+            ("seniorities", "seniority", "seniority"),
+            ("remote_values", "remote", "remote"),
+            ("languages", "language", "language")):
+        _where_in(dove, par, column, singolare,
+                  _valori_export(filtri, plurale, singolare))
+    _where_in(dove, par, "raw->>'employment_type'", "employment_type",
+              _valori_export(filtri, "employment_types", "employment_type"))
+    _where_in(dove, par, "coalesce(raw->>'source_type', 'direct')", "source_type",
+              _valori_export(filtri, "source_types", "source_type"))
+    _where_in(dove, par, "ats", "ats", _valori_export(filtri, "ats_values", "ats"))
+    _where_in(dove, par, "ats", "exclude_ats",
+              _valori_export(filtri, "exclude_ats_values", "exclude_ats"), negate=True)
+    if filtri.get("q"):
+        dove.append(f"(title || ' ' || {_SEARCH_DOC}) ILIKE $q ESCAPE '\\'")
+        par["q"] = _like(str(filtri["q"]))
+    if filtri.get("title"):
+        dove.append("title ILIKE $title ESCAPE '\\'")
+        par["title"] = _like(str(filtri["title"]))
+    for campo in ("dal", "posted_before"):
+        if filtri.get(campo):
+            operator = ">=" if campo == "dal" else "<"
+            dove.append(f"posted_at {operator} CAST(${campo} AS TIMESTAMP)")
+            par[campo] = _norm_ts(filtri[campo])
+    salary_present = ("(TRY_CAST(raw->>'salary_min' AS DOUBLE) IS NOT NULL OR "
+                      "TRY_CAST(raw->>'salary_max' AS DOUBLE) IS NOT NULL)")
+    if filtri.get("has_salary") is not None:
+        dove.append(salary_present if filtri["has_salary"] else f"NOT {salary_present}")
+    if filtri.get("salary_min") is not None:
+        dove.append("TRY_CAST(raw->>'salary_min' AS DOUBLE) >= $salary_min")
+        par["salary_min"] = float(filtri["salary_min"])
+    if filtri.get("salary_max") is not None:
+        dove.append("TRY_CAST(raw->>'salary_max' AS DOUBLE) <= $salary_max")
+        par["salary_max"] = float(filtri["salary_max"])
     return " AND ".join(dove), par
 
 
@@ -412,16 +596,20 @@ def scrivi_export(filtri: dict, percorso: str, tetto: int = 0) -> int:
 
 
 def _dove_export_aziende(filtri: dict) -> tuple[str, dict]:
-    """I filtri del download aziende: paese e tecnologia, come le offerte
-    (la data non ha senso sullo spine)."""
     dove = ["company IS NOT NULL"]
     par: dict = {}
-    if filtri.get("country"):
-        dove.append("country = $country")
-        par["country"] = str(filtri["country"])[:2].upper()
-    if filtri.get("technology"):
-        dove.append(_TEC.format(nome="technology"))
-        par["technology"] = str(filtri["technology"])
+    _where_in(dove, par, "country", "country",
+              _valori_export(filtri, "countries", "country"), upper=True)
+    _where_tech(dove, par, filtri)
+    _where_in(dove, par, "industry", "industry",
+              _valori_export(filtri, "industries", "industry"))
+    for campo, operator in (("employees_min", ">="), ("employees_max", "<="),
+                            ("min_active_jobs", ">=")):
+        if filtri.get(campo) is not None:
+            column = ("employees" if campo != "min_active_jobs"
+                      else "TRY_CAST(raw->>'active_jobs' AS BIGINT)")
+            dove.append(f"{column} {operator} ${campo}")
+            par[campo] = int(filtri[campo])
     return " AND ".join(dove), par
 
 
@@ -873,6 +1061,74 @@ def azienda(piattaforma: str, slug: str) -> dict | None:
             " WHERE ats = $ats AND company_slug = $slug LIMIT 1",
             {"ats": piattaforma, "slug": slug}).fetchone()
     return _senza_pii(json.loads(r[0])) if r else None
+
+
+_CATALOGO_CAMPI = {
+    "technology": "offerte", "country": "offerte", "category": "offerte",
+    "ats": "offerte", "industry": "aziende",
+}
+_CatalogoItem = tuple[str, str, int]
+_catalogo_cache: dict[tuple[str, str], tuple[float | None, tuple[_CatalogoItem, ...]]] = {}
+_catalogo_cache_lock = threading.Lock()
+_catalogo_fetch_locks: dict[tuple[str, str], threading.Lock] = {}
+
+
+def _carica_catalogo(campo: str) -> tuple[_CatalogoItem, ...]:
+    if campo == "technology":
+        sorgente = ("SELECT unnest(technologies) AS value FROM offerte "
+                    "WHERE technologies IS NOT NULL")
+    else:
+        sorgente = f"SELECT {campo} AS value FROM {_CATALOGO_CAMPI[campo]}"
+    with _lock:
+        righe = _conn().execute(f"""
+            SELECT min(value) AS value, count(*) AS count
+              FROM ({sorgente}) AS catalogo
+             WHERE value IS NOT NULL AND trim(value) <> ''
+             GROUP BY lower(value)""").fetchall()
+    return tuple(sorted(
+        ((str(r[0]), str(r[0]).casefold(), int(r[1])) for r in righe),
+        key=lambda item: (-item[2], item[1])))
+
+
+def _catalogo_snapshot(campo: str, mtime: float | None) -> tuple[_CatalogoItem, ...]:
+    key = (_percorso, campo)
+    with _catalogo_cache_lock:
+        cached = _catalogo_cache.get(key)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+        fetch_lock = _catalogo_fetch_locks.setdefault(key, threading.Lock())
+    with fetch_lock:
+        with _catalogo_cache_lock:
+            cached = _catalogo_cache.get(key)
+            if cached is not None and cached[0] == mtime:
+                return cached[1]
+        items = _carica_catalogo(campo)
+        with _catalogo_cache_lock:
+            _catalogo_cache[key] = (mtime, items)
+        return items
+
+
+def catalogo_export(campo: str, q: str = "", limite: int = 25) -> list[dict]:
+    """Catalogo completo per dimensione; prefissi filtrati fuori dai lock."""
+    if campo not in _CATALOGO_CAMPI:
+        raise ValueError("unknown catalog field")
+    q_cf = str(q or "").strip().casefold()
+    if len(q_cf) > 80:
+        raise ValueError("q must be at most 80 characters")
+    limite = max(1, min(int(limite), 30))
+    try:
+        mtime = os.path.getmtime(_percorso)
+    except OSError:
+        mtime = None
+    items = _catalogo_snapshot(campo, mtime)
+    out = []
+    for value, value_cf, count in items:
+        if q_cf and not value_cf.startswith(q_cf):
+            continue
+        out.append({"value": value, "count": count})
+        if len(out) == limite:
+            break
+    return out
 
 
 def demo_tecnologie(q: str) -> dict:

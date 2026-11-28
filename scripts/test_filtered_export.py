@@ -4,6 +4,7 @@ import gzip
 import json
 import os
 import threading
+import time
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -542,9 +543,12 @@ def test_unlocked_companies_combobox_selection_and_drawer_contract():
     assert 'api("/portale/token-azienda"' in source
     assert 'method: "POST", body: JSON.stringify({ company_ref: r.ref })' in source
     assert "await apriAziendaDaJob(token)" in source
-    assert 'location.hash = "#explorer"' in source
-    assert 'cambiaExplorer("query")' in source
-    assert source.index('location.hash = "#explorer"') < source.index("await apriAziendaDaJob(token)")
+    assert 'location.hash = "#explorer"' not in source
+    assert 'cambiaExplorer("query")' not in source
+    assert "logoRivelato(logoRecord" in source
+    assert ".app-input.unlocked-search" in css
+    assert html.index('id="explorer"') < html.index('id="dettaglio"')
+    assert html.index('id="settings"') < html.index('id="dettaglio"') < html.index('id="export-modale"')
     assert "revealInfo[token]" in source
     assert "if (!response.ok)" in source
     assert "esc(name)" in source
@@ -556,3 +560,291 @@ def test_unlocked_companies_combobox_selection_and_drawer_contract():
     assert "unlockedCompanySelected.clear();" in html
     assert "unlockedCompanyLoading.clear();" in html
     assert "disegnaAziendeSbloccate();" in html
+
+
+@pytest.fixture
+def rich_export_db(tmp_path):
+    path = tmp_path / "rich-export.duckdb"
+    with duckdb.connect(str(path)) as connection:
+        connection.execute("""
+            CREATE TABLE offerte(
+                raw VARCHAR, posted_at TIMESTAMP, id VARCHAR, title VARCHAR,
+                country VARCHAR, language VARCHAR, seniority VARCHAR, remote VARCHAR,
+                category VARCHAR, technologies VARCHAR[], ats VARCHAR)
+        """)
+        connection.execute("""
+            CREATE TABLE aziende(
+                raw VARCHAR, company VARCHAR, country VARCHAR, industry VARCHAR,
+                employees BIGINT, technologies VARCHAR[], ats VARCHAR, company_slug VARCHAR)
+        """)
+        jobs = [
+            {"id": "a", "title": "Senior Data Engineer", "description": "Kubernetes platform",
+             "country": "IT", "language": "en", "seniority": "senior", "remote": "remote",
+             "category": "Engineering", "technologies": ["Python", "SAP"], "ats": "greenhouse",
+             "posted_at": "2026-11-20", "employment_type": "full_time", "source_type": "direct",
+             "salary_min": 50000, "salary_max": 90000},
+            {"id": "b", "title": "Data Analyst", "description": "SQL reports",
+             "country": "DE", "language": "de", "seniority": "mid", "remote": "hybrid",
+             "category": "Data & Analytics", "technologies": ["Python"], "ats": "workday",
+             "posted_at": "2026-11-10", "employment_type": "part_time",
+             "source_type": "public_board", "salary_min": None, "salary_max": None},
+            {"id": "c", "title": "SAP Intern", "description": "Excel support",
+             "country": "IT", "language": "it", "seniority": "intern", "remote": "onsite",
+             "category": "Engineering", "technologies": ["SAP", "Excel"], "ats": "greenhouse",
+             "posted_at": "2026-11-01", "employment_type": "internship", "source_type": "direct",
+             "salary_min": 20000, "salary_max": 30000},
+        ]
+        connection.executemany(
+            "INSERT INTO offerte VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(json.dumps(row), row["posted_at"], row["id"], row["title"], row["country"],
+              row["language"], row["seniority"], row["remote"], row["category"],
+              row["technologies"], row["ats"]) for row in jobs])
+        companies = [
+            {"company": "Alpha", "country": "IT", "industry": "software", "employees": 100,
+             "technologies": ["Python", "SAP"], "ats": "greenhouse", "company_slug": "alpha",
+             "active_jobs": 5},
+            {"company": "Beta", "country": "DE", "industry": "software", "employees": 500,
+             "technologies": ["Python"], "ats": "workday", "company_slug": "beta", "active_jobs": 1},
+            {"company": "Gamma", "country": "IT", "industry": "finance", "employees": 20,
+             "technologies": ["SAP", "Excel"], "ats": "greenhouse", "company_slug": "gamma",
+             "active_jobs": 10},
+        ]
+        connection.executemany(
+            "INSERT INTO aziende VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(json.dumps(row), row["company"], row["country"], row["industry"],
+              row["employees"], row["technologies"], row["ats"], row["company_slug"])
+             for row in companies])
+    previous = dati._percorso
+    dati.apri(str(path))
+    yield path
+    if dati._con is not None:
+        dati._con.close()
+    dati._con = None
+    dati._con_mtime = None
+    dati._percorso = previous
+
+
+def _export_ids(kind: str, filters: dict, path) -> tuple[int, list[str]]:
+    normalized = dati.normalizza_filtri_export(filters, kind)
+    if kind == "companies":
+        count = dati.stima_export_aziende(normalized)
+        written = dati.scrivi_export_aziende(normalized, str(path), 100)
+    else:
+        count = dati.stima_export(normalized)
+        written = dati.scrivi_export(normalized, str(path), 100)
+    assert count == written
+    with gzip.open(path, "rt", encoding="utf-8") as source:
+        rows = [json.loads(line) for line in source]
+    assert written == len(rows)
+    key = "company" if kind == "companies" else "id"
+    return count, [row[key] for row in rows]
+
+
+@pytest.mark.parametrize(("filters", "expected"), [
+    ({"countries": "it,de"}, {"a", "b", "c"}),
+    ({"technologies": ["python", "sap"]}, {"a", "b", "c"}),
+    ({"technologies": ["python", "sap"], "tech_match": "all"}, {"a"}),
+    ({"categories": ["Engineering"]}, {"a", "c"}),
+    ({"seniority": "senior,mid"}, {"a", "b"}),
+    ({"remote": ["remote", "hybrid"]}, {"a", "b"}),
+    ({"employment_type": "full_time"}, {"a"}),
+    ({"language": "en,it"}, {"a", "c"}),
+    ({"has_salary": True}, {"a", "c"}),
+    ({"has_salary": False}, {"b"}),
+    ({"salary_min": 40000}, {"a"}),
+    ({"salary_max": 85000}, {"c"}),
+    ({"q": "Kubernetes"}, {"a"}),
+    ({"title": "Senior"}, {"a"}),
+    ({"posted_after": "2026-11-15"}, {"a"}),
+    ({"posted_before": "2026-11-15"}, {"b", "c"}),
+    ({"source_type": "direct"}, {"a", "c"}),
+    ({"source_type": "public"}, {"b"}),
+    ({"ats": "greenhouse"}, {"a", "c"}),
+    ({"exclude_ats": "greenhouse"}, {"b"}),
+])
+def test_duckdb_rich_posting_filters_have_identical_quote_and_download(
+        rich_export_db, tmp_path, filters, expected):
+    count, ids = _export_ids("postings", filters, tmp_path / "postings.jsonl.gz")
+    assert count == len(expected)
+    assert set(ids) == expected
+
+
+@pytest.mark.parametrize(("filters", "expected"), [
+    ({"countries": ["IT", "DE"]}, {"Alpha", "Beta", "Gamma"}),
+    ({"technologies": ["Python", "SAP"], "tech_match": "all"}, {"Alpha"}),
+    ({"industries": "software"}, {"Alpha", "Beta"}),
+    ({"employees_min": 50, "employees_max": 500}, {"Alpha", "Beta"}),
+    ({"min_active_jobs": 5}, {"Alpha", "Gamma"}),
+])
+def test_duckdb_rich_company_filters_have_identical_quote_and_download(
+        rich_export_db, tmp_path, filters, expected):
+    count, names = _export_ids("companies", filters, tmp_path / "companies.jsonl.gz")
+    assert count == len(expected)
+    assert set(names) == expected
+
+
+def test_catalog_is_canonical_case_insensitive_ordered_and_injection_safe(rich_export_db):
+    assert dati.catalogo_export("technology", "py") == [{"value": "Python", "count": 2}]
+    popular = dati.catalogo_export("technology")
+    assert [row["value"] for row in popular] == ["Python", "SAP", "Excel"]
+    assert popular[0]["count"] == 2
+    assert dati.catalogo_export("technology", "DDDDDD") == []
+    assert dati.catalogo_export("technology", "%") == []
+    assert dati.catalogo_export("country", "i") == [{"value": "IT", "count": 2}]
+    assert dati.catalogo_export("industry", "SOFT") == [{"value": "software", "count": 2}]
+    assert dati.catalogo_export("technology", "' OR 1=1 --") == []
+
+
+def test_catalog_http_is_authenticated_free_and_uses_limit(
+        rich_export_db, pg_account, portal_client):
+    uid = pg_account(0)
+    client = portal_client(uid)
+    response = client.get("/portale/catalogo/technology?q=py&limit=1")
+    assert response.status_code == 200
+    assert response.json() == [{"value": "Python", "count": 2}]
+    assert client.get("/portale/catalogo/technology?q=DDDDDD").json() == []
+    assert client.get("/portale/catalogo/not-a-field").status_code == 404
+    assert _billing_state(uid) == (0, 0, 0, 0)
+
+
+def _reset_catalogo_cache():
+    with dati._catalogo_cache_lock:
+        dati._catalogo_cache.clear()
+        dati._catalogo_fetch_locks.clear()
+
+
+def test_catalog_sequential_prefixes_and_limits_use_one_duckdb_fetch(
+        rich_export_db, monkeypatch):
+    _reset_catalogo_cache()
+    calls = []
+    real_loader = dati._carica_catalogo
+
+    def spy_loader(campo):
+        calls.append(campo)
+        return real_loader(campo)
+
+    monkeypatch.setattr(dati, "_carica_catalogo", spy_loader)
+    cases = [
+        ("", 5, ["Python", "SAP", "Excel"]),
+        ("s", 25, ["SAP"]),
+        ("sa", 5, ["SAP"]),
+        ("sap", 25, ["SAP"]),
+        ("py", 5, ["Python"]),
+        ("DDDDDD", 25, []),
+    ]
+    for query, limit, expected in cases:
+        rows = dati.catalogo_export("technology", query, limit)
+        assert [row["value"] for row in rows] == expected
+    assert calls == ["technology"]
+    key = (str(rich_export_db), "technology")
+    assert list(dati._catalogo_cache) == [key]
+    cached_mtime, items = dati._catalogo_cache[key]
+    assert cached_mtime == os.path.getmtime(rich_export_db)
+    assert isinstance(items, tuple)
+    assert all(isinstance(item, tuple) and len(item) == 3 for item in items)
+
+
+def test_catalog_mtime_change_replaces_snapshot_with_one_new_fetch(
+        rich_export_db, monkeypatch):
+    _reset_catalogo_cache()
+    calls = []
+    real_loader = dati._carica_catalogo
+
+    def spy_loader(campo):
+        calls.append(campo)
+        return real_loader(campo)
+
+    monkeypatch.setattr(dati, "_carica_catalogo", spy_loader)
+    assert dati.catalogo_export("technology", "sa") == [{"value": "SAP", "count": 2}]
+    key = (str(rich_export_db), "technology")
+    old_mtime, old_items = dati._catalogo_cache[key]
+    stat = os.stat(rich_export_db)
+    os.utime(rich_export_db, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
+
+    assert dati.catalogo_export("technology", "py") == [{"value": "Python", "count": 2}]
+    assert calls == ["technology", "technology"]
+    assert list(dati._catalogo_cache) == [key]
+    new_mtime, new_items = dati._catalogo_cache[key]
+    assert new_mtime > old_mtime
+    assert new_items is not old_items
+
+
+def test_catalog_concurrent_cold_requests_singleflight(
+        rich_export_db, monkeypatch):
+    _reset_catalogo_cache()
+    calls = []
+    real_loader = dati._carica_catalogo
+
+    def spy_loader(campo):
+        calls.append(campo)
+        time.sleep(0.05)
+        return real_loader(campo)
+
+    monkeypatch.setattr(dati, "_carica_catalogo", spy_loader)
+    queries = ["s", "sa", "sap", "py", "", "DDDDDD", "s", "py"]
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        results = list(pool.map(
+            lambda query: dati.catalogo_export("technology", query, 25), queries))
+    assert calls == ["technology"]
+    assert [row["value"] for row in results[2]] == ["SAP"]
+    assert [row["value"] for row in results[3]] == ["Python"]
+    assert [row["value"] for row in results[4]] == ["Python", "SAP", "Excel"]
+    assert results[5] == []
+
+
+@pytest.mark.parametrize("body", [
+    {"technologies": ["x" * 121]}, {"tech_match": "sometimes"},
+    {"has_salary": "yes"}, {"salary_min": 10, "salary_max": 9},
+    {"unexpected": "must-not-be-dropped"}, {"source_type": "unknown"},
+])
+def test_export_filter_validation_rejects_invalid_or_unsupported_input(body):
+    with pytest.raises(ValueError):
+        dati.normalizza_filtri_export(body, "postings")
+
+
+def test_portal_quote_and_download_receive_the_same_normalized_filters(
+        pg_account, portal_client, monkeypatch):
+    uid = pg_account(100)
+    seen = []
+
+    def estimate(filters):
+        seen.append(filters)
+        return 1
+
+    def write(filters, path, limit):
+        seen.append(filters)
+        return _writer(1)(filters, path, limit)
+
+    monkeypatch.setattr(dati, "stima_export", estimate)
+    monkeypatch.setattr(dati, "scrivi_export", write)
+    client = portal_client(uid)
+    payload = {"tipo": "postings", "country": "it,de", "technology": "Python,SAP",
+               "tech_match": "all", "posted_after": "2026-11-01", "max_rows": 1}
+    quote = client.post("/portale/export/stima", json=payload)
+    assert quote.status_code == 200
+    response = client.post("/portale/export/scarica", json=payload)
+    assert response.status_code == 200
+    assert seen[0] == seen[1] == seen[2]
+    assert seen[0]["countries"] == ["IT", "DE"]
+    assert seen[0]["technologies"] == ["Python", "SAP"]
+    assert seen[0]["tech_match"] == "all"
+
+
+def test_unlocked_companies_payload_contains_logo_and_drawer_identity_fields(
+        pg_account, portal_client, monkeypatch):
+    uid = pg_account(10)
+    reference = "greenhouse:acme"
+    with psycopg.connect(os.environ["TEST_DATABASE_URL"]) as connection:
+        connection.execute(
+            "INSERT INTO portale_rivelazioni (user_id, tipo, riferimento) "
+            "VALUES (%s, 'azienda', %s)", (uid, reference))
+    monkeypatch.setattr(dati, "rivela_azienda", lambda ref: {
+        "company": "Acme", "domain": "acme.example", "logo": "https://acme.example/logo.svg"})
+    response = portal_client(uid).get("/portale/uso")
+    assert response.status_code == 200
+    row = response.json()["rivelazioni"][0]
+    assert row["ref"] == reference
+    assert row["company_domain"] == "acme.example"
+    assert row["logo_url"] == "https://acme.example/logo.svg"
+    assert row["ats"] == "greenhouse"
+    assert row["company_slug"] == "acme"
