@@ -25,16 +25,27 @@ import json
 import logging
 import os
 import re
+import tempfile
+import uuid
 
 import psycopg
 
 from nivult.ats.aziende_dettagli import dipendenti
+from nivult.ats.export_quality import (
+    aggiorna_indice,
+    carica_indice,
+    indice_nuovo,
+    pubblica_generazione,
+    scrivi_indice,
+    stratifica,
+)
 from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
 
 log = logging.getLogger("nivult.ats.esporta")
 
 CARTELLA = "/opt/nivult/exports"
+RUN_ID = uuid.uuid4().hex[:12]
 
 _DESCR = "coalesce((SELECT v FROM unnest(ARRAY[raw->>'description', raw->>'content', raw->>'descriptionHtml', raw->>'descriptionPlain', raw->>'externalDescription', raw->>'jobDescription', raw->>'job_description', raw->>'Job_Description', raw->>'body', raw->>'content_html', raw->>'description_html', raw->>'descriptionBody', raw->>'text', raw->'_jobposting'->>'description', raw->>'ShortDescriptionStr']) v WHERE length(v) >= 80 LIMIT 1), '')"
 
@@ -79,9 +90,17 @@ _ATTIVE_SELECT = f"""
 """
 
 
+def _ultimo_file(cartella: str, prefisso: str) -> str | None:
+    candidati = [os.path.join(cartella, nome) for nome in os.listdir(cartella)
+                 if nome.startswith(prefisso + "-")
+                 and re.search(r"-\d{4}-\d{2}-\d{2}(?:-[0-9a-f]{12})?\.jsonl\.gz$", nome)
+                 and (prefisso.endswith("campione") or "-campione-" not in nome)]
+    return max(candidati) if candidati else None
+
+
 def _apri(nome: str):
     os.makedirs(CARTELLA, exist_ok=True)
-    oggi = dt.date.today().isoformat()
+    oggi = f"{dt.date.today().isoformat()}-{RUN_ID}"
     percorso = f"{CARTELLA}/{nome}-{oggi}.jsonl.gz"
     return percorso, gzip.open(percorso + ".tmp", "wt", encoding="utf-8")
 
@@ -112,7 +131,7 @@ _SKILL_NO = {"dental", "vision", "medical", "life insurance", "401k", "401(k)", 
              "english", "german", "french", "spanish", "italian", "dutch", "portuguese", "chinese", "japanese",
              "swedish", "norwegian", "danish", "finnish", "polish", "russian", "arabic", "georgian",
              "computer science", "bachelor", "master", "phd", "degree", "geography", "history"}
-_SKILL_PAR_RX = re.compile(r"\s*\((computer programming|programming language|software|framework|database|tool|technology|methodology)\)\s*$", re.I)
+_SKILL_PAR_RX = re.compile(r"\s*\((computer programming|programming language|software|framework|database|tool|technology|methodology)\)\s*$", re.IGNORECASE)
 
 
 def _skills_pulite(valori) -> list[str]:
@@ -172,8 +191,8 @@ def _riga_attiva(r, bench: dict) -> dict:
     geo = ({"latitude": lat, "longitude": lon, "source": geo_da}
            if lat is not None else None)
     return {
-        "id": str(r[0]), "title": r[1], "ats": r[2], "company_slug": r[3],
-        "company": r[4], "url": r[5], "country": r[6], "city": r[7],
+        "id": str(r[0]), "title": pulito(r[1]), "ats": r[2], "company_slug": r[3],
+        "company": pulito(r[4]), "url": r[5], "country": r[6], "city": r[7],
         "location": r[8], "language": r[9], "seniority": r[10],
         "remote": r[11], "skills": _skills_pulite(r[12]),
         "company_domain": (str(r[51]).strip().lower()
@@ -189,10 +208,10 @@ def _riga_attiva(r, bench: dict) -> dict:
         "external_id": ext_id, "department": department,
         "hours_type": orario, "duration_type": durata,
         "salary_period": sal_period, "salary_source": sal_da,
-        "salary_text": sal_testo,
+        "salary_text": pulito(sal_testo),
         "posted_at_estimated": True if posted_est else None,
         "technologies": list(tecnologie or []),
-        "summary": sintesi, "summary_source": sintesi_da,
+        "summary": pulito(sintesi), "summary_source": sintesi_da,
         "management_level": mgmt,
         "is_decision_maker": True if decisore else None,
         "shift_schedule": turni, "work_hours": ore,
@@ -259,7 +278,7 @@ def attive(dsn: str, campione: int | None = None) -> int:
     vet_paesi: set = set()
     vet_piattaforme: set = set()
     vet_nuove = 0
-    soglia_24h = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
+    soglia_24h = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
     copertura = {k: 0 for k in ("salary_observed", "salary_estimate",
                                 "description", "language", "category",
                                 "country", "skills", "employment_type",
@@ -269,68 +288,60 @@ def attive(dsn: str, campione: int | None = None) -> int:
                                 "management_level", "valid_through",
                                 "state", "geo", "job_sources",
                                 "department", "salary_text")}
+    indice = indice_nuovo()
+
+    def scrivi(riga: dict) -> None:
+        nonlocal n, vet_nuove
+        if riga.get("country"):
+            vet_paesi.add(riga["country"])
+        if riga.get("ats"):
+            vet_piattaforme.add(riga["ats"])
+        fs = riga.get("first_seen")
+        if fs:
+            if not isinstance(fs, dt.datetime):
+                fs = dt.datetime.combine(fs, dt.time.min, tzinfo=dt.UTC)
+            elif fs.tzinfo is None:
+                fs = fs.replace(tzinfo=dt.UTC)
+            if fs >= soglia_24h:
+                vet_nuove += 1
+        f.write(_riga(**riga))
+        aggiorna_indice(indice, riga)
+        n += 1
+        copertura["salary_observed"] += bool(riga["has_salary"])
+        copertura["salary_estimate"] += bool(riga.get("salary_is_estimate"))
+        copertura["description"] += bool(riga.get("description"))
+        copertura["salary_text"] += bool(riga.get("salary_text"))
+        for chiave, campo in (("language", "language"), ("category", "category"),
+                              ("country", "country"), ("employment_type", "employment_type"),
+                              ("seniority", "seniority"), ("remote", "remote"),
+                              ("valid_through", "valid_through"), ("state", "state"),
+                              ("geo", "geo"), ("department", "department"),
+                              ("management_level", "management_level"),
+                              ("shift_schedule", "shift_schedule"), ("work_hours", "work_hours")):
+            copertura[chiave] += riga.get(campo) is not None
+        for chiave, campo in (("skills", "skills"), ("technologies", "technologies"),
+                              ("summary", "summary"), ("benefits", "benefits"),
+                              ("job_sources", "job_sources")):
+            copertura[chiave] += bool(riga.get(campo))
+
     with psycopg.connect(dsn) as conn:
-        # il benchmark in memoria: stima SOLO dove l'annuncio tace, in
-        # campi SEPARATI e dichiarati — mai mescolata con l'osservato
         bench = _benchmark(conn)
         with conn.cursor(name="esp_attive") as cur:
             cur.itersize = 2000
             cur.execute(f"""{_ATTIVE_SELECT}
                  WHERE j.expired_at IS NULL
-                   -- un annuncio per chiave (titolo+azienda+citta'): nel
-                   -- corpus i doppi restano (10.573 gruppi il 06/09). Al
-                   -- cliente arriva il piu' VECCHIO di ciascun gruppo: il
-                   -- confronto e' sul first_seen (created_at, poi posted_at,
-                   -- poi fetched_at — mai NULL), non sull'id: e' un uuid4,
-                   -- e ordinarlo non ordina niente (fino al 22/09 arrivava
-                   -- un membro a caso del gruppo). Spareggio su id perche'
-                   -- la scelta resti unica e stabile fra due esportazioni.
                    AND NOT EXISTS (SELECT 1 FROM ats_jobs d
                                     WHERE d.duplicate_key = j.duplicate_key
                                       AND d.expired_at IS NULL
                                       AND (COALESCE(d.created_at, d.posted_at, d.fetched_at), d.id)
-                                          < (COALESCE(j.created_at, j.posted_at, j.fetched_at), j.id))"""
-                        + (" LIMIT %s" if campione else ""),
-                        (campione,) if campione else None)
-            for r in cur:
-                if r[6]:
-                    vet_paesi.add(r[6])
-                if r[2]:
-                    vet_piattaforme.add(r[2])
-                fs = r[17]
-                if fs:
-                    if not isinstance(fs, dt.datetime):
-                        fs = dt.datetime.combine(fs, dt.time.min,
-                                                 tzinfo=dt.timezone.utc)
-                    elif fs.tzinfo is None:
-                        fs = fs.replace(tzinfo=dt.timezone.utc)
-                    if fs >= soglia_24h:
-                        vet_nuove += 1
-                riga = _riga_attiva(r, bench)
-                f.write(_riga(**riga))
-                n += 1
-                copertura["salary_observed"] += r[13] is not None
-                copertura["salary_estimate"] += bool(riga.get("salary_is_estimate"))
-                copertura["description"] += bool(r[19])
-                copertura["language"] += r[9] is not None
-                copertura["category"] += r[20] is not None
-                copertura["country"] += r[6] is not None
-                copertura["skills"] += bool(riga["skills"])
-                copertura["employment_type"] += r[21] is not None
-                copertura["seniority"] += r[10] is not None
-                copertura["remote"] += r[11] is not None
-                copertura["technologies"] += bool(riga["technologies"])
-                copertura["summary"] += bool(riga["summary"])
-                copertura["benefits"] += bool(riga["benefits"])
-                copertura["shift_schedule"] += riga["shift_schedule"] is not None
-                copertura["work_hours"] += riga["work_hours"] is not None
-                copertura["management_level"] += riga["management_level"] is not None
-                copertura["valid_through"] += riga["valid_through"] is not None
-                copertura["state"] += riga["state"] is not None
-                copertura["geo"] += riga["geo"] is not None
-                copertura["job_sources"] += bool(riga["job_sources"])
-                copertura["department"] += bool(riga["department"])
-                copertura["salary_text"] += riga["salary_text"] is not None
+                                          < (COALESCE(j.created_at, j.posted_at, j.fetched_at), j.id))""")
+            if campione:
+                for riga in stratifica((_riga_attiva(r, bench) for r in cur), campione):
+                    scrivi(riga)
+            else:
+                for r in cur:
+                    scrivi(_riga_attiva(r, bench))
+    scrivi_indice(percorso + ".indice.json.gz", indice)
     _chiudi(percorso, f, n)
     # il manifest: la copertura di ogni campo, dichiarata. I venditori
     # seri pubblicano i fill-rate; i buchi dichiarati sono un argomento
@@ -353,195 +364,145 @@ def attive(dsn: str, campione: int | None = None) -> int:
 
 def aziende(dsn: str, campione: int | None = None) -> int:
     percorso, f = _apri("aziende-segnali" + ("-campione" if campione else ""))
+    indice_path = percorso.replace("aziende-segnali", "offerte-attive") + ".indice.json.gz"
+    archivio = carica_indice(indice_path)
     n = 0
-    # la copertura dei campi AZIENDA, dichiarata come quella delle offerte
-    # (27/09/2026): il prodotto sono le aziende, e i buchi si mostrano
     copertura: dict[str, int] = {}
-    with psycopg.connect(dsn) as conn:
-        # le competenze più chieste da ciascuna azienda: l'aggregato che
-        # trasforma un mucchio di annunci in un segnale su chi assume cosa
-        skill_per_azienda: dict = {}
-        with conn.cursor(name="esp_skill") as cur:
-            cur.itersize = 5000
-            cur.execute("""
-                SELECT platform_id, slug, s.skill, count(*)
-                  FROM ats_jobs, LATERAL unnest(skills) AS s(skill)
-                 WHERE expired_at IS NULL
-                 GROUP BY 1, 2, 3""")
-            for pid, slug, skill, cnt in cur:
-                skill_per_azienda.setdefault((pid, slug), []).append(
-                    (cnt, skill))
-        # le tecnologie DELL'AZIENDA, con prima e ultima data in cui sono
-        # comparse in un suo annuncio (vista materializzata, rinfrescata
-        # ogni mattina da deploy/rinfresca-viste.sh)
-        tec_per_azienda: dict = {}
-        with conn.cursor(name="esp_tec") as cur:
-            cur.itersize = 5000
-            cur.execute("""
-                SELECT platform_id, slug, technology, annunci, annunci_attivi,
-                       first_verified_at, last_verified_at
-                  FROM azienda_tecnologie""")
-            for pid, slug, tec, tot, att, primo, ultimo in cur:
-                tec_per_azienda.setdefault((pid, slug), []).append(
-                    (att, tot, tec, primo, ultimo))
-        with conn.cursor(name="esp_az") as cur:
-            cur.itersize = 2000
-            cur.execute("""
-                SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
-                       ac.logo_domain, ac.logo_url, ac.job_count,
-                       COALESCE(ac.employees_reg, ac.employees_wd,
-                                ac.employees_site, ac.employees_self,
-                                cd.employees),
-                       COALESCE(ac.industry_reg, ac.industry,
-                                ac.industry_site, ac.pdl_industry,
-                                ac.industry_mix),
-                       ac.employees_reg_band, ac.reg_source,
-                       -- la fonte dei dipendenti la decide la regola unica
-                       -- (aziende_dettagli.dipendenti): qui solo il nome
-                       -- del registro, per size_range_source
-                       ac.reg_source,
-                       CASE WHEN ac.industry_reg IS NOT NULL
-                            THEN ac.reg_source
-                            WHEN ac.industry IS NOT NULL THEN 'wikidata'
-                            WHEN ac.industry_site IS NOT NULL
-                            THEN 'company_site'
-                            WHEN ac.pdl_industry IS NOT NULL
-                            THEN 'pdl (free dataset)'
-                            WHEN ac.industry_mix IS NOT NULL
-                            THEN 'job_mix' END,
-                       (SELECT count(*) FROM ats_jobs j
-                         WHERE j.platform_id = ac.platform_id
-                           AND j.slug = ac.slug AND j.expired_at IS NULL
-                           AND COALESCE(j.posted_at, j.created_at)
-                               > now() - interval '30 days'),
-                       (SELECT array_agg(DISTINCT j.lang) FROM ats_jobs j
-                         WHERE j.platform_id = ac.platform_id
-                           AND j.slug = ac.slug AND j.expired_at IS NULL
-                           AND j.lang IS NOT NULL),
-                       -- 21/09/2026: la scheda azienda (aziende_dettagli)
-                       ac.site_domain, ac.lei, ac.company_name_source,
-                       ad.size_range, ad.size_da, ad.locations,
-                       ad.n_locations, ad.hq_country, ad.hq_state,
-                       ad.hq_city, ad.hq_street, ad.hq_zipcode,
-                       ad.hq_full_address, ad.hq_da, ad.description,
-                       ad.description_da, ad.external_urls, ad.keywords,
-                       ad.employees_best, ad.employees_scope, ad.legal_name,
-                       ad.legal_form, ad.legal_form_code, ad.registration_id,
-                       ad.founded, ad.hq_latitude, ad.hq_longitude,
-                       ac.employees_reg, ac.employees_wd, ac.employees_site,
-                       ac.employees_self_n,
-                       -- la forza del segnale quando industry viene dal mix
-                       -- delle offerte (23/09): chi compra vede la quota
-                       ac.industry_mix_share,
-                       -- la fonte della fondata (24/09): registro o PDL,
-                       -- che da' il solo anno e lo dichiara
-                       ad.founded_da,
-                       -- la fascia PDL per la regola unica quando la scheda
-                       -- manca ancora (tenant nuovo)
-                       ac.pdl_size
-                  FROM ats_companies ac
-                  LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
-                  LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id
-                 WHERE ac.is_active AND ac.job_count > 0"""
-                        + (" ORDER BY ac.job_count DESC LIMIT %s" if campione else ""),
-                        (campione,) if campione else None)
-            for r in cur:
-                cime = sorted(skill_per_azienda.get((r[0], r[1]), []),
-                              reverse=True)[:15]
-                tec = sorted(tec_per_azienda.get((r[0], r[1]), []),
-                             reverse=True)[:25]
-                (sito, lei, nome_da, size_range, size_da, sedi, n_sedi,
-                 hq_paese, hq_stato, hq_citta, hq_via, hq_cap, hq_indirizzo,
-                 hq_da, descr, descr_da, urls, keywords, dip_best, dip_scope,
-                 legal_name, legal_form, legal_form_code, reg_id, fondata,
-                 hq_lat, hq_lon, e_reg, e_wd, e_site, e_self) = r[15:46]
-                # la scheda puo' non esserci ancora (tenant nuovo): allora la
-                # regola unica si applica qui, sugli stessi ingressi
-                if dip_best is None and size_range is None:
-                    dip_best, dip_da, dip_scope, size_range, size_da = dipendenti(
-                        e_reg, e_site, e_self, e_wd, r[9], None, r[48])
-                else:
-                    # la fonte del NUMERO: quella il cui valore e' il numero
-                    # scelto (la fascia puo' venire da un'altra, es. INSEE GE)
-                    dip_da = next((f for f, n in (("wikidata", e_wd), ("sito", e_site), ("registro", e_reg),
-                                                  ("dichiarato", e_self)) if n and int(n) == dip_best), None)
-                hq = ({"country": hq_paese, "state": hq_stato,
-                       "city": hq_citta, "street": hq_via,
-                       "zipcode": hq_cap, "full_address": hq_indirizzo,
-                       "latitude": hq_lat, "longitude": hq_lon,
-                       "source": hq_da} if hq_da else None)
-                # il dominio che conta per chi compra: il sito VERO
-                # (site_domain, dalla scheda-sito), poi il dominio del logo.
-                # Prima `domain` era il logo_domain e basta — la copertura
-                # dichiarata in landing leggeva 26,5% mentre la scheda-sito
-                # ne trova il ~70% (misurato il 04/10/2026: il cruscotto
-                # contava il campo giusto, la vetrina quello sbagliato).
-                # E il prefisso "''" del bug searxng si toglie qui.
-                dominio = (sito or "").lstrip("'") or r[4]
-                f.write(_riga(
-                    ats=r[0], company_slug=r[1], company=r[2], country=r[3],
-                    domain=dominio, logo=r[5], active_jobs=r[6],
-                    employees=dip_best, employees_scope=dip_scope,
-                    employees_source=dip_da, industry=r[8],
-                    employees_legal_entity=e_reg,
-                    employees_legal_entity_band=r[9],
-                    employees_legal_entity_source=r[11],
-                    industry_source=r[12],
-                    industry_mix_share=r[46],
-                    founded_source=r[47],
-                    legal_name=legal_name, legal_form=legal_form,
-                    legal_form_code=legal_form_code,
-                    registration_id=reg_id, founded=fondata,
-                    jobs_posted_30d=r[13],
-                    languages=list(r[14] or []),
-                    top_skills=[{"skill": s, "jobs": c} for c, s in cime],
-                    website=sito, lei=lei, company_name_source=nome_da,
-                    size_range=size_range, size_range_source=size_da,
-                    locations=list(sedi or []), n_locations=n_sedi,
-                    headquarters=hq, description=pulito(descr) or None,
-                    description_source=descr_da,
-                    external_urls=list(urls or []), keywords=keywords,
-                    technologies=[{"technology": t, "active_jobs": a,
-                                   "jobs": tot, "first_verified_at": p,
-                                   "last_verified_at": u}
-                                  for a, tot, t, p, u in tec]))
-                n += 1
-                copertura["country"] = copertura.get("country", 0) + (r[3] is not None)
-                copertura["domain"] = copertura.get("domain", 0) + bool(dominio)
-                copertura["website"] = copertura.get("website", 0) + bool(sito)
-                copertura["industry"] = copertura.get("industry", 0) + bool(r[8])
-                copertura["size_range"] = copertura.get("size_range", 0) + bool(size_range)
-                copertura["employees"] = copertura.get("employees", 0) + (dip_best is not None)
-                copertura["legal_name"] = copertura.get("legal_name", 0) + bool(legal_name)
-                copertura["legal_form"] = copertura.get("legal_form", 0) + bool(legal_form)
-                copertura["registration_id"] = copertura.get("registration_id", 0) + bool(reg_id)
-                copertura["founded"] = copertura.get("founded", 0) + bool(fondata)
-                copertura["headquarters"] = copertura.get("headquarters", 0) + bool(hq)
-                copertura["description"] = copertura.get("description", 0) + bool(pulito(descr))
-                copertura["technologies"] = copertura.get("technologies", 0) + bool(tec)
-                copertura["top_skills"] = copertura.get("top_skills", 0) + bool(cime)
-                copertura["locations"] = copertura.get("locations", 0) + bool(sedi)
-                copertura["external_urls"] = copertura.get("external_urls", 0) + bool(urls)
-                copertura["lei"] = copertura.get("lei", 0) + bool(lei)
-                copertura["languages"] = copertura.get("languages", 0) + bool(r[14])
+    with psycopg.connect(dsn) as conn, conn.cursor(name="esp_az") as cur:
+        cur.itersize = 2000
+        cur.execute("""
+            SELECT ac.platform_id, ac.slug, ac.company_name, ac.country,
+                   ac.logo_domain, ac.logo_url, ac.job_count,
+                   COALESCE(ac.employees_reg, ac.employees_wd,
+                            ac.employees_site, ac.employees_self, cd.employees),
+                   COALESCE(ac.industry_reg, ac.industry, ac.industry_site,
+                            ac.pdl_industry, ac.industry_mix),
+                   ac.employees_reg_band, ac.reg_source, ac.reg_source,
+                   CASE WHEN ac.industry_reg IS NOT NULL THEN ac.reg_source
+                        WHEN ac.industry IS NOT NULL THEN 'wikidata'
+                        WHEN ac.industry_site IS NOT NULL THEN 'company_site'
+                        WHEN ac.pdl_industry IS NOT NULL THEN 'pdl (free dataset)'
+                        WHEN ac.industry_mix IS NOT NULL THEN 'job_mix' END,
+                   NULL, NULL,
+                   ac.site_domain, ac.lei, ac.company_name_source,
+                   ad.size_range, ad.size_da, ad.locations, ad.n_locations,
+                   ad.hq_country, ad.hq_state, ad.hq_city, ad.hq_street,
+                   ad.hq_zipcode, ad.hq_full_address, ad.hq_da, ad.description,
+                   ad.description_da, ad.external_urls, ad.keywords,
+                   ad.employees_best, ad.employees_scope, ad.legal_name,
+                   ad.legal_form, ad.legal_form_code, ad.registration_id,
+                   ad.founded, ad.hq_latitude, ad.hq_longitude,
+                   ac.employees_reg, ac.employees_wd, ac.employees_site,
+                   ac.employees_self_n, ac.industry_mix_share, ad.founded_da,
+                   ac.pdl_size
+              FROM ats_companies ac
+              LEFT JOIN company_domains cd ON cd.domain = ac.logo_domain
+              LEFT JOIN aziende_dettagli ad ON ad.company_id = ac.id""")
+        arricchite = {}
+        for r in cur:
+            key = f"{r[0]}\0{r[1]}"
+            if key in archivio:
+                arricchite[key] = r
+
+    for key, canon in archivio.items():
+        r = list(arricchite.get(key) or [None] * 49)
+        r[0], r[1] = canon["ats"], canon["company_slug"]
+        cime = canon["top_skills"]
+        tec = canon["technologies"]
+        (sito, lei, nome_da, size_range, size_da, sedi, n_sedi,
+         hq_paese, hq_stato, hq_citta, hq_via, hq_cap, hq_indirizzo,
+         hq_da, descr, descr_da, urls, keywords, dip_best, dip_scope,
+         legal_name, legal_form, legal_form_code, reg_id, fondata,
+         hq_lat, hq_lon, e_reg, e_wd, e_site, e_self) = r[15:46]
+        if dip_best is None and size_range is None:
+            dip_best, dip_da, dip_scope, size_range, size_da = dipendenti(
+                e_reg, e_site, e_self, e_wd, r[9], None, r[48])
+        else:
+            dip_da = next((fonte for fonte, numero in (("wikidata", e_wd), ("sito", e_site),
+                          ("registro", e_reg), ("dichiarato", e_self))
+                          if numero and int(numero) == dip_best), None)
+        hq = ({"country": hq_paese, "state": hq_stato, "city": hq_citta,
+               "street": hq_via, "zipcode": hq_cap, "full_address": hq_indirizzo,
+               "latitude": hq_lat, "longitude": hq_lon, "source": hq_da}
+              if hq_da else None)
+        dominio = ((sito or "").lstrip("'") or r[4] or canon.get("domain"))
+        company = pulito(canon.get("company") or r[2])
+        country = canon.get("country") or r[3]
+        f.write(_riga(
+            ats=canon["ats"], company_slug=canon["company_slug"], company=company,
+            country=country, domain=dominio, logo=r[5],
+            active_jobs=canon["active_jobs"], employees=dip_best,
+            employees_scope=dip_scope, employees_source=dip_da, industry=r[8],
+            employees_legal_entity=e_reg, employees_legal_entity_band=r[9],
+            employees_legal_entity_source=r[11], industry_source=r[12],
+            industry_mix_share=r[46], founded_source=r[47], legal_name=legal_name,
+            legal_form=legal_form, legal_form_code=legal_form_code,
+            registration_id=reg_id, founded=fondata,
+            jobs_posted_30d=canon["jobs_posted_30d"],
+            languages=canon["languages"], top_skills=cime, website=sito, lei=lei,
+            company_name_source=nome_da, size_range=size_range,
+            size_range_source=size_da, locations=list(sedi or []),
+            n_locations=n_sedi, headquarters=hq, description=pulito(descr) or None,
+            description_source=descr_da, external_urls=list(urls or []),
+            keywords=keywords, technologies=tec))
+        n += 1
+        copertura["country"] = copertura.get("country", 0) + (country is not None)
+        copertura["domain"] = copertura.get("domain", 0) + bool(dominio)
+        copertura["website"] = copertura.get("website", 0) + bool(sito)
+        copertura["industry"] = copertura.get("industry", 0) + bool(r[8])
+        copertura["size_range"] = copertura.get("size_range", 0) + bool(size_range)
+        copertura["employees"] = copertura.get("employees", 0) + (dip_best is not None)
+        copertura["legal_name"] = copertura.get("legal_name", 0) + bool(legal_name)
+        copertura["legal_form"] = copertura.get("legal_form", 0) + bool(legal_form)
+        copertura["registration_id"] = copertura.get("registration_id", 0) + bool(reg_id)
+        copertura["founded"] = copertura.get("founded", 0) + bool(fondata)
+        copertura["headquarters"] = copertura.get("headquarters", 0) + bool(hq)
+        copertura["description"] = copertura.get("description", 0) + bool(pulito(descr))
+        copertura["technologies"] = copertura.get("technologies", 0) + bool(tec)
+        copertura["top_skills"] = copertura.get("top_skills", 0) + bool(cime)
+        copertura["locations"] = copertura.get("locations", 0) + bool(sedi)
+        copertura["external_urls"] = copertura.get("external_urls", 0) + bool(urls)
+        copertura["lei"] = copertura.get("lei", 0) + bool(lei)
+        copertura["languages"] = copertura.get("languages", 0) + bool(canon["languages"])
     _chiudi(percorso, f, n)
-    # il manifest delle offerte e' gia' scritto da attive(): qui si aggiunge
-    # la chiave coverage_aziende, stessa atomica' (tmp + rename)
+    nome_manifest = f"{CARTELLA}/manifest-campione.json" if campione else f"{CARTELLA}/manifest-ultimo.json"
+    try:
+        with open(nome_manifest) as mf:
+            manifest = json.load(mf)
+    except (OSError, json.JSONDecodeError):
+        manifest = {"date": dt.date.today().isoformat()}
+    manifest["companies_rows"] = n
     if not campione:
-        nome_manifest = f"{CARTELLA}/manifest-ultimo.json"
-        try:
-            with open(nome_manifest) as mf:
-                manifest = json.load(mf)
-        except (OSError, json.JSONDecodeError):
-            manifest = {"date": dt.date.today().isoformat()}
         manifest["coverage_aziende"] = {k: round(100 * v / max(n, 1), 1)
                                         for k, v in copertura.items()}
-        with open(nome_manifest + ".tmp", "w") as mf:
-            json.dump(manifest, mf, indent=1)
-        os.replace(nome_manifest + ".tmp", nome_manifest)
-        log.info("manifest aziende: %s", manifest["coverage_aziende"])
         _vetrina_merge({"aziende": n})
+    with open(nome_manifest + ".tmp", "w") as mf:
+        json.dump(manifest, mf, indent=1, default=str)
+    os.replace(nome_manifest + ".tmp", nome_manifest)
     return n
+
+
+def esporta_coppia(dsn: str, campione: int | None = None) -> tuple[int, int]:
+    global CARTELLA
+    radice = CARTELLA
+    staging = tempfile.mkdtemp(prefix=".staging-", dir=radice)
+    try:
+        CARTELLA = staging
+        n_jobs = attive(dsn, campione)
+        n_aziende = aziende(dsn, campione)
+        nome_manifest = "manifest-campione.json" if campione else "manifest-ultimo.json"
+        with open(os.path.join(staging, nome_manifest)) as f:
+            manifest = json.load(f)
+        jobs_path = _ultimo_file(staging, "offerte-attive-campione" if campione else "offerte-attive")
+        companies_path = _ultimo_file(staging, "aziende-segnali-campione" if campione else "aziende-segnali")
+        pubblica_generazione(staging, radice, manifest, os.path.basename(jobs_path),
+                             os.path.basename(companies_path), nome_manifest)
+        return n_jobs, n_aziende
+    finally:
+        CARTELLA = radice
+        if os.path.isdir(staging):
+            import shutil
+            shutil.rmtree(staging)
 
 
 def scadute(dsn: str, giorni: int | None = None) -> int:
@@ -550,7 +511,7 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
               if giorni else "")
     n = 0
     chiuse_24h = 0
-    soglia_24h = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
+    soglia_24h = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
     with psycopg.connect(dsn) as conn:
         # 09/10/2026: i contatori della vetrina NON possono venire dal
         # conteggio del file — il giro notturno scrive solo le chiuse
@@ -574,7 +535,7 @@ def scadute(dsn: str, giorni: int | None = None) -> int:
                 (giorni,) if giorni else None)
             for r in cur:
                 f.write(_riga(
-                    id=str(r[0]), title=r[1], ats=r[2], company_slug=r[3],
+                    id=str(r[0]), title=pulito(r[1]), ats=r[2], company_slug=r[3],
                     url=r[4], country=r[5], city=r[6], language=r[7],
                     seniority=r[8], posted_at=r[9], closed_at=r[10],
                     first_seen=r[11]))
@@ -599,11 +560,12 @@ def flusso(dsn: str) -> dict:
     os.makedirs(cartella, exist_ok=True)
     cursore_file = f"{cartella}/cursore.json"
     try:
-        da = json.load(open(cursore_file))["t"]
+        with open(cursore_file) as f:
+            da = json.load(f)["t"]
     except Exception:                                # noqa: BLE001
-        da = (dt.datetime.now(dt.timezone.utc)
+        da = (dt.datetime.now(dt.UTC)
               - dt.timedelta(minutes=15)).isoformat()
-    adesso = dt.datetime.now(dt.timezone.utc)
+    adesso = dt.datetime.now(dt.UTC)
     marca = adesso.strftime("%Y%m%d-%H%M%S")
     percorso = f"{cartella}/novita-{marca}.jsonl.gz"
     stats = {"nuove": 0, "aggiornate": 0, "chiuse": 0}
@@ -628,15 +590,15 @@ def flusso(dsn: str) -> dict:
                    AND j.expired_at IS NULL""", (da, adesso))
             for r in cur:
                 f.write(_riga(
-                    event="new", id=str(r[0]), title=r[1], ats=r[2],
-                    company_slug=r[3], company=r[4], url=r[5],
+                    event="new", id=str(r[0]), title=pulito(r[1]), ats=r[2],
+                    company_slug=r[3], company=pulito(r[4]), url=r[5],
                     country=r[6], city=r[7], language=r[8],
                     seniority=r[9], remote=r[10],
                     skills=_skills_pulite(r[11]),
                     salary_min=float(r[12]) if r[12] is not None else None,
                     salary_max=float(r[13]) if r[13] is not None else None,
                     salary_currency=r[14], posted_at=r[15],
-                    first_seen=r[16], description=r[17], source_type=r[18]))
+                    first_seen=r[16], description=pulito(r[17]), source_type=r[18]))
                 stats["nuove"] += 1
         with conn.cursor(name="fl_aggiornate") as cur:
             cur.itersize = 2000
@@ -668,7 +630,7 @@ def flusso(dsn: str) -> dict:
                    AND expired_at <= %s::timestamptz""", (da, adesso))
             for r in cur:
                 f.write(_riga(
-                    event="closed", id=str(r[0]), title=r[1], ats=r[2],
+                    event="closed", id=str(r[0]), title=pulito(r[1]), ats=r[2],
                     company_slug=r[3], url=r[4], country=r[5],
                     posted_at=r[6], closed_at=r[7]))
                 stats["chiuse"] += 1
@@ -697,10 +659,13 @@ def main(argv: list[str] | None = None) -> int:
     dsn = os.environ.get(
         "ATS_DATABASE_URL",
         "postgresql://giusepperanno@127.0.0.1:5432/nivult_ats")
-    if args.attive:
-        print("attive:", attive(dsn, args.campione))
-    if args.aziende:
-        print("aziende:", aziende(dsn, args.campione))
+    if args.attive and args.aziende:
+        print("attive e aziende:", esporta_coppia(dsn, args.campione))
+    else:
+        if args.attive:
+            print("attive:", attive(dsn, args.campione))
+        if args.aziende:
+            print("aziende:", aziende(dsn, args.campione))
     if args.scadute:
         print("scadute:", scadute(dsn, args.giorni))
     if args.flusso:

@@ -36,7 +36,7 @@ from nivult.ats.source_type import COMPANY_SQL, SOURCE_TYPE_SQL
 from nivult.ats.testo import pulito
 from nivult.ats.titoli import pulisci as pulisci_titolo
 
-from .dati import (_cursore, _iso, _leggi_cursore, _like, _norm_ts)
+from .dati import _cursore, _iso, _leggi_cursore, _like, _norm_ts
 
 log = logging.getLogger("nivult.api_clienti.vivo")
 
@@ -182,13 +182,13 @@ def _dove(filtri: dict, portale: bool = False) -> tuple[str, dict]:
             "(j.posted_at IS NULL OR j.posted_at <= now())",
             # un annuncio per chiave di dedup: il piu' vecchio del gruppo,
             # la stessa regola dell'export
-            "NOT EXISTS (SELECT 1 FROM ats_jobs d"
-            "  WHERE d.duplicate_key = j.duplicate_key"
-            "    AND j.duplicate_key IS NOT NULL"
-            "    AND d.expired_at IS NULL"
-            "    AND (COALESCE(d.created_at, d.posted_at, d.fetched_at), d.id)"
-            "        < (COALESCE(j.created_at, j.posted_at, j.fetched_at),"
-            "           j.id))"]
+            ("NOT EXISTS (SELECT 1 FROM ats_jobs d"
+             "  WHERE d.duplicate_key = j.duplicate_key"
+             "    AND j.duplicate_key IS NOT NULL"
+             "    AND d.expired_at IS NULL"
+             "    AND (COALESCE(d.created_at, d.posted_at, d.fetched_at), d.id)"
+             "        < (COALESCE(j.created_at, j.posted_at, j.fetched_at),"
+             "           j.id))")]
     par: dict = {}
     for campo, colonna, trasforma in (
             ("country", "j.country", str.upper), ("category", "x.family", None),
@@ -370,9 +370,9 @@ def _riga_export(j: dict) -> dict:
     geo = ({"latitude": j["latitude"], "longitude": j["longitude"],
             "source": j["geo_da"]} if j.get("latitude") is not None else None)
     riga = {
-        "id": str(j["id"]), "title": pulisci_titolo(j["title"], j["url"]),
+        "id": str(j["id"]), "title": pulito(pulisci_titolo(j["title"], j["url"])),
         "ats": j["platform_id"],
-        "company_slug": j["slug"], "company": j["company"], "url": j["url"],
+        "company_slug": j["slug"], "company": pulito(j["company"]), "url": j["url"],
         "source_type": j.get("source_type") or "direct",
         "company_domain": j.get("company_domain"),
         "country": j["country"], "city": j["city"], "location": j["location"],
@@ -392,10 +392,10 @@ def _riga_export(j: dict) -> dict:
         "external_id": j["external_id"], "department": j["department"],
         "hours_type": j["orario"], "duration_type": j["durata"],
         "salary_period": j["salary_period"], "salary_source": j["salary_da"],
-        "salary_text": j["salary_text"],
+        "salary_text": pulito(j["salary_text"]),
         "posted_at_estimated": True if j["posted_at_estimated"] else None,
         "technologies": list(j["tecnologie"] or []),
-        "summary": j["sintesi"], "summary_source": j["sintesi_da"],
+        "summary": pulito(j["sintesi"]), "summary_source": j["sintesi_da"],
         "management_level": j["management_level"],
         "is_decision_maker": True if j["is_decision_maker"] else None,
         "shift_schedule": j["shift_schedule"], "work_hours": j["work_hours"],

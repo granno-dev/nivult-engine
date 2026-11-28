@@ -22,7 +22,12 @@ COMPANY_SQL = """CASE WHEN co.source_type = 'aggregator'
                   NULLIF(btrim(j.raw->>'firma'), ''),
                   NULLIF(btrim(j.raw->>'company_name'), ''),
                   NULLIF(btrim(j.raw->>'Company_Name'), '')) END"""
-SOURCE_TYPE_SQL = "COALESCE(co.source_type, 'direct')"
+SOURCE_TYPE_SQL = """COALESCE(co.source_type, CASE
+    WHEN j.platform_id IN ('francetravail','bundesanstellung','arbetsformedlingen',
+                           'eures','nav','mycareersfuture','epraca','nva')
+        THEN 'public_board'
+    WHEN j.platform_id = 'agenzie' THEN 'staffing'
+    ELSE 'direct' END)"""
 
 
 def da_blocklist(dominio: str) -> bool:

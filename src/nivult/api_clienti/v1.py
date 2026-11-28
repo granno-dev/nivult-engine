@@ -11,6 +11,7 @@ risultati vuoti, errori e guasti del contatore non producono dati gratuiti.
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import math
 import os
@@ -49,7 +50,7 @@ def _volume_mensile(cliente: dict) -> int:
     try:
         volume = (chiavi.volume_per_utente(str(cliente["user_id"]))
                   if cliente.get("user_id") else int(cliente["crediti_mensili"]))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(503, "credit counter temporarily unavailable") from exc
     cliente["monthly_tier"] = volume
     return volume
@@ -186,7 +187,7 @@ def _richiedi_volume(cliente: dict, minimo: int, prodotto: str) -> None:
     periodo = cliente.get("current_period_end")
     if attivo and stato == "scheduled_cancel" and periodo:
         if isinstance(periodo, str):
-            periodo = datetime.fromisoformat(periodo.replace("Z", "+00:00"))
+            periodo = datetime.fromisoformat(periodo)
         if periodo.tzinfo is None:
             periodo = periodo.replace(tzinfo=UTC)
         attivo = periodo > datetime.now(UTC)
@@ -212,6 +213,9 @@ def _pagina(funzione, filtri: dict, cursore: str | None, limite: int) -> dict:
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"data": righe, "next_cursor": prossimo, "count_page": len(righe)}
+
+
+CLIENTE = Depends(_cliente)
 
 
 def _normalizza_ats(valore: str | None) -> str | None:
@@ -289,7 +293,7 @@ def jobs(request: Request, country: str | None = None, category: str | None = No
          salary_max: str | None = None, posted_after: str | None = None,
          posted_before: str | None = None, dal: str | None = None,
          limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-         cursor: str | None = None, cliente=Depends(_cliente)):
+         cursor: str | None = None, cliente=CLIENTE):
     """Cerca offerte attive; i filtri keyword accettano valori multipli separati
     da virgola. ``exclude_ats`` esclude le sorgenti indicate. ``q`` richiede
     tutti i termini, ``q_any`` almeno una delle massimo 15 keyword; ``title``
@@ -319,7 +323,7 @@ def companies(request: Request, country: str | None = None,
               technology: str | None = None, employees_min: str | None = None,
               employees_max: str | None = None,
               limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-              cursor: str | None = None, cliente=Depends(_cliente)):
+              cursor: str | None = None, cliente=CLIENTE):
     minimo, massimo = _valida_employees(employees_min, employees_max)
     risposta = _pagina(
         dati.aziende,
@@ -331,7 +335,7 @@ def companies(request: Request, country: str | None = None,
 
 
 @router.get("/companies/{piattaforma}/{slug}")
-def company(request: Request, piattaforma: str, slug: str, cliente=Depends(_cliente)):
+def company(request: Request, piattaforma: str, slug: str, cliente=CLIENTE):
     _limite_con_saldo(cliente, 1, chiavi.COSTO_COMPANY)
     azienda = dati.azienda(piattaforma, slug)
     if azienda is None:
@@ -343,7 +347,7 @@ def company(request: Request, piattaforma: str, slug: str, cliente=Depends(_clie
 @router.get("/changes")
 def changes(request: Request, since: str | None = None, cursor: str | None = None,
             limit: int = Query(LIMITE_DEFAULT, ge=1, le=LIMITE_MASSIMO),
-            cliente=Depends(_cliente)):
+            cliente=CLIENTE):
     if not since or not since.strip():
         raise HTTPException(400, "the 'since' parameter is required: an ISO 8601 date, "
                                  "e.g. 2026-09-01T00:00:00Z")
@@ -378,7 +382,7 @@ def _manifest_pubblico(stato: dict) -> dict:
 
 
 @router.get("/exports/latest")
-def export_latest(request: Request, cliente=Depends(_cliente)):
+def export_latest(request: Request, cliente=CLIENTE):
     _richiedi_volume(cliente, SOGLIA_BULK, "the daily bulk export")
     stato = _manifest_pubblico(dati.stato_export())
     _servizio(cliente)
@@ -387,7 +391,7 @@ def export_latest(request: Request, cliente=Depends(_cliente)):
 
 
 @router.get("/exports/latest/{nome}")
-def export_file(request: Request, nome: str, cliente=Depends(_cliente)):
+def export_file(request: Request, nome: str, cliente=CLIENTE):
     if cliente.get("via") == "rapidapi":
         raise HTTPException(403, "the daily bulk export is not part of the "
                                  "RapidAPI plans — write to hello@nivult.com")
@@ -407,7 +411,7 @@ def export_file(request: Request, nome: str, cliente=Depends(_cliente)):
 
 
 @router.get("/coverage")
-def coverage(request: Request, cliente=Depends(_cliente)):
+def coverage(request: Request, cliente=CLIENTE):
     risposta = dati.copertura()
     _servizio(cliente)
     return JSONResponse(risposta, headers={} if cliente.get("via") == "rapidapi"
@@ -415,7 +419,7 @@ def coverage(request: Request, cliente=Depends(_cliente)):
 
 
 @router.get("/usage")
-def usage(request: Request, cliente=Depends(_cliente)):
+def usage(request: Request, cliente=CLIENTE):
     if cliente.get("via") == "rapidapi":
         return {"via": "rapidapi",
                 "note": "usage quotas are managed by the RapidAPI plan"}
@@ -498,12 +502,27 @@ def _campione_export(tipo: str) -> str | None:
         return None
     nome = os.path.basename(configurato)
     radice = Path(os.environ.get("EXPORT_DIR") or os.path.dirname(configurato))
+    manifest_path = radice / "manifest-campione.json"
+    if manifest_path.is_file():
+        try:
+            with manifest_path.open(encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return None
+        if manifest.get("state") != "ready":
+            return None
+        chiave = "jobs" if tipo == "offerte" else "companies"
+        nome_file = (manifest.get("files") or {}).get(chiave)
+        if not nome_file or os.path.basename(nome_file) != nome_file:
+            return None
+        percorso = radice / nome_file
+        return str(percorso) if percorso.is_file() else None
     ultimo = radice / nome
     if ultimo.is_file():
         return str(ultimo)
     prefisso = nome.split("-campione-", 1)[0]
     rx = re.compile(r"^" + re.escape(prefisso) +
-                    r"-campione-(\d{4}-\d{2}-\d{2})\.jsonl\.gz$")
+                    r"-campione-(\d{4}-\d{2}-\d{2})(?:-[0-9a-f]{12})?\.jsonl\.gz$")
     candidati: list[tuple[str, str]] = []
     try:
         for percorso in radice.iterdir():

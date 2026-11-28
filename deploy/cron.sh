@@ -82,34 +82,38 @@ RIGHE=$(cat <<'EOF'
 */30 * * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/retention-utenti.sh >> /var/log/nivult-retention.log 2>&1
 10 * * * * /opt/nivult/engine/deploy/digests.sh >> /var/log/nivult-digests.log 2>&1
+*/5 * * * * /opt/nivult/engine/deploy/tracker-notifications.sh >> /var/log/nivult-tracker-notifications.log 2>&1
 */5 * * * * cd /opt/nivult/engine && .venv/bin/python -m nivult.ats.sentinella >> /var/log/nivult-sentinella.log 2>&1
 0 0,6,12,18 * * * /opt/nivult/engine/deploy/salute.sh >> /var/log/nivult-salute.log 2>&1
 # il flusso si tiene 7 giorni (era 48 ore): /v1/changes serve il delta feed
 # da questi file, e un cliente che non legge nel weekend non deve perdere
 # i cambiamenti del sabato (23/09/2026)
 20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +10080 -delete
-15 6 * * * find /opt/nivult/exports -name "*.jsonl.gz" -mtime +7 -delete
+# Dopo il builder delle 13:30: prima archiviazione protetta, poi retention.
+# Il && impedisce alla retention di partire se i pin o l'archivio falliscono.
+30 15 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1 && /opt/nivult/engine/deploy/mantieni-export.sh >> /var/log/nivult-retention-export.log 2>&1
 30 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.wikidata_ditte --limite 1500 >> /var/log/nivult-esporta.log 2>&1
 35 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.benchmark_salari >> /var/log/nivult-esporta.log 2>&1
 40 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.segnali --aggiorna --segnali >> /var/log/nivult-esporta.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" /opt/nivult/engine/deploy/sotto-limite.sh 8G 400\% .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
 # il campione gratuito per la vetrina B2B (28/09/2026): riga a parte perche'
 # --campione SOSTITUISCE il file — nella riga dell'export intero lo ridurrebbe
-# a 2.000 righe. Il retention di notte lo cancella: questa riga lo rifa'.
+# a 2.000 righe. La retention protegge sempre la coppia campione corrente.
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" /opt/nivult/engine/deploy/sotto-limite.sh 8G 400\% .venv/bin/python -m nivult.ats.esporta --attive --aziende --campione 500 >> /var/log/nivult-esporta.log 2>&1
 # le pagine SEO della vetrina: numeri vivi dal DB ATS, fill rate dal daily
 # export DuckDB. Il lastmod segue content_updated_at, non la data di build.
 50 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb .venv/bin/python -m nivult.ats.pagine_seo >> /var/log/nivult-pagine-seo.log 2>&1; /opt/nivult/engine/deploy/pubblica-vetrina.sh
 # il DuckDB dei clienti, DAGLI EXPORT appena scritti: /v1 legge da qui,
-# mai dal Postgres di produzione. Sul volume dedicato (23/09/2026: il
-# disco di root non regge il file da 15 GB + il ciclo notturno).
+# mai dal Postgres di produzione. Vive sul disco di root (29/10/2026: il
+# volume dedicato non regge il file da oltre 40 GB + la copia temporanea).
 # L'orario operativo e' 13:30, DOPO gli export: alle 05:55 il builder
 # fotografava l'export di IERI e l'API serviva dati vecchi di 30 ore.
 # Se l'export sfora, il builder ASPETTA il file di oggi fino a 60 minuti;
 # se manca del tutto conserva il db di ieri invece di svuotare le tabelle.
-# Un thread e 2 GB: il motore riversa sul volume invece di chiedere RAM
-# per ogni thread sulle righe JSONL piu' grandi.
-30 13 * * * cd /opt/nivult/engine && AGG_THREADS=1 AGG_MEMORIA=2GB API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+# Un thread e 4 GB: il motore riversa sul volume invece di chiedere RAM
+# per ogni thread sulle righe JSONL piu' grandi. Il lock e' condiviso col
+# recupero manuale: mai due builder sullo stesso file temporaneo.
+30 13 * * * cd /opt/nivult/engine && AGG_THREADS=1 AGG_MEMORIA=4GB API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb flock -w 7200 /var/run/nivult-api-clienti-aggiorna.lock .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 # Controlli giornalieri dei due prodotti; --no-notify resta riservato ai test.
 35 8 * * * /opt/nivult/engine/.venv/bin/python /opt/nivult/engine/deploy/canarino.py >> /var/log/canarino.log 2>&1
 30 4 * * * /opt/nivult/engine/deploy/passo-diurno.sh estrai-extra nivult.ats.estrai_extra --limite 200000
@@ -135,10 +139,7 @@ RIGHE=$(cat <<'EOF'
 0 23 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 5400 .venv/bin/python -m nivult.ats.jsonld --scopri --limite 1500 --thread 4 >> /var/log/nivult-jsonld.log 2>&1
 15 22 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 1800 .venv/bin/python -m nivult.ats.radar_indeed --giro --limite 300 >> /var/log/nivult-radar-indeed.log 2>&1
 30 21 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" timeout 3600 .venv/bin/python -m nivult.ats.bilanci --esef --limite 400 >> /var/log/nivult-bilanci.log 2>&1
-20 6 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
 0 9 * * * cd /opt/nivult/engine && ATS_DATABASE_URL="postgresql://nivult:$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-)@127.0.0.1:5432/nivult_ats" .venv/bin/python /opt/nivult/pulisci_domini.py >> /opt/nivult/logs/pulisci_domini.log 2>&1
-50 6 * * * find /opt/nivult/exports -type f -name "offerte-attive-*.jsonl.gz" -mtime +1 -delete
-15 6 * * * find /opt/nivult/exports -maxdepth 1 -name "offerte-*-2026*.jsonl.gz" -mtime +2 -delete; find /opt/nivult/exports -maxdepth 1 -name "aziende-segnali-2026*.jsonl.gz" -mtime +2 -delete
 16 6 * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mtime +7 -delete 2>/dev/null; true
 5 6 * * * cd /opt/nivult/engine && LOTTO=2000 .venv/bin/python scripts/ripulisci_sintesi.py >> /opt/nivult/engine/logs/ripulisci-sintesi.log 2>&1
 # 11/10/2026: era 06:50, sopra l'export — e la query delle bacheche (3-4 ore
@@ -191,15 +192,20 @@ OBSOLETE=$(cat <<'EOF'
 0 3 * * * /opt/nivult/backup.sh >> /var/log/nivult-backup.log 2>&1
 0 5 * * * /opt/nivult/engine/deploy/ponte-ats.sh >> /var/log/nivult-ponte-ats.log 2>&1
 40 4 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
+20 6 * * * /opt/nivult/archivia-sul-n5.sh >> /var/log/nivult-archivio.log 2>&1
+15 6 * * * find /opt/nivult/exports -name "*.jsonl.gz" -mtime +7 -delete
+50 6 * * * find /opt/nivult/exports -type f -name "offerte-attive-*.jsonl.gz" -mtime +1 -delete
+15 6 * * * find /opt/nivult/exports -maxdepth 1 -name "offerte-*-2026*.jsonl.gz" -mtime +2 -delete; find /opt/nivult/exports -maxdepth 1 -name "aziende-segnali-2026*.jsonl.gz" -mtime +2 -delete
 20 * * * * find /opt/nivult/exports/flusso -name "novita-*.jsonl.gz" -mmin +2880 -delete
 20 7 * * * docker exec -i nivult-db-1 psql -U nivult -d nivult_ats -c "REFRESH MATERIALIZED VIEW CONCURRENTLY azienda_tecnologie" >> /var/log/nivult-esporta.log 2>&1
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.esporta --attive --campione 2000 >> /var/log/nivult-esporta.log 2>&1
 20 7 * * * /opt/nivult/engine/deploy/rinfresca-viste.sh >> /var/log/nivult-esporta.log 2>&1
 50 6 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python scripts/costruisci_aziende.py --bacheche >> /opt/nivult/engine/logs/costruisci-aziende.log 2>&1
 50 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" .venv/bin/python -m nivult.ats.pagine_seo >> /var/log/nivult-pagine-seo.log 2>&1; /opt/nivult/engine/deploy/pubblica-vetrina.sh
-40 7 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
-40 7 * * * cd /opt/nivult/engine && AGG_THREADS=1 AGG_MEMORIA=2GB API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
-30 13 * * * cd /opt/nivult/engine && AGG_MEMORIA=10GB API_CLIENTI_DB=/mnt/HC_Volume_106941692/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+40 7 * * * cd /opt/nivult/engine && API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+40 7 * * * cd /opt/nivult/engine && AGG_THREADS=1 AGG_MEMORIA=2GB API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+30 13 * * * cd /opt/nivult/engine && AGG_THREADS=1 AGG_MEMORIA=2GB API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb flock -w 7200 /var/run/nivult-api-clienti-aggiorna.lock .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
+30 13 * * * cd /opt/nivult/engine && AGG_MEMORIA=10GB API_CLIENTI_DB=/opt/nivult/api-clienti/api-clienti.duckdb .venv/bin/python -m nivult.api_clienti.aggiorna >> /var/log/nivult-api-clienti.log 2>&1
 30 2 * * * /opt/nivult/engine/deploy/sotto-limite.sh 10G 600% /opt/nivult/ats-nightly.sh >> /opt/nivult/engine/logs/ats-cron.log 2>&1
 45 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" /opt/nivult/engine/deploy/sotto-limite.sh 8G 400% .venv/bin/python -m nivult.ats.esporta --attive --aziende --scadute --giorni 7 >> /var/log/nivult-esporta.log 2>&1
 46 5 * * * cd /opt/nivult/engine && PW=$(grep -E "^POSTGRES_PASSWORD=" /opt/nivult/.env | head -1 | cut -d= -f2-) ATS_DATABASE_URL="postgresql://nivult:${PW}@127.0.0.1:5432/nivult_ats" /opt/nivult/engine/deploy/sotto-limite.sh 8G 400% .venv/bin/python -m nivult.ats.esporta --attive --aziende --campione 500 >> /var/log/nivult-esporta.log 2>&1

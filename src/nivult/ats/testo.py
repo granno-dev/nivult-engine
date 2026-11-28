@@ -17,7 +17,7 @@ import re
 # e descrizioni._jobposting): quello di arricchisci non apriva le LISTE
 # [{...}] e eploy e' rimasta senza testo per settimane. Chi cerca un
 # JobPosting passa da qui.
-_LD_RX = re.compile(r'<script[^>]*ld\+json[^>]*>(.*?)</script>', re.S | re.I)
+_LD_RX = re.compile(r'<script[^>]*ld\+json[^>]*>(.*?)</script>', re.DOTALL | re.IGNORECASE)
 
 
 def jobposting_da_html(pagina: str) -> dict | None:
@@ -64,10 +64,10 @@ def descrizione(raw: dict | None, massimo: int = 30000) -> str:
 # («&lt;div class=&quot;...»; 35k codificate due volte), e SmartRecruiters,
 # Workday, iCIMS, Workable, Lever, Ashby lo hanno con i tag dentro. Il
 # compratore vuole testo, non markup: da qui passa la descrizione esportata.
-_BLOCCHI_RX = re.compile(r"<(script|style|noscript)\b.*?</\1\s*>", re.I | re.S)
-_A_CAPO_RX = re.compile(r"<\s*(/?)(p|div|br|li|ul|ol|h[1-6]|tr|table|section|article|header|footer|blockquote|pre)\b[^>]*>", re.I)
+_BLOCCHI_RX = re.compile(r"<(script|style|noscript)\b.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_A_CAPO_RX = re.compile(r"<\s*(/?)(p|div|br|li|ul|ol|h[1-6]|tr|table|section|article|header|footer|blockquote|pre)\b[^>]*>", re.IGNORECASE)
 _TAG_RX = re.compile(r"<[^>]+>")
-_ENTITA_RX = re.compile(r"&(#\d+|#x[0-9a-f]+|[a-z]+);", re.I)
+_ENTITA_RX = re.compile(r"&(#\d+|#x[0-9a-f]+|[a-z]+);", re.IGNORECASE)
 
 
 def pulito(v, massimo: int | None = None) -> str:
@@ -84,17 +84,19 @@ def pulito(v, massimo: int | None = None) -> str:
             break
         t = _html.unescape(t)
     t = _BLOCCHI_RX.sub(" ", t)
-    t = re.sub(r"<\s*li\b[^>]*>", "\n- ", t, flags=re.I)
-    t = re.sub(r"<\s*/li\s*>", "", t, flags=re.I)
+    t = re.sub(r"<\s*li\b[^>]*>", "\n- ", t, flags=re.IGNORECASE)
+    t = re.sub(r"<\s*/li\s*>", "", t, flags=re.IGNORECASE)
     t = _A_CAPO_RX.sub("\n", t)
     t = _TAG_RX.sub(" ", t)
     # le entita' comparse DOPO aver tolto i tag (testo che citava «&amp;»)
     if _ENTITA_RX.search(t):
         t = _html.unescape(t)
-    t = t.replace("\xa0", " ").replace("​", "")
+    t = t.replace("\xa0", " ").replace("\u200b", "")
     t = re.sub(r"[ \t\r\f\v]+", " ", t)
     t = re.sub(r" *\n *", "\n", t)
     t = re.sub(r"\n{3,}", "\n\n", t).strip()
+    from .pii import redact_pii
+    t = redact_pii(t)
     return t[:massimo] if massimo else t
 
 
@@ -106,16 +108,16 @@ def pulito(v, massimo: int | None = None) -> str:
 # una lettura, e' un'invenzione del modello. Usata dal demone v1 (prima di
 # scrivere) e dalla riparazione del 22/09.
 _STAGE_RX = re.compile(
-    r"(?<![a-zÀ-ɏ])(intern|interns|internship|internships|stagiaire|stagiaires|stagista|stagisti|"
+    r"(?<![a-zÀ-ɏ])(intern|interns|internship|internships|stagiaire|stagiaires|stagista|stagisti|stageurs?|"
     r"tirocin\w*|praktik\w*|werkstudent\w*|working student|trainee|traineeship|est[aá]gio|estagi[aá]ri[oa]|"
     r"pr[aá]cticas|becari[oa]|beca|pasant[ií]a|pasante|alternance|alternant[es]?|apprenti[es]?|apprentissage|"
     r"apprentice|apprenticeship|apprendist\w*|azubi|ausbildung|auszubildende[rn]?|lehrling|lehrstelle|"
     r"leerling|stageplaats|stagiaire?|harjoittelija|harjoittelu|praktikplats|l[æe]rling|"
     r"graduate program(me)?|summer analyst|co-op|thesis|tesi di laurea|tfg|tfm|duales? studium|dual student)"
-    r"(?![a-zÀ-ɏ])", re.I)
+    r"(?![a-zÀ-ɏ])", re.IGNORECASE)
 # «stage» vuol dire stage solo dove la lingua lo dice (fr, nl, it): in
 # inglese e' «early stage», «stage 2», «backstage»
-_STAGE_LINGUA_RX = re.compile(r"(?<![a-z])stages?(?![a-z])", re.I)
+_STAGE_LINGUA_RX = re.compile(r"(?<![a-z])stages?(?![a-z])", re.IGNORECASE)
 _STAGE_CJK_RX = re.compile(r"实习|インターン|인턴")
 
 

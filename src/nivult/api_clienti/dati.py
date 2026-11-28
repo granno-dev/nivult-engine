@@ -38,6 +38,8 @@ import zlib
 
 import duckdb
 
+from nivult.ats.pii import sanitize_record
+
 from .explorer import clean_company_name, employer_key
 
 log = logging.getLogger("nivult.api_clienti.dati")
@@ -45,15 +47,8 @@ log = logging.getLogger("nivult.api_clienti.dati")
 PERCORSO = os.environ.get("API_CLIENTI_DB",
                           "/opt/nivult/exports/api-clienti.duckdb")
 LIMITE_MAX = 500  # oltre, il cliente vuole un export bulk, non un'API
-_CAMPI_PII = frozenset({"contact_email", "recruiter"})
-
-
 def _senza_pii(valore):
-    if isinstance(valore, dict):
-        return {k: _senza_pii(v) for k, v in valore.items() if k not in _CAMPI_PII}
-    if isinstance(valore, list):
-        return [_senza_pii(v) for v in valore]
-    return valore
+    return sanitize_record(valore)
 
 
 def stream_export_senza_pii(percorso: str):
@@ -175,15 +170,15 @@ def _norm_ts(v) -> str | None:
         return None
     d = dt.datetime.fromisoformat(str(v))
     if d.tzinfo:
-        d = d.astimezone(dt.timezone.utc).replace(tzinfo=None)
+        d = d.astimezone(dt.UTC).replace(tzinfo=None)
     return d.isoformat()
 
 
 def _timestamp_utc(valore: str) -> dt.datetime:
     d = dt.datetime.fromisoformat(str(valore))
     if d.tzinfo is None:
-        return d.replace(tzinfo=dt.timezone.utc)
-    return d.astimezone(dt.timezone.utc)
+        return d.replace(tzinfo=dt.UTC)
+    return d.astimezone(dt.UTC)
 
 
 def _cursore(chiave: list) -> str:
@@ -196,7 +191,7 @@ def _leggi_cursore(cursore: str) -> list:
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"unreadable cursor: {cursore!r}") from e
     if not isinstance(chiave, list):
-        raise ValueError(f"unreadable cursor: {cursore!r}")
+        raise TypeError(f"unreadable cursor: {cursore!r}")
     return chiave
 
 
@@ -1229,11 +1224,12 @@ def demo_stats() -> dict:
                     "chiuse_storico": v.get("chiuse_storico"),
                     "copertura": m.get("coverage") or {},
                     "copertura_aziende": m.get("coverage_aziende") or {}}
-    except Exception:                                # noqa: BLE001
-        pass                                         # ripiego sotto
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, duckdb.Error) as exc:
+        log.debug("demo stats fallback: %s", exc)
     try:
         import json as _json
-        d = _json.load(open("/opt/nivult/cruscotto-cache.json"))
+        with open("/opt/nivult/cruscotto-cache.json") as cache_file:
+            d = _json.load(cache_file)
         sal = d.get("v", {}).get("salute", {})
         if sal.get("offerte_attive") and time.time() - d["t"] < 900:
             nuove = None
@@ -1262,8 +1258,8 @@ def demo_stats() -> dict:
                                        .get("storico_chiuse")),
                     "copertura": cop,
                     "copertura_aziende": cop_az}
-    except Exception:                                # noqa: BLE001
-        pass                                         # ripiego sotto
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, duckdb.Error) as exc:
+        log.debug("demo stats fallback: %s", exc)
     with _lock:
         offerte = _conn().execute("SELECT count(*) FROM offerte").fetchone()[0]
         aziende = _conn().execute("SELECT count(*) FROM aziende").fetchone()[0]

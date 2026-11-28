@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import glob
-import gzip
 import json
 import logging
 import os
@@ -46,7 +45,7 @@ NOME_DB = "api-clienti.duckdb"
 DB_PATH = os.environ.get("API_CLIENTI_DB",
                          os.path.join(CARTELLA, NOME_DB))
 
-_DATA_RX = re.compile(r"-(\d{4}-\d{2}-\d{2})\.jsonl\.gz$")
+_DATA_RX = re.compile(r"-(\d{4}-\d{2}-\d{2})(?:-[0-9a-f]{12})?\.jsonl\.gz$")
 _FLUSSO_RX = re.compile(r"novita-(\d{4})(\d{2})(\d{2})-")
 
 
@@ -144,22 +143,17 @@ _READT = ("SELECT row_number() OVER () AS rn, linea FROM read_csv(?, "
           # il JSONL reale ha righe da 3 MB (immagini base64 dentro le
           # descrizioni): il tetto di linea di default (2 MB) tagliava
           # il flusso a meta' (23/09/2026). Alzato a 256 MB il 09/10/2026
-          # per una riga da 33 MB — MA il lettore CSV prealloca
-          # max_line_size PER THREAD: 256 MB x 16 thread = 4 GiB chiesti
-          # a ogni file, e sul box da 7 GB la build e' morta cosi' il 10 e
-          # l'11/10 (misurato: OOM identico su un file da 61 byte).
-          # 48 MB coprono il massimo misurato oggi (46,5 MB) e il record
-          # da 33 MB del 09/10. Su DuckDB 1.5 il taglio da 64 MB chiede
-          # un blocco da 1 GiB in piu' e fallisce anche con threads=1 e
-          # memory_limit=2GB; chi supera il tetto fa ERRORE rumoroso,
-          # mai taglio silenzioso.
-          "max_line_size=50331648)")
+          # per una riga da 33 MB. Senza buffer_size, DuckDB 1.5 alloca
+          # 16 buffer da max_line_size (768 MB) anche con threads=1 e
+          # memory_limit=1GB. buffer_size=max_line_size evita quel blocco
+          # senza tagliare il testo: chi supera il tetto fa comunque errore.
+          "max_line_size=50331648, buffer_size=50331648)")
 
 # I timestamp dell'export (Postgres «2026-09-23 07:00:00+00:00» o ISO col
 # fuso): TIMESTAMPTZ converte davvero («+02:00» diventa l'istante UTC,
 # non troncato), ::TIMESTAMP toglie il fuso. La sessione e' sempre UTC
 # (_configura), altrimenti DuckDB restituirebbe l'ora locale del server.
-_TS_SQL = "TRY_CAST(TRY_CAST({c} AS TIMESTAMPTZ)::TIMESTAMP AS TIMESTAMP)"
+_TS_SQL = "timezone('UTC', TRY_CAST({c} AS TIMESTAMPTZ))"
 
 _COLONNE_OFFERTE = (
     ("id", '"id"', ("id",)), ("title", '"title"', ("title",)),
@@ -201,33 +195,45 @@ _COLONNE_FLUSSO = (
 )
 
 
+def _json_espr(expr: str) -> str:
+    if expr == 'list_transform("technologies", lambda x: x.technology)':
+        return ("list_transform(CAST(json_extract(linea,'$.technologies') AS JSON[]), "
+                "lambda x: json_extract_string(x,'$.technology'))")
+    if expr == '"remote"::VARCHAR':
+        return "json_extract_string(linea,'$.remote')::VARCHAR"
+    if re.fullmatch(r'"[A-Za-z_][A-Za-z0-9_]*"', expr):
+        return f"json_extract_string(linea,'$.{expr[1:-1]}')"
+    return re.sub(r'"([A-Za-z_][A-Za-z0-9_]*)"',
+                  lambda m: f"json_extract_string(linea,'$.{m.group(1)}')", expr)
+
+
+def _id_raw_mismatch(con: duckdb.DuckDBPyConnection) -> int:
+    return con.execute(
+        "SELECT count(*) FROM offerte WHERE id<>json_extract_string(raw,'$.id')").fetchone()[0]
+
+
 def _carica_nativa(con: duckdb.DuckDBPyConnection, percorso: str,
                    tabella: str, colonne: tuple, dove: str = "") -> int:
-    """Un file .jsonl.gz in una tabella, tutto nel motore DuckDB.
-
-    `colonne`: (nome, espressione o callable, colonne della sorgente che
-    servono); una colonna le cui fonti mancano tutte diventa NULL — lo
-    schema dell'export si evolve senza rompere il builder. `raw` e' la
-    riga VERBATIM dell'export (lettura testuale parallela, join per rn).
-    """
     disponibili = {r[0] for r in con.execute(
         f"DESCRIBE {_READ}", [percorso]).fetchall()}
-    disponibili.discard("rn")     # la colonna tecnica, non dell'export
-    sel = ", ".join(f"{(expr(disponibili) if callable(expr) else expr)} AS {nome}"
+    disponibili.discard("rn")
+    sel = ", ".join(f"{_json_espr(expr(disponibili) if callable(expr) else expr)} AS {nome}"
                     if any(f in disponibili for f in fonti)
                     else f"NULL AS {nome}"
                     for nome, expr, fonti in colonne)
-    interna = (f"SELECT {sel}, r.linea AS raw "
-               f"FROM ({_READ}) j JOIN ({_READT}) r USING (rn)")
+    interna = f"SELECT {sel}, linea AS raw FROM ({_READT})"
     if dove:
         interna = f"SELECT * FROM ({interna}) WHERE {dove}"
-    n = con.execute(f"INSERT INTO {tabella} {interna}",
-                    [percorso, percorso]).fetchone()
+    n = con.execute(f"INSERT INTO {tabella} {interna}", [percorso]).fetchone()
+    if tabella == "offerte":
+        mismatch = _id_raw_mismatch(con)
+        if mismatch:
+            raise ValueError(f"id/raw mismatch nel caricamento: {mismatch}")
     return int(n[0]) if n else 0
 
 
 def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
-                   giorni: int, db_path: str) -> int:
+                   giorni: int, temp_dir: str) -> int:
     """I novita-* degli ultimi `giorni` giorni, scelti dalla data nel nome.
 
     Il file delle 09:15 contiene gli eventi fra il giro delle 09:00 e
@@ -237,18 +243,13 @@ def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
     da solo al file successivo.
     """
     taglio = dt.date.today() - dt.timedelta(days=giorni)
-    tmp = os.path.join(os.path.dirname(os.path.abspath(db_path)), "duckdb-tmp")
-    os.makedirs(tmp, exist_ok=True)
     n = 0
-    with tempfile.TemporaryDirectory(prefix="flusso-stage-", dir=tmp) as staging:
+    with tempfile.TemporaryDirectory(prefix="flusso-stage-", dir=temp_dir) as staging:
         stage = os.path.join(staging, "flusso.duckdb")
         con.execute("ATTACH " + _sql_stringa(stage) + " AS stage")
         try:
             con.execute("CREATE TABLE stage.flusso("
                         "t TIMESTAMP, id VARCHAR, event VARCHAR, raw VARCHAR)")
-            con.execute("SET memory_limit = '3GB'")
-            con.execute("SET threads = 4")
-            con.execute("SET temp_directory = " + _sql_stringa(tmp))
             con.execute("SET max_temp_directory_size = '100GB'")
             con.execute("SET preserve_insertion_order = false")
             for percorso in sorted(glob.glob(
@@ -267,9 +268,7 @@ def _carica_flusso(con: duckdb.DuckDBPyConnection, cartella: str,
                     n += caricati
                 except Exception as e:               # noqa: BLE001
                     log.warning("flusso: %s illeggibile (%s), salto", percorso, e)
-            con.execute("SET preserve_insertion_order = true")
-            con.execute("INSERT INTO flusso "
-                        "SELECT * FROM stage.flusso ORDER BY t, id")
+            con.execute("INSERT INTO flusso SELECT * FROM stage.flusso")
             con.execute("CHECKPOINT")
         finally:
             con.execute("DETACH stage")
@@ -317,45 +316,108 @@ def _sql_stringa(valore: str) -> str:
     return "'" + valore.replace("'", "''") + "'"
 
 
-def _configura(con: duckdb.DuckDBPyConnection, db_path: str) -> None:
-    memoria = os.environ.get("AGG_MEMORIA", "3GB")
-    thread = int(os.environ.get("AGG_THREADS", "4"))
+def _configura(con: duckdb.DuckDBPyConnection, temp_dir: str) -> None:
+    memoria = os.environ.get("AGG_MEMORIA")
+    if not memoria:
+        try:
+            ram = (os.sysconf("SC_PHYS_PAGES")
+                   * os.sysconf("SC_PAGE_SIZE"))
+            memoria = f"{max(512, int(ram * 0.55 / 1048576))}MB"
+        except (ValueError, OSError):
+            memoria = "3GB"
+    thread = int(os.environ.get("AGG_THREADS", "2"))
     if thread < 1:
         raise ValueError("AGG_THREADS deve essere almeno 1")
-    tmp = os.path.join(os.path.dirname(os.path.abspath(db_path)), "duckdb-tmp")
-    os.makedirs(tmp, exist_ok=True)
     con.execute("SET memory_limit = " + _sql_stringa(memoria))
     con.execute("SET preserve_insertion_order = false")
     con.execute(f"SET threads = {thread}")
-    con.execute("SET temp_directory = " + _sql_stringa(tmp))
+    con.execute("SET temp_directory = " + _sql_stringa(temp_dir))
     con.execute("SET TimeZone = 'UTC'")
+
+
+def _manifest(cartella: str) -> dict:
+    try:
+        with open(os.path.join(cartella, "manifest-ultimo.json")) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _sorgenti_export(cartella: str) -> tuple[str | None, str | None, dict]:
+    manifest = _manifest(cartella)
+    files = manifest.get("files") or {}
+    if manifest.get("state") == "ready" and files:
+        def percorso(*nomi):
+            nome = next((files.get(n) for n in nomi if files.get(n)), None)
+            if not nome or os.path.basename(nome) != nome:
+                raise ValueError("nome file non sicuro nel manifest")
+            return os.path.join(cartella, nome)
+        return (percorso("jobs", "offerte"), percorso("companies", "aziende"), manifest)
+    return (_ultimo(cartella, "offerte-attive"),
+            _ultimo(cartella, "aziende-segnali"), manifest)
+
+
+def _controlla_invarianti(con: duckdb.DuckDBPyConnection) -> dict[str, int]:
+    conteggi = {}
+    conteggi["orphan_jobs"] = con.execute(
+        "SELECT count(*) FROM offerte o LEFT JOIN aziende a "
+        "ON a.ats=o.ats AND a.company_slug=o.company_slug "
+        "WHERE a.company_slug IS NULL").fetchone()[0]
+    conteggi["companies_without_jobs"] = con.execute(
+        "SELECT count(*) FROM aziende a LEFT JOIN offerte o "
+        "ON a.ats=o.ats AND a.company_slug=o.company_slug "
+        "WHERE o.id IS NULL").fetchone()[0]
+    job_tec = ("SELECT DISTINCT ats,company_slug,trim(t) technology "
+               "FROM offerte,UNNEST(technologies) u(t) WHERE trim(t)<>''")
+    co_tec = ("SELECT DISTINCT ats,company_slug,trim(t) technology "
+              "FROM aziende,UNNEST(technologies) u(t) WHERE trim(t)<>''")
+    conteggi["missing_tech_pairs"] = con.execute(
+        f"WITH j AS ({job_tec}), c AS ({co_tec}) "
+        "SELECT count(*) FROM j LEFT JOIN c USING(ats,company_slug,technology) "
+        "WHERE c.technology IS NULL").fetchone()[0]
+    conteggi["ghost_tech_pairs"] = con.execute(
+        f"WITH j AS ({job_tec}), c AS ({co_tec}) "
+        "SELECT count(*) FROM c LEFT JOIN j USING(ats,company_slug,technology) "
+        "WHERE j.technology IS NULL").fetchone()[0]
+    conteggi["company_count_mismatch"] = con.execute(
+        "WITH n AS (SELECT ats,company_slug,count(*) n FROM offerte GROUP BY 1,2) "
+        "SELECT count(*) FROM aziende a LEFT JOIN n "
+        "ON a.ats=n.ats AND a.company_slug=n.company_slug "
+        "WHERE coalesce(n.n,0)<>TRY_CAST(json_extract_string(a.raw,'$.active_jobs') AS BIGINT)").fetchone()[0]
+    actual = ("SELECT ats,company_slug,trim(t) technology,count(distinct id) n "
+              "FROM offerte,UNNEST(technologies) u(t) WHERE trim(t)<>'' GROUP BY 1,2,3")
+    declared = ("SELECT ats,company_slug,trim(t->>'technology') technology,"
+                "TRY_CAST(t->>'active_jobs' AS BIGINT) n "
+                "FROM aziende,UNNEST(CAST(json_extract(raw,'$.technologies') AS JSON[])) u(t) "
+                "WHERE trim(t->>'technology')<>''")
+    conteggi["tech_count_mismatch"] = con.execute(
+        f"WITH a AS ({actual}), d AS ({declared}) "
+        "SELECT count(*) FROM d LEFT JOIN a USING(ats,company_slug,technology) "
+        "WHERE coalesce(a.n,0)<>d.n").fetchone()[0]
+    return conteggi
+
+
+def _file_valido(percorso: str | None) -> bool:
+    return bool(percorso and os.path.isfile(percorso) and os.path.getsize(percorso) > 0)
 
 
 def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
                db_path: str | None = None, attesa_minuti: int = 60) -> dict:
-    # dove finisce il db: l'argomento vince, poi l'ambiente, poi il
-    # default accanto agli export. I banchi passano --cartella e restano
-    # nella loro sabbia; in produzione API_CLIENTI_DB manda sul volume.
     destinazione = (db_path or os.environ.get("API_CLIENTI_DB")
                     or os.path.join(cartella, NOME_DB))
-    # il volume dedicato (26/09): se la destinazione e' sul volume ma il
-    # volume non e' montato, makedirs la creerebbe sul DISCO DI ROOT e li'
-    # il builder scriverebbe 15 GB — esattamente lo scenario che il volume
-    # doveva evitare. Si misura il mount, non si suppone.
     cartella_dest = os.path.dirname(os.path.abspath(destinazione))
     if cartella_dest.startswith("/mnt/") and not os.path.ismount(cartella_dest):
         raise SystemExit(f"il volume {cartella_dest} non e' montato: "
                          "non costruisco il db sul disco di root")
     os.makedirs(cartella_dest, exist_ok=True)
     tmp = destinazione + ".tmp"
-    for p in (tmp, tmp + ".wal"):  # resti di un giro morto a meta'
+    for p in (tmp, tmp + ".wal"):
         try:
             os.remove(p)
         except OSError:
             pass
     _aspetta_export_oggi(cartella, attesa_minuti)
-    f_offerte = _ultimo(cartella, "offerte-attive")
-    f_aziende = _ultimo(cartella, "aziende-segnali")
+    f_offerte, f_aziende, manifest = _sorgenti_export(cartella)
     mancanti = [nome for nome, p in (("offerte-attive", f_offerte),
                                      ("aziende-segnali", f_aziende))
                 if p is None]
@@ -365,69 +427,78 @@ def costruisci(cartella: str = CARTELLA, flusso_giorni: int = 7,
         raise SystemExit(f"export non allineati: offerte {data_offerte}, "
                          f"aziende {data_aziende} — non sostituisco il db live")
     data_export = data_offerte or data_aziende
-    if mancanti:
-        log.warning("export mancanti: %s — costruisco comunque il db, "
-                    "con le tabelle vuote e lo stato dichiarato", mancanti)
-    con = duckdb.connect(tmp)
-    # Un thread e 4 GB sono i limiti operativi: oltre il tetto il
-    # motore riversa nella directory temporanea accanto al DB. Le stesse
-    # impostazioni vanno riapplicate dopo la riapertura, che azzera il
-    # buffer fra il caricamento degli snapshot e quello del flusso.
-    _configura(con, tmp)
-    _crea_tabelle(con)
-    n_offerte = _carica_nativa(con, f_offerte, "offerte",
-                               _COLONNE_OFFERTE) if f_offerte else 0
-    n_aziende = _carica_nativa(con, f_aziende, "aziende",
-                               _COLONNE_AZIENDE) if f_aziende else 0
-    con.execute("CHECKPOINT")
-    con.close()
-    con = duckdb.connect(tmp)
-    _configura(con, tmp)
-    n_flusso = _carica_flusso(con, cartella, flusso_giorni, tmp)
-    manifest = _carica_copertura(con, cartella)
-    inizio_flusso = dt.datetime.combine(
-        dt.date.today() - dt.timedelta(days=flusso_giorni), dt.time.min,
-        tzinfo=dt.timezone.utc)
-    meta = {
-        "stato": "mancano gli export di oggi" if mancanti else "ok",
-        "data_export": data_export or "",
-        "offerte": n_offerte,
-        "aziende": n_aziende,
-        "flusso": n_flusso,
-        "flusso_giorni": flusso_giorni,
-        "flusso_dal": inizio_flusso.isoformat(),
-        # i path servono a /v1/exports/latest/{nome}: il download punta a
-        # questi, non a un nome inventato dal client
-        "file_offerte": f_offerte or "",
-        "file_aziende": f_aziende or "",
-        "generato_at": dt.datetime.now(dt.timezone.utc)
-                       .isoformat(timespec="seconds"),
-    }
-    con.executemany("INSERT INTO meta VALUES (?, ?)",
-                    [(k, str(v)) for k, v in meta.items()])
-    con.close()  # la chiusura pulita svuota il WAL dentro il .tmp
-    # Mai sostituire un db buono con uno vuoto: se l'export di oggi manca
-    # anche dopo l'attesa (export rotto, non solo lento), il db live di
-    # ieri sono dati vecchi di 24 ore — il db di oggi senza aziende e' un
-    # prodotto rotto (reveal dei clienti a vuoto, 29/09/2026).
-    svuotate = [t for t, n in (("offerte", n_offerte), ("aziende", n_aziende))
-                if n == 0 and _tabella_non_vuota(destinazione, t)]
-    # la copertura entra nella stessa guardia (07/10/2026): la build
-    # eccezionale sull'N5 non aveva il manifest e il db nuovo e' uscito
-    # senza fill-rate — la landing ha mostrato il fallback vecchio per
-    # ore, e se n'e' accorto Giuseppe. Mai piu' senza un allarme.
-    n_cop = len(manifest.get("coverage") or {}) + \
-        len(manifest.get("coverage_aziende") or {})
-    if n_cop == 0 and _tabella_non_vuota(destinazione, "copertura"):
-        svuotate.append("copertura")
-    if svuotate:
-        os.remove(tmp)
-        log.error("tabelle che diventerebbero vuote: %s — il db live "
-                  "precedente resta al suo posto", svuotate)
-        meta["stato"] = ("export mancanti: conservato il db precedente "
-                         "con le tabelle piene")
-        return meta
-    os.replace(tmp, destinazione)  # atomico: i lettori restano sul vecchio inode
+    if not mancanti and (not _file_valido(f_offerte) or not _file_valido(f_aziende)):
+        raise FileNotFoundError("file referenziati dal manifest assenti o vuoti")
+    try:
+        with tempfile.TemporaryDirectory(prefix=".duckdb-build-", dir=cartella_dest) as temp_dir:
+            con = duckdb.connect(tmp)
+            _configura(con, temp_dir)
+            _crea_tabelle(con)
+            n_offerte = _carica_nativa(con, f_offerte, "offerte",
+                                       _COLONNE_OFFERTE) if f_offerte else 0
+            n_aziende = _carica_nativa(con, f_aziende, "aziende",
+                                       _COLONNE_AZIENDE) if f_aziende else 0
+            con.execute("CHECKPOINT")
+            con.close()
+            con = duckdb.connect(tmp)
+            _configura(con, temp_dir)
+            n_flusso = _carica_flusso(con, cartella, flusso_giorni, temp_dir)
+            manifest = _carica_copertura(con, cartella)
+            invarianti = (_controlla_invarianti(con)
+                          if n_offerte and n_aziende else {})
+            if any(invarianti.values()):
+                raise ValueError(f"invarianti export falliti: {invarianti}")
+            inizio_flusso = dt.datetime.combine(
+                dt.date.today() - dt.timedelta(days=flusso_giorni), dt.time.min,
+                tzinfo=dt.UTC)
+            meta = {
+                "stato": "mancano gli export di oggi" if mancanti else "ok",
+                "data_export": data_export or "",
+                "offerte": n_offerte,
+                "aziende": n_aziende,
+                "flusso": n_flusso,
+                "flusso_giorni": flusso_giorni,
+                "flusso_dal": inizio_flusso.isoformat(),
+                "file_offerte": f_offerte or "",
+                "file_aziende": f_aziende or "",
+                "invarianti": json.dumps(invarianti, sort_keys=True),
+                "generato_at": dt.datetime.now(dt.UTC)
+                               .isoformat(timespec="seconds"),
+            }
+            con.executemany("INSERT INTO meta VALUES (?, ?)",
+                            [(k, str(v)) for k, v in meta.items()])
+            con.close()
+        svuotate = [t for t, n in (("offerte", n_offerte), ("aziende", n_aziende))
+                    if n == 0 and _tabella_non_vuota(destinazione, t)]
+        n_cop = len(manifest.get("coverage") or {}) + \
+            len(manifest.get("coverage_aziende") or {})
+        if n_cop == 0 and _tabella_non_vuota(destinazione, "copertura"):
+            svuotate.append("copertura")
+        if svuotate:
+            os.remove(tmp)
+            log.error("tabelle che diventerebbero vuote: %s — il db live "
+                      "precedente resta al suo posto", svuotate)
+            meta["stato"] = ("export mancanti: conservato il db precedente "
+                             "con le tabelle piene")
+            return meta
+        if not mancanti and (not _file_valido(f_offerte) or not _file_valido(f_aziende)):
+            raise FileNotFoundError("file referenziati dal manifest assenti o vuoti")
+        expected_jobs = manifest.get("rows") if manifest.get("state") == "ready" else None
+        expected_companies = (manifest.get("companies_rows")
+                              if manifest.get("state") == "ready" else None)
+        if expected_jobs is not None and int(expected_jobs) != n_offerte:
+            raise ValueError(f"righe jobs diverse dal manifest: {expected_jobs} != {n_offerte}")
+        if expected_companies is not None and int(expected_companies) != n_aziende:
+            raise ValueError(
+                f"righe companies diverse dal manifest: {expected_companies} != {n_aziende}")
+        os.replace(tmp, destinazione)
+    except Exception:
+        for p in (tmp, tmp + ".wal"):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        raise
     log.info("api-clienti.duckdb: %d offerte, %d aziende, %d eventi flusso, "
              "copertura %d campi, export del %s — %.1f MB",
              n_offerte, n_aziende, n_flusso, len(manifest.get("coverage") or {}),

@@ -17,11 +17,13 @@
 set -uo pipefail
 # 22/09/2026: su Hetzner (75 GB, 4 liberi) restano SOLO il backup e l'export
 # di oggi; tutto cio' che ha piu' di 24 ore va sul N5 (6 TB liberi). Il
-# cron gira alle 06:40, DOPO backup (03:00) ed export (05:45): cosi' il
-# file di ieri ha passato le 24 ore e quello di oggi resta.
+# cron gira DOPO il builder dei clienti, che deve prima pinnare i file vivi.
 GIORNI_EXPORT=${GIORNI_EXPORT:-0}
 GIORNI_BACKUP=${GIORNI_BACKUP:-0}
 GIORNI_GPU=${GIORNI_GPU:-1}
+ENGINE_DIR=${ENGINE_DIR:-/opt/nivult/engine}
+EXPORT_DIR=${EXPORT_DIR:-/opt/nivult/exports}
+API_CLIENTI_DB=${API_CLIENTI_DB:-/mnt/HC_Volume_106941692/api-clienti.duckdb}
 N5=root@100.119.200.7; K=/root/.ssh/id_ed25519_n5
 SSH="ssh -n -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i $K"
 SCP="scp -q -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i $K"
@@ -29,24 +31,41 @@ BASE=/mnt/user/nivult-archivio
 LOG=/var/log/nivult-archivio.log
 dire() { echo "$(date -Is) $*" >> $LOG; }
 
+# Senza TUTTI i pin non si copia e non si cancella nulla: il comando in
+# process substitution nasconderebbe il suo exit status, quindi va catturato.
+if ! protetti=$(cd "$ENGINE_DIR" && .venv/bin/python -m nivult.api_clienti.retention \
+      --exports "$EXPORT_DIR" --db "$API_CLIENTI_DB" --protected); then
+  dire "pin export non disponibili: archiviazione e cancellazioni FERMATE"
+  exit 1
+fi
+declare -A PROTETTI=()
+while IFS= read -r nome; do
+  [ -n "$nome" ] && PROTETTI["$nome"]=1
+done <<< "$protetti"
+
 $SSH $N5 "mkdir -p $BASE/exports $BASE/backups $BASE/gpu" 2>/dev/null || {
   dire "N5 non raggiungibile: non tocco niente"; exit 0; }
 prima=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
 
 sposta() {   # $1 file, $2 sottocartella
   local f="$1" sub="$2" nome dim remota
-  nome=$(basename "$f"); dim=$(stat -c %s "$f" 2>/dev/null) || return 1
+  nome=$(basename "$f")
+  if [ -n "${PROTETTI[$nome]+pin}" ]; then
+    dire "export pinnato dal manifest/DuckDB: $nome resta locale"
+    return 0
+  fi
+  dim=$(stat -c %s "$f" 2>/dev/null) || return 1
   $SCP "$f" "$N5:$BASE/$sub/$nome" || { dire "copia fallita: $nome"; return 1; }
   remota=$($SSH $N5 "stat -c %s $BASE/$sub/$nome 2>/dev/null || echo 0")
   if [ "$remota" = "$dim" ]; then rm -f "$f"; dire "spostato $sub/$nome ($((dim/1048576)) MB)"; return 0; fi
   dire "dimensione diversa per $nome ($dim vs $remota): NON cancello"; return 1
 }
 
-# 1. export freddi (daystart: «vecchi di oggi» — con -mtime +0 il file delle
-# 07:13 di ieri alle 06:40 ha 23h e NON si muoveva: due giorni di export
+# 1. export freddi (daystart: «vecchi di oggi» — con -mtime +0 il file di
+# ieri poteva avere meno di 24 ore e NON si muoveva: due giorni di export
 # restavano sul disco, 8 GB. Misurato il 23/09/2026)
 while IFS= read -r f; do sposta "$f" exports; done \
-  < <(find /opt/nivult/exports -maxdepth 1 -name "*.jsonl.gz" -daystart -mtime +$GIORNI_EXPORT -type f | sort)
+  < <(find "$EXPORT_DIR" -maxdepth 1 -name "*.jsonl.gz" -daystart -mtime +$GIORNI_EXPORT -type f | sort)
 
 # 2. backup: solo quelli gia' verificati sullo spazio remoto.
 # Il 26/09: il sourcing di backup.env era «2>/dev/null»: se manca, il giro

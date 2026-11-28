@@ -3,27 +3,36 @@
 # mattino e' lo spazio che finisce su file dimenticati — export morti a
 # meta', duckdb.tmp di relay falliti, backup che si accumulano. Gira ogni
 # notte PRIMA del backup (02:45): cancella il pattume e registra quanto
-# resta libero. Le ritenzioni vere restano ai loro padroni (esporta ruota
-# gli export, backup.sh ruota i dump locali): qui si cancella solo cio'
+# resta libero. Le ritenzioni vere restano ai loro padroni (mantieni-export
+# ruota gli snapshot, backup.sh ruota i dump locali): qui si cancella solo cio'
 # che nessun padrone reclama.
 set -uo pipefail
 LIBERATI=0
 pesa() { du -sb "$1" 2>/dev/null | cut -f1 || echo 0; }
 
-# 1. export morti a meta' (.tmp piu' vecchi di un giorno)
-for f in /opt/nivult/exports/*.tmp; do
-  [ -e "$f" ] || continue
-  if [ "$(find "$f" -mtime +1 2>/dev/null)" ]; then
-    LIBERATI=$((LIBERATI + $(pesa "$f")))
-    rm -f "$f" && echo "spazzino: tolto $f"
-  fi
-done
-
-# 2. residui di relay duckdb sul volume (il file vero e' api-clienti.duckdb)
-for f in /mnt/HC_Volume_106941692/*.duckdb.tmp /mnt/HC_Volume_106941692/tmp-duckdb/*.tmp; do
-  [ -e "$f" ] || continue
+rimuovi_se_stale() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  [ "$(find "$f" -type f -mtime +1 2>/dev/null)" ] || return 0
   LIBERATI=$((LIBERATI + $(pesa "$f")))
   rm -f "$f" && echo "spazzino: tolto $f"
+}
+
+# 1. export morti a meta' (.tmp piu' vecchi di un giorno)
+for f in /opt/nivult/exports/*.tmp; do
+  rimuovi_se_stale "$f"
+done
+
+# 2. Solo file DuckDB stale: le directory temporanee e un .duckdb.tmp giovane
+# possono appartenere al builder attivo e non vanno mai rimossi.
+for f in /mnt/HC_Volume_106941692/*.duckdb.tmp; do
+  rimuovi_se_stale "$f"
+done
+for d in /mnt/HC_Volume_106941692/duckdb-tmp /mnt/HC_Volume_106941692/tmp-duckdb; do
+  [ -d "$d" ] || continue
+  while IFS= read -r f; do
+    rimuovi_se_stale "$f"
+  done < <(find "$d" -type f -mtime +1 2>/dev/null)
 done
 
 # 3. backup sul volume: mai piu' dei 2 piu' recenti (la staging ora e' su

@@ -11,6 +11,8 @@ from contextlib import contextmanager
 import httpx
 import psycopg
 
+from nivult.ats.pii import sanitize_record
+
 URL = os.environ.get("OPENSEARCH_URL", "http://127.0.0.1:9200")
 INDEX = os.environ.get("OPENSEARCH_INDEX", "nivult_jobs_active")
 _client: httpx.Client | None = None
@@ -53,7 +55,7 @@ def _leggi_cursore(cursore: str) -> list:
     except (binascii.Error, ValueError) as e:
         raise ValueError(f"unreadable cursor: {cursore!r}") from e
     if not isinstance(chiave, list):
-        raise ValueError(f"unreadable cursor: {cursore!r}")
+        raise TypeError(f"unreadable cursor: {cursore!r}")
     return chiave
 
 
@@ -164,7 +166,7 @@ def offerte(filtri: dict, cursore: str | None,
         doc = hits[limite - 1]["_source"]
         prossimo = _cursore([doc.get("posted_at"), str(doc["id"])])
         hits = hits[:limite]
-    return [h["_source"] for h in hits], prossimo
+    return [sanitize_record(h["_source"]) for h in hits], prossimo
 
 
 def conteggio(filtri: dict) -> int:

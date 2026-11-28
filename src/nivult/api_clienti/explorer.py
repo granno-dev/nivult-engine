@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from nivult.ats.pii import redact_pii
+
 REVEAL_TTL = 30 * 60
 CURSOR_TTL = 24 * 60 * 60
 MAX_LIMIT = 20
@@ -184,24 +186,13 @@ def safe_title(title, company=None, domain=None, slug=None) -> str:
     return re.sub(r"\s{2,}", " ", result).strip(" -–—|:") or "Hidden company"
 
 
-def _hide_contact_number(match) -> str:
-    value = match.group(0)
-    digits = re.sub(r"\D", "", value)
-    return "[contact hidden]" if 9 <= len(digits) <= 15 else value
-
-
 def sanitized_description(description, company=None, domain=None, slug=None) -> str:
     text = re.sub(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", " ",
                   str(description or ""), flags=re.IGNORECASE | re.DOTALL)
     text = html.unescape(re.sub(r"<[^>]+>", " ", text))
     text = re.sub(r"(?:https?:)?//[^\s<>]+|www\.[^\s<>]+", "[link hidden]", text,
                   flags=re.IGNORECASE)
-    text = re.sub(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
-                  "[contact hidden]", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"(?i)\b(?:phone|tel(?:ephone)?|telefono|telefon|mobile|cellulare)"
-        r"\s*[:+]?\s*\+?[\d\s()./-]{7,}", "[contact hidden]", text)
-    text = re.sub(r"(?<!\w)\+?\d[\d\s()./-]{7,}\d", _hide_contact_number, text)
+    text = redact_pii(text)
     text = _redact_identity(text, company, domain, slug)
     text = re.sub(r"[ \t]+", " ", text)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
